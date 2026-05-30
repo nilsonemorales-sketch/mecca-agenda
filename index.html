@@ -1521,6 +1521,8 @@ function getNivelesUnicos(){
 
 function applyActFilters(acts){
   let filtered = acts;
+  // Hide completed unless showing all
+  if(!S.actMostrarTodas && !S.actFiltroRapido) filtered = filtered.filter(a=>a.estado!=='completado');
   // Quick estado filter
   if(S.actFiltroRapido) filtered = filtered.filter(a=>a.estado===S.actFiltroRapido);
   // Advanced filters
@@ -1589,7 +1591,10 @@ function buildActsFiltros(){
   var av=S.actFiltroAvanzado||{};
 
   var h='<div style="background:#fff;border:1.5px solid #dee2e6;border-radius:12px;padding:12px 14px;margin-bottom:12px">';
-  h+='<div style="font-size:11px;color:#868e96;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Filtros</div>';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+    '<div style="font-size:11px;color:#868e96;font-weight:700;text-transform:uppercase;letter-spacing:.6px">Filtros</div>'+
+    '<button onclick="S.actMostrarTodas=!S.actMostrarTodas;loadActsAll();renderActs()" style="padding:5px 12px;border-radius:20px;border:1.5px solid '+(S.actMostrarTodas?'#2f9e44':'#dee2e6')+';background:'+(S.actMostrarTodas?'#d3f9d8':'#fff')+';color:'+(S.actMostrarTodas?'#2f9e44':'#495057')+';font-size:11px;font-weight:600;cursor:pointer">'+(S.actMostrarTodas?'✓ Mostrando todas':'Ver todas (incl. completadas)')+'</button>'+
+    '</div>';
 
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
 
@@ -1754,6 +1759,20 @@ async function marcarActCompletada(id){
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
     setSS('ok','✓ Completada');
   }catch(e){setSS('err','Error');}
+}
+
+async function loadActsAll(){
+  if(S.actMostrarTodas){
+    try{
+      var all=await sb('obra_actividades?order=fecha.desc,created_at.desc&limit=500');
+      S.acts=all;
+    }catch(e){setSS('err','Error cargando');}
+  } else {
+    try{
+      var activas=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300');
+      S.acts=activas;
+    }catch(e){setSS('err','Error cargando');}
+  }
 }
 
 async function iniciarActividad(id){
