@@ -1700,13 +1700,21 @@ function getActGroupsFromActs(acts){
   return[{titulo:'Actividades',items:acts}];
 }
 
-function actHTML(a,ai,tipo){
+function actHTML(a, ai, tipo){
   const fotos=(a.fotos||'').split('||').filter(Boolean);
-  return`<div class="act-item ${tipo}">
+  const hoy=new Date().toISOString().slice(0,10);
+  const vencida=a.fecha_fin&&a.fecha_fin<hoy&&a.estado!=='completado';
+  const retrasada=a.fecha<hoy&&a.estado!=='completado';
+  
+  const estadoLabel = vencida||retrasada ? 
+    '<span class="pill" style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8">🔴 retrasada</span>' :
+    `<span class="pill ${a.estado.replace(' ','-')}">${a.estado}</span>`;
+
+  return`<div class="act-item ${tipo}" style="${(vencida||retrasada)?'border-left:3px solid #e03131;':a.estado==='en-progreso'?'border-left:3px solid #1a56db;':''}">
     <div class="act-top">
       <span class="act-desc">${esc(a.descripcion)}</span>
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
-        <span class="pill ${a.estado.replace(' ','-')}">${a.estado}</span>
+        ${estadoLabel}
         ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px" onclick="editAct(${ai})">✏️</button>`:''}
       </div>
     </div>
@@ -1714,29 +1722,27 @@ function actHTML(a,ai,tipo){
       ${a.area?`<span>📍 ${esc(a.area)}</span>`:''}
       ${a.ingeniero_nombre?`<span>👤 ${esc(a.ingeniero_nombre)}</span>`:''}
       ${a.personal_nombre?`<span>👷 ${esc(a.personal_nombre)}</span>`:''}
-      ${a.cantidad_plan&&a.unidad?`<span>📦 ${a.cantidad_plan} ${esc(a.unidad)}</span>`:''}
-      ${a.fecha_inicio?`<span>📅 ${a.fecha_inicio}${a.fecha_fin?' → '+a.fecha_fin:''}</span>`:''}
-      ${a.fecha_inicio&&a.fecha_fin?`<span style="color:var(--accent)">⏱ ${calcDurLbl(a.fecha_inicio,a.fecha_fin)}</span>`:''}
+      ${a.fecha?`<span>📅 ${a.fecha}${a.fecha_fin?' → '+a.fecha_fin:''}</span>`:''}
+      ${a.cantidad_plan>0?`<span>📦 ${a.cantidad_real||0}/${a.cantidad_plan} ${esc(a.unidad||'')}</span>`:''}
+      ${(vencida||retrasada)?`<span style="color:#e03131;font-weight:600">⚠️ ${Math.round((new Date(hoy)-new Date(a.fecha))/(1000*60*60*24))} días sin completar</span>`:''}
     </div>
-    ${a.porcentaje>0?`<div class="prog-wrap">
-      <div class="prog-lbl"><span>Avance</span><span>${a.porcentaje}%</span></div>
-      <div class="prog-bg"><div class="prog-fill" style="width:${a.porcentaje}%"></div></div>
+    ${a.notas?`<div class="act-notas">${esc(a.notas)}</div>`:''}
+    ${a.porcentaje>0?`<div style="height:4px;background:var(--bg4);border-radius:2px;overflow:hidden;margin:4px 0">
+      <div style="height:100%;width:${Math.min(100,a.porcentaje)}%;background:${vencida?'#e03131':'var(--accent)'};border-radius:2px"></div>
     </div>`:''}
-    ${a.notas?`<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">${esc(a.notas)}</div>`:''}
-    ${a.foto_pendiente&&!(a.fotos||'').split('||').filter(Boolean).length?`<div style="font-size:11px;color:var(--amber);margin-top:6px;display:flex;align-items:center;gap:4px">📷 <span>Foto pendiente — actividad incompleta</span></div>`:''}
-    ${fotos.length||canEdit()?`<div class="fotos-wrap">
-      ${fotos.map(f=>`<img class="foto-thumb" src="${f}" onclick="verFoto('${f}')" loading="lazy">`).join('')}
-      ${canEdit()?`<label class="foto-add-btn" title="Agregar foto">
-        📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="subirFoto(this,${ai})">
-      </label>`:''}
+    ${fotos.length?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
+      ${fotos.map(f=>`<img src="${f}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${a.fecha}')">`).join('')}
     </div>`:''}
-  </div>
-  ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2)">
-    <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Marcar completada</button>
-    ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid var(--accent);background:#e8f0fe;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">▶ Iniciar</button>`:''}
-  </div>`:''}
+    ${a.foto_pendiente&&!fotos.length&&canEdit()?`<label class="act-foto-btn">
+      📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="subirFoto(this,${ai})">
+    </label>`:''}
+    ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2)">
+      <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Completar</button>
+      ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid var(--accent);background:#e8f0fe;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">▶ Iniciar</button>`:''}
+    </div>`:''}
   </div>`;
 }
+
 
 async function marcarActCompletada(id){
   var a=S.acts.find(function(x){return x.id===id;});
