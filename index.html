@@ -1132,7 +1132,7 @@ async function loadFecha(){
   try{
     const[asist,acts]=await Promise.all([
       sb('obra_asistencia?fecha=eq.'+S.fecha),
-      sb('obra_actividades?fecha=eq.'+S.fecha+'&order=created_at'),
+      sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300'),
     ]);
     S.asist=asist;S.acts=acts;
     setSS('ok','✓ '+hhmm());
@@ -1730,7 +1730,39 @@ function actHTML(a,ai,tipo){
         📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="subirFoto(this,${ai})">
       </label>`:''}
     </div>`:''}
+  </div>
+  ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2)">
+    <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Marcar completada</button>
+    ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid var(--accent);background:#e8f0fe;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">▶ Iniciar</button>`:''}
+  </div>`:''}
   </div>`;
+}
+
+async function marcarActCompletada(id){
+  var a=S.acts.find(function(x){return x.id===id;});
+  if(a){a.estado='completado';a.porcentaje=100;}
+  S.actsActivas=S.actsActivas?S.actsActivas.filter(function(x){return x.id!==id;}):[];
+  renderActs(); renderHoy(); renderEnObra();
+  setSS('syncing','...');
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
+    setSS('ok','✓ Completada');
+  }catch(e){setSS('err','Error');}
+}
+
+async function iniciarActividad(id){
+  var a=S.acts.find(function(x){return x.id===id;});
+  if(!a) return;
+  a.estado='en-progreso';
+  var ai=S.actsActivas?S.actsActivas.findIndex(function(x){return x.id===id;}):- 1;
+  if(ai<0&&S.actsActivas) S.actsActivas.unshift(a);
+  renderActs(); renderHoy();
+  setSS('syncing','...');
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'en-progreso'})});
+    setSS('ok','✓ Iniciada');
+    loadTareas();
+  }catch(e){setSS('err','Error');}
 }
 
 async function subirFoto(input, ai){
@@ -3625,7 +3657,7 @@ try{
 setInterval(async function(){
   try{
     var asist=await sb('obra_asistencia?fecha=eq.'+S.fecha);
-    var acts=await sb('obra_actividades?fecha=eq.'+S.fecha+'&order=created_at&limit=50');
+    var acts=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300');
     S.asist=asist; S.acts=acts;
     setSS('ok','↺ '+hhmm());
     renderHoy(); renderAsist(); renderActs(); renderReportes();
