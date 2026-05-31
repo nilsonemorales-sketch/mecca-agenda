@@ -1716,7 +1716,7 @@ function actHTML(a, ai, tipo){
     `<span class="pill ${a.estado.replace(' ','-')}">${a.estado}</span>`;
 
   return`<div class="act-item ${tipo}" style="${(vencida||retrasada)?'border-left:3px solid #e03131;':a.estado==='en-progreso'?'border-left:3px solid #1a56db;':''}">
-    <div style="margin-bottom:6px">${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">📍 ${esc(a.area)}</span>`:`<span style="background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" onclick="editAct(${ai})">⚠️ Sin ubicacion — Editar</span>`}</div>
+    <div style="margin-bottom:6px">${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">📍 ${esc(a.area)}</span>`:`<span style="background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" onclick="setArea('${a.id}')">⚠️ Sin ubicacion — toca para agregar</span>`}</div>
     <div class="act-top">
       <span class="act-desc">${esc(a.descripcion)}</span>${prioBadge}
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
@@ -3068,6 +3068,48 @@ async function generarPDF(tipo){
 }
 
 
+async function setArea(id){
+  var act=S.acts.find(function(a){return a.id===id;});
+  if(!act&&S.actsActivas) act=S.actsActivas.find(function(a){return a.id===id;});
+  if(!act) return;
+  window._setAreaId=id;
+  var mc=document.getElementById('mcontent');
+  mc.innerHTML=
+    '<div class="mhandle"></div>'+
+    '<h3>📍 Seleccionar ubicación</h3>'+
+    '<div style="font-size:13px;font-weight:500;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:14px">'+esc(act.descripcion)+'</div>'+
+    '<div class="fw"><label class="fl">Ubicación / Área</label>'+
+    ubicacionSelect('sa-area',act.area||'')+
+    '</div>'+
+    '<div class="mactions">'+
+    '<button class="btn" onclick="closeModal()">Cancelar</button>'+
+    '<button class="btn primary" onclick="guardarArea()">Guardar</button>'+
+    '</div>';
+  openModal();
+}
+
+async function guardarArea(){
+  var id=window._setAreaId;
+  if(!id) return;
+  var sel=document.getElementById('sa-area');
+  if(!sel||!sel.value){alert('Selecciona una ubicacion');return;}
+  var area=sel.value;
+  closeModal();
+  setSS('syncing','Guardando...');
+  var a=S.acts.find(function(x){return x.id===id;});
+  if(a) a.area=area;
+  var a2=S.actsActivas?S.actsActivas.find(function(x){return x.id===id;}):null;
+  if(a2) a2.area=area;
+  renderActs();renderEnObra();renderHoy();
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({area:area})});
+    setSS('ok','Ubicacion guardada');
+  }catch(e){setSS('err','Error');}
+}
+
+
+
+
 async function loadHistorial(){
   const el=document.getElementById('c-hist');
   if(!el) return;
@@ -3725,7 +3767,7 @@ function buildActCardObra(a){
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">'+
       '<div style="flex:1">'+
         '<div style="font-size:13px;font-weight:600">'+tipo+' '+desc+'</div>'+
-            (a.area?'<div style="display:inline-block;background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;margin:4px 0">📍 '+esc(a.area)+'</div>':'<div style="display:inline-block;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;margin:4px 0">⚠️ Sin ubicacion</div>')+
+            (a.area?'<div style="display:inline-block;background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;margin:4px 0">📍 '+esc(a.area)+'</div>':'<div style="display:inline-block;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;margin:4px 0;cursor:pointer" onclick="setArea(\''+id+'\')" >⚠️ Sin ubicacion — toca para agregar</div>')+
             '<div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">'+pers+ing+'<span>📅 '+a.fecha+'</span></div>'+
       '<span style="font-size:10px;background:'+eb+';color:'+ec+';padding:3px 9px;border-radius:8px;font-weight:600;flex-shrink:0">'+el+'</span>'+
     '</div>'+
