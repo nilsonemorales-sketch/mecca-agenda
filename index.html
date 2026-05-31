@@ -2131,72 +2131,125 @@ function renderReportes(){
   const actCont=S.acts.filter(a=>a.tipo_personal==='contratista').length;
   const pct=propios.length?Math.round(pres/propios.length*100):0;
 
-  // Rendimiento por persona
-  const rendData=S.personal.map(p=>{
-    const acts=S.acts.filter(a=>a.personal_nombre===p.nombre);
-    const done=acts.filter(a=>a.estado==='completado').length;
-    const asist=S.asist.find(a=>a.personal_id===p.id);
-    const hrs=asist?(()=>{
+  // Active filter state (persisted on S)
+  if(!S.repFiltros) S.repFiltros={tipo:'',contratista:'',ingeniero:'',estado:''};
+  const RF=S.repFiltros;
+
+  // Filtered activity list
+  var actsF=S.acts.filter(function(a){
+    if(RF.tipo&&a.tipo_personal!==RF.tipo) return false;
+    if(RF.contratista&&(a.personal_nombre||'')!==RF.contratista) return false;
+    if(RF.ingeniero&&(a.ingeniero_nombre||'')!==RF.ingeniero) return false;
+    if(RF.estado&&a.estado!==RF.estado) return false;
+    return true;
+  });
+  const hasFilter=RF.tipo||RF.contratista||RF.ingeniero||RF.estado;
+
+  // Rendimiento por persona (filtered)
+  var rendData=S.personal.filter(function(p){
+    if(RF.tipo&&p.tipo!==RF.tipo) return false;
+    if(RF.contratista&&p.nombre!==RF.contratista) return false;
+    return true;
+  }).map(function(p){
+    var pActs=actsF.filter(function(a){return a.personal_nombre===p.nombre;});
+    var done=pActs.filter(function(a){return a.estado==='completado';}).length;
+    var asist=S.asist.find(function(a){return a.personal_id===p.id;});
+    var hrs=asist?(function(){
       if(!asist.hora_entrada||!asist.hora_salida)return null;
-      const[eh,em]=asist.hora_entrada.split(':').map(Number);
-      const[sh,sm]=asist.hora_salida.split(':').map(Number);
+      var eh=parseInt(asist.hora_entrada),em=parseInt(asist.hora_entrada.split(':')[1]||0);
+      var sh=parseInt(asist.hora_salida),sm=parseInt(asist.hora_salida.split(':')[1]||0);
+      eh=parseInt(asist.hora_entrada.split(':')[0]);sh=parseInt(asist.hora_salida.split(':')[0]);
       return((sh*60+sm)-(eh*60+em))/60+(parseFloat(asist.horas_extra)||0);
     })():null;
-    return{p,acts:acts.length,done,asist,hrs};
-  }).filter(r=>r.acts>0||r.asist);
+    return{p,acts:pActs.length,done,asist,hrs};
+  }).filter(function(r){return r.acts>0||r.asist;});
 
-  document.getElementById('c-rep').innerHTML=`
-    ${dateNavHTML()}
-    <div class="stats-row">
-      <div class="scard"><div class="v" style="color:var(--blue)">${pct}%</div><div class="l">Asistencia</div></div>
-      <div class="scard"><div class="v" style="color:var(--accent)">${actDone}/${actTotal}</div><div class="l">Completadas</div></div>
-      <div class="scard"><div class="v" style="color:var(--accent)">${actProp}</div><div class="l">Propios</div></div>
-      <div class="scard"><div class="v" style="color:var(--purple)">${actCont}</div><div class="l">Contratistas</div></div>
-    </div>
+  var SEL2='width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg2);color:var(--text);font-size:11px;font-family:var(--font);-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'7\' viewBox=\'0 0 10 7\'%3E%3Cpath d=\'M1 1l4 4 4-4\' stroke=\'%23868e96\' stroke-width=\'1.5\' fill=\'none\'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:26px';
+  var contOpts2=getContratistasOpts();
+  var ingOpts2=Object.values(USERS).map(function(u){return{val:u.nombre,label:u.nombre};});
 
-    <div class="sec-hdr"><span class="sec-title">Rendimiento por persona</span></div>
-    ${rendData.length===0?'<div class="empty">Sin datos de rendimiento para este día</div>'
-    :`<div style="overflow-x:auto"><table class="rend-table">
-      <thead><tr><th>Trabajador</th><th>Asistencia</th><th>Hrs</th><th>Actividades</th><th>% Avance</th></tr></thead>
-      <tbody>
-        ${rendData.map(r=>{
-          const pct2=r.acts?Math.round(r.done/r.acts*100):0;
-          return`<tr>
-            <td>
-              <div style="display:flex;align-items:center;gap:6px">
-                <div style="width:24px;height:24px;border-radius:50%;background:${avColor(r.p.nombre)}22;color:${avColor(r.p.nombre)};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0">${initials(r.p.nombre)}</div>
-                <div>
-                  <div style="font-size:12px;font-weight:500">${esc(r.p.nombre)}</div>
-                  <div style="font-size:10px;color:var(--text3)">${esc(r.p.oficio||r.p.tipo)}</div>
-                </div>
-              </div>
-            </td>
-            <td>${r.asist?`<span class="pill ${(r.asist.estado||'').replace(' ','-')}">${r.asist.estado}</span>`:'<span style="color:var(--text3);font-size:11px">—</span>'}</td>
-            <td style="font-family:var(--mono);font-size:11px">${r.hrs!==null?r.hrs.toFixed(1)+'h':'—'}</td>
-            <td style="font-family:var(--mono);font-size:11px">${r.done}/${r.acts}</td>
-            <td style="white-space:nowrap">
-              <span style="font-family:var(--mono);font-size:11px">${pct2}%</span>
-              <div class="rend-bar"><div class="rend-bar-fill" style="width:${pct2}%"></div></div>
-            </td>
-          </tr>`;}).join('')}
-      </tbody>
-    </table></div>`}
+  document.getElementById('c-rep').innerHTML=
+    dateNavHTML()+
 
-    <div class="sec-hdr" style="margin-top:16px"><span class="sec-title">Actividades del día</span></div>
-    ${S.acts.length===0?'<div class="empty">Sin actividades registradas</div>'
-    :S.acts.map(a=>`
-      <div style="padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${a.tipo_personal==='contratista'?'var(--purple)':'var(--accent)'};border-radius:var(--r);margin-bottom:6px">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
-          <span style="font-size:12px;font-weight:500">${esc(a.descripcion)}</span>
-          <span class="pill ${a.estado.replace(' ','-')}" style="font-size:9px">${a.estado}</span>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text3)">
-          ${a.area?`<span>📍${esc(a.area)}</span>`:''}
-          ${a.personal_nombre?`<span>👷${esc(a.personal_nombre)}</span>`:''}
-          ${a.porcentaje>0?`<span>⚡${a.porcentaje}%</span>`:''}
-          <span class="pill ${a.tipo_personal}" style="font-size:9px">${a.tipo_personal}</span>
-        </div>
-      </div>`).join('')}`;
+    // Stats row
+    '<div class="stats-row">'+
+      '<div class="scard"><div class="v" style="color:var(--blue)">'+pct+'%</div><div class="l">Asistencia</div></div>'+
+      '<div class="scard"><div class="v" style="color:var(--accent)">'+actDone+'/'+actTotal+'</div><div class="l">Completadas</div></div>'+
+      '<div class="scard"><div class="v" style="color:var(--accent)">'+actProp+'</div><div class="l">Propios</div></div>'+
+      '<div class="scard"><div class="v" style="color:var(--purple)">'+actCont+'</div><div class="l">Contratistas</div></div>'+
+    '</div>'+
+
+    // Filter bar
+    '<div style="background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:12px">'+
+      '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:8px">FILTRAR VISTA</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">'+
+        '<select style="'+SEL2+'" onchange="S.repFiltros.tipo=this.value;renderReportes()">'+
+          '<option value="" '+(RF.tipo===''?'selected':'')+'>Tipo: Todos</option>'+
+          '<option value="propio" '+(RF.tipo==='propio'?'selected':'')+'>Personal x la casa</option>'+
+          '<option value="contratista" '+(RF.tipo==='contratista'?'selected':'')+'>Contratistas</option>'+
+        '</select>'+
+        '<select style="'+SEL2+'" onchange="S.repFiltros.estado=this.value;renderReportes()">'+
+          '<option value="" '+(RF.estado===''?'selected':'')+'>Estado: Todos</option>'+
+          '<option value="pendiente" '+(RF.estado==='pendiente'?'selected':'')+'>Pendiente</option>'+
+          '<option value="en-progreso" '+(RF.estado==='en-progreso'?'selected':'')+'>En progreso</option>'+
+          '<option value="pausada" '+(RF.estado==='pausada'?'selected':'')+'>Pausada</option>'+
+          '<option value="completado" '+(RF.estado==='completado'?'selected':'')+'>Completado</option>'+
+        '</select>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'+
+        '<select style="'+SEL2+'" onchange="S.repFiltros.contratista=this.value;renderReportes()">'+
+          '<option value="" '+(RF.contratista===''?'selected':'')+'>Contratista: Todos</option>'+
+          contOpts2.map(function(o){return'<option value="'+esc(o.val)+'" '+(RF.contratista===o.val?'selected':'')+'>'+esc(o.label)+'</option>';}).join('')+
+        '</select>'+
+        '<select style="'+SEL2+'" onchange="S.repFiltros.ingeniero=this.value;renderReportes()">'+
+          '<option value="" '+(RF.ingeniero===''?'selected':'')+'>Ingeniero: Todos</option>'+
+          ingOpts2.map(function(o){return'<option value="'+esc(o.val)+'" '+(RF.ingeniero===o.val?'selected':'')+'>'+esc(o.label)+'</option>';}).join('')+
+        '</select>'+
+      '</div>'+
+      (hasFilter?'<div style="margin-top:6px;text-align:right"><button style="background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline" onclick="S.repFiltros={tipo:\'\',contratista:\'\',ingeniero:\'\',estado:\'\'};renderReportes()">Limpiar filtros</button></div>':'')+
+    '</div>'+
+
+    // Rendimiento
+    '<div class="sec-hdr"><span class="sec-title">Rendimiento'+(hasFilter?' (filtrado)':'')+'</span></div>'+
+    (rendData.length===0?'<div class="empty">Sin datos para los filtros seleccionados</div>':
+      '<div style="overflow-x:auto"><table class="rend-table">'+
+      '<thead><tr><th>Trabajador</th><th>Asistencia</th><th>Hrs</th><th>Actividades</th><th>% Avance</th></tr></thead>'+
+      '<tbody>'+
+      rendData.map(function(r){
+        var pct2=r.acts?Math.round(r.done/r.acts*100):0;
+        return'<tr>'+
+          '<td><div style="display:flex;align-items:center;gap:6px">'+
+            '<div style="width:24px;height:24px;border-radius:50%;background:'+avColor(r.p.nombre)+'22;color:'+avColor(r.p.nombre)+';display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0">'+initials(r.p.nombre)+'</div>'+
+            '<div><div style="font-size:12px;font-weight:500">'+esc(r.p.nombre)+'</div>'+
+            '<div style="font-size:10px;color:var(--text3)">'+esc(r.p.oficio||r.p.tipo)+'</div></div>'+
+          '</div></td>'+
+          '<td>'+(r.asist?'<span class="pill '+(r.asist.estado||'').replace(' ','-')+'">'+r.asist.estado+'</span>':'<span style="color:var(--text3);font-size:11px">—</span>')+'</td>'+
+          '<td style="font-family:var(--mono);font-size:11px">'+(r.hrs!==null?r.hrs.toFixed(1)+'h':'—')+'</td>'+
+          '<td style="font-family:var(--mono);font-size:11px">'+r.done+'/'+r.acts+'</td>'+
+          '<td style="white-space:nowrap"><span style="font-family:var(--mono);font-size:11px">'+pct2+'%</span>'+
+          '<div class="rend-bar"><div class="rend-bar-fill" style="width:'+pct2+'%"></div></div></td>'+
+        '</tr>';
+      }).join('')+
+      '</tbody></table></div>')+
+
+    // Activity list
+    '<div class="sec-hdr" style="margin-top:16px"><span class="sec-title">Actividades'+(hasFilter?' filtradas ('+actsF.length+')':' del día')+'</span></div>'+
+    (actsF.length===0?'<div class="empty">Sin actividades para los filtros seleccionados</div>':
+      actsF.map(function(a){
+        return'<div style="padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid '+(a.tipo_personal==='contratista'?'var(--purple)':'var(--accent)')+';border-radius:var(--r);margin-bottom:6px">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">'+
+            '<span style="font-size:12px;font-weight:500">'+esc(a.descripcion)+'</span>'+
+            '<span class="pill '+a.estado.replace(' ','-')+'" style="font-size:9px">'+a.estado+'</span>'+
+          '</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text3)">'+
+            (a.area?'<span>'+esc(a.area)+'</span>':'')+
+            (a.personal_nombre?'<span>'+esc(a.personal_nombre)+'</span>':'')+
+            (a.ingeniero_nombre?'<span>'+esc(a.ingeniero_nombre)+'</span>':'')+
+            (a.porcentaje>0?'<span>'+a.porcentaje+'%</span>':'')+
+            '<span class="pill '+a.tipo_personal+'" style="font-size:9px">'+a.tipo_personal+'</span>'+
+          '</div>'+
+        '</div>';
+      }).join(''));
 }
 
 // ── SEMANA ────────────────────────────────────────────
@@ -2686,49 +2739,177 @@ async function delPersonal(pid){
 
 // ── PDF ───────────────────────────────────────────────
 function exportarPDF(){
-  // Show report options modal
-  document.getElementById('mcontent').innerHTML=`
-    <div class="mhandle"></div>
-    <h3>📄 Generar reporte PDF</h3>
-    <div style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:8px">TIPO DE REPORTE</div>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
-      <button class="ibtn" style="padding:12px;border-radius:var(--r);text-align:left;min-height:52px;flex-direction:column;align-items:flex-start;gap:2px" onclick="generarPDF('diario')">
-        <span style="font-size:13px;font-weight:500">📋 Reporte diario</span>
-        <span style="font-size:11px;color:var(--text3)">Asistencia + actividades de un día</span>
-      </button>
-      <button class="ibtn" style="padding:12px;border-radius:var(--r);text-align:left;min-height:52px;flex-direction:column;align-items:flex-start;gap:2px" onclick="generarPDF('asistencia')">
-        <span style="font-size:13px;font-weight:500">👷 Solo asistencia</span>
-        <span style="font-size:11px;color:var(--text3)">Registro de entradas, salidas y horas extra</span>
-      </button>
-      <button class="ibtn" style="padding:12px;border-radius:var(--r);text-align:left;min-height:52px;flex-direction:column;align-items:flex-start;gap:2px" onclick="generarPDF('actividades')">
-        <span style="font-size:13px;font-weight:500">⚡ Solo actividades</span>
-        <span style="font-size:11px;color:var(--text3)">Personal x la casa y contratistas separados</span>
-      </button>
-      <button class="ibtn" style="padding:12px;border-radius:var(--r);text-align:left;min-height:52px;flex-direction:column;align-items:flex-start;gap:2px" onclick="generarPDF('contratistas')">
-        <span style="font-size:13px;font-weight:500">🔨 Solo contratistas</span>
-        <span style="font-size:11px;color:var(--text3)">Actividades, avance y duración por contratista</span>
-      </button>
-      <button class="ibtn" style="padding:12px;border-radius:var(--r);text-align:left;min-height:52px;flex-direction:column;align-items:flex-start;gap:2px" onclick="generarPDF('penalidades')">
-        <span style="font-size:13px;font-weight:500">⚠️ Penalidades</span>
-        <span style="font-size:11px;color:var(--text3)">Situaciones y puntos de desempeño</span>
-      </button>
-      <button class="ibtn primary" style="padding:12px;border-radius:var(--r);text-align:left;min-height:52px;flex-direction:column;align-items:flex-start;gap:2px" onclick="generarPDF('completo')">
-        <span style="font-size:13px;font-weight:500">📊 Reporte completo</span>
-        <span style="font-size:11px;color:#111">Todo — asistencia + actividades + penalidades</span>
-      </button>
-    </div>
-    <div style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:6px">FECHA DEL REPORTE</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-      <div class="fw" style="margin-bottom:0"><label class="fl">Desde</label><input type="date" id="pdf-fi" value="${S.fecha}"></div>
-      <div class="fw" style="margin-bottom:0"><label class="fl">Hasta</label><input type="date" id="pdf-ff" value="${S.fecha}"></div>
-    </div>
-    <div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button></div>`;
+  var SEL='width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg2);color:var(--text);font-size:12px;font-family:var(--font);-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'7\' viewBox=\'0 0 10 7\'%3E%3Cpath d=\'M1 1l4 4 4-4\' stroke=\'%23868e96\' stroke-width=\'1.5\' fill=\'none\'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px';
+  var contOpts=getContratistasOpts();
+  var ingOpts=Object.values(USERS).map(function(u){return{val:u.nombre,label:u.nombre};});
+  var chkStyle='display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:12px;font-weight:500;user-select:none';
+  document.getElementById('mcontent').innerHTML=
+    '<div class="mhandle"></div>'+
+    '<h3 style="margin-bottom:14px">Generar Reporte PDF</h3>'+
+
+    '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:6px">ACCESOS RAPIDOS</div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:16px">'+
+      '<button class="ibtn" onclick="pdfPreset(\'diario\')" style="flex:1;padding:8px 4px;font-size:11px;font-weight:600">Diario</button>'+
+      '<button class="ibtn" onclick="pdfPreset(\'semanal\')" style="flex:1;padding:8px 4px;font-size:11px;font-weight:600">Semanal</button>'+
+      '<button class="ibtn" onclick="pdfPreset(\'completo\')" style="flex:1;padding:8px 4px;font-size:11px;font-weight:600">Completo</button>'+
+      '<button class="ibtn" onclick="pdfPreset(\'contratistas\')" style="flex:1;padding:8px 4px;font-size:11px;font-weight:600">Contrat.</button>'+
+      '<button class="ibtn" onclick="pdfPreset(\'asistencia\')" style="flex:1;padding:8px 4px;font-size:11px;font-weight:600">Asistenc.</button>'+
+    '</div>'+
+
+    '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:6px">PERIODO</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'+
+      '<div class="fw" style="margin-bottom:0"><label class="fl">Desde</label><input type="date" id="pdf-fi" value="'+S.fecha+'"></div>'+
+      '<div class="fw" style="margin-bottom:0"><label class="fl">Hasta</label><input type="date" id="pdf-ff" value="'+S.fecha+'"></div>'+
+    '</div>'+
+
+    '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:6px">FILTROS</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+      '<div class="fw" style="margin-bottom:0"><label class="fl">Tipo de personal</label>'+
+        '<select id="pdf-tipo-pers" style="'+SEL+'" onchange="pdfUpdateFiltros()">'+
+          '<option value="">Todos</option>'+
+          '<option value="propio">Personal x la casa</option>'+
+          '<option value="contratista">Contratistas</option>'+
+        '</select></div>'+
+      '<div class="fw" style="margin-bottom:0"><label class="fl">Estado de actividad</label>'+
+        '<select id="pdf-estado" style="'+SEL+'">'+
+          '<option value="">Todos los estados</option>'+
+          '<option value="pendiente">Pendiente</option>'+
+          '<option value="en-progreso">En progreso</option>'+
+          '<option value="pausada">Pausada</option>'+
+          '<option value="completado">Completado</option>'+
+        '</select></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'+
+      '<div class="fw" style="margin-bottom:0" id="pdf-cont-wrap"><label class="fl">Contratista especifico</label>'+
+        '<select id="pdf-contratista" style="'+SEL+'">'+
+          '<option value="">Todos los contratistas</option>'+
+          contOpts.map(function(o){return'<option value="'+esc(o.val)+'">'+esc(o.label)+'</option>';}).join('')+
+        '</select></div>'+
+      '<div class="fw" style="margin-bottom:0"><label class="fl">Ingeniero responsable</label>'+
+        '<select id="pdf-ingeniero" style="'+SEL+'">'+
+          '<option value="">Todos los ingenieros</option>'+
+          ingOpts.map(function(o){return'<option value="'+esc(o.val)+'">'+esc(o.label)+'</option>';}).join('')+
+        '</select></div>'+
+    '</div>'+
+
+    '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:8px">SECCIONES A INCLUIR</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px">'+
+      [
+        {id:'pdf-s-resumen',  label:'Resumen estadístico', def:true},
+        {id:'pdf-s-asist',    label:'Asistencia del personal', def:true},
+        {id:'pdf-s-propios',  label:'Personal x la casa', def:true},
+        {id:'pdf-s-contrat',  label:'Actividades contratistas', def:true},
+        {id:'pdf-s-retr',     label:'Actividades retrasadas', def:true},
+        {id:'pdf-s-pens',     label:'Situaciones / Penalidades', def:true},
+      ].map(function(s){
+        return'<label style="'+chkStyle+'"><input type="checkbox" id="'+s.id+'" '+(s.def?'checked':'')+' style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">'+s.label+'</label>';
+      }).join('')+
+    '</div>'+
+
+    '<div class="mactions">'+
+      '<button class="btn" onclick="closeModal()">Cancelar</button>'+
+      '<button class="btn primary" onclick="pdfGenerar()">Generar PDF</button>'+
+    '</div>';
+
+  pdfUpdateFiltros();
   openModal();
 }
 
-async function generarPDF(tipo){
-  const fi=document.getElementById('pdf-fi')?.value||S.fecha;
-  const ff=document.getElementById('pdf-ff')?.value||S.fecha;
+function pdfUpdateFiltros(){
+  var tp=document.getElementById('pdf-tipo-pers');
+  var wrap=document.getElementById('pdf-cont-wrap');
+  if(!tp||!wrap)return;
+  var isPropio=tp.value==='propio';
+  wrap.style.opacity=isPropio?'0.35':'1';
+  wrap.style.pointerEvents=isPropio?'none':'auto';
+  // Auto-toggle section checkboxes based on tipo
+  if(tp.value==='propio'){
+    var cEl=document.getElementById('pdf-s-contrat');
+    if(cEl) cEl.checked=false;
+  } else if(tp.value==='contratista'){
+    var pEl=document.getElementById('pdf-s-propios');
+    if(pEl) pEl.checked=false;
+    var aEl=document.getElementById('pdf-s-asist');
+    if(aEl) aEl.checked=false;
+  }
+}
+
+function pdfPreset(tipo){
+  var fi=document.getElementById('pdf-fi');
+  var ff=document.getElementById('pdf-ff');
+  if(tipo==='semanal'){
+    var d=new Date(S.fecha+'T12:00:00');
+    var day=d.getDay()||7;
+    var mon=new Date(d);mon.setDate(d.getDate()-day+1);
+    if(fi)fi.value=mon.toISOString().slice(0,10);
+    if(ff)ff.value=S.fecha;
+  } else {
+    if(fi)fi.value=S.fecha;
+    if(ff)ff.value=S.fecha;
+  }
+  var presets={
+    diario:      {resumen:true,  asist:true,  propios:true,  contrat:true,  retr:true,  pens:false},
+    semanal:     {resumen:true,  asist:false, propios:false, contrat:true,  retr:true,  pens:false},
+    completo:    {resumen:true,  asist:true,  propios:true,  contrat:true,  retr:true,  pens:true},
+    contratistas:{resumen:false, asist:false, propios:false, contrat:true,  retr:true,  pens:false},
+    asistencia:  {resumen:true,  asist:true,  propios:false, contrat:false, retr:false, pens:false},
+  };
+  var s=presets[tipo];
+  if(s){
+    Object.keys(s).forEach(function(k){
+      var el=document.getElementById('pdf-s-'+k);
+      if(el)el.checked=s[k];
+    });
+  }
+  // Reset filters
+  ['pdf-tipo-pers','pdf-estado','pdf-contratista','pdf-ingeniero'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el)el.value='';
+  });
+  if(tipo==='contratistas'){
+    var tp=document.getElementById('pdf-tipo-pers');
+    if(tp)tp.value='contratista';
+  } else if(tipo==='asistencia'){
+    var tp2=document.getElementById('pdf-tipo-pers');
+    if(tp2)tp2.value='propio';
+  }
+  pdfUpdateFiltros();
+}
+
+function pdfGenerar(){
+  var opts={
+    fi:  document.getElementById('pdf-fi')?.value||S.fecha,
+    ff:  document.getElementById('pdf-ff')?.value||S.fecha,
+    filtroContratista:  document.getElementById('pdf-contratista')?.value||'',
+    filtroIngeniero:    document.getElementById('pdf-ingeniero')?.value||'',
+    filtroTipoPersonal: document.getElementById('pdf-tipo-pers')?.value||'',
+    filtroEstado:       document.getElementById('pdf-estado')?.value||'',
+    secciones:{
+      resumen:     !!document.getElementById('pdf-s-resumen')?.checked,
+      asistencia:  !!document.getElementById('pdf-s-asist')?.checked,
+      propios:     !!document.getElementById('pdf-s-propios')?.checked,
+      contratistas:!!document.getElementById('pdf-s-contrat')?.checked,
+      retrasadas:  !!document.getElementById('pdf-s-retr')?.checked,
+      penalidades: !!document.getElementById('pdf-s-pens')?.checked,
+    }
+  };
+  generarPDF(opts);
+}
+
+async function generarPDF(opts){
+  // Accept either a legacy string (old callers) or the new opts object
+  if(typeof opts==='string'){
+    opts={fi:S.fecha,ff:S.fecha,filtroContratista:'',filtroIngeniero:'',filtroTipoPersonal:'',filtroEstado:'',
+      secciones:{resumen:true,asistencia:true,propios:true,contratistas:true,retrasadas:true,penalidades:true}};
+  }
+  var fi=opts.fi||S.fecha;
+  var ff=opts.ff||S.fecha;
+  var secs=opts.secciones||{resumen:true,asistencia:true,propios:true,contratistas:true,retrasadas:true,penalidades:true};
+  var fCont=opts.filtroContratista||'';
+  var fIng=opts.filtroIngeniero||'';
+  var fTipo=opts.filtroTipoPersonal||'';
+  var fEst=opts.filtroEstado||'';
+
   closeModal();
   setSS('syncing','Generando PDF...');
   try{
@@ -2737,9 +2918,9 @@ async function generarPDF(tipo){
     if(!mismodia){
       var [asistD,actsD,pensD,retrsD]=await Promise.all([
         sb('obra_asistencia?fecha=gte.'+fi+'&fecha=lte.'+ff+'&order=fecha'),
-        sb('obra_actividades?fecha=gte.'+fi+'&fecha=lte.'+ff+'&order=fecha,created_at&limit=300'),
+        sb('obra_actividades?fecha=gte.'+fi+'&fecha=lte.'+ff+'&order=fecha,created_at&limit=500'),
         sb('obra_penalidades?fecha=gte.'+fi+'&fecha=lte.'+ff+'&order=fecha'),
-        sb('obra_actividades?fecha=lt.'+fi+'&estado=neq.completado&order=fecha.asc&limit=100'),
+        sb('obra_actividades?fecha=lt.'+fi+'&estado=neq.completado&order=fecha.asc&limit=200'),
       ]);
       asist=asistD; pens=pensD;
       // Merge retrasadas into acts (dedup by id)
@@ -2749,7 +2930,26 @@ async function generarPDF(tipo){
       retrs=retrsD;
     } else {
       // Single day: retrasadas = non-completed from before fi
-      retrs=acts.filter(function(a){return a.fecha<fi&&a.estado!=='completado';});
+      retrs=(S.actsActivas||[]).filter(function(a){return a.fecha<fi&&a.estado!=='completado';});
+    }
+
+    // Apply filters to acts
+    function applyFilters(arr){
+      return arr.filter(function(a){
+        if(fTipo&&a.tipo_personal!==fTipo) return false;
+        if(fCont&&(a.personal_nombre||'')!==fCont) return false;
+        if(fIng&&(a.ingeniero_nombre||'')!==fIng) return false;
+        if(fEst&&a.estado!==fEst) return false;
+        return true;
+      });
+    }
+    acts=applyFilters(acts);
+    retrs=applyFilters(retrs);
+    // Apply engineer filter to attendance if filtering by engineer
+    if(fIng){
+      var ingUser=Object.values(USERS).find(function(u){return u.nombre===fIng;});
+      // attendance is personal-level; if filtering by engineer skip asistencia section
+      asist=asist; // engineer filter doesn't narrow attendance
     }
     const{jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
@@ -2780,11 +2980,22 @@ async function generarPDF(tipo){
     const ESTADO_C={'completado':GRN,'en-progreso':ACC,'pendiente':MUT,'pausada':AMB,'retrasada':RED};
     const ESTADO_L={'completado':'COMPLETADO','en-progreso':'EN PROGRESO','pendiente':'PENDIENTE','pausada':'PAUSADA','retrasada':'RETRASADA'};
 
-    const TITULOS={diario:'REPORTE DIARIO DE OBRA',asistencia:'REPORTE DE ASISTENCIA',
-      actividades:'REPORTE DE ACTIVIDADES',contratistas:'REPORTE DE CONTRATISTAS',
-      semanal:'INFORME SEMANAL DE AVANCE',penalidades:'REGISTRO DE SITUACIONES',
-      completo:'REPORTE COMPLETO DE OBRA'};
-    const titulo=TITULOS[tipo]||tipo.toUpperCase();
+    // Build report title dynamically from active sections + filters
+    var _tparts=[];
+    if(secs.resumen&&secs.asistencia&&secs.propios&&secs.contratistas&&secs.retrasadas&&secs.penalidades&&!fCont&&!fIng&&!fTipo&&!fEst){
+      _tparts.push('REPORTE COMPLETO DE OBRA');
+    } else {
+      if(secs.asistencia&&!secs.propios&&!secs.contratistas) _tparts.push('REPORTE DE ASISTENCIA');
+      else if(secs.propios&&secs.contratistas&&!secs.asistencia) _tparts.push('REPORTE DE ACTIVIDADES');
+      else if(secs.contratistas&&!secs.propios&&!secs.asistencia) _tparts.push('REPORTE DE CONTRATISTAS');
+      else if(secs.penalidades&&!secs.propios&&!secs.contratistas&&!secs.asistencia) _tparts.push('REGISTRO DE SITUACIONES');
+      else _tparts.push('REPORTE DE OBRA');
+    }
+    if(fCont) _tparts.push('CONTRATISTA: '+fCont.toUpperCase());
+    if(fIng)  _tparts.push('RESPONSABLE: '+fIng.toUpperCase());
+    if(fEst)  _tparts.push('ESTADO: '+fEst.toUpperCase());
+    const titulo=_tparts[0];
+    const subtitulo=_tparts.slice(1).join(' | ');
     const periodo=fi===ff?fmtF(fi):fmtF(fi)+' al '+fmtF(ff);
 
     function chk(h){if(y+h>280){doc.addPage();drawHeader();y=32;}}
@@ -2803,12 +3014,21 @@ async function generarPDF(tipo){
       // Proyecto
       tc([200,215,255]);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
       doc.text('PROYECTO: MECCA RESIDENCE 2026',M,20);
-      // Derecha: tipo + periodo + pagina
+      // Derecha: tipo + filtros + periodo + pagina
       tc([160,180,220]);doc.setFontSize(7);doc.setFont('helvetica','normal');
       doc.text(titulo,W-M,9,{align:'right'});
-      doc.text(periodo,W-M,14.5,{align:'right'});
-      tc([120,140,180]);
-      doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,20,{align:'right'});
+      if(subtitulo){
+        tc([200,180,255]);doc.setFontSize(6);
+        doc.text(subtitulo,W-M,14.5,{align:'right'});
+        tc([200,215,255]);doc.setFontSize(6.5);
+        doc.text(periodo,W-M,19.5,{align:'right'});
+        tc([120,140,180]);doc.setFontSize(6);
+        doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,23,{align:'right'});
+      } else {
+        doc.text(periodo,W-M,14.5,{align:'right'});
+        tc([120,140,180]);
+        doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,20,{align:'right'});
+      }
       // Línea verde debajo
       fc(BDX_GRN);doc.rect(0,24,W,1.5,'F');
     }
@@ -2863,8 +3083,8 @@ async function generarPDF(tipo){
     drawHeader();
     y=32;
 
-    // ── RESUMEN ESTADÍSTICO (diario / completo) ───────────────────
-    if(['diario','completo'].includes(tipo)){
+    // ── RESUMEN ESTADÍSTICO ───────────────────────────────────────
+    if(secs.resumen){
       var propios=S.personal.filter(function(p){return p.tipo==='propio';});
       var pres=asist.filter(function(a){return['presente','tarde','medio dia','medio día'].includes(a.estado);});
       var aus=asist.filter(function(a){return a.estado==='ausente';});
@@ -2894,7 +3114,7 @@ async function generarPDF(tipo){
     }
 
     // ── ASISTENCIA ────────────────────────────────────────────────
-    if(['diario','asistencia','completo'].includes(tipo)){
+    if(secs.asistencia){
       var propiosA=S.personal.filter(function(p){return p.tipo==='propio';});
       var presA=asist.filter(function(a){return['presente','tarde','medio dia','medio día'].includes(a.estado);});
       secBanner('ASISTENCIA  — '+presA.length+' de '+propiosA.length+' trabajadores presentes');
@@ -2953,7 +3173,7 @@ async function generarPDF(tipo){
     }
 
     // ── ACTIVIDADES PERSONAL X LA CASA ────────────────────────────
-    if(['diario','actividades','completo'].includes(tipo)){
+    if(secs.propios){
       var actP=acts.filter(function(a){return a.tipo_personal==='propio';});
       if(actP.length){
         secBanner('PERSONAL X LA CASA  ('+actP.length+' actividades)');
@@ -3007,7 +3227,7 @@ async function generarPDF(tipo){
     }
 
     // ── ACTIVIDADES RETRASADAS ────────────────────────────────────
-    if(['diario','actividades','contratistas','completo'].includes(tipo)&&retrs.length){
+    if(secs.retrasadas&&retrs.length){
       secBanner('ACTIVIDADES RETRASADAS  ('+retrs.length+') — pendientes de dias anteriores',RED);
       retrs.forEach(function(a){
         chk(24);
@@ -3049,7 +3269,7 @@ async function generarPDF(tipo){
     }
 
     // ── CONTRATISTAS ──────────────────────────────────────────────
-    if(['diario','contratistas','completo','semanal'].includes(tipo)){
+    if(secs.contratistas){
       var actC=acts.filter(function(a){return a.tipo_personal==='contratista';});
       if(actC.length){
         secBanner('CONTRATISTAS  ('+actC.length+' actividades)',PUR);
@@ -3116,79 +3336,8 @@ async function generarPDF(tipo){
       }
     }
 
-    // ── INFORME SEMANAL ───────────────────────────────────────────
-    if(tipo==='semanal'){
-      var total=acts.length;
-      var compS=acts.filter(function(a){return a.estado==='completado';}).length;
-      var progS=acts.filter(function(a){return a.estado==='en-progreso';}).length;
-      var pendS=acts.filter(function(a){return a.estado==='pendiente';}).length;
-      var hoyS=new Date().toISOString().slice(0,10);
-      var retrS=acts.filter(function(a){return a.estado!=='completado'&&a.fecha<hoyS;}).length;
-      var pctS=total>0?Math.round(compS/total*100):0;
-
-      secBanner('RESUMEN GENERAL DE AVANCE');
-      chk(38);
-      // Barra de avance principal
-      tc(TXT);doc.setFontSize(11);doc.setFont('helvetica','bold');
-      doc.text('Avance del proyecto: '+pctS+'%',M+4,y);y+=7;
-      fc([230,235,245]);doc.roundedRect(M+4,y,RW-8,8,2,2,'F');
-      fc(pctS>=80?GRN:pctS>=40?AMB:RED);
-      var barSW=(RW-8)*pctS/100;
-      if(barSW>0.5) doc.roundedRect(M+4,y,barSW,8,2,2,'F');
-      tc(WHT);doc.setFontSize(8);doc.setFont('helvetica','bold');
-      if(pctS>5) doc.text(pctS+'%',M+6,y+5.5);
-      y+=14;
-
-      // Cajas de estadísticas
-      var statsS=[
-        {l:'Total',v:total,c:DARK},
-        {l:'Completadas',v:compS,c:GRN},
-        {l:'En Progreso',v:progS,c:ACC},
-        {l:'Pendientes',v:pendS,c:MUT},
-        {l:'Retrasadas',v:retrS,c:retrS>0?RED:MUT}
-      ];
-      var sw2=(RW-16)/5;
-      chk(20);
-      statsS.forEach(function(s,i){
-        var sx=M+4+i*(sw2+4);
-        fc(s.c);doc.roundedRect(sx,y,sw2,16,2,2,'F');
-        tc(WHT);doc.setFontSize(14);doc.setFont('helvetica','bold');
-        doc.text(String(s.v),sx+sw2/2,y+10,{align:'center'});
-        doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-        doc.text(s.l,sx+sw2/2,y+14.5,{align:'center'});
-      });
-      y+=21;hrLine();
-
-      // Avance por contratista
-      secBanner('AVANCE POR CONTRATISTA',PUR);
-      var contsS=[];
-      acts.filter(function(a){return a.tipo_personal==='contratista';})
-          .forEach(function(a){var n=a.personal_nombre||'Sin asignar';if(!contsS.includes(n))contsS.push(n);});
-      contsS.sort();
-      if(!contsS.length){
-        chk(8);tc(MUT);doc.setFontSize(8);doc.setFont('helvetica','italic');
-        doc.text('Sin actividades de contratistas en este período.',M+4,y);y+=10;
-      }
-      contsS.forEach(function(c){
-        var ca=acts.filter(function(a){return a.tipo_personal==='contratista'&&(a.personal_nombre||'Sin asignar')===c;});
-        var cc=ca.filter(function(a){return a.estado==='completado';}).length;
-        var pct2=ca.length>0?Math.round(cc/ca.length*100):0;
-        chk(14);
-        tc(TXT);doc.setFontSize(9);doc.setFont('helvetica','bold');
-        doc.text(safe(c),M+4,y+4);
-        tc(MUT);doc.setFont('helvetica','normal');doc.setFontSize(8);
-        doc.text(cc+' / '+ca.length+' completadas  ('+pct2+'%)',W-M,y+4,{align:'right'});
-        y+=7;
-        fc([230,235,245]);doc.rect(M+4,y,RW-8,4,'F');
-        var barCC=pct2>=80?GRN:pct2>=40?AMB:RED;
-        fc(barCC);if(pct2>0)doc.rect(M+4,y,Math.max(0.5,(RW-8)*pct2/100),4,'F');
-        y+=7;
-      });
-      hrLine();
-    }
-
     // ── SITUACIONES / PENALIDADES ─────────────────────────────────
-    if(['penalidades','completo'].includes(tipo)&&pens.length){
+    if(secs.penalidades&&pens.length){
       secBanner('SITUACIONES REGISTRADAS  ('+pens.length+')',RED);
       // Cabecera tabla
       chk(8);fc([250,235,235]);doc.rect(M,y-1,RW,7,'F');
@@ -3229,7 +3378,13 @@ async function generarPDF(tipo){
       doc.text('Generado: '+new Date().toLocaleDateString('es-DO')+' '+hhmm()+(S.user?'  |  '+safe(S.user.nombre):''),W-M,292,{align:'right'});
     }
 
-    doc.save('BRIDEX_MeccaResidence_'+tipo+'_'+fi+(fi!==ff?'_al_'+ff:'')+'.pdf');
+    var _fname='BRIDEX_MeccaResidence';
+    if(fCont) _fname+='_'+fCont.replace(/\s+/g,'_').slice(0,20);
+    else if(fIng) _fname+='_'+fIng.replace(/\s+/g,'_').replace(/\./g,'').slice(0,20);
+    else if(fTipo==='contratista') _fname+='_Contratistas';
+    else if(fTipo==='propio') _fname+='_Personal';
+    _fname+='_'+fi+(fi!==ff?'_al_'+ff:'')+'.pdf';
+    doc.save(_fname);
     setSS('ok','PDF generado correctamente');
   }catch(e){
     setSS('err','Error PDF: '+e.message);
