@@ -2995,7 +2995,7 @@ async function generarPDF(tipo){
           cActs.forEach(function(a){
             chk(18);
             doc.setFillColor(C.light[0],C.light[1],C.light[2]);
-            doc.roundedRect(M+2,y-1,RW-4,1,'F');
+            doc.rect(M+2,y-1,RW-4,1,'F');
             doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
             var titleLines=doc.splitTextToSize((fi!==ff?'['+a.fecha+'] ':'')+a.descripcion,RW-35);
             titleLines.forEach(function(l){doc.text(l,M+6,y+3);y+=5;});
