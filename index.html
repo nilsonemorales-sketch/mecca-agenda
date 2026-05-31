@@ -1724,7 +1724,7 @@ function actHTML(a, ai, tipo){
       </div>
     </div>
     <div class="act-meta">
-      ${a.area?`<span>📍 ${esc(a.area)}</span>`:''}
+      ${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.2);padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600">📍 ${esc(a.area)}</span>`:''}
       ${a.ingeniero_nombre?`<span>👤 ${esc(a.ingeniero_nombre)}</span>`:''}
       ${a.personal_nombre?`<span>👷 ${esc(a.personal_nombre)}</span>`:''}
       ${a.fecha?`<span>📅 ${a.fecha}${a.fecha_fin?' → '+a.fecha_fin:''}</span>`:''}
@@ -2746,7 +2746,6 @@ async function generarPDF(tipo){
   const ff=document.getElementById('pdf-ff')?.value||S.fecha;
   closeModal();
   setSS('syncing','Generando PDF...');
-
   try{
     const mismodia=fi===ff;
     let asist=S.asist||[], acts=S.acts||[], pens=S.pens||[];
@@ -2757,129 +2756,90 @@ async function generarPDF(tipo){
         sb('obra_penalidades?fecha=gte.'+fi+'&fecha=lte.'+ff+'&order=fecha'),
       ]);
     }
-
     const{jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     const W=210,M=14,RW=W-2*M;
     let y=0;
 
-    // ── Color palette ────────────────────────────────
-    const C={
-      bg:     [26,35,50],
-      accent: [26,86,219],
-      green:  [47,158,68],
-      amber:  [224,138,0],
-      red:    [224,49,49],
-      purple: [112,72,232],
-      white:  [255,255,255],
-      light:  [248,249,250],
-      border: [222,226,230],
-      text:   [33,37,41],
-      muted:  [108,117,125],
-      section:[240,244,255],
-    };
+    // Safe color helpers - NO spread operator
+    function fc(c){doc.setFillColor(c[0],c[1],c[2]);}
+    function tc(c){doc.setTextColor(c[0],c[1],c[2]);}
+    function dc(c){doc.setDrawColor(c[0],c[1],c[2]);}
 
-    const rgb=(c)=>c;
-    const chk=(h)=>{if(y+h>285){doc.addPage();addPageHeader();y=30;}};
+    // Strip emoji from text for PDF
+    function safe(s){return String(s||'').replace(/[\u{1F000}-\u{1FFFF}|\u{2600}-\u{27BF}]|[\uD800-\uDBFF][\uDC00-\uDFFF]/gu,'').replace(/[^\x00-\x7E\xC0-\xFF]/g,'').trim();}
 
-    function addPageHeader(){
-      doc.setFillColor(C.bg[0],C.bg[1],C.bg[2]);
-      doc.rect(0,0,W,22,'F');
-      doc.setFillColor(C.accent[0],C.accent[1],C.accent[2]);
-      doc.rect(0,22,W,2,'F');
-      doc.setTextColor(C.white[0],C.white[1],C.white[2]);
-      doc.setFontSize(11);doc.setFont('helvetica','bold');
+    const BG=[26,35,50],ACC=[26,86,219],GRN=[47,158,68],AMB=[224,138,0],
+          RED=[224,49,49],PUR=[112,72,232],WHT=[255,255,255],
+          BOR=[222,226,230],TXT=[33,37,41],MUT=[108,117,125];
+
+    const ESTADO_C={'completado':GRN,'en-progreso':ACC,'pendiente':MUT,'pausada':AMB,'retrasada':RED};
+
+    const TITULOS={diario:'REPORTE DIARIO',asistencia:'REPORTE DE ASISTENCIA',
+      actividades:'REPORTE DE ACTIVIDADES',contratistas:'REPORTE DE CONTRATISTAS',
+      semanal:'REPORTE SEMANAL DE AVANCE',penalidades:'REPORTE DE PENALIDADES',completo:'REPORTE COMPLETO'};
+    const titulo=TITULOS[tipo]||tipo.toUpperCase();
+    const periodo=fi===ff?fmtF(fi):fmtF(fi)+' - '+fmtF(ff);
+
+    function chk(h){if(y+h>283){doc.addPage();drawHeader();y=30;}}
+
+    function drawHeader(){
+      fc(BG);doc.rect(0,0,W,22,'F');
+      fc(ACC);doc.rect(0,22,W,2,'F');
+      tc(WHT);doc.setFontSize(11);doc.setFont('helvetica','bold');
       doc.text('MECCA RESIDENCE 2026',M,9);
-      doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,230);
-      doc.text(titulo+'  ·  '+periodo+(S.user?'  ·  '+S.user.nombre:''),M,16);
-      const pg=doc.internal.getCurrentPageInfo().pageNumber;
-      doc.text('Pág. '+pg,W-M,16,{align:'right'});
+      doc.setFontSize(8);doc.setFont('helvetica','normal');tc([200,210,230]);
+      var sub=titulo+'  -  '+periodo+(S.user?'  -  '+safe(S.user.nombre):'');
+      doc.text(sub,M,16);
+      doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,16,{align:'right'});
     }
 
-    function secHeader(label,color,count){
+    function secBanner(label, color){
       chk(14);
-      doc.setFillColor(...(color||C.section));
+      fc(color||[240,244,255]);
       doc.roundedRect(M,y,RW,10,2,2,'F');
-      doc.setTextColor(...(color?C.white:C.accent));
+      tc(color?WHT:ACC);
       doc.setFontSize(10);doc.setFont('helvetica','bold');
-      doc.text(label+(count!==undefined?' ('+count+')':''),M+4,y+6.5);
+      doc.text(safe(label),M+4,y+6.5);
       y+=13;
     }
 
-    function row(label,val,indent){
-      chk(6);
-      const x=M+(indent||0)*4;
-      doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
-      doc.text(label,x,y);
-      if(val){
-        doc.setFont('helvetica','normal');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
-        doc.text(val,x+45,y);
-      }
-      y+=5.5;
+    function hrLine(){
+      chk(5);dc(BOR);doc.setLineWidth(0.3);
+      doc.line(M,y,W-M,y);y+=5;
     }
 
-    function badge(text,color,x,yy){
-      var w=doc.getTextWidth(text)+4;
-      doc.setFillColor(...(color||C.accent));
-      doc.roundedRect(x,yy-4,w,5.5,1,1,'F');
-      doc.setTextColor(C.white[0],C.white[1],C.white[2]);
-      doc.setFontSize(7);doc.setFont('helvetica','bold');
-      doc.text(text,x+2,yy);
+    function pdfBadge(text,color,x,yb){
+      var t=safe(text);
+      var w=doc.getTextWidth(t)+4;
+      if(w<8)w=8;
+      fc(color);doc.roundedRect(x,yb-4,w,5.5,1,1,'F');
+      tc(WHT);doc.setFontSize(7);doc.setFont('helvetica','bold');
+      doc.text(t,x+2,yb);
       return w+3;
     }
 
-    function divider(){
-      chk(4);
-      doc.setDrawColor(C.border[0],C.border[1],C.border[2]);doc.setLineWidth(0.3);
-      doc.line(M,y,W-M,y);
-      y+=4;
-    }
-
-    const ESTADO_COLOR={
-      'completado':C.green,'en-progreso':C.accent,
-      'pendiente':C.muted,'pausada':C.amber,'retrasada':C.red
-    };
-
-    const titulos={
-      diario:'REPORTE DIARIO',
-      asistencia:'REPORTE DE ASISTENCIA',
-      actividades:'REPORTE DE ACTIVIDADES',
-      contratistas:'REPORTE DE CONTRATISTAS',
-      semanal:'REPORTE SEMANAL DE AVANCE',
-      penalidades:'REPORTE DE SITUACIONES',
-      completo:'REPORTE COMPLETO'
-    };
-    const titulo=titulos[tipo]||tipo.toUpperCase();
-    const periodo=fi===ff?fmtF(fi):fmtF(fi)+' — '+fmtF(ff);
-
-    addPageHeader();
+    drawHeader();
     y=30;
 
-    // ══════════════════════════════════════════════════
-    // 1. REPORTE DIARIO
-    // ══════════════════════════════════════════════════
+    // ── SUMMARY BOXES (diario/completo) ──────────────────────────
     if(['diario','completo'].includes(tipo)){
-      const pres=asist.filter(a=>['presente','tarde','medio día'].includes(a.estado));
-      const aus=asist.filter(a=>a.estado==='ausente');
-      const actHoy=acts.filter(a=>a.fecha===fi);
-      const enProg=actHoy.filter(a=>a.estado==='en-progreso').length;
-      const comp=actHoy.filter(a=>a.estado==='completado').length;
-
-      // Summary boxes
-      chk(24);
+      var pres=asist.filter(function(a){return['presente','tarde','medio dia'].includes(a.estado);});
+      var aus=asist.filter(function(a){return a.estado==='ausente';});
+      var actHoy=acts.filter(function(a){return a.fecha===fi;});
+      var comp=actHoy.filter(function(a){return a.estado==='completado';});
+      chk(26);
       var boxes=[
-        {l:'Presentes',v:pres.length+'/'+S.personal.filter(p=>p.tipo==='propio').length,c:C.green},
-        {l:'Ausentes',v:aus.length,c:C.red},
-        {l:'Actividades',v:actHoy.length,c:C.accent},
-        {l:'Completadas',v:comp,c:C.green},
+        {l:'Presentes',v:pres.length+'/'+S.personal.filter(function(p){return p.tipo==='propio';}).length,c:GRN},
+        {l:'Ausentes',v:aus.length,c:RED},
+        {l:'Actividades',v:actHoy.length,c:ACC},
+        {l:'Completadas',v:comp.length,c:GRN},
       ];
       var bw=(RW-9)/4;
       boxes.forEach(function(b,i){
         var bx=M+i*(bw+3);
-        doc.setFillColor(...b.c);
-        doc.roundedRect(bx,y,bw,18,2,2,'F');
-        doc.setTextColor(C.white[0],C.white[1],C.white[2]);
-        doc.setFontSize(16);doc.setFont('helvetica','bold');
+        fc(b.c);doc.roundedRect(bx,y,bw,18,2,2,'F');
+        tc(WHT);doc.setFontSize(15);doc.setFont('helvetica','bold');
         doc.text(String(b.v),bx+bw/2,y+11,{align:'center'});
         doc.setFontSize(7);doc.setFont('helvetica','normal');
         doc.text(b.l,bx+bw/2,y+16,{align:'center'});
@@ -2887,235 +2847,213 @@ async function generarPDF(tipo){
       y+=23;
     }
 
-    // ══════════════════════════════════════════════════
-    // 2. ASISTENCIA
-    // ══════════════════════════════════════════════════
+    // ── ASISTENCIA ────────────────────────────────────────────────
     if(['diario','asistencia','completo'].includes(tipo)){
-      const propios=S.personal.filter(p=>p.tipo==='propio');
-      const pres=asist.filter(a=>['presente','tarde','medio día'].includes(a.estado));
-      secHeader('ASISTENCIA — PERSONAL X LA CASA',C.bg,pres.length+'/'+propios.length);
-
-      if(asist.length===0){
-        chk(8);doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);doc.setFontSize(8.5);doc.setFont('helvetica','italic');
-        doc.text('Sin registros de asistencia para este período.',M+4,y);y+=8;
+      var propios=S.personal.filter(function(p){return p.tipo==='propio';});
+      var presA=asist.filter(function(a){return['presente','tarde','medio dia'].includes(a.estado);});
+      secBanner('ASISTENCIA  '+presA.length+'/'+propios.length+' presentes', BG);
+      if(!asist.length){
+        chk(8);tc(MUT);doc.setFontSize(8.5);doc.setFont('helvetica','italic');
+        doc.text('Sin registros de asistencia.',M+4,y);y+=8;
       } else {
         asist.forEach(function(a){
-          const p=propios.find(x=>x.id===a.personal_id);
+          var p=propios.find(function(x){return x.id===a.personal_id;});
           if(!p)return;
           chk(8);
-          // Status dot
-          var sc=a.estado==='presente'?C.green:a.estado==='ausente'?C.red:C.amber;
-          doc.setFillColor(...sc);doc.circle(M+3,y-1.5,1.5,'F');
-          doc.setTextColor(C.text[0],C.text[1],C.text[2]);doc.setFontSize(9);doc.setFont('helvetica','bold');
-          doc.text(p.nombre,M+7,y);
-          doc.setFont('helvetica','normal');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
+          var sc=a.estado==='presente'?GRN:a.estado==='ausente'?RED:AMB;
+          fc(sc);doc.circle(M+3,y-1.5,1.5,'F');
+          tc(TXT);doc.setFontSize(9);doc.setFont('helvetica','bold');
+          doc.text(safe(p.nombre),M+7,y);
+          doc.setFont('helvetica','normal');tc(MUT);
           var info=a.estado.toUpperCase();
           if(a.hora_entrada&&a.hora_salida){
             var hrs=calcHorasEfectivas(a.hora_entrada,a.hora_salida,a.fecha,a.horas_extra);
-            info+=' | '+a.hora_entrada+' - '+a.hora_salida+' | '+fmtHoras(hrs.efectivas)+' efectivas';
-            if(hrs.extra>0) info+=' | +'+hrs.extra+'h extra';
+            info+='  '+a.hora_entrada+' - '+a.hora_salida+'  '+fmtHoras(hrs.efectivas)+' efectivas';
+            if(hrs.extra>0) info+='  +'+hrs.extra+'h extra';
           }
-          if(fi!==ff) info+=' ['+a.fecha+']';
+          if(fi!==ff) info+='  ['+a.fecha+']';
           doc.text(info,M+55,y);
           y+=6.5;
         });
       }
-      divider();
+      hrLine();
     }
 
-    // ══════════════════════════════════════════════════
-    // 3. ACTIVIDADES PERSONAL X LA CASA
-    // ══════════════════════════════════════════════════
+    // ── ACTIVIDADES PERSONAL ──────────────────────────────────────
     if(['diario','actividades','completo'].includes(tipo)){
-      const actP=acts.filter(a=>a.tipo_personal==='propio');
+      var actP=acts.filter(function(a){return a.tipo_personal==='propio';});
       if(actP.length){
-        secHeader('ACTIVIDADES — PERSONAL X LA CASA',C.bg,actP.length);
+        secBanner('PERSONAL X LA CASA  ('+actP.length+')', BG);
         actP.forEach(function(a){
-          chk(20);
-          // Activity title
-          doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
-          var titleLines=doc.splitTextToSize((fi!==ff?'['+a.fecha+'] ':'')+a.descripcion,RW-30);
-          titleLines.forEach(function(l){doc.text(l,M+4,y);y+=5;});
-          // Badges
+          chk(22);
+          tc(TXT);doc.setFontSize(9);doc.setFont('helvetica','bold');
+          var prefix=fi!==ff?'['+a.fecha+'] ':'';
+          var tLines=doc.splitTextToSize(prefix+safe(a.descripcion),RW-30);
+          tLines.forEach(function(l){chk(5);doc.text(l,M+4,y);y+=5;});
           var bx=M+4;
-          if(a.estado) bx+=badge(a.estado.toUpperCase(),ESTADO_COLOR[a.estado]||C.muted,bx,y);
-          if(a.prioridad==='urgente') badge('URGENTE',C.red,bx,y);
+          var ec=ESTADO_C[a.estado]||MUT;
+          bx+=pdfBadge(a.estado.toUpperCase(),ec,bx,y);
+          if(a.prioridad==='urgente') pdfBadge('URGENTE',RED,bx,y);
           y+=7;
-          // Meta
-          doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
-          if(a.area) doc.text('📍 '+a.area,M+4,y);
-          if(a.personal_nombre) doc.text('👷 '+a.personal_nombre,M+70,y);
-          if(a.ingeniero_nombre) doc.text('👤 '+a.ingeniero_nombre,M+130,y);
-          y+=5;
+          tc(MUT);doc.setFontSize(8);doc.setFont('helvetica','normal');
+          var meta=[];
+          if(a.area) meta.push('Ubicacion: '+safe(a.area));
+          if(a.personal_nombre) meta.push('Trab: '+safe(a.personal_nombre));
+          if(a.ingeniero_nombre) meta.push('Resp: '+safe(a.ingeniero_nombre));
+          if(meta.length){chk(5);doc.text(meta.join('   '),M+4,y);y+=5;}
           if(a.porcentaje>0){
             chk(7);
-            doc.setFontSize(7.5);doc.text('Avance: '+a.porcentaje+'%',M+4,y);
-            var barW=60;var barX=M+20;
-            doc.setFillColor(C.border[0],C.border[1],C.border[2]);doc.roundedRect(barX,y-3.5,barW,3,1,1,'F');
-            doc.setFillColor(C.green[0],C.green[1],C.green[2]);doc.roundedRect(barX,y-3.5,barW*a.porcentaje/100,3,1,1,'F');
+            doc.setFontSize(7.5);tc(MUT);doc.text('Avance: '+a.porcentaje+'%',M+4,y);
+            var barW=60,barX=M+22;
+            fc(BOR);doc.rect(barX,y-3.5,barW,3,'F');
+            if(a.porcentaje>0){fc(GRN);doc.rect(barX,y-3.5,Math.max(0.5,barW*a.porcentaje/100),3,'F');}
             y+=5;
           }
           if(a.notas){
-            chk(6);
-            doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
-            var nLines=doc.splitTextToSize('Nota: '+a.notas,RW-8);
-            nLines.forEach(function(l){doc.text(l,M+4,y);y+=4.5;});
+            chk(6);tc(MUT);doc.setFontSize(8);doc.setFont('helvetica','italic');
+            var nl=doc.splitTextToSize('Nota: '+safe(a.notas),RW-8);
+            nl.forEach(function(l){chk(4);doc.text(l,M+4,y);y+=4.5;});
           }
-          y+=3;
-          doc.setDrawColor(C.border[0],C.border[1],C.border[2]);doc.setLineWidth(0.2);
-          doc.line(M+4,y,W-M-4,y);y+=4;
+          y+=2;
+          dc(BOR);doc.setLineWidth(0.2);doc.line(M+4,y,W-M-4,y);y+=4;
         });
-        divider();
+        hrLine();
       }
     }
 
-    // ══════════════════════════════════════════════════
-    // 4. CONTRATISTAS
-    // ══════════════════════════════════════════════════
+    // ── CONTRATISTAS ──────────────────────────────────────────────
     if(['diario','contratistas','completo','semanal'].includes(tipo)){
-      const actC=acts.filter(a=>a.tipo_personal==='contratista');
+      var actC=acts.filter(function(a){return a.tipo_personal==='contratista';});
       if(actC.length){
-        secHeader('ACTIVIDADES — CONTRATISTAS',C.purple,actC.length);
-        const conts=[...new Set(actC.map(a=>a.personal_nombre||'Sin asignar'))].sort();
+        secBanner('CONTRATISTAS  ('+actC.length+')', PUR);
+        var conts=[...new Set(actC.map(function(a){return a.personal_nombre||'Sin asignar';}))].sort();
         conts.forEach(function(c){
-          const cActs=actC.filter(a=>(a.personal_nombre||'Sin asignar')===c);
-          const comp=cActs.filter(a=>a.estado==='completado').length;
-          const prog=cActs.filter(a=>a.estado==='en-progreso').length;
+          var cActs=actC.filter(function(a){return(a.personal_nombre||'Sin asignar')===c;});
+          var cComp=cActs.filter(function(a){return a.estado==='completado';}).length;
+          var cProg=cActs.filter(function(a){return a.estado==='en-progreso';}).length;
           chk(14);
-          // Contractor header
-          doc.setFillColor(245,240,255);
-          doc.roundedRect(M,y,RW,10,2,2,'F');
-          doc.setFillColor(C.purple[0],C.purple[1],C.purple[2]);doc.roundedRect(M,y,3,10,1,1,'F');
-          doc.setTextColor(C.purple[0],C.purple[1],C.purple[2]);doc.setFontSize(9.5);doc.setFont('helvetica','bold');
-          doc.text(c,M+6,y+6.5);
-          doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);doc.setFontSize(8);doc.setFont('helvetica','normal');
-          doc.text(comp+' completadas  '+prog+' en progreso  '+(cActs.length-comp-prog)+' pendientes',W-M,y+6.5,{align:'right'});
+          fc([245,240,255]);doc.roundedRect(M,y,RW,10,2,2,'F');
+          fc(PUR);doc.roundedRect(M,y,3,10,1,1,'F');
+          tc(PUR);doc.setFontSize(9.5);doc.setFont('helvetica','bold');
+          doc.text(safe(c),M+6,y+6.5);
+          tc(MUT);doc.setFontSize(8);doc.setFont('helvetica','normal');
+          doc.text(cComp+' comp.  '+cProg+' en prog.  '+(cActs.length-cComp-cProg)+' pend.',W-M,y+6.5,{align:'right'});
           y+=13;
-
           cActs.forEach(function(a){
-            chk(18);
-            doc.setFillColor(C.light[0],C.light[1],C.light[2]);
-            doc.rect(M+2,y-1,RW-4,1,'F');
-            doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
-            var titleLines=doc.splitTextToSize((fi!==ff?'['+a.fecha+'] ':'')+a.descripcion,RW-35);
-            titleLines.forEach(function(l){doc.text(l,M+6,y+3);y+=5;});
-            y+=2;
-            // Badges
-            var bx=M+6;
-            bx+=badge(a.estado.toUpperCase(),ESTADO_COLOR[a.estado]||C.muted,bx,y);
-            if(a.prioridad==='urgente') bx+=badge('URGENTE',C.red,bx,y);
+            chk(20);
+            tc(TXT);doc.setFontSize(8.5);doc.setFont('helvetica','bold');
+            var tl=doc.splitTextToSize((fi!==ff?'['+a.fecha+'] ':'')+safe(a.descripcion),RW-30);
+            tl.forEach(function(l){chk(5);doc.text(l,M+6,y);y+=5;});
+            var bx2=M+6;
+            bx2+=pdfBadge(a.estado.toUpperCase(),ESTADO_C[a.estado]||MUT,bx2,y);
+            if(a.prioridad==='urgente') pdfBadge('URGENTE',RED,bx2,y);
             y+=7;
-            doc.setFontSize(7.5);doc.setFont('helvetica','normal');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
-            var meta=[];
-            if(a.area) meta.push('📍 '+a.area);
-            if(a.ingeniero_nombre) meta.push('👤 '+a.ingeniero_nombre);
-            if(a.fecha_inicio&&a.fecha_fin) meta.push('📅 '+a.fecha_inicio+' → '+a.fecha_fin);
-            if(a.porcentaje>0) meta.push('⚡ '+a.porcentaje+'%');
-            if(meta.length){doc.text(meta.join('   '),M+6,y);y+=4.5;}
+            tc(MUT);doc.setFontSize(7.5);doc.setFont('helvetica','normal');
+            var m2=[];
+            if(a.area) m2.push('Ubic: '+safe(a.area));
+            if(a.ingeniero_nombre) m2.push('Resp: '+safe(a.ingeniero_nombre));
+            if(a.fecha_inicio&&a.fecha_fin) m2.push(a.fecha_inicio+' > '+a.fecha_fin);
+            if(a.porcentaje>0) m2.push(a.porcentaje+'%');
+            if(m2.length){chk(5);doc.text(m2.join('   '),M+6,y);y+=4.5;}
             if(a.notas){
-              var nLines=doc.splitTextToSize('Nota: '+a.notas,RW-12);
-              nLines.forEach(function(l){doc.setFont('helvetica','italic');doc.text(l,M+6,y);y+=4;});
+              var nl2=doc.splitTextToSize('Nota: '+safe(a.notas),RW-12);
+              nl2.forEach(function(l){chk(4);doc.setFont('helvetica','italic');tc(MUT);doc.text(l,M+6,y);y+=4;});
             }
             y+=2;
           });
           y+=4;
         });
-        divider();
+        hrLine();
       }
     }
 
-    // ══════════════════════════════════════════════════
-    // 5. REPORTE SEMANAL DE AVANCE
-    // ══════════════════════════════════════════════════
+    // ── SEMANAL ───────────────────────────────────────────────────
     if(tipo==='semanal'){
-      const total=acts.length;
-      const comp=acts.filter(a=>a.estado==='completado').length;
-      const prog=acts.filter(a=>a.estado==='en-progreso').length;
-      const pend=acts.filter(a=>a.estado==='pendiente').length;
-      const retr=acts.filter(a=>{
-        var hoy=new Date().toISOString().slice(0,10);
-        return a.estado!=='completado'&&a.fecha<hoy;
-      }).length;
-      const pct=total>0?Math.round(comp/total*100):0;
+      var total=acts.length;
+      var compS=acts.filter(function(a){return a.estado==='completado';}).length;
+      var progS=acts.filter(function(a){return a.estado==='en-progreso';}).length;
+      var pendS=acts.filter(function(a){return a.estado==='pendiente';}).length;
+      var hoyS=new Date().toISOString().slice(0,10);
+      var retrS=acts.filter(function(a){return a.estado!=='completado'&&a.fecha<hoyS;}).length;
+      var pctS=total>0?Math.round(compS/total*100):0;
 
-      secHeader('RESUMEN DE AVANCE SEMANAL',C.bg);
-      chk(30);
-      // Progress bar
-      doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
-      doc.text('Avance general: '+pct+'%',M+4,y);y+=7;
-      doc.setFillColor(C.border[0],C.border[1],C.border[2]);doc.roundedRect(M+4,y,RW-8,6,2,2,'F');
-      doc.setFillColor(C.green[0],C.green[1],C.green[2]);doc.roundedRect(M+4,y,(RW-8)*pct/100,6,2,2,'F');
-      y+=10;
-      // Stats row
-      var stats=[
-        {l:'Total',v:total,c:C.accent},
-        {l:'Completadas',v:comp,c:C.green},
-        {l:'En progreso',v:prog,c:C.accent},
-        {l:'Pendientes',v:pend,c:C.muted},
-        {l:'Retrasadas',v:retr,c:C.red},
+      secBanner('RESUMEN DE AVANCE SEMANAL', BG);
+      chk(35);
+      tc(TXT);doc.setFontSize(11);doc.setFont('helvetica','bold');
+      doc.text('Avance general: '+pctS+'%',M+4,y);y+=8;
+      fc(BOR);doc.rect(M+4,y,RW-8,7,'F');
+      fc(GRN);
+      var barSW=(RW-8)*pctS/100;
+      if(barSW>0.5) doc.rect(M+4,y,barSW,7,'F');
+      y+=12;
+
+      var statsS=[
+        {l:'Total',v:total,c:ACC},{l:'Completadas',v:compS,c:GRN},
+        {l:'En progreso',v:progS,c:ACC},{l:'Pendientes',v:pendS,c:MUT},{l:'Retrasadas',v:retrS,c:RED}
       ];
-      var sw=(RW-16)/5;
-      stats.forEach(function(s,i){
-        var sx=M+4+i*(sw+4);
-        chk(16);
-        doc.setFillColor(...s.c);doc.roundedRect(sx,y,sw,14,2,2,'F');
-        doc.setTextColor(C.white[0],C.white[1],C.white[2]);
-        doc.setFontSize(14);doc.setFont('helvetica','bold');doc.text(String(s.v),sx+sw/2,y+9,{align:'center'});
-        doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(s.l,sx+sw/2,y+13,{align:'center'});
+      var sw2=(RW-16)/5;
+      statsS.forEach(function(s,i){
+        var sx=M+4+i*(sw2+4);
+        chk(16);fc(s.c);doc.roundedRect(sx,y,sw2,14,2,2,'F');
+        tc(WHT);doc.setFontSize(13);doc.setFont('helvetica','bold');
+        doc.text(String(s.v),sx+sw2/2,y+9,{align:'center'});
+        doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+        doc.text(s.l,sx+sw2/2,y+13,{align:'center'});
       });
-      y+=19;divider();
+      y+=19;hrLine();
 
-      // By contractor progress
-      secHeader('AVANCE POR CONTRATISTA',C.purple);
-      const conts=[...new Set(acts.filter(a=>a.tipo_personal==='contratista').map(a=>a.personal_nombre||'Sin asignar'))].sort();
-      conts.forEach(function(c){
-        const ca=acts.filter(a=>a.tipo_personal==='contratista'&&(a.personal_nombre||'Sin asignar')===c);
-        const cc=ca.filter(a=>a.estado==='completado').length;
-        const pct2=ca.length>0?Math.round(cc/ca.length*100):0;
-        chk(12);
-        doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
-        doc.text(c,M+4,y);
-        doc.setFont('helvetica','normal');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
-        doc.text(cc+'/'+ca.length+' ('+pct2+'%)',W-M,y,{align:'right'});
+      secBanner('AVANCE POR CONTRATISTA', PUR);
+      var contsS=[...new Set(acts.filter(function(a){return a.tipo_personal==='contratista';}).map(function(a){return a.personal_nombre||'Sin asignar';}))].sort();
+      contsS.forEach(function(c){
+        var ca=acts.filter(function(a){return a.tipo_personal==='contratista'&&(a.personal_nombre||'Sin asignar')===c;});
+        var cc=ca.filter(function(a){return a.estado==='completado';}).length;
+        var pct2=ca.length>0?Math.round(cc/ca.length*100):0;
+        chk(14);
+        tc(TXT);doc.setFontSize(9);doc.setFont('helvetica','bold');
+        doc.text(safe(c),M+4,y);
+        tc(MUT);doc.setFont('helvetica','normal');
+        doc.text(cc+'/'+ca.length+'  ('+pct2+'%)',W-M,y,{align:'right'});
         y+=4;
-        doc.setFillColor(C.border[0],C.border[1],C.border[2]);doc.roundedRect(M+4,y,RW-8,4,1,1,'F');
-        doc.setFillColor(pct2>=80?C.green[0]:pct2>=40?C.amber[0]:C.red[0],
-                         pct2>=80?C.green[1]:pct2>=40?C.amber[1]:C.red[1],
-                         pct2>=80?C.green[2]:pct2>=40?C.amber[2]:C.red[2]);
-        doc.roundedRect(M+4,y,(RW-8)*pct2/100,4,1,1,'F');
+        fc(BOR);doc.rect(M+4,y,RW-8,4,'F');
+        var barC=pct2>=80?GRN:pct2>=40?AMB:RED;
+        fc(barC);
+        var barCW=(RW-8)*pct2/100;
+        if(barCW>0.5) doc.rect(M+4,y,barCW,4,'F');
         y+=7;
       });
-      divider();
+      hrLine();
     }
 
-    // ══════════════════════════════════════════════════
-    // 6. SITUACIONES / PENALIDADES
-    // ══════════════════════════════════════════════════
+    // ── PENALIDADES ───────────────────────────────────────────────
     if(['penalidades','completo'].includes(tipo)&&pens.length){
-      secHeader('SITUACIONES REGISTRADAS',C.red,pens.length);
+      secBanner('SITUACIONES REGISTRADAS  ('+pens.length+')', RED);
       pens.forEach(function(p){
         chk(14);
-        doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
-        doc.text('['+p.fecha+'] '+p.personal_nombre+' — '+p.tipo,M+4,y);y+=5;
+        tc(TXT);doc.setFontSize(9);doc.setFont('helvetica','bold');
+        doc.text('['+p.fecha+'] '+safe(p.personal_nombre)+' - '+safe(p.tipo),M+4,y);y+=5;
         if(p.descripcion){
-          doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
-          var ls=doc.splitTextToSize(p.descripcion,RW-8);
-          ls.forEach(function(l){doc.text(l,M+8,y);y+=4;});
+          tc(MUT);doc.setFont('helvetica','italic');doc.setFontSize(8);
+          var dl=doc.splitTextToSize(safe(p.descripcion),RW-8);
+          dl.forEach(function(l){chk(4);doc.text(l,M+8,y);y+=4;});
         }
         y+=2;
       });
     }
 
-    // Footer on last page
-    doc.setFillColor(C.border[0],C.border[1],C.border[2]);doc.rect(0,287,W,10,'F');
-    doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);doc.setFontSize(7);doc.setFont('helvetica','normal');
-    doc.text('Mecca Residence 2026 — Agenda de Obra',M,293);
-    doc.text('Generado el '+new Date().toLocaleDateString('es-DO')+' a las '+hhmm()+(S.user?' por '+S.user.nombre:''),W-M,293,{align:'right'});
+    // Footer
+    fc(BOR);doc.rect(0,286,W,11,'F');
+    tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','normal');
+    doc.text('Mecca Residence 2026 - Agenda de Obra',M,292);
+    doc.text('Generado: '+new Date().toLocaleDateString('es-DO')+' '+hhmm()+(S.user?' - '+safe(S.user.nombre):''),W-M,292,{align:'right'});
 
-    const nombre='MeccaResidence_'+tipo+'_'+fi+(fi!==ff?'_al_'+ff:'')+'.pdf';
-    doc.save(nombre);
-    setSS('ok','✓ PDF generado');
-  }catch(e){setSS('err','Error PDF: '+e.message);document.getElementById('err-bar').style.display='block';document.getElementById('err-bar').textContent='PDF Error: '+e.message;console.error(e);}
+    doc.save('MeccaResidence_'+tipo+'_'+fi+(fi!==ff?'_al_'+ff:'')+'.pdf');
+    setSS('ok','PDF generado');
+  }catch(e){
+    setSS('err','Error PDF: '+e.message);
+    var eb=document.getElementById('err-bar');
+    if(eb){eb.style.display='block';eb.textContent='PDF Error: '+e.message;}
+    console.error(e);
+  }
 }
 
 
@@ -3232,7 +3170,7 @@ function renderHistorial(){
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--text3)">
                 <span>📅 ${a.fecha}</span>
-                ${a.area?`<span>📍 ${esc(a.area)}</span>`:''}
+                ${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.2);padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600">📍 ${esc(a.area)}</span>`:''}
                 ${a.personal_nombre?`<span>👷 ${esc(a.personal_nombre)}</span>`:''}
                 ${a.porcentaje>0?`<span>⚡ ${a.porcentaje}%</span>`:''}
               </div>
@@ -3469,7 +3407,7 @@ function renderFotos(){
               <div style="flex:1;min-width:0">
                 <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.descripcion)}</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--text3);margin-top:2px">
-                  ${a.area?`<span>📍 ${esc(a.area)}</span>`:''}
+                  ${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.2);padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600">📍 ${esc(a.area)}</span>`:''}
                   ${a.ingeniero_nombre?`<span style="color:${ingColor}">👤 ${esc(a.ingeniero_nombre)}</span>`:''}
                   ${a.personal_nombre?`<span>👷 ${esc(a.personal_nombre)}</span>`:''}
                   <span class="pill ${(a.estado||'').replace(' ','-')}" style="font-size:9px">${a.estado}</span>
