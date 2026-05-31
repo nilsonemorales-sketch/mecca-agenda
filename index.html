@@ -2749,7 +2749,7 @@ async function generarPDF(tipo){
 
   try{
     const mismodia=fi===ff;
-    let asist=S.asist, acts=S.acts, pens=S.pens;
+    let asist=S.asist||[], acts=S.acts||[], pens=S.pens||[];
     if(!mismodia){
       [asist,acts,pens]=await Promise.all([
         sb('obra_asistencia?fecha=gte.'+fi+'&fecha=lte.'+ff+'&order=fecha'),
@@ -2783,11 +2783,11 @@ async function generarPDF(tipo){
     const chk=(h)=>{if(y+h>285){doc.addPage();addPageHeader();y=30;}};
 
     function addPageHeader(){
-      doc.setFillColor(...C.bg);
+      doc.setFillColor(C.bg[0],C.bg[1],C.bg[2]);
       doc.rect(0,0,W,22,'F');
-      doc.setFillColor(...C.accent);
+      doc.setFillColor(C.accent[0],C.accent[1],C.accent[2]);
       doc.rect(0,22,W,2,'F');
-      doc.setTextColor(...C.white);
+      doc.setTextColor(C.white[0],C.white[1],C.white[2]);
       doc.setFontSize(11);doc.setFont('helvetica','bold');
       doc.text('MECCA RESIDENCE 2026',M,9);
       doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,230);
@@ -2809,10 +2809,10 @@ async function generarPDF(tipo){
     function row(label,val,indent){
       chk(6);
       const x=M+(indent||0)*4;
-      doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(...C.text);
+      doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
       doc.text(label,x,y);
       if(val){
-        doc.setFont('helvetica','normal');doc.setTextColor(...C.muted);
+        doc.setFont('helvetica','normal');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
         doc.text(val,x+45,y);
       }
       y+=5.5;
@@ -2822,7 +2822,7 @@ async function generarPDF(tipo){
       var w=doc.getTextWidth(text)+4;
       doc.setFillColor(...(color||C.accent));
       doc.roundedRect(x,yy-4,w,5.5,1,1,'F');
-      doc.setTextColor(...C.white);
+      doc.setTextColor(C.white[0],C.white[1],C.white[2]);
       doc.setFontSize(7);doc.setFont('helvetica','bold');
       doc.text(text,x+2,yy);
       return w+3;
@@ -2830,7 +2830,7 @@ async function generarPDF(tipo){
 
     function divider(){
       chk(4);
-      doc.setDrawColor(...C.border);doc.setLineWidth(0.3);
+      doc.setDrawColor(C.border[0],C.border[1],C.border[2]);doc.setLineWidth(0.3);
       doc.line(M,y,W-M,y);
       y+=4;
     }
@@ -2878,7 +2878,7 @@ async function generarPDF(tipo){
         var bx=M+i*(bw+3);
         doc.setFillColor(...b.c);
         doc.roundedRect(bx,y,bw,18,2,2,'F');
-        doc.setTextColor(...C.white);
+        doc.setTextColor(C.white[0],C.white[1],C.white[2]);
         doc.setFontSize(16);doc.setFont('helvetica','bold');
         doc.text(String(b.v),bx+bw/2,y+11,{align:'center'});
         doc.setFontSize(7);doc.setFont('helvetica','normal');
@@ -2896,7 +2896,7 @@ async function generarPDF(tipo){
       secHeader('ASISTENCIA — PERSONAL X LA CASA',C.bg,pres.length+'/'+propios.length);
 
       if(asist.length===0){
-        chk(8);doc.setTextColor(...C.muted);doc.setFontSize(8.5);doc.setFont('helvetica','italic');
+        chk(8);doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);doc.setFontSize(8.5);doc.setFont('helvetica','italic');
         doc.text('Sin registros de asistencia para este período.',M+4,y);y+=8;
       } else {
         asist.forEach(function(a){
@@ -2906,9 +2906,9 @@ async function generarPDF(tipo){
           // Status dot
           var sc=a.estado==='presente'?C.green:a.estado==='ausente'?C.red:C.amber;
           doc.setFillColor(...sc);doc.circle(M+3,y-1.5,1.5,'F');
-          doc.setTextColor(...C.text);doc.setFontSize(9);doc.setFont('helvetica','bold');
+          doc.setTextColor(C.text[0],C.text[1],C.text[2]);doc.setFontSize(9);doc.setFont('helvetica','bold');
           doc.text(p.nombre,M+7,y);
-          doc.setFont('helvetica','normal');doc.setTextColor(...C.muted);
+          doc.setFont('helvetica','normal');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
           var info=a.estado.toUpperCase();
           if(a.hora_entrada&&a.hora_salida){
             var hrs=calcHorasEfectivas(a.hora_entrada,a.hora_salida,a.fecha,a.horas_extra);
@@ -2933,7 +2933,7 @@ async function generarPDF(tipo){
         actP.forEach(function(a){
           chk(20);
           // Activity title
-          doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...C.text);
+          doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
           var titleLines=doc.splitTextToSize((fi!==ff?'['+a.fecha+'] ':'')+a.descripcion,RW-30);
           titleLines.forEach(function(l){doc.text(l,M+4,y);y+=5;});
           // Badges
@@ -2942,7 +2942,7 @@ async function generarPDF(tipo){
           if(a.prioridad==='urgente') badge('URGENTE',C.red,bx,y);
           y+=7;
           // Meta
-          doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...C.muted);
+          doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
           if(a.area) doc.text('📍 '+a.area,M+4,y);
           if(a.personal_nombre) doc.text('👷 '+a.personal_nombre,M+70,y);
           if(a.ingeniero_nombre) doc.text('👤 '+a.ingeniero_nombre,M+130,y);
@@ -2951,18 +2951,18 @@ async function generarPDF(tipo){
             chk(7);
             doc.setFontSize(7.5);doc.text('Avance: '+a.porcentaje+'%',M+4,y);
             var barW=60;var barX=M+20;
-            doc.setFillColor(...C.border);doc.roundedRect(barX,y-3.5,barW,3,1,1,'F');
-            doc.setFillColor(...C.green);doc.roundedRect(barX,y-3.5,barW*a.porcentaje/100,3,1,1,'F');
+            doc.setFillColor(C.border[0],C.border[1],C.border[2]);doc.roundedRect(barX,y-3.5,barW,3,1,1,'F');
+            doc.setFillColor(C.green[0],C.green[1],C.green[2]);doc.roundedRect(barX,y-3.5,barW*a.porcentaje/100,3,1,1,'F');
             y+=5;
           }
           if(a.notas){
             chk(6);
-            doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(...C.muted);
+            doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
             var nLines=doc.splitTextToSize('Nota: '+a.notas,RW-8);
             nLines.forEach(function(l){doc.text(l,M+4,y);y+=4.5;});
           }
           y+=3;
-          doc.setDrawColor(...C.border);doc.setLineWidth(0.2);
+          doc.setDrawColor(C.border[0],C.border[1],C.border[2]);doc.setLineWidth(0.2);
           doc.line(M+4,y,W-M-4,y);y+=4;
         });
         divider();
@@ -2985,18 +2985,18 @@ async function generarPDF(tipo){
           // Contractor header
           doc.setFillColor(245,240,255);
           doc.roundedRect(M,y,RW,10,2,2,'F');
-          doc.setFillColor(...C.purple);doc.roundedRect(M,y,3,10,1,1,'F');
-          doc.setTextColor(...C.purple);doc.setFontSize(9.5);doc.setFont('helvetica','bold');
+          doc.setFillColor(C.purple[0],C.purple[1],C.purple[2]);doc.roundedRect(M,y,3,10,1,1,'F');
+          doc.setTextColor(C.purple[0],C.purple[1],C.purple[2]);doc.setFontSize(9.5);doc.setFont('helvetica','bold');
           doc.text(c,M+6,y+6.5);
-          doc.setTextColor(...C.muted);doc.setFontSize(8);doc.setFont('helvetica','normal');
+          doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);doc.setFontSize(8);doc.setFont('helvetica','normal');
           doc.text(comp+' completadas  '+prog+' en progreso  '+(cActs.length-comp-prog)+' pendientes',W-M,y+6.5,{align:'right'});
           y+=13;
 
           cActs.forEach(function(a){
             chk(18);
-            doc.setFillColor(...C.light);
+            doc.setFillColor(C.light[0],C.light[1],C.light[2]);
             doc.roundedRect(M+2,y-1,RW-4,1,'F');
-            doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(...C.text);
+            doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
             var titleLines=doc.splitTextToSize((fi!==ff?'['+a.fecha+'] ':'')+a.descripcion,RW-35);
             titleLines.forEach(function(l){doc.text(l,M+6,y+3);y+=5;});
             y+=2;
@@ -3005,7 +3005,7 @@ async function generarPDF(tipo){
             bx+=badge(a.estado.toUpperCase(),ESTADO_COLOR[a.estado]||C.muted,bx,y);
             if(a.prioridad==='urgente') bx+=badge('URGENTE',C.red,bx,y);
             y+=7;
-            doc.setFontSize(7.5);doc.setFont('helvetica','normal');doc.setTextColor(...C.muted);
+            doc.setFontSize(7.5);doc.setFont('helvetica','normal');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
             var meta=[];
             if(a.area) meta.push('📍 '+a.area);
             if(a.ingeniero_nombre) meta.push('👤 '+a.ingeniero_nombre);
@@ -3041,10 +3041,10 @@ async function generarPDF(tipo){
       secHeader('RESUMEN DE AVANCE SEMANAL',C.bg);
       chk(30);
       // Progress bar
-      doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(...C.text);
+      doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
       doc.text('Avance general: '+pct+'%',M+4,y);y+=7;
-      doc.setFillColor(...C.border);doc.roundedRect(M+4,y,RW-8,6,2,2,'F');
-      doc.setFillColor(...C.green);doc.roundedRect(M+4,y,(RW-8)*pct/100,6,2,2,'F');
+      doc.setFillColor(C.border[0],C.border[1],C.border[2]);doc.roundedRect(M+4,y,RW-8,6,2,2,'F');
+      doc.setFillColor(C.green[0],C.green[1],C.green[2]);doc.roundedRect(M+4,y,(RW-8)*pct/100,6,2,2,'F');
       y+=10;
       // Stats row
       var stats=[
@@ -3059,7 +3059,7 @@ async function generarPDF(tipo){
         var sx=M+4+i*(sw+4);
         chk(16);
         doc.setFillColor(...s.c);doc.roundedRect(sx,y,sw,14,2,2,'F');
-        doc.setTextColor(...C.white);
+        doc.setTextColor(C.white[0],C.white[1],C.white[2]);
         doc.setFontSize(14);doc.setFont('helvetica','bold');doc.text(String(s.v),sx+sw/2,y+9,{align:'center'});
         doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(s.l,sx+sw/2,y+13,{align:'center'});
       });
@@ -3073,12 +3073,12 @@ async function generarPDF(tipo){
         const cc=ca.filter(a=>a.estado==='completado').length;
         const pct2=ca.length>0?Math.round(cc/ca.length*100):0;
         chk(12);
-        doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...C.text);
+        doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
         doc.text(c,M+4,y);
-        doc.setFont('helvetica','normal');doc.setTextColor(...C.muted);
+        doc.setFont('helvetica','normal');doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
         doc.text(cc+'/'+ca.length+' ('+pct2+'%)',W-M,y,{align:'right'});
         y+=4;
-        doc.setFillColor(...C.border);doc.roundedRect(M+4,y,RW-8,4,1,1,'F');
+        doc.setFillColor(C.border[0],C.border[1],C.border[2]);doc.roundedRect(M+4,y,RW-8,4,1,1,'F');
         doc.setFillColor(pct2>=80?C.green[0]:pct2>=40?C.amber[0]:C.red[0],
                          pct2>=80?C.green[1]:pct2>=40?C.amber[1]:C.red[1],
                          pct2>=80?C.green[2]:pct2>=40?C.amber[2]:C.red[2]);
@@ -3095,10 +3095,10 @@ async function generarPDF(tipo){
       secHeader('SITUACIONES REGISTRADAS',C.red,pens.length);
       pens.forEach(function(p){
         chk(14);
-        doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...C.text);
+        doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(C.text[0],C.text[1],C.text[2]);
         doc.text('['+p.fecha+'] '+p.personal_nombre+' — '+p.tipo,M+4,y);y+=5;
         if(p.descripcion){
-          doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(...C.muted);
+          doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);
           var ls=doc.splitTextToSize(p.descripcion,RW-8);
           ls.forEach(function(l){doc.text(l,M+8,y);y+=4;});
         }
@@ -3107,15 +3107,15 @@ async function generarPDF(tipo){
     }
 
     // Footer on last page
-    doc.setFillColor(...C.border);doc.rect(0,287,W,10,'F');
-    doc.setTextColor(...C.muted);doc.setFontSize(7);doc.setFont('helvetica','normal');
+    doc.setFillColor(C.border[0],C.border[1],C.border[2]);doc.rect(0,287,W,10,'F');
+    doc.setTextColor(C.muted[0],C.muted[1],C.muted[2]);doc.setFontSize(7);doc.setFont('helvetica','normal');
     doc.text('Mecca Residence 2026 — Agenda de Obra',M,293);
     doc.text('Generado el '+new Date().toLocaleDateString('es-DO')+' a las '+hhmm()+(S.user?' por '+S.user.nombre:''),W-M,293,{align:'right'});
 
     const nombre='MeccaResidence_'+tipo+'_'+fi+(fi!==ff?'_al_'+ff:'')+'.pdf';
     doc.save(nombre);
     setSS('ok','✓ PDF generado');
-  }catch(e){setSS('err','Error PDF');console.error(e);}
+  }catch(e){setSS('err','Error PDF: '+e.message);document.getElementById('err-bar').style.display='block';document.getElementById('err-bar').textContent='PDF Error: '+e.message;console.error(e);}
 }
 
 
