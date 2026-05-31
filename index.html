@@ -2733,13 +2733,23 @@ async function generarPDF(tipo){
   setSS('syncing','Generando PDF...');
   try{
     const mismodia=fi===ff;
-    let asist=S.asist||[], acts=S.acts||[], pens=S.pens||[];
+    let asist=S.asist||[], acts=S.acts||[], pens=S.pens||[], retrs=[];
     if(!mismodia){
-      [asist,acts,pens]=await Promise.all([
+      var [asistD,actsD,pensD,retrsD]=await Promise.all([
         sb('obra_asistencia?fecha=gte.'+fi+'&fecha=lte.'+ff+'&order=fecha'),
         sb('obra_actividades?fecha=gte.'+fi+'&fecha=lte.'+ff+'&order=fecha,created_at&limit=300'),
         sb('obra_penalidades?fecha=gte.'+fi+'&fecha=lte.'+ff+'&order=fecha'),
+        sb('obra_actividades?fecha=lt.'+fi+'&estado=neq.completado&order=fecha.asc&limit=100'),
       ]);
+      asist=asistD; pens=pensD;
+      // Merge retrasadas into acts (dedup by id)
+      var seenIds={};
+      actsD.forEach(function(a){seenIds[a.id]=1;});
+      acts=[...actsD,...retrsD.filter(function(a){return !seenIds[a.id];})];
+      retrs=retrsD;
+    } else {
+      // Single day: retrasadas = non-completed from before fi
+      retrs=acts.filter(function(a){return a.fecha<fi&&a.estado!=='completado';});
     }
     const{jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
@@ -2865,9 +2875,9 @@ async function generarPDF(tipo){
       var boxes=[
         {l:'Presentes',  v:pres.length+'/'+propios.length, c:GRN},
         {l:'Ausentes',   v:aus.length,                     c:aus.length>0?RED:MUT},
-        {l:'Actividades',v:actHoy.length,                  c:ACC},
+        {l:'Act. del dia',v:actHoy.length,                 c:ACC},
+        {l:'Retrasadas', v:retrs.length,                   c:retrs.length>0?RED:MUT},
         {l:'Completadas',v:comp.length,                    c:comp.length>0?GRN:MUT},
-        {l:'En progreso',v:enProg.length,                  c:enProg.length>0?ACC:MUT},
       ];
       var bw=(RW-12)/5;
       boxes.forEach(function(b,i){
@@ -2994,6 +3004,48 @@ async function generarPDF(tipo){
         });
         hrLine();
       }
+    }
+
+    // ── ACTIVIDADES RETRASADAS ────────────────────────────────────
+    if(['diario','actividades','contratistas','completo'].includes(tipo)&&retrs.length){
+      secBanner('ACTIVIDADES RETRASADAS  ('+retrs.length+') — pendientes de dias anteriores',RED);
+      retrs.forEach(function(a){
+        chk(24);
+        var ec2=ESTADO_C[a.estado]||MUT;
+        var el2=ESTADO_L[a.estado]||safe(a.estado).toUpperCase();
+        var diasR=Math.round((new Date(fi)-new Date(a.fecha))/(1000*60*60*24));
+        // Descripción
+        tc([150,20,20]);doc.setFontSize(9);doc.setFont('helvetica','bold');
+        var tLines2=doc.splitTextToSize(safe(a.descripcion),RW-36);
+        tLines2.forEach(function(l){chk(5);doc.text(l,M+4,y);y+=5;});
+        // Badges
+        var bxR=M+4;
+        bxR+=badge(el2,ec2,bxR,y);
+        bxR+=badge('RETRASO '+diasR+'d',RED,bxR,y);
+        if(a.prioridad==='urgente') badge('URGENTE',RED,bxR,y);
+        y+=7;
+        // Área
+        if(a.area){
+          chk(7);
+          fc(RED);doc.roundedRect(M+4,y-4,doc.getTextWidth(safe(a.area))+8,5.5,1,1,'F');
+          tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
+          doc.text(safe(a.area),M+7,y);y+=7;
+        }
+        // Meta
+        tc(MUT);doc.setFontSize(7.5);doc.setFont('helvetica','normal');
+        var metaR=[];
+        metaR.push('Fecha original: '+a.fecha);
+        if(a.personal_nombre) metaR.push((a.tipo_personal==='contratista'?'Contrat: ':'Trabaj: ')+safe(a.personal_nombre));
+        if(a.ingeniero_nombre) metaR.push('Resp: '+safe(a.ingeniero_nombre));
+        if(metaR.length){chk(5);doc.text(metaR.join('   '),M+4,y);y+=5;}
+        if(a.notas){
+          chk(5);tc([130,130,130]);doc.setFontSize(7.5);doc.setFont('helvetica','italic');
+          var nlR=doc.splitTextToSize('Obs: '+safe(a.notas),RW-10);
+          nlR.forEach(function(l){chk(4);doc.text(l,M+4,y);y+=4;});
+        }
+        y+=2;dc([255,200,200]);doc.setLineWidth(0.15);doc.line(M+4,y,W-M-4,y);y+=4;
+      });
+      hrLine();
     }
 
     // ── CONTRATISTAS ──────────────────────────────────────────────
@@ -3713,18 +3765,10 @@ function verFotoInfo(url, desc, fecha, area, ing){
 async function loadTareas(){
   renderEnObra();
   try{
-    // Load: in-progress from any date + today's pending
-    const[enProgreso, hoyPendiente]=await Promise.all([
-      sb('obra_actividades?estado=eq.en-progreso&order=created_at.desc&limit=100'),
-      sb('obra_actividades?fecha=eq.'+S.fecha+'&estado=eq.pendiente&order=created_at.desc&limit=50'),
-    ]);
-    // Merge and deduplicate
-    var seen={};
-    var all=[];
-    enProgreso.forEach(function(a){if(!seen[a.id]){seen[a.id]=1;all.push(a);}});
-    hoyPendiente.forEach(function(a){if(!seen[a.id]){seen[a.id]=1;all.push(a);}});
+    // All non-completed activities dated today or earlier (overdue keep showing until done)
+    const all=await sb('obra_actividades?estado=neq.completado&fecha=lte.'+S.fecha+'&order=fecha.asc,created_at.desc&limit=250');
     S.actsActivas=all;
-    S.tareas=[]; // No longer needed separately
+    S.tareas=[];
     renderEnObra();
   }catch(e){ console.warn('Error En Obra:', e.message); }
 }
@@ -3869,6 +3913,7 @@ function renderEnObra(){
   var pendiente=S.actsActivas.filter(function(a){return a.estado==='pendiente';});
   var pausada=S.actsActivas.filter(function(a){return a.estado==='pausada';});
   var urgentes=S.actsActivas.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
+  var retrasadas=S.actsActivas.filter(function(a){return a.fecha&&a.fecha<S.fecha&&a.estado!=='completado';});
 
   el.innerHTML=`
     <!-- HEADER -->
@@ -3877,7 +3922,8 @@ function renderEnObra(){
         <div style="font-size:14px;font-weight:600">🏗️ En Obra — ${fmtDia(S.fecha)} ${fmtF(S.fecha)}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">${S.actsActivas.length} actividad${S.actsActivas.length!==1?'es':''} activas</div>
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        ${retrasadas.length?`<span style="background:#ffe3e3;color:#c92a2a;border:1px solid #ffa8a8;font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:8px;font-weight:700">⏰ ${retrasadas.length} retrasada${retrasadas.length>1?'s':''}</span>`:''}
         ${urgentes.length?`<span style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8;font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:8px">🔴 ${urgentes.length} urgente${urgentes.length>1?'s':''}</span>`:''}
         <button onclick="loadTareas()" style="background:none;border:1.5px solid #dee2e6;border-radius:8px;padding:5px 8px;cursor:pointer;color:#495057;font-size:13px">↺</button>
       </div>
@@ -3886,10 +3932,10 @@ function renderEnObra(){
     <!-- STATS -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">
       ${[
-        {v:enProgreso.length, l:'En curso',  c:'var(--accent)'},
-        {v:pausada.length,    l:'Pausadas',  c:'var(--amber)'},
-        {v:pendiente.length,  l:'Pendientes',c:'var(--blue)'},
-        {v:S.actsActivas.length, l:'Total',  c:'var(--text2)'},
+        {v:enProgreso.length, l:'En curso',   c:'var(--accent)'},
+        {v:retrasadas.length, l:'Retrasadas', c:retrasadas.length>0?'#c92a2a':'var(--text3)'},
+        {v:pausada.length,    l:'Pausadas',   c:'var(--amber)'},
+        {v:S.actsActivas.length, l:'Total',   c:'var(--text2)'},
       ].map(s=>`<div class="scard"><div class="v" style="color:${s.c};font-size:18px">${s.v}</div><div class="l">${s.l}</div></div>`).join('')}
     </div>
 
@@ -3931,10 +3977,15 @@ function buildActCardObra(a){
   var EB = {'en-progreso':'#e8f0fe','pendiente':'#f8f9fa','pausada':'#fff3bf','completado':'#d3f9d8'};
   var EL = {'en-progreso':'▶ En curso','pendiente':'⏳ Pendiente','pausada':'⏸ Pausada','completado':'✓ Lista'};
 
-  var ec = EC[a.estado]||'#868e96';
-  var eb = EB[a.estado]||'#f8f9fa';
-  var el = EL[a.estado]||a.estado;
-  var bc = a.estado==='en-progreso'?'rgba(26,86,219,.3)':a.estado==='pausada'?'rgba(240,184,96,.4)':'#dee2e6';
+  var retrasada = a.fecha && a.fecha < today() && a.estado !== 'completado';
+  var diasRetraso = retrasada ? Math.round((new Date(today())-new Date(a.fecha))/(1000*60*60*24)) : 0;
+
+  var ec = retrasada ? '#c92a2a' : (EC[a.estado]||'#868e96');
+  var eb = retrasada ? '#ffe3e3' : (EB[a.estado]||'#f8f9fa');
+  var el = retrasada
+    ? '⏰ Retrasada ' + diasRetraso + 'd'
+    : (EL[a.estado]||a.estado);
+  var bc = retrasada ? 'rgba(201,42,42,.45)' : a.estado==='en-progreso'?'rgba(26,86,219,.3)':a.estado==='pausada'?'rgba(240,184,96,.4)':'#dee2e6';
 
   var k = regAct(id);
 
@@ -3961,14 +4012,21 @@ function buildActCardObra(a){
     }
   }
 
-  return '<div style="background:#fff;border:1.5px solid '+bc+';border-left:3px solid '+ec+';border-radius:var(--r2);padding:12px 14px;margin-bottom:10px">'+
+  var retrasadaBanner = retrasada
+    ? '<div style="background:#ffe3e3;border:1px solid #ffa8a8;border-radius:6px;padding:4px 10px;font-size:11px;color:#c92a2a;font-weight:600;margin-bottom:6px">'+
+        '⏰ Retrasada '+diasRetraso+' día'+(diasRetraso!==1?'s':'')+' — asignada el '+a.fecha+
+      '</div>'
+    : '';
+
+  return '<div style="background:#fff;border:1.5px solid '+bc+';border-left:4px solid '+ec+';border-radius:var(--r2);padding:12px 14px;margin-bottom:10px'+(retrasada?';background:#fffafa':'')+'">'+
+    retrasadaBanner+
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">'+
       '<div style="flex:1;min-width:0">'+
         '<div style="font-size:13px;font-weight:600">'+tipo+' '+desc+'</div>'+
             (a.area?'<div style="display:inline-block;background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;margin:4px 0">📍 '+esc(a.area)+'</div>':'<div style="display:inline-block;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;margin:4px 0;cursor:pointer" onclick="setArea(\''+id+'\')" >⚠️ Sin ubicacion — toca para agregar</div>')+
             '<div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">'+pers+ing+'<span>📅 '+a.fecha+'</span></div>'+
       '</div>'+
-      '<span style="font-size:10px;background:'+eb+';color:'+ec+';padding:3px 9px;border-radius:8px;font-weight:600;flex-shrink:0;align-self:flex-start">'+el+'</span>'+
+      '<span style="font-size:10px;background:'+eb+';color:'+ec+';padding:3px 9px;border-radius:8px;font-weight:700;flex-shrink:0;align-self:flex-start;border:1px solid '+ec+'44">'+el+'</span>'+
     '</div>'+
     (pct>0?'<div style="height:4px;background:#e9ecef;border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:'+Math.min(100,pct)+'%;background:'+ec+';border-radius:2px"></div></div>':'')+
     (a.notas?'<div style="font-size:11px;color:var(--text3);margin-bottom:6px;padding:5px 8px;background:#f8f9fa;border-radius:6px">'+esc(a.notas)+'</div>':'')+
