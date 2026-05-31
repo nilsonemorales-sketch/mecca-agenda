@@ -1758,6 +1758,21 @@ async function loadActsAll(){
   }catch(e){setSS('err','Error cargando');}
 }
 
+function updateWorkersField(){
+  var boxes=document.querySelectorAll('input[name="a-pers"]:checked');
+  var names=Array.from(boxes).map(function(b){return b.value;});
+  var inp=document.getElementById('a-pers');
+  if(inp) inp.value=names.join(', ');
+  // Update label styles
+  document.querySelectorAll('input[name="a-pers"]').forEach(function(b){
+    var lbl=b.parentElement;
+    if(lbl){
+      lbl.style.borderColor=b.checked?'var(--accent)':'var(--border2)';
+      lbl.style.background=b.checked?'#e8f0fe':'#fff';
+    }
+  });
+}
+
 async function togglePrioridadAct(id){
   var a=S.acts.find(function(x){return x.id===id;});
   if(!a) return;
@@ -1872,13 +1887,20 @@ function showAddActPropio(ai, ctx){
           <option value="">Sin asignar</option>
           ${Object.values(USERS).map(u=>`<option value="${u.nombre}" ${a.ingeniero_nombre===u.nombre?'selected':''}>${u.nombre}</option>`).join('')}
         </select></div>
-      <div class="fw"><label class="fl">Trabajador</label>
-        <select id="a-pers" class="sel">
-          <option value="">Sin asignar</option>
-          ${a.personal_nombre&&!S.personal.find(p=>p.nombre===a.personal_nombre)?`<option value="${a.personal_nombre}" selected>${esc(a.personal_nombre)} (no registrado)</option>`:''}
-          ${S.personal.filter(p=>p.tipo==='propio').map(p=>`<option value="${p.nombre}" ${a.personal_nombre===p.nombre?'selected':''}>${esc(p.nombre)}</option>`).join('')}
-        </select></div>
-      <div class="fw"><label class="fl">Estado</label>
+      <div class="fw">
+        <label class="fl">Trabajadores <span style="font-size:10px;color:var(--text3)">(selecciona varios)</span></label>
+        ${(function(){
+          var selNames=(a.personal_nombre||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+          return S.personal.filter(function(p){return p.tipo==='propio'&&p.activo;}).map(function(p){
+            var sel=selNames.includes(p.nombre);
+            return '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid '+(sel?'var(--accent)':'var(--border2)')+';border-radius:var(--r);cursor:pointer;background:'+(sel?'#e8f0fe':'#fff')+';margin-bottom:4px">'+
+              '<input type="checkbox" name="a-pers" value="'+esc(p.nombre)+'"'+(sel?' checked':'')+' style="width:18px;height:18px;accent-color:var(--accent)" onchange="updateWorkersField()">'+
+              '<span style="font-size:13px;font-weight:500">'+esc(p.nombre)+'</span>'+
+              (p.oficio?'<span style="font-size:11px;color:var(--text3);margin-left:4px">'+esc(p.oficio)+'</span>':'')+
+              '</label>';
+          }).join('')+'<input type="hidden" id="a-pers" value="'+esc(a.personal_nombre||'')+'">';
+        })()}
+      </div>      <div class="fw"><label class="fl">Estado</label>
         <select id="a-est" class="sel">
           <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
           <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>🔄 En progreso</option>
