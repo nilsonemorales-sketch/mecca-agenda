@@ -9,9 +9,8 @@
 <title>Agenda de Obra — Mecca Residence</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
   --bg:#f8f6ff;
@@ -47,7 +46,7 @@ body{padding-left:var(--sl);padding-right:var(--sr)}
 
 /* ── HEADER ── */
 .hdr{
-  background:linear-gradient(135deg,#1e1b4b 0%,#4c1d95 60%,#7c3aed 100%);
+  background:linear-gradient(135deg,#1e1b4b 0%,#4c1d95 60%,#7c3aed 100%) !important;
   padding:14px 16px;padding-top:calc(14px + var(--st));
   display:flex;align-items:center;justify-content:space-between;
   flex-shrink:0;gap:8px;
@@ -60,12 +59,12 @@ body{padding-left:var(--sl);padding-right:var(--sr)}
 .menu-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:#fff;font-size:16px;cursor:pointer;padding:7px 10px;line-height:1;flex-shrink:0;border-radius:10px;transition:all .15s}
 .menu-btn:hover{background:rgba(255,255,255,.22)}
 .logo-dot{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.15);flex-shrink:0;backdrop-filter:blur(4px)}
-.hdr-title{font-size:14px;font-weight:800;color:#fff;letter-spacing:-.2px}
+.hdr-title{font-size:14px;font-weight:800;color:#fff !important;letter-spacing:-.2px}
 .hdr-sub{font-size:11px;color:rgba(255,255,255,.6);font-family:var(--mono)}
 .hdr-r{display:flex;gap:6px;flex-shrink:0;align-items:center;position:relative}
 .ibtn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:var(--r);padding:7px 13px;font-size:12px;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:all .15s;font-weight:600}
 .ibtn:hover{background:rgba(255,255,255,.22)}
-.ibtn.primary{background:#fff;color:var(--accent);border-color:transparent;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.ibtn.primary{background:#fff !important;color:var(--accent) !important;border-color:transparent !important;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .ibtn.primary:hover{background:#f3f0ff}
 .ibtn.danger{background:var(--red-light);color:var(--red);border-color:#fecaca}
 .ibtn.ghost{background:transparent;border-color:transparent;color:var(--text3)}
@@ -305,7 +304,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="hdr-l">
       <button class="menu-btn" onclick="toggleDrawer()">☰</button>
       <div style="display:flex;align-items:center;gap:10px">
-        <div id="logo-dot" style="width:34px;height:34px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(26,86,219,.25);flex-shrink:0">
+        <div id="logo-dot" class="logo-dot">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         </div>
         <div>
