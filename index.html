@@ -1233,6 +1233,7 @@ const FAB_ACTIONS={
   personal:()=>requireEdit(showAddPersonalChoice),
   penalidades:()=>requireEdit(showAddPen),
   semana:()=>requireEdit(showAddPlan),
+  reportes:()=>exportarPDF(),
 };
 function updateFAB(){
   const fab=document.getElementById('fab');
@@ -4310,6 +4311,7 @@ function goTab(tab, payload){
     b.classList.toggle("active", b.dataset.tab===tab);
   });
   updateBNav(tab);
+  updateFAB();
   if(tab==="hoy") renderHoy();
   else if(tab==="asistencia") renderAsist();
   else if(tab==="actividades") renderActs();
