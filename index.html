@@ -1716,6 +1716,7 @@ function actHTML(a, ai, tipo){
     `<span class="pill ${a.estado.replace(' ','-')}">${a.estado}</span>`;
 
   return`<div class="act-item ${tipo}" style="${(vencida||retrasada)?'border-left:3px solid #e03131;':a.estado==='en-progreso'?'border-left:3px solid #1a56db;':''}">
+    ${a.area?`<div style="font-size:10px;font-weight:700;color:var(--accent);background:#e8f0fe;border:1px solid rgba(26,86,219,.2);border-radius:6px;padding:3px 10px;margin-bottom:6px;display:inline-block">📍 ${esc(a.area)}</div>`:''}
     <div class="act-top">
       <span class="act-desc">${esc(a.descripcion)}</span>${prioBadge}
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
@@ -1724,7 +1725,7 @@ function actHTML(a, ai, tipo){
       </div>
     </div>
     <div class="act-meta">
-      ${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.2);padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600">📍 ${esc(a.area)}</span>`:''}
+
       ${a.ingeniero_nombre?`<span>👤 ${esc(a.ingeniero_nombre)}</span>`:''}
       ${a.personal_nombre?`<span>👷 ${esc(a.personal_nombre)}</span>`:''}
       ${a.fecha?`<span>📅 ${a.fecha}${a.fecha_fin?' → '+a.fecha_fin:''}</span>`:''}
@@ -2767,7 +2768,7 @@ async function generarPDF(tipo){
     function dc(c){doc.setDrawColor(c[0],c[1],c[2]);}
 
     // Strip emoji from text for PDF
-    function safe(s){return String(s||'').replace(/[\u{1F000}-\u{1FFFF}|\u{2600}-\u{27BF}]|[\uD800-\uDBFF][\uDC00-\uDFFF]/gu,'').replace(/[^\x00-\x7E\xC0-\xFF]/g,'').trim();}
+    function safe(s){if(!s)return'';var r=String(s);r=r.replace(/[\uD800-\uDFFF]/g,'');r=r.replace(/[^\x20-\x7E\xC0-\xD6\xD8-\xF6\xF8-\xFF]/g,'');return r.trim();}
 
     const BG=[26,35,50],ACC=[26,86,219],GRN=[47,158,68],AMB=[224,138,0],
           RED=[224,49,49],PUR=[112,72,232],WHT=[255,255,255],
@@ -2895,9 +2896,14 @@ async function generarPDF(tipo){
           bx+=pdfBadge(a.estado.toUpperCase(),ec,bx,y);
           if(a.prioridad==='urgente') pdfBadge('URGENTE',RED,bx,y);
           y+=7;
+          if(a.area){
+            chk(8);
+            fc(ACC);doc.roundedRect(M+4,y-4,doc.getTextWidth('  '+safe(a.area)+'  ')+4,6,1,1,'F');
+            tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
+            doc.text(safe(a.area),M+6,y);y+=7;
+          }
           tc(MUT);doc.setFontSize(8);doc.setFont('helvetica','normal');
           var meta=[];
-          if(a.area) meta.push('Ubicacion: '+safe(a.area));
           if(a.personal_nombre) meta.push('Trab: '+safe(a.personal_nombre));
           if(a.ingeniero_nombre) meta.push('Resp: '+safe(a.ingeniero_nombre));
           if(meta.length){chk(5);doc.text(meta.join('   '),M+4,y);y+=5;}
@@ -2948,9 +2954,14 @@ async function generarPDF(tipo){
             bx2+=pdfBadge(a.estado.toUpperCase(),ESTADO_C[a.estado]||MUT,bx2,y);
             if(a.prioridad==='urgente') pdfBadge('URGENTE',RED,bx2,y);
             y+=7;
+            if(a.area){
+              chk(8);
+              fc(PUR);doc.roundedRect(M+6,y-4,doc.getTextWidth('  '+safe(a.area)+'  ')+4,6,1,1,'F');
+              tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
+              doc.text(safe(a.area),M+8,y);y+=7;
+            }
             tc(MUT);doc.setFontSize(7.5);doc.setFont('helvetica','normal');
             var m2=[];
-            if(a.area) m2.push('Ubic: '+safe(a.area));
             if(a.ingeniero_nombre) m2.push('Resp: '+safe(a.ingeniero_nombre));
             if(a.fecha_inicio&&a.fecha_fin) m2.push(a.fecha_inicio+' > '+a.fecha_fin);
             if(a.porcentaje>0) m2.push(a.porcentaje+'%');
@@ -3170,7 +3181,7 @@ function renderHistorial(){
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--text3)">
                 <span>📅 ${a.fecha}</span>
-                ${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.2);padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600">📍 ${esc(a.area)}</span>`:''}
+          
                 ${a.personal_nombre?`<span>👷 ${esc(a.personal_nombre)}</span>`:''}
                 ${a.porcentaje>0?`<span>⚡ ${a.porcentaje}%</span>`:''}
               </div>
@@ -3407,7 +3418,7 @@ function renderFotos(){
               <div style="flex:1;min-width:0">
                 <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.descripcion)}</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--text3);margin-top:2px">
-                  ${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.2);padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600">📍 ${esc(a.area)}</span>`:''}
+            
                   ${a.ingeniero_nombre?`<span style="color:${ingColor}">👤 ${esc(a.ingeniero_nombre)}</span>`:''}
                   ${a.personal_nombre?`<span>👷 ${esc(a.personal_nombre)}</span>`:''}
                   <span class="pill ${(a.estado||'').replace(' ','-')}" style="font-size:9px">${a.estado}</span>
