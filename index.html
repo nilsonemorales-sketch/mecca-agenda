@@ -1716,7 +1716,7 @@ function actHTML(a, ai, tipo){
     `<span class="pill ${a.estado.replace(' ','-')}">${a.estado}</span>`;
 
   return`<div class="act-item ${tipo}" style="${(vencida||retrasada)?'border-left:3px solid #e03131;':a.estado==='en-progreso'?'border-left:3px solid #1a56db;':''}">
-    ${a.area?`<div style="font-size:10px;font-weight:700;color:var(--accent);background:#e8f0fe;border:1px solid rgba(26,86,219,.2);border-radius:6px;padding:3px 10px;margin-bottom:6px;display:inline-block">📍 ${esc(a.area)}</div>`:''}
+    <div style="margin-bottom:6px">${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">📍 ${esc(a.area)}</span>`:`<span style="background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" onclick="editAct(${ai})">⚠️ Sin ubicacion — Editar</span>`}</div>
     <div class="act-top">
       <span class="act-desc">${esc(a.descripcion)}</span>${prioBadge}
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
@@ -3725,7 +3725,7 @@ function buildActCardObra(a){
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">'+
       '<div style="flex:1">'+
         '<div style="font-size:13px;font-weight:600">'+tipo+' '+desc+'</div>'+
-        (a.area?'<div style="display:inline-block;background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:6px;padding:2px 9px;font-size:11px;font-weight:700;margin:4px 0 2px">📍 '+esc(a.area)+'</div>':'')+
+            (a.area?'<div style="display:inline-block;background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;margin:4px 0">📍 '+esc(a.area)+'</div>':'<div style="display:inline-block;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;margin:4px 0">⚠️ Sin ubicacion</div>')+
             '<div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">'+pers+ing+'<span>📅 '+a.fecha+'</span></div>'+
       '<span style="font-size:10px;background:'+eb+';color:'+ec+';padding:3px 9px;border-radius:8px;font-weight:600;flex-shrink:0">'+el+'</span>'+
     '</div>'+
