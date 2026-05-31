@@ -900,55 +900,25 @@ function showAddActSmart(){
 }
 
 function ubicacionSelect(id, val){
-  return`<select id="${id}" class="sel">
-    <option value="">Selecciona ubicación...</option>
-    ${UBICACIONES.map(g=>`<optgroup label="${g.grupo}">${g.opciones.map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}</optgroup>`).join('')}
-  </select>`;
+  var AREAS=[
+    ['N1',['N1 — Apto 1A','N1 — Apto 1B','N1 — Areas Comunes N1']],
+    ['N2',['N2 — Apto 2A','N2 — Apto 2B','N2 — Areas Comunes N2']],
+    ['N3',['N3 — Apto 3A','N3 — Apto 3B','N3 — Areas Comunes N3']],
+    ['N4',['N4 — Apto 4A','N4 — Apto 4B','N4 — Areas Comunes N4']],
+    ['N5',['N5 — Apto 5A','N5 — Apto 5B','N5 — Areas Comunes N5']],
+    ['N6',['N6 — Apto 6A','N6 — Apto 6B','N6 — Areas Comunes N6']],
+    ['N7',['N7 — Penthouse A','N7 — Penthouse B']],
+    ['Exteriores',['Fachada Frontal','Fachada Lateral Derecha','Fachada Lateral Izquierda','Fachada Posterior']],
+    ['General',['Escalera Principal','Terraza','Parqueo','General','Toda la obra']]
+  ];
+  var opts='<option value="">-- Seleccionar --</option>';
+  AREAS.forEach(function(g){
+    opts+='<optgroup label="'+g[0]+'">';
+    g[1].forEach(function(a){opts+='<option value="'+a+'"'+(val===a?' selected':'')+'>'+a+'</option>';});
+    opts+='</optgroup>';
+  });
+  return '<select id="'+id+'" style="width:100%;padding:10px 12px;border:1.5px solid var(--border2);border-radius:var(--r);background:#fff;font-size:13px;font-family:var(--font)">'+opts+'</select>';
 }
-const PEN_TIPOS=['Tardanza','Ausencia injustificada','Incumplimiento de normas','Daño a materiales','Conducta inapropiada','Abandono de trabajo','Otro'];
-
-// Sistema de puntos de desempeño
-const PUNTOS_CONFIG = {
-  // Puntualidad
-  'Tardanza hasta 30 min':          {puntos:1, cat:'⏰ Puntualidad', tipo:'negativo'},
-  'Tardanza más de 30 min':         {puntos:2, cat:'⏰ Puntualidad', tipo:'negativo'},
-  'Ausencia injustificada':         {puntos:4, cat:'⏰ Puntualidad', tipo:'negativo'},
-  // Rendimiento
-  'Tarea incompleta al cierre':     {puntos:1, cat:'🔨 Rendimiento', tipo:'negativo'},
-  'Trabajo deficiente':             {puntos:3, cat:'🔨 Rendimiento', tipo:'negativo'},
-  'Baja productividad reiterada':   {puntos:3, cat:'🔨 Rendimiento', tipo:'negativo'},
-  // Cumplimiento
-  'Incumplimiento de instrucción':  {puntos:2, cat:'📋 Cumplimiento', tipo:'negativo'},
-  'Abandono de área sin aviso':     {puntos:3, cat:'📋 Cumplimiento', tipo:'negativo'},
-  'Uso inadecuado de materiales':   {puntos:2, cat:'📋 Cumplimiento', tipo:'negativo'},
-  // Conducta
-  'Conflicto con compañero':        {puntos:2, cat:'⚠️ Conducta', tipo:'negativo'},
-  'Conducta inapropiada':           {puntos:4, cat:'⚠️ Conducta', tipo:'negativo'},
-  'Daño a materiales por negligencia':{puntos:3,cat:'⚠️ Conducta', tipo:'negativo'},
-  // Ingenieros
-  'Sin registro de inicio de labores':{puntos:2,cat:'📱 Ingenieros', tipo:'negativo'},
-  'Inactividad en obra':            {puntos:2, cat:'📱 Ingenieros', tipo:'negativo'},
-  'Sin fotos en actividades':       {puntos:1, cat:'📱 Ingenieros', tipo:'negativo'},
-  // Positivos
-  'Semana sin infracciones':        {puntos:-2,cat:'⭐ Positivo', tipo:'positivo'},
-  'Mes sin ausencias':              {puntos:-3,cat:'⭐ Positivo', tipo:'positivo'},
-  'Actividad completada antes del tiempo':{puntos:-1,cat:'⭐ Positivo', tipo:'positivo'},
-  'Reporte proactivo de problema':  {puntos:-1,cat:'⭐ Positivo', tipo:'positivo'},
-  // Legacy
-  'Tardanza':                       {puntos:1, cat:'⏰ Puntualidad', tipo:'negativo'},
-  'Incumplimiento de normas':       {puntos:2, cat:'📋 Cumplimiento', tipo:'negativo'},
-  'Daño a materiales':              {puntos:3, cat:'⚠️ Conducta', tipo:'negativo'},
-  'Abandono de trabajo':            {puntos:3, cat:'📋 Cumplimiento', tipo:'negativo'},
-  'Otro':                           {puntos:1, cat:'📋 Cumplimiento', tipo:'negativo'},
-};
-
-const NIVELES_DESEMPENO = [
-  {min:0,  max:4,  nivel:'Excelente',    color:'#2f9e44', bg:'#d3f9d8', icon:'🟢'},
-  {min:5,  max:9,  nivel:'Regular',      color:'#f08c00', bg:'#fff3bf', icon:'🟡'},
-  {min:10, max:14, nivel:'En observación',color:'#e8590c',bg:'#ffe8cc', icon:'🟠'},
-  {min:15, max:19, nivel:'Crítico',      color:'#e03131', bg:'#ffe3e3', icon:'🔴'},
-  {min:20, max:999,nivel:'Alerta máxima',color:'#862e9c', bg:'#f3d9fa', icon:'⛔'},
-];
 
 function getNivelDesempeno(puntos){
   const p=Math.max(0,puntos);
@@ -1528,6 +1498,7 @@ function applyActFilters(acts){
   // Advanced filters
   const av = S.actFiltroAvanzado;
   if(av.contratista) filtered = filtered.filter(a=>a.personal_nombre===av.contratista);
+  if(av.prioridad) filtered = filtered.filter(a=>a.prioridad===av.prioridad);
   if(av.nivel) filtered = filtered.filter(a=>(a.area||'').startsWith(av.nivel));
   if(av.responsable) filtered = filtered.filter(a=>a.ingeniero_nombre===av.responsable);
   if(av.tipo) filtered = filtered.filter(a=>a.tipo_personal===av.tipo);
@@ -1629,6 +1600,10 @@ function buildActsFiltros(){
   h+='</div>';
 
   // Agrupar por
+  h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Prioridad</div>';
+  h+=filtroDropdown('af-prio',av.prioridad||'',[{val:'urgente',label:'🔴 Solo urgentes'}],'Todas',
+    "S.actFiltroAvanzado={...S.actFiltroAvanzado,prioridad:this.value};renderActs()");
+  h+='</div>';
   h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Agrupar por</div>';
   h+=filtroDropdown('af-grupo',S.actFiltro||'tipo',
     [{val:'tipo',label:'Tipo (propio / contratista)'},{val:'contratista',label:'Por contratista'},{val:'nivel',label:'Por nivel'},{val:'apto',label:'Por apartamento'},{val:'responsable',label:'Por responsable'},{val:'critico',label:'Por estado / críticos'}],
@@ -1719,13 +1694,14 @@ function actHTML(a, ai, tipo){
   const vencida=a.fecha_fin&&a.fecha_fin<hoy&&a.estado!=='completado';
   const retrasada=a.fecha<hoy&&a.estado!=='completado';
   
+  var prioBadge = a.prioridad==='urgente' ? '<span style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;margin-left:6px">🔴 URGENTE</span>' : '';
   const estadoLabel = vencida||retrasada ? 
     '<span class="pill" style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8">🔴 retrasada</span>' :
     `<span class="pill ${a.estado.replace(' ','-')}">${a.estado}</span>`;
 
   return`<div class="act-item ${tipo}" style="${(vencida||retrasada)?'border-left:3px solid #e03131;':a.estado==='en-progreso'?'border-left:3px solid #1a56db;':''}">
     <div class="act-top">
-      <span class="act-desc">${esc(a.descripcion)}</span>
+      <span class="act-desc">${esc(a.descripcion)}</span>${prioBadge}
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
         ${estadoLabel}
         ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px" onclick="editAct(${ai})">✏️</button>`:''}
@@ -1751,6 +1727,7 @@ function actHTML(a, ai, tipo){
     </label>`:''}
     ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2)">
       <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Completar</button>
+      <button onclick="togglePrioridadAct('${a.id}')" title="${a.prioridad==='urgente'?'Quitar urgente':'Marcar urgente'}" style="padding:8px 12px;border-radius:var(--r);border:1.5px solid ${a.prioridad==='urgente'?'#e03131':'#dee2e6'};background:${a.prioridad==='urgente'?'#ffe3e3':'#fff'};font-size:13px;cursor:pointer">${a.prioridad==='urgente'?'🔴':'⚪'}</button>
       ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid var(--accent);background:#e8f0fe;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">▶ Iniciar</button>`:''}
     </div>`:''}
   </div>`;
@@ -1779,6 +1756,20 @@ async function loadActsAll(){
     }
     setSS('ok','✓ '+hhmm());
   }catch(e){setSS('err','Error cargando');}
+}
+
+async function togglePrioridadAct(id){
+  var a=S.acts.find(function(x){return x.id===id;});
+  if(!a) return;
+  var nueva=a.prioridad==='urgente'?'normal':'urgente';
+  a.prioridad=nueva;
+  var aa=S.actsActivas?S.actsActivas.find(function(x){return x.id===id;}):null;
+  if(aa) aa.prioridad=nueva;
+  renderActs();
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({prioridad:nueva})});
+    setSS('ok',nueva==='urgente'?'🔴 Marcada urgente':'Prioridad normal');
+  }catch(e){setSS('err','Error');}
 }
 
 async function iniciarActividad(id){
