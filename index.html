@@ -291,12 +291,40 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 .view{padding-bottom:calc(76px + var(--sb))}
 /* ── DESKTOP / TABLET (>600px) ── */
 @media(min-width:601px){
-  body{background:#e8e6f0;display:flex;align-items:flex-start;justify-content:center;overflow:auto;height:100%}
-  .app{max-width:540px;width:100%;height:100vh;height:100dvh;border-radius:0;box-shadow:0 0 60px rgba(80,40,160,.18);position:relative}
+  html,body{overflow:auto;height:auto;min-height:100%}
+  body{background:#0f0a1e;display:block}
+  .app{max-width:100%;height:100vh;height:100dvh;display:flex;flex-direction:row;overflow:hidden}
+  /* Sidebar */
+  #sidebar{display:flex !important;flex-direction:column;width:230px;min-width:230px;background:linear-gradient(180deg,#1e1040 0%,#140c30 60%,#0d1a35 100%);border-right:1px solid rgba(255,255,255,.07);overflow-y:auto;flex-shrink:0}
+  .sb-logo{padding:22px 18px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .sb-logo-icon{width:40px;height:40px;border-radius:13px;background:linear-gradient(135deg,#6b238e,#4a1870);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 14px rgba(107,35,142,.4)}
+  .sb-brand{font-size:13px;font-weight:800;color:#fff;letter-spacing:.3px}
+  .sb-brand-sub{font-size:10px;color:rgba(255,255,255,.45);font-weight:500;margin-top:1px}
+  .sb-section{padding:14px 10px 6px;color:rgba(255,255,255,.3);font-size:9.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase}
+  .sb-btn{display:flex;align-items:center;gap:10px;width:calc(100% - 16px);margin:2px 8px;padding:10px 12px;background:none;border:none;border-radius:11px;color:rgba(255,255,255,.55);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;text-align:left}
+  .sb-btn svg{opacity:.65;flex-shrink:0}
+  .sb-btn:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.9)}
+  .sb-btn:hover svg{opacity:.9}
+  .sb-btn.active{background:rgba(124,58,237,.25);color:#fff;border:1px solid rgba(124,58,237,.35)}
+  .sb-btn.active svg{opacity:1}
+  .sb-spacer{flex:1}
+  .sb-user-box{margin:8px;padding:12px 14px;background:rgba(255,255,255,.06);border-radius:12px;border:1px solid rgba(255,255,255,.08)}
+  .sb-user-name{color:#fff;font-size:13px;font-weight:700}
+  .sb-user-role{color:rgba(255,255,255,.4);font-size:11px;margin-top:2px}
+  .sb-logout{display:flex;align-items:center;gap:8px;width:calc(100% - 16px);margin:4px 8px 16px;padding:9px 12px;background:rgba(255,100,100,.1);border:1px solid rgba(255,100,100,.2);border-radius:10px;color:rgba(255,150,150,.8);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)}
+  .sb-logout:hover{background:rgba(255,100,100,.18);color:#ff8080}
+  /* Main area */
+  .main-col{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
   .bottom-nav{display:none !important}
-  .add-fab{right:calc(50% - 270px + 16px)}
-  .view{padding-bottom:20px}
   .tabs{display:flex !important}
+  .menu-btn{display:none}
+  .add-fab{right:20px}
+  .view{padding-bottom:20px}
+  #overlay,#drawer{display:none !important}
+}
+@media(max-width:600px){
+  #sidebar{display:none}
+  .main-col{display:contents}
 }
 
 /* ── BOTTOM NAV ── */
@@ -347,6 +375,56 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <div class="app">
+
+  <!-- SIDEBAR (desktop only) -->
+  <nav id="sidebar" style="display:none">
+    <div class="sb-logo">
+      <div class="sb-logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </div>
+      <div>
+        <div class="sb-brand">BRIDEX SRL</div>
+        <div class="sb-brand-sub">Mecca Residence 2026</div>
+      </div>
+    </div>
+    <div class="sb-section">Navegación</div>
+    <button class="sb-btn active" id="sb-hoy" onclick="goTab('hoy')">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Hoy
+    </button>
+    <button class="sb-btn" id="sb-obra" onclick="goTab('obra')">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Obra
+    </button>
+    <button class="sb-btn" id="sb-equipo" onclick="goTab('equipo')">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Equipo
+    </button>
+    <button class="sb-btn" id="sb-reportes" onclick="goTab('reportes')">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Reportes
+    </button>
+    <button class="sb-btn" id="sb-fotos" onclick="goTab('fotos')">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Fotos
+    </button>
+    <button class="sb-btn" id="sb-compras" onclick="goTab('compras')">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+      Compras
+    </button>
+    <div class="sb-spacer"></div>
+    <div class="sb-user-box" id="sb-user-box" style="display:none">
+      <div class="sb-user-name" id="sb-user-name">—</div>
+      <div class="sb-user-role" id="sb-user-role">—</div>
+    </div>
+    <button class="sb-logout" onclick="logout()" id="sb-logout-btn" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Cerrar sesión
+    </button>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-col">
   <div class="hdr">
     <div class="hdr-l">
       <button class="menu-btn" onclick="toggleDrawer()">☰</button>
@@ -454,6 +532,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <span class="blbl">OC</span>
     </button>
   </nav>
+  </div><!-- /main-col -->
 </div>
 
 <!-- FAB -->
@@ -505,7 +584,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_10';
+const APP_VERSION='20260601_11';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1301,17 +1380,28 @@ function updateUserUI(){
   if(S.user){
     b.className='ubadge '+(S.user.rol==='admin'?'admin':'ing');
     b.textContent=(S.user.rol==='admin'?'★ ':'')+(S.user.nombre.split(' ')[1]||S.user.nombre);
-    // logo color handled by CSS
     sub.textContent=S.user.nombre;
     document.getElementById('dw-user').textContent=S.user.nombre+' · '+(S.user.rol==='admin'?'Admin':'Ingeniero');
     document.getElementById('dw-login-btn').style.display='none';
     document.getElementById('dw-logout-btn').style.display='flex';
+    // Sidebar
+    var sbn=document.getElementById('sb-user-name');
+    var sbr=document.getElementById('sb-user-role');
+    var sbb=document.getElementById('sb-user-box');
+    var sbl=document.getElementById('sb-logout-btn');
+    if(sbn) sbn.textContent=(S.user.rol==='admin'?'★ ':'')+S.user.nombre;
+    if(sbr) sbr.textContent=S.user.rol==='admin'?'Administrador':'Ingeniero';
+    if(sbb) sbb.style.display='block';
+    if(sbl) sbl.style.display='flex';
   }else{
     b.className='ubadge guest';b.textContent='👤 Entrar';
-    // logo staticsub.textContent='Mecca Residence 2026';
     document.getElementById('dw-user').textContent='Sin sesión';
     document.getElementById('dw-login-btn').style.display='flex';
     document.getElementById('dw-logout-btn').style.display='none';
+    var sbb2=document.getElementById('sb-user-box');
+    var sbl2=document.getElementById('sb-logout-btn');
+    if(sbb2) sbb2.style.display='none';
+    if(sbl2) sbl2.style.display='none';
   }
   // Hide inactivity banner for Nilson
   if(isAdmin()){
@@ -4645,6 +4735,9 @@ function switchTabD(tab){ goTabD(tab); }
 function updateBNav(tab){
   document.querySelectorAll('.bnav-btn').forEach(function(b){
     b.classList.toggle('active', b.id==='bn-'+tab);
+  });
+  document.querySelectorAll('.sb-btn').forEach(function(b){
+    b.classList.toggle('active', b.id==='sb-'+tab);
   });
 }
 
