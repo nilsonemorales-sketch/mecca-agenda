@@ -618,7 +618,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_30';
+const APP_VERSION='20260601_31';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2565,6 +2565,7 @@ function showAddActPropio(ai, ctx){
     <div class="fw"><label class="fl">Notas</label>
       <textarea id="a-n" class="ta" placeholder="Materiales usados, observaciones...">${esc(a.notas)}</textarea></div>
     <input type="hidden" id="a-tipo" value="propio">
+    <input type="hidden" id="a-edit-id" value="${edit?a.id:''}">
     <div class="fgrid">
       <div class="fw"><label class="fl">📅 Fecha inicio (opcional)</label>
         <input type="date" id="a-fi" value="${a.fecha_inicio||''}" onchange="calcDuracion()"></div>
@@ -2668,6 +2669,7 @@ function showAddActContratista(ai, preContratista, ctx){
       <textarea id="a-n" class="ta" placeholder="Condiciones, materiales, acuerdos...">${esc(a.notas)}</textarea></div>
 
     <input type="hidden" id="a-tipo" value="contratista">
+    <input type="hidden" id="a-edit-id" value="${edit?a.id:''}">
     ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -2756,6 +2758,7 @@ function showAddActIngeniero(ai){
     <input type="hidden" id="a-plan" value="0">
     <input type="hidden" id="a-real" value="0">
     <input type="hidden" id="a-tipo" value="ingeniero">
+    <input type="hidden" id="a-edit-id" value="${edit?a.id:''}">
     ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -2789,9 +2792,10 @@ async function saveActIngeniero(ai){
     fecha:S.fecha, foto_pendiente:false,
     predecesoras:(document.getElementById('a-preds')||{value:''}).value.trim()||null,
   };
+  const editIdIng=(document.getElementById('a-edit-id')||{value:''}).value.trim();
   closeModal(); setSS('syncing','Guardando...');
   try{
-    if(ai===undefined||ai==='undefined'){
+    if(!editIdIng){
       const ubicaciones=_ubicacionesSeleccionadas.length>0?_ubicacionesSeleccionadas:[a.area||''];
       for(const ubic of ubicaciones){
         const act={...a,id:uid(),fotos:'',area:ubic};
@@ -2800,8 +2804,9 @@ async function saveActIngeniero(ai){
       }
       _ubicacionesSeleccionadas=[];
     }else{
-      Object.assign(S.acts[ai],a);
-      await sb('obra_actividades?id=eq.'+S.acts[ai].id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
+      var realIdxIng=S.acts.findIndex(function(x){return x.id===editIdIng;});
+      if(realIdxIng>=0) Object.assign(S.acts[realIdxIng],a);
+      await sb('obra_actividades?id=eq.'+editIdIng,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
     }
     setSS('ok','✓ '+hhmm()); renderHoy(); renderActs();
     if(S.obraVista==='kanban') renderKanban();
@@ -2891,9 +2896,10 @@ async function saveAct(ai){
     foto_pendiente:true,
     predecesoras:getFld('a-preds','').trim()||null,
   };
+  const editId = getFld('a-edit-id','').trim();
   closeModal();setSS('syncing','Guardando...');
   try{
-    if(ai===undefined||ai==='undefined'){
+    if(!editId){
       // Multi-location: create one activity per location
       const ubicaciones = _ubicacionesSeleccionadas.length > 0
         ? _ubicacionesSeleccionadas
@@ -2907,8 +2913,9 @@ async function saveAct(ai){
       }
       _ubicacionesSeleccionadas = [];
     }else{
-      Object.assign(S.acts[ai],a);
-      await sb('obra_actividades?id=eq.'+S.acts[ai].id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
+      var realIdx=S.acts.findIndex(function(x){return x.id===editId;});
+      if(realIdx>=0) Object.assign(S.acts[realIdx],a);
+      await sb('obra_actividades?id=eq.'+editId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
     }
     setSS('ok','✓ '+hhmm());renderHoy();renderActs();renderReportes();
     if(S.obraVista==='kanban') renderKanban();
@@ -2922,7 +2929,11 @@ async function saveAct(ai){
 async function delAct(ai){
   if(!isAdmin()){alert('Solo el administrador puede eliminar actividades.');return;}
   if(!confirm('¿Eliminar esta actividad?'))return;
-  const a=S.acts.splice(ai,1)[0];closeModal();renderHoy();renderActs();
+  // Use stored edit ID to avoid stale index bug (auto-refresh replaces S.acts every 90s)
+  var editId=(document.getElementById('a-edit-id')||{value:''}).value.trim();
+  var realIdx=editId?S.acts.findIndex(function(x){return x.id===editId;}):ai;
+  if(realIdx<0)realIdx=ai;
+  const a=S.acts.splice(realIdx,1)[0];closeModal();renderHoy();renderActs();
   try{await sb('obra_actividades?id=eq.'+a.id,{method:'DELETE',prefer:'return=minimal'});}catch(e){}
 }
 
