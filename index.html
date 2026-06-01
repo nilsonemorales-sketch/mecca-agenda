@@ -618,7 +618,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_32';
+const APP_VERSION='20260601_33';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -3911,39 +3911,31 @@ async function generarPDF(opts){
     const subtitulo=_tparts.slice(1).join(' | ');
     const periodo=fi===ff?fmtF(fi):fmtF(fi)+' al '+fmtF(ff);
 
-    function chk(h){if(y+h>280){doc.addPage();drawHeader();y=32;}}
+    function chk(h){if(y+h>284){doc.addPage();drawHeader();y=24;}}
 
     // ── HEADER (cada página) ──────────────────────────────────────
     function drawHeader(){
-      // Fondo oscuro
-      fc(DARK);doc.rect(0,0,W,24,'F');
-      // Franja izquierda BRIDEX morada
-      fc(BDX_PUR);doc.rect(0,0,4,24,'F');
-      // Logo texto BRIDEX SRL
-      tc(WHT);doc.setFontSize(12);doc.setFont('helvetica','bold');
-      doc.text('BRIDEX SRL',M,9);
-      doc.setFontSize(6.5);doc.setFont('helvetica','normal');tc([180,180,200]);
-      doc.text('Arquitectura  Urbanismo  Construccion',M,14.5);
-      // Proyecto
-      tc([200,215,255]);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
-      doc.text('PROYECTO: MECCA RESIDENCE 2026',M,20);
-      // Derecha: tipo + filtros + periodo + pagina
-      tc([160,180,220]);doc.setFontSize(7);doc.setFont('helvetica','normal');
-      doc.text(titulo,W-M,9,{align:'right'});
+      fc(DARK);doc.rect(0,0,W,17,'F');
+      fc(BDX_PUR);doc.rect(0,0,3,17,'F');
+      tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');
+      doc.text('BRIDEX SRL',M,7);
+      doc.setFontSize(5.5);doc.setFont('helvetica','normal');tc([180,180,200]);
+      doc.text('Arquitectura  Urbanismo  Construccion',M,11);
+      tc([200,215,255]);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+      doc.text('PROYECTO: MECCA RESIDENCE 2026',M,15);
+      tc([160,180,220]);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text(titulo,W-M,7,{align:'right'});
       if(subtitulo){
-        tc([200,180,255]);doc.setFontSize(6);
-        doc.text(subtitulo,W-M,14.5,{align:'right'});
-        tc([200,215,255]);doc.setFontSize(6.5);
-        doc.text(periodo,W-M,19.5,{align:'right'});
-        tc([120,140,180]);doc.setFontSize(6);
-        doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,23,{align:'right'});
+        tc([200,180,255]);doc.setFontSize(5.5);
+        doc.text(subtitulo,W-M,11,{align:'right'});
+        tc([200,215,255]);doc.setFontSize(6);
+        doc.text(periodo,W-M,15,{align:'right'});
       } else {
-        doc.text(periodo,W-M,14.5,{align:'right'});
-        tc([120,140,180]);
-        doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,20,{align:'right'});
+        doc.text(periodo,W-M,11,{align:'right'});
+        tc([120,140,180]);doc.setFontSize(5.5);
+        doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,15,{align:'right'});
       }
-      // Línea verde debajo
-      fc(BDX_GRN);doc.rect(0,24,W,1.5,'F');
+      fc(BDX_GRN);doc.rect(0,17,W,1.2,'F');
     }
 
     // ── SECCIÓN BANNER ────────────────────────────────────────────
@@ -3993,7 +3985,7 @@ async function generarPDF(opts){
 
     // ── INICIO ────────────────────────────────────────────────────
     drawHeader();
-    y=32;
+    y=24;
 
     // ── RESUMEN ESTADÍSTICO ───────────────────────────────────────
     if(secs.resumen){
@@ -4607,23 +4599,24 @@ function exportarHistorialPDF(uid_){
     const per=S.histFecha&&S.histFechaFin?fmtF(S.histFecha)+' al '+fmtF(S.histFechaFin):S.histFecha?'Desde '+fmtF(S.histFecha):'Todos los registros';
 
     function drawHeader(){
-      fc(DARK);doc.rect(0,0,W,24,'F');
-      fc(BDX_PUR);doc.rect(0,0,4,24,'F');
-      tc(WHT);doc.setFontSize(12);doc.setFont('helvetica','bold');
-      doc.text('BRIDEX SRL',M,9);
-      tc([180,180,200]);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-      doc.text('Arquitectura  Urbanismo  Construccion',M,14.5);
-      tc([200,215,255]);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
-      doc.text('PROYECTO: MECCA RESIDENCE 2026',M,20);
-      tc([160,180,220]);doc.setFontSize(7);doc.setFont('helvetica','normal');
-      doc.text('HISTORIAL DE INGENIERO',W-M,9,{align:'right'});
-      doc.text(per,W-M,14.5,{align:'right'});
-      doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,20,{align:'right'});
-      fc(BDX_GRN);doc.rect(0,24,W,1.5,'F');
+      fc(DARK);doc.rect(0,0,W,17,'F');
+      fc(BDX_PUR);doc.rect(0,0,3,17,'F');
+      tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');
+      doc.text('BRIDEX SRL',M,7);
+      tc([180,180,200]);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+      doc.text('Arquitectura  Urbanismo  Construccion',M,11);
+      tc([200,215,255]);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+      doc.text('PROYECTO: MECCA RESIDENCE 2026',M,15);
+      tc([160,180,220]);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text('HISTORIAL DE INGENIERO',W-M,7,{align:'right'});
+      doc.text(per,W-M,11,{align:'right'});
+      tc([120,140,180]);doc.setFontSize(5.5);
+      doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,15,{align:'right'});
+      fc(BDX_GRN);doc.rect(0,17,W,1.2,'F');
     }
-    function chk(h){if(y+h>280){doc.addPage();drawHeader();y=32;}}
+    function chk(h){if(y+h>284){doc.addPage();drawHeader();y=24;}}
 
-    drawHeader();y=32;
+    drawHeader();y=24;
 
     const myActs=(S.histActs||[]).filter(a=>a.ingeniero_id===uid_);
     const myPens=(S.histPens||[]).filter(p=>p.personal_nombre===u.nombre);
@@ -5809,7 +5802,7 @@ function printAptoReport(apto){
     var pc=PCOL[a.prioridad]||'#868e96'; var pb=PBG[a.prioridad]||'#f1f3f5';
     return '<tr>'
       +'<td>'+(a.prioridad?'<span style="background:'+pb+';color:'+pc+';border:1px solid '+pc+'40;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700">'+a.prioridad.toUpperCase()+'</span>':'—')+'</td>'
-      +'<td style="font-weight:600;color:#212529">'+esc(a.descripcion)+(a.notas?'<div style="font-size:10px;color:#868e96;margin-top:1px">'+esc(a.notas)+'</div>':'')+'</td>'
+      +'<td style="font-weight:600;color:#212529">'+esc(a.descripcion)+(a.notas?'<div style="font-size:8.5px;color:#868e96;margin-top:0">'+esc(a.notas)+'</div>':'')+'</td>'
       +'<td style="color:#1a56db;font-size:10.5px">'+esc(a.area||'—')+'</td>'
       +'<td style="color:#495057;font-size:10.5px">'+esc(a.ingeniero_nombre||'—')+'</td>'
       +'<td style="text-align:center;color:'+(retrasada?'#c92a2a':'#495057')+';font-weight:'+(retrasada?'700':'400')+'">'+(a.fecha?fmtF(a.fecha):'—')+'</td>'
@@ -5819,19 +5812,19 @@ function printAptoReport(apto){
   }
 
   var TH='<thead><tr style="background:#1e1b4b;color:#fff">'
-    +'<th style="width:58px">Prioridad</th><th>Descripción</th>'
-    +'<th style="width:88px">Ubicación</th><th style="width:95px">Responsable</th>'
-    +'<th style="width:66px;text-align:center">Fecha</th>'
-    +'<th style="width:32px;text-align:center">%</th><th style="width:76px">Estado</th>'
+    +'<th style="width:50px">Prior.</th><th>Descripción</th>'
+    +'<th style="width:80px">Ubicación</th><th style="width:85px">Responsable</th>'
+    +'<th style="width:58px;text-align:center">Fecha</th>'
+    +'<th style="width:28px;text-align:center">%</th><th style="width:68px">Estado</th>'
     +'</tr></thead>';
 
   var sections=grupos.map(function(g){
     var gDone=g.g.filter(function(a){return a.estado==='completado';}).length;
     var gPct=Math.round(g.g.reduce(function(s,a){return s+(a.porcentaje||0);},0)/g.g.length);
-    return '<div style="margin-bottom:8px">'
-      +'<div style="background:'+g.bg+';padding:4px 10px;border-left:4px solid '+g.color+';margin-bottom:0;display:flex;justify-content:space-between;align-items:center">'
-        +'<span style="font-size:11px;font-weight:800;color:'+g.color+'">'+esc(g.titulo)+'</span>'
-        +'<span style="font-size:10px;color:#495057">'+gDone+'/'+g.g.length+' hechas &nbsp;·&nbsp; <b>'+gPct+'%</b></span>'
+    return '<div style="margin-bottom:5px">'
+      +'<div style="background:'+g.bg+';padding:2px 8px;border-left:3px solid '+g.color+';display:flex;justify-content:space-between;align-items:center">'
+        +'<span style="font-size:10px;font-weight:800;color:'+g.color+'">'+esc(g.titulo)+'</span>'
+        +'<span style="font-size:9px;color:#495057">'+gDone+'/'+g.g.length+' hechas &nbsp;·&nbsp; <b>'+gPct+'%</b></span>'
       +'</div>'
       +'<table style="margin-bottom:0">'+TH+'<tbody>'+g.g.map(pRow).join('')+'</tbody></table>'
       +'</div>';
@@ -5840,24 +5833,22 @@ function printAptoReport(apto){
   var win=window.open('','_blank','width=1000,height=700');
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
     +'<title>Supervisión '+esc(apto)+' — Mecca Residence</title>'
-    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Calibri,Arial,sans-serif;font-size:11px;color:#212529;padding:12px 18px}'
-    +'h1{font-size:14px;font-weight:800;color:#1e1b4b;margin-bottom:2px}'
-    +'.sub{font-size:10px;color:#868e96;margin-bottom:6px}'
-    +'.meta{display:flex;gap:10px;margin-bottom:8px;padding:5px 10px;background:#f8f9fa;border-radius:4px;border:1px solid #dee2e6;flex-wrap:wrap}'
-    +'.meta-item{text-align:center;min-width:44px}.meta-item .v{font-size:15px;font-weight:800}.meta-item .l{font-size:9px;color:#868e96}'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Calibri,Arial,sans-serif;font-size:10px;color:#212529;padding:6px 10px}'
+    +'h1{font-size:12px;font-weight:800;color:#1e1b4b;display:inline}'
+    +'.infobar{font-size:9.5px;color:#495057;margin-bottom:5px;padding:3px 8px;background:#f1f3f5;border-left:3px solid #1e1b4b;display:flex;gap:14px;align-items:center;flex-wrap:wrap}'
+    +'.infobar b{color:#212529}'
     +'table{width:100%;border-collapse:collapse;border:1px solid #dee2e6;border-top:none}'
-    +'thead th{padding:4px 7px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15)}'
+    +'thead th{padding:3px 6px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.2px;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15)}'
     +'tbody tr:nth-child(even){background:#f8f9fa}'
-    +'tbody td{padding:3px 7px;border-right:1px solid #dee2e6;border-bottom:1px solid #dee2e6;vertical-align:top}'
-    +'@media print{body{padding:4px}@page{size:A4 landscape;margin:5mm 7mm}.no-break{page-break-inside:avoid}}</style>'
+    +'tbody td{padding:2px 5px;border-right:1px solid #dee2e6;border-bottom:1px solid #dee2e6;vertical-align:top}'
+    +'@media print{body{padding:2px 4px}@page{size:A4 landscape;margin:4mm 5mm}.no-break{page-break-inside:avoid}}</style>'
     +'</head><body>'
-    +'<h1>Supervisión — '+esc(apto)+'</h1>'
-    +'<div class="sub">Mecca Residence &nbsp;·&nbsp; Generado el '+fmtF(hoy)+'</div>'
-    +'<div class="meta">'
-    +'<div class="meta-item"><div class="v" style="color:#1a56db">'+acts.length+'</div><div class="l">Total</div></div>'
-    +'<div class="meta-item"><div class="v" style="color:#2f9e44">'+completadas+'</div><div class="l">Completadas</div></div>'
-    +(retrasadasCnt?'<div class="meta-item"><div class="v" style="color:#c92a2a">'+retrasadasCnt+'</div><div class="l">Retrasadas</div></div>':'')
-    +'<div class="meta-item"><div class="v" style="color:'+(pct>=80?'#2f9e44':pct>=50?'#e67700':'#c92a2a')+'">'+pct+'%</div><div class="l">Avance global</div></div>'
+    +'<div class="infobar"><span><h1>Supervisión '+esc(apto)+'</h1></span>'
+    +'<span>Total: <b>'+acts.length+'</b></span>'
+    +'<span>Completadas: <b style="color:#2f9e44">'+completadas+'</b></span>'
+    +(retrasadasCnt?'<span>Retrasadas: <b style="color:#c92a2a">'+retrasadasCnt+'</b></span>':'')
+    +'<span>Avance: <b style="color:'+(pct>=80?'#2f9e44':pct>=50?'#e67700':'#c92a2a')+'">'+pct+'%</b></span>'
+    +'<span style="margin-left:auto;color:#868e96">Mecca Residence &nbsp;·&nbsp; '+fmtF(hoy)+'</span>'
     +'</div>'
     +sections
     +'<script>window.onload=function(){window.print();}<\/script>'
