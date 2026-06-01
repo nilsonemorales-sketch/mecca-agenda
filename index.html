@@ -286,12 +286,12 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 .msheet{border-radius:24px 24px 0 0}
 .mactions .btn{min-height:50px;font-size:15px;border-radius:12px}
 @media(max-width:380px){.fgrid{grid-template-columns:1fr}.stats-row{grid-template-columns:repeat(2,1fr)}}
-.add-fab{width:54px;height:54px;bottom:calc(78px + var(--sb));right:16px}
-.view{padding-bottom:calc(80px + var(--sb))}
+.add-fab{width:54px;height:54px;bottom:calc(86px + var(--sb));right:16px}
+.view{padding-bottom:calc(90px + var(--sb))}
 
 /* ── BOTTOM NAV ── */
-.bottom-nav{display:flex;background:#fff;border-top:1px solid var(--border);padding:2px 0;padding-bottom:calc(14px + var(--sb));flex-shrink:0;position:sticky;bottom:0;z-index:10;box-shadow:0 -4px 20px rgba(124,58,237,.08)}
-.bnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:4px 4px 2px;background:none;border:none;cursor:pointer;color:var(--text3);font-family:var(--font);min-height:48px;transition:all .15s;border-radius:14px;margin:2px;position:relative}
+.bottom-nav{display:flex;background:#fff;border-top:1px solid var(--border);padding:0;padding-bottom:calc(18px + var(--sb));flex-shrink:0;position:fixed;bottom:0;left:0;right:0;z-index:10;box-shadow:0 -4px 20px rgba(124,58,237,.08)}
+.bnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;padding:8px 4px 0;background:none;border:none;cursor:pointer;color:var(--text3);font-family:var(--font);min-height:52px;transition:all .15s;border-radius:14px;margin:2px;position:relative}
 .bnav-btn.active{color:var(--accent)}
 .bnav-btn.active::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:28px;height:3px;background:var(--accent);border-radius:0 0 4px 4px}
 .bnav-btn .blbl{font-size:10px;font-weight:500;line-height:1}
@@ -302,6 +302,40 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </head>
 <body>
 <div id="err-bar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c00;color:#fff;font-size:13px;font-family:monospace;padding:8px 12px;word-break:break-all"></div>
+
+<!-- ── LOCK SCREEN ── -->
+<div id="app-lock" style="display:none;position:fixed;inset:0;z-index:99990;background:linear-gradient(160deg,#1a0a2e 0%,#12082a 50%,#0d1a35 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;font-family:var(--font)">
+  <!-- Decorative circles -->
+  <div style="position:absolute;top:-60px;right:-60px;width:220px;height:220px;border-radius:50%;background:rgba(107,35,142,.25);pointer-events:none"></div>
+  <div style="position:absolute;bottom:-40px;left:-40px;width:160px;height:160px;border-radius:50%;background:rgba(45,110,45,.18);pointer-events:none"></div>
+  <!-- Logo -->
+  <div style="width:64px;height:64px;background:linear-gradient(135deg,#6b238e,#4a1870);border-radius:20px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;box-shadow:0 8px 32px rgba(107,35,142,.5)">
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+  </div>
+  <div style="color:#fff;font-size:22px;font-weight:800;letter-spacing:.5px;margin-bottom:4px">BRIDEX SRL</div>
+  <div style="color:rgba(200,180,255,.7);font-size:12px;font-weight:500;letter-spacing:2px;margin-bottom:6px">MECCA RESIDENCE 2026</div>
+  <div style="color:rgba(255,255,255,.35);font-size:11px;margin-bottom:32px">Agenda de Obra</div>
+  <!-- Login card -->
+  <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:28px 24px;width:100%;max-width:360px;backdrop-filter:blur(20px)">
+    <div style="color:rgba(255,255,255,.5);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:10px">USUARIO</div>
+    <select id="lock-user" style="width:100%;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);border-radius:12px;color:#fff;font-size:15px;font-weight:600;padding:13px 14px;margin-bottom:20px;font-family:var(--font);-webkit-appearance:none;appearance:none;cursor:pointer" onchange="document.getElementById('lock-pin').focus()">
+      <option value="" style="background:#1a0a2e;color:#fff">Selecciona tu usuario...</option>
+      <option value="nilson" style="background:#1a0a2e;color:#fff">★ Ing. Nilson — Administrador</option>
+      <option value="edgar" style="background:#1a0a2e;color:#fff">Ing. Edgar Polanco</option>
+      <option value="moises" style="background:#1a0a2e;color:#fff">Ing. Moises Jimenez</option>
+    </select>
+    <div style="color:rgba(255,255,255,.5);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:10px">CÓDIGO DE ACCESO</div>
+    <input id="lock-pin" type="password" inputmode="numeric" maxlength="10" placeholder="••••••"
+      style="width:100%;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);border-radius:12px;color:#fff;font-size:32px;letter-spacing:12px;text-align:center;padding:14px;font-family:var(--font);box-sizing:border-box;margin-bottom:8px;outline:none"
+      onkeydown="if(event.key==='Enter')doLockLogin()">
+    <div id="lock-err" style="color:#ff6b6b;font-size:12px;text-align:center;margin-bottom:16px;min-height:18px"></div>
+    <button onclick="doLockLogin()" style="width:100%;background:linear-gradient(135deg,#6b238e,#4a1870);border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;padding:16px;cursor:pointer;font-family:var(--font);box-shadow:0 4px 20px rgba(107,35,142,.4);letter-spacing:.5px">
+      Ingresar
+    </button>
+  </div>
+  <div style="color:rgba(255,255,255,.2);font-size:10px;margin-top:28px">Acceso restringido — Solo personal autorizado</div>
+</div>
+
 <div class="app">
   <div class="hdr">
     <div class="hdr-l">
@@ -1183,6 +1217,37 @@ function logout(){
   S.user=null;
   try{sessionStorage.removeItem('mecca_user');}catch(e){}
   updateUserUI();renderAll();
+  showLockScreen();
+}
+
+function showLockScreen(){
+  var el=document.getElementById('app-lock');
+  if(el){el.style.display='flex';document.getElementById('lock-pin').value='';document.getElementById('lock-err').textContent='';}
+}
+
+function hideLockScreen(){
+  var el=document.getElementById('app-lock');
+  if(el) el.style.display='none';
+}
+
+function doLockLogin(){
+  var uid_=document.getElementById('lock-user').value;
+  var pin=document.getElementById('lock-pin').value;
+  var errEl=document.getElementById('lock-err');
+  if(!uid_){errEl.textContent='Selecciona un usuario';return;}
+  var u=USERS[uid_];
+  if(!u||pin!==u.pin){
+    errEl.textContent='Codigo incorrecto, intenta de nuevo';
+    document.getElementById('lock-pin').value='';
+    document.getElementById('lock-pin').focus();
+    return;
+  }
+  S.user={...u,id:uid_};
+  try{sessionStorage.setItem('mecca_user',JSON.stringify(S.user));}catch(e){}
+  hideLockScreen();
+  updateUserUI();
+  renderAll();
+  setSS('ok','Bienvenido, '+u.nombre.split(' ').slice(-1)[0]);
 }
 
 // requireEdit: runs action if logged in, otherwise shows login first
@@ -2181,6 +2246,7 @@ async function saveAct(ai){
 }
 
 async function delAct(ai){
+  if(!isAdmin()){alert('Solo el administrador puede eliminar actividades.');return;}
   if(!confirm('¿Eliminar esta actividad?'))return;
   const a=S.acts.splice(ai,1)[0];closeModal();renderHoy();renderActs();
   try{await sb('obra_actividades?id=eq.'+a.id,{method:'DELETE',prefer:'return=minimal'});}catch(e){}
@@ -2836,6 +2902,7 @@ async function updatePersonal(pid){
 }
 
 async function delPersonal(pid){
+  if(!isAdmin()){alert('Solo el administrador puede eliminar trabajadores.');return;}
   if(!confirm('¿Eliminar este trabajador?'))return;
   S.personal=S.personal.filter(p=>p.id!==pid);closeModal();renderPersonal();
   try{await sb('obra_personal?id=eq.'+pid,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({activo:false})});}catch(e){}
@@ -4684,8 +4751,14 @@ function closeModal(){
 // ── INITIALIZATION ────────────────────────────────
 try{
   var _saved=sessionStorage.getItem('mecca_user');
-  if(_saved){ S.user=JSON.parse(_saved); updateUserUI(); }
-}catch(e){}
+  if(_saved){
+    S.user=JSON.parse(_saved);
+    updateUserUI();
+    hideLockScreen();
+  } else {
+    showLockScreen();
+  }
+}catch(e){ showLockScreen(); }
 
 setInterval(async function(){
   try{
@@ -4952,6 +5025,7 @@ function confirmDeleteOrden(id){
 }
 
 async function deleteOrden(id){
+  if(!isAdmin()){alert('Solo el administrador puede eliminar órdenes de compra.');closeModal();return;}
   closeModal();
   S.compras=S.compras.filter(x=>x.id!==id);
   renderCompras();
