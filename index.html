@@ -2028,7 +2028,12 @@ function showAddActContratista(ai, preContratista, ctx){
       ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
       <button class="btn primary" onclick="saveAct(${edit?ai:'undefined'})">${edit?'Guardar':'Agregar'}</button>
     </div>`;
-  openModal();setTimeout(()=>document.getElementById('a-d').focus(),100);
+  openModal();
+  _ubicacionesSeleccionadas = edit && a.area ? [a.area] : [];
+  setTimeout(()=>{
+    document.getElementById('a-d').focus();
+    renderUbicacionesSeleccionadas();
+  },100);
 }
 
 var _renderTimer=null;
@@ -2074,9 +2079,13 @@ function calcPct(){
 async function saveAct(ai){
   const desc=document.getElementById('a-d').value.trim();if(!desc)return;
   const getFld=(id,def='')=>{const el=document.getElementById(id);return el?el.value:def;};
+  // Area: use the tracked selections array, fallback to the single-select dropdown
+  const areaVal = _ubicacionesSeleccionadas.length>0
+    ? _ubicacionesSeleccionadas[0]
+    : getFld('a-area-single','').trim() || getFld('a-area','').trim();
   const a={
     descripcion:desc,
-    area:getFld('a-area','').trim(),
+    area:areaVal,
     estado:getFld('a-est','pendiente'),
     tipo_personal:getFld('a-tipo','propio'),
     ingeniero_nombre:getFld('a-ing',''),
