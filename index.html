@@ -616,7 +616,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_19';
+const APP_VERSION='20260601_20';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -5228,7 +5228,10 @@ function applyKbf(acts){
   var hoy=new Date().toISOString().slice(0,10);
   var r=acts;
   if(f.tipo)     r=r.filter(function(a){return a.tipo_personal===f.tipo;});
-  if(f.persona)  r=r.filter(function(a){return (a.personal_nombre||a.ingeniero_nombre)===f.persona;});
+  if(f.persona)  r=r.filter(function(a){
+    var raw=(a.personal_nombre||a.ingeniero_nombre||'');
+    return raw.split(',').some(function(part){return part.trim().replace(/[,;]+$/,'').trim()===f.persona;});
+  });
   if(f.nivel)    r=r.filter(function(a){return (a.area||'').startsWith(f.nivel);});
   if(f.retrasadas) r=r.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';});
   if(f.urgentes) r=r.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
@@ -5251,11 +5254,28 @@ function renderKanban(){
   var acts=applyKbf(all);
   var isDesk=window.innerWidth>600;
 
-  // Derive unique person list based on tipo filter
+  // Derive unique person list — normalize names (trim, remove trailing commas,
+  // split multi-person fields, skip "Ing."/"Arq." prefix for label)
   var personas=(function(){
     var src=f.tipo?all.filter(function(a){return a.tipo_personal===f.tipo;}):all;
-    return [...new Set(src.map(function(a){return a.personal_nombre||a.ingeniero_nombre||'';}).filter(Boolean))].sort();
+    var names=[];
+    src.forEach(function(a){
+      var raw=a.personal_nombre||a.ingeniero_nombre||'';
+      // split by comma in case field contains "Felix, Jefrey"
+      raw.split(',').forEach(function(part){
+        var n=part.trim().replace(/[,;]+$/,'').trim();
+        if(n) names.push(n);
+      });
+    });
+    return [...new Set(names)].sort();
   })();
+
+  function chipLabel(fullName){
+    var parts=fullName.trim().split(/\s+/);
+    // Skip title prefix like "Ing.", "Arq.", "Dr."
+    if(parts.length>1&&/^(Ing\.|Arq\.|Dr\.|Lcdo\.)$/i.test(parts[0])) return parts[1];
+    return parts[0];
+  }
   // Derive unique niveles
   var niveles=[...new Set(all.map(function(a){var m=(a.area||'').match(/^(N\d+)/);return m?m[1]:null;}).filter(Boolean))].sort();
 
@@ -5278,7 +5298,8 @@ function renderKanban(){
   if(personas.length>1){
     filterBar+='<div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:6px">';
     personas.forEach(function(p){
-      filterBar+=kbfChip(p.split(' ')[0],f.persona===p,"S.kbf.persona=S.kbf.persona==='"+p.replace(/'/g,"\\'")+"'?'':'"+p.replace(/'/g,"\\'")+  "';renderKanban()");
+      var safe=p.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      filterBar+=kbfChip(chipLabel(p),f.persona===p,"S.kbf.persona=S.kbf.persona==='"+safe+"'?'':'"+safe+"';renderKanban()");
     });
     filterBar+='</div>';
   }
