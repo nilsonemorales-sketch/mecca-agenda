@@ -495,6 +495,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
+const APP_VERSION='20260601_08';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -4771,6 +4772,63 @@ setInterval(async function(){
     if(S.currentTab==='enobra') loadTareas();
   }catch(e){}
 }, 90000);
+
+// ── INACTIVIDAD: cerrar sesión tras 3 horas ───────────────────
+var _lastActivity=Date.now();
+var INACT_LIMIT=3*60*60*1000; // 3 horas en ms
+function _resetActivity(){ _lastActivity=Date.now(); }
+['click','touchstart','keydown','scroll','mousemove'].forEach(function(ev){
+  document.addEventListener(ev,_resetActivity,{passive:true});
+});
+setInterval(function(){
+  if(!S.user) return;
+  if(Date.now()-_lastActivity > INACT_LIMIT){
+    S.user=null;
+    try{sessionStorage.removeItem('mecca_user');}catch(e){}
+    updateUserUI(); renderAll(); showLockScreen();
+    // Show brief message on lock screen
+    var errEl=document.getElementById('lock-err');
+    if(errEl) errEl.textContent='Sesion cerrada por inactividad (3 horas)';
+  }
+}, 60000); // revisar cada minuto
+
+// ── AUTO-ACTUALIZACIÓN: detectar nueva versión sin borrar acceso directo ──
+(function(){
+  var _checking=false;
+  function checkForUpdate(){
+    if(_checking) return;
+    _checking=true;
+    fetch(location.href+'?_v='+Date.now(),{cache:'no-store',method:'GET'})
+      .then(function(r){return r.text();})
+      .then(function(html){
+        _checking=false;
+        var m=html.match(/APP_VERSION='([^']+)'/);
+        if(m && m[1] && m[1]!==APP_VERSION){
+          // Nueva versión disponible — recargar silenciosamente si no hay modal abierto
+          var modal=document.getElementById('modal');
+          var modalOpen=modal&&modal.style.display!=='none';
+          if(!modalOpen){
+            location.reload(true);
+          } else {
+            // Esperar hasta que el modal cierre
+            var _waitClose=setInterval(function(){
+              if(!modal||modal.style.display==='none'){
+                clearInterval(_waitClose);
+                location.reload(true);
+              }
+            }, 5000);
+          }
+        }
+      })
+      .catch(function(){ _checking=false; });
+  }
+  // Verificar cada 5 minutos
+  setInterval(checkForUpdate, 5*60*1000);
+  // También verificar cuando la app vuelve al primer plano
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible') checkForUpdate();
+  });
+})();
 
 loadAll();
 
