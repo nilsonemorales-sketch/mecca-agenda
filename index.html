@@ -615,7 +615,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_15';
+const APP_VERSION='20260601_16';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1850,7 +1850,8 @@ function applyActFilters(acts){
   if(S.actFiltroRapido) filtered = filtered.filter(a=>a.estado===S.actFiltroRapido);
   // Advanced filters
   const av = S.actFiltroAvanzado;
-  if(av.contratista) filtered = filtered.filter(a=>a.personal_nombre===av.contratista);
+  if(av.contratista) filtered = filtered.filter(a=>a.personal_nombre===av.contratista&&a.tipo_personal==='contratista');
+  if(av.personal) filtered = filtered.filter(a=>a.personal_nombre===av.personal&&a.tipo_personal==='propio');
   if(av.prioridad) filtered = filtered.filter(a=>a.prioridad===av.prioridad);
   if(av.nivel) filtered = filtered.filter(a=>(a.area||'').startsWith(av.nivel));
   if(av.responsable) filtered = filtered.filter(a=>a.ingeniero_nombre===av.responsable);
@@ -1952,13 +1953,23 @@ function buildActsFiltros(){
   h+='</div>';
   h+='</div>';
 
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+
+  // Personal x la casa
+  h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Personal x la casa</div>';
+  h+=filtroDropdown('af-pers',av.personal||'',getPropioOpts(),'Todos',
+    "S.actFiltroAvanzado={...S.actFiltroAvanzado,personal:this.value,tipo:this.value?'propio':''};renderActs()");
+  h+='</div>';
+
   // Prioridad
-  h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Prioridad</div>';
+  h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Prioridad</div>';
   h+=filtroDropdown('af-prio',av.prioridad||'',[{val:'urgente',label:'🔴 Solo urgentes'}],'Todas',
     "S.actFiltroAvanzado={...S.actFiltroAvanzado,prioridad:this.value};renderActs()");
   h+='</div>';
 
-  var hasFilters=S.actFiltroRapido||(av.nivel||av.contratista||av.responsable||av.tipo);
+  h+='</div>';
+
+  var hasFilters=S.actFiltroRapido||(av.nivel||av.contratista||av.personal||av.responsable||av.tipo);
   if(hasFilters){
     h+='<button onclick="S.actFiltroRapido=\'\';S.actFiltroAvanzado={};renderActs()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid #e03131;background:#fff5f5;color:#e03131;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">× Limpiar filtros</button>';
   }
@@ -1974,6 +1985,7 @@ function renderActs(){
 
   const grupoPills = [
     {id:'tipo',       label:'📊 Tipo'},
+    {id:'personal',   label:'👷 Personal'},
     {id:'contratista',label:'🔨 Contratista'},
     {id:'nivel',      label:'📍 Nivel'},
     {id:'responsable',label:'👤 Responsable'},
@@ -2056,6 +2068,13 @@ function getActGroupsFromActs(acts){
     const grouped=conts.map(c=>({titulo:'🔨 '+c,items:acts.filter(a=>a.tipo_personal==='contratista'&&(a.personal_nombre||'Sin asignar')===c)}));
     const propios=acts.filter(a=>a.tipo_personal==='propio');
     if(propios.length) grouped.unshift({titulo:'👷 Personal x la casa',items:propios});
+    return grouped.filter(g=>g.items.length);
+  }
+  if(f==='personal'){
+    const workers=[...new Set(acts.filter(a=>a.tipo_personal==='propio').map(a=>a.personal_nombre||'Sin asignar'))].sort();
+    const grouped=workers.map(w=>({titulo:'👷 '+w,items:acts.filter(a=>a.tipo_personal==='propio'&&(a.personal_nombre||'Sin asignar')===w)}));
+    const conts=acts.filter(a=>a.tipo_personal==='contratista');
+    if(conts.length) grouped.push({titulo:'🔨 Contratistas',items:conts});
     return grouped.filter(g=>g.items.length);
   }
   if(f==='critico'){
