@@ -3470,7 +3470,7 @@ async function generarPDF(opts){
       retrs.forEach(function(a){
         var ec2=ESTADO_C[a.estado]||MUT;
         var el2=ESTADO_L[a.estado]||safe(a.estado).toUpperCase();
-        var diasR=Math.round((new Date(fi)-new Date(a.fecha))/(1000*60*60*24));
+        var diasR=a.fecha?Math.round((new Date(fi)-new Date(a.fecha))/(1000*60*60*24)):0;
         var hasNote=!!(a.notas&&a.notas.trim());
         var rowH=hasNote?10:7;
         chk(rowH+2);
@@ -3480,7 +3480,7 @@ async function generarPDF(opts){
         tc([180,30,30]);doc.setFontSize(7);doc.setFont('helvetica','bold');
         doc.text(safe(a.fecha||''),M+3,y+rowH/2+1);
         // Desc
-        tc(TXT);doc.setFontSize(7.5);
+        tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
         var rdl=doc.splitTextToSize(safe(a.descripcion),52);
         doc.text(rdl[0]||'',M+22,y+rowH/2+1);
         // Area
@@ -3539,7 +3539,7 @@ async function generarPDF(opts){
           doc.text(safe(c),M+6,y+6.5);
           // Stats right side
           tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','normal');
-          doc.text(cComp+'✓  '+cProg+' prog  '+cPend+' pend  '+pctC+'%',W-M,y+6.5,{align:'right'});
+          doc.text(cComp+' OK  '+cProg+' prog  '+cPend+' pend  '+pctC+'%',W-M,y+6.5,{align:'right'});
           y+=11;
           // Table header for this contractor
           actTableHeader(PUR);
