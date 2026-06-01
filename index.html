@@ -509,6 +509,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <div id="c-obra-subnav"></div>
       <div id="c-enobra"></div>
       <div id="c-act" style="display:none"></div>
+      <div id="c-kanban" style="display:none"></div>
     </div>
 
     <!-- EQUIPO: Asistencia + Personal + Penalidades -->
@@ -615,7 +616,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_17';
+const APP_VERSION='20260601_18';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2054,6 +2055,7 @@ function getActGroupsFromActs(acts){
     return[
       {titulo:'👷 Personal x la casa',items:acts.filter(a=>a.tipo_personal==='propio')},
       {titulo:'🔨 Contratistas',items:acts.filter(a=>a.tipo_personal==='contratista')},
+      {titulo:'👤 Tareas administrativas',items:acts.filter(a=>a.tipo_personal==='ingeniero')},
     ].filter(g=>g.items.length);
   }
   if(f==='nivel'){
@@ -2079,7 +2081,9 @@ function getActGroupsFromActs(acts){
     const workers=[...new Set(acts.filter(a=>a.tipo_personal==='propio').map(a=>a.personal_nombre||'Sin asignar'))].sort();
     const grouped=workers.map(w=>({titulo:'👷 '+w,items:acts.filter(a=>a.tipo_personal==='propio'&&(a.personal_nombre||'Sin asignar')===w)}));
     const conts=acts.filter(a=>a.tipo_personal==='contratista');
+    const ings=acts.filter(a=>a.tipo_personal==='ingeniero');
     if(conts.length) grouped.push({titulo:'🔨 Contratistas',items:conts});
+    if(ings.length) grouped.push({titulo:'👤 Tareas admin',items:ings});
     return grouped.filter(g=>g.items.length);
   }
   if(f==='critico'){
@@ -2369,6 +2373,7 @@ function showAddAct(ai){
   if(edit){
     const tipo=S.acts[ai].tipo_personal;
     if(tipo==='contratista') showAddActContratista(ai);
+    else if(tipo==='ingeniero') showAddActIngeniero(ai);
     else showAddActPropio(ai);
     return;
   }
@@ -2377,13 +2382,17 @@ function showAddAct(ai){
     <div class="mhandle"></div>
     <h3>¿Qué tipo de actividad?</h3>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-      <button class="ibtn primary" style="padding:16px;font-size:14px;border-radius:12px;min-height:60px;flex-direction:column;gap:4px" onclick="closeModal();showAddActPropio()">
+      <button class="ibtn primary" style="padding:14px;font-size:14px;border-radius:12px;min-height:56px;flex-direction:column;gap:3px" onclick="closeModal();showAddActPropio()">
         👷 Personal x la casa
         <span style="font-size:11px;font-weight:400;opacity:.7">Trabajadores en planilla</span>
       </button>
-      <button class="ibtn" style="padding:16px;font-size:14px;border-radius:12px;border-color:var(--purple);color:var(--purple);min-height:60px;flex-direction:column;gap:4px" onclick="closeModal();showAddActContratista()">
+      <button class="ibtn" style="padding:14px;font-size:14px;border-radius:12px;border-color:var(--purple);color:var(--purple);min-height:56px;flex-direction:column;gap:3px" onclick="closeModal();showAddActContratista()">
         🔨 Contratista
         <span style="font-size:11px;font-weight:400;opacity:.7">Empresa o trabajador externo</span>
+      </button>
+      <button class="ibtn" style="padding:14px;font-size:14px;border-radius:12px;border-color:#1a56db;color:#1a56db;min-height:56px;flex-direction:column;gap:3px" onclick="closeModal();showAddActIngeniero()">
+        👤 Tarea administrativa
+        <span style="font-size:11px;font-weight:400;opacity:.7">Revisión, medición, gestión — asignada a ingeniero</span>
       </button>
     </div>
     <div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button></div>`;
@@ -2564,6 +2573,130 @@ function showAddActContratista(ai, preContratista, ctx){
   },100);
 }
 
+// ── FORM TAREA ADMINISTRATIVA (INGENIERO) ─────────────
+function showAddActIngeniero(ai){
+  const edit=ai!==undefined;
+  const a=edit?S.acts[ai]:{
+    descripcion:'',area:'',estado:'pendiente',tipo_personal:'ingeniero',
+    unidad:'',cantidad_plan:0,cantidad_real:0,porcentaje:0,notas:'',
+    ingeniero_nombre:S.user?.nombre||'',personal_nombre:S.user?.nombre||'',
+    fecha_inicio:'',fecha_fin:''
+  };
+  const TIPOS_ADMIN=[
+    'Revisión de planos','Medición en obra','Reunión con contratistas',
+    'Gestión de permisos','Control de calidad','Supervisión','Informe de avance',
+    'Levantamiento fotográfico','Coordinación','Otro',
+  ];
+  document.getElementById('mcontent').innerHTML=`
+    <div class="mhandle"></div>
+    <h3>👤 ${edit?'Editar tarea':'Tarea administrativa — Ingeniero'}</h3>
+
+    <div class="fw"><label class="fl">Tipo de tarea</label>
+      <select id="a-tipo-admin" class="sel" style="font-size:15px;margin-bottom:6px" onchange="var d=document.getElementById('a-d');if(this.value!=='Otro')d.value=this.value;">
+        <option value="">— Seleccionar tipo —</option>
+        ${TIPOS_ADMIN.map(t=>`<option value="${t}" ${a.descripcion===t?'selected':''}>${t}</option>`).join('')}
+      </select></div>
+
+    <div class="fw"><label class="fl">Descripción *</label>
+      <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Detalle la tarea..." style="font-size:15px"></div>
+
+    <div class="fw"><label class="fl">Área / Ubicación</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${ubicacionSelect('a-area-single','')}
+        <button type="button" onclick="addUbicacion()" style="flex-shrink:0;padding:10px 14px;border-radius:var(--r);border:2px solid var(--accent);background:#e8f0fe;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Agregar</button>
+      </div></div>
+    <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
+    <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:#e8f0fe;border-radius:var(--r);margin-bottom:8px"></div>
+    <div id="ubicaciones-selected" style="min-height:4px"></div>
+
+    <div class="fw"><label class="fl">Ingeniero responsable</label>
+      <select id="a-ing" class="sel" style="font-size:15px">
+        <option value="">Sin asignar</option>
+        ${Object.values(USERS).map(u=>`<option value="${u.nombre}" ${(a.personal_nombre||a.ingeniero_nombre)===u.nombre?'selected':''}>${u.nombre}</option>`).join('')}
+      </select></div>
+    <input type="hidden" id="a-pers" value="">
+
+    <div class="fgrid">
+      <div class="fw"><label class="fl">Estado</label>
+        <select id="a-est" class="sel">
+          <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
+          <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>🔄 En progreso</option>
+          <option value="completado" ${a.estado==='completado'?'selected':''}>✅ Completado</option>
+        </select></div>
+      <div class="fw"><label class="fl">% Avance</label>
+        <input type="range" id="a-pct" value="${a.porcentaje||0}" min="0" max="100" style="width:100%;accent-color:var(--accent);height:6px;margin:10px 0" oninput="document.getElementById('a-pct-lbl').textContent=this.value+'%'">
+        <div style="text-align:center;font-family:var(--mono);font-size:13px;color:var(--accent)" id="a-pct-lbl">${a.porcentaje||0}%</div></div>
+    </div>
+
+    <div class="fgrid">
+      <div class="fw"><label class="fl">📅 Fecha inicio</label>
+        <input type="date" id="a-fi" value="${a.fecha_inicio||''}" onchange="calcDuracion()"></div>
+      <div class="fw"><label class="fl">📅 Fecha límite</label>
+        <input type="date" id="a-ff" value="${a.fecha_fin||''}" onchange="calcDuracion()"></div>
+    </div>
+    <div id="duracion-wrap" style="display:${a.fecha_inicio&&a.fecha_fin?'block':'none'};margin-bottom:10px">
+      <div style="background:rgba(26,86,219,.07);border:1px solid rgba(26,86,219,.2);border-radius:8px;padding:8px 12px;text-align:center">
+        <span style="font-size:11px;color:var(--text3)">Duración: </span>
+        <span style="font-family:var(--mono);color:#1a56db;font-weight:600" id="duracion-lbl">${calcDurLbl(a.fecha_inicio,a.fecha_fin)}</span>
+      </div></div>
+
+    <div class="fw"><label class="fl">Notas</label>
+      <textarea id="a-n" class="ta" placeholder="Observaciones, acuerdos, pendientes...">${esc(a.notas)}</textarea></div>
+
+    <input type="hidden" id="a-u" value="">
+    <input type="hidden" id="a-plan" value="0">
+    <input type="hidden" id="a-real" value="0">
+    <input type="hidden" id="a-tipo" value="ingeniero">
+    <div class="mactions">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
+      <button class="btn primary" onclick="saveActIngeniero(${edit?ai:'undefined'})">${edit?'Guardar':'Agregar'}</button>
+    </div>`;
+  openModal();
+  _ubicacionesSeleccionadas = edit && a.area ? [a.area] : [];
+  setTimeout(()=>{
+    document.getElementById('a-d').focus();
+    renderUbicacionesSeleccionadas();
+  },100);
+}
+
+async function saveActIngeniero(ai){
+  const desc=document.getElementById('a-d').value.trim(); if(!desc)return;
+  const ing=document.getElementById('a-ing').value;
+  const areaVal=_ubicacionesSeleccionadas.length>0?_ubicacionesSeleccionadas[0]:(document.getElementById('a-area-single')||{value:''}).value.trim();
+  const a={
+    descripcion:desc, area:areaVal,
+    estado:document.getElementById('a-est').value,
+    tipo_personal:'ingeniero',
+    ingeniero_nombre:ing||S.user?.nombre||'',
+    personal_nombre:ing||S.user?.nombre||'',
+    ingeniero_id:ing?Object.entries(USERS).find(([k,u])=>u.nombre===ing)?.[0]||S.user?.id||'':S.user?.id||'',
+    unidad:'',cantidad_plan:0,cantidad_real:0,
+    porcentaje:parseFloat(document.getElementById('a-pct').value)||0,
+    notas:document.getElementById('a-n').value.trim(),
+    fecha_inicio:(document.getElementById('a-fi')||{value:''}).value,
+    fecha_fin:(document.getElementById('a-ff')||{value:''}).value,
+    fecha:S.fecha, foto_pendiente:false,
+  };
+  closeModal(); setSS('syncing','Guardando...');
+  try{
+    if(ai===undefined||ai==='undefined'){
+      const ubicaciones=_ubicacionesSeleccionadas.length>0?_ubicacionesSeleccionadas:[a.area||''];
+      for(const ubic of ubicaciones){
+        const act={...a,id:uid(),fotos:'',area:ubic};
+        S.acts.push(act);
+        await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(act)});
+      }
+      _ubicacionesSeleccionadas=[];
+    }else{
+      Object.assign(S.acts[ai],a);
+      await sb('obra_actividades?id=eq.'+S.acts[ai].id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
+    }
+    setSS('ok','✓ '+hhmm()); renderHoy(); renderActs();
+    if(S.obraVista==='kanban') renderKanban();
+  }catch(e){setSS('err','Error: '+e.message.slice(0,30));}
+}
+
 var _renderTimer=null;
 function debounceRender(){
   clearTimeout(_renderTimer);
@@ -2648,6 +2781,7 @@ async function saveAct(ai){
       await sb('obra_actividades?id=eq.'+S.acts[ai].id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
     }
     setSS('ok','✓ '+hhmm());renderHoy();renderActs();renderReportes();
+    if(S.obraVista==='kanban') renderKanban();
     if(S.currentTab==='enobra') loadTareas();
   }catch(e){setSS('err','Error: '+e.message.slice(0,30));}
 }
@@ -5084,24 +5218,91 @@ function subNavBtn(label, isActive, onclick){
   return '<button onclick="'+onclick+'" style="flex-shrink:0;padding:7px 16px;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;border:1.5px solid '+(isActive?'var(--accent)':'var(--border2)')+';background:'+(isActive?'var(--accent)':'var(--bg2)')+';color:'+(isActive?'#fff':'var(--text2)')+';transition:all .15s">'+label+'</button>';
 }
 
-// ── RENDER OBRA (En Obra + Actividades) ──────────────
+// ── KANBAN VIEW ───────────────────────────────────────
+function renderKanban(){
+  var el=document.getElementById('c-kanban');
+  if(!el) return;
+  var acts=applyActFilters(S.acts);
+  var hoy=new Date().toISOString().slice(0,10);
+  // Columns definition
+  var cols=[
+    {id:'pendiente',   label:'⏳ Pendiente',   color:'#868e96', bg:'#f1f3f5', border:'#dee2e6'},
+    {id:'en-progreso', label:'🔄 En progreso', color:'#1a56db', bg:'#dbe4ff', border:'#748ffc'},
+    {id:'pausada',     label:'⏸ Pausada',      color:'#e67700', bg:'#fff3bf', border:'#fcc419'},
+    {id:'completado',  label:'✅ Completado',  color:'#2f9e44', bg:'#d3f9d8', border:'#69db7c'},
+  ];
+  var isDesk=window.innerWidth>600;
+
+  function kanbanCard(a){
+    var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
+    var bc=retrasada?'#ffa8a8':'var(--border)';
+    var TIPO_ICON={'propio':'👷','contratista':'🔨','ingeniero':'👤'};
+    var icon=TIPO_ICON[a.tipo_personal]||'';
+    var ai=S.acts.indexOf(a);
+    return '<div style="background:#fff;border:1px solid '+bc+';border-radius:10px;padding:10px 11px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s" onclick="editAct('+ai+')" onmouseover="this.style.boxShadow=\'0 3px 10px rgba(0,0,0,.12)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,.06)\'">'
+      +(retrasada?'<div style="font-size:9px;color:#c92a2a;font-weight:700;margin-bottom:3px">⏰ RETRASADA</div>':'')
+      +'<div style="font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;margin-bottom:5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+esc(a.descripcion)+'</div>'
+      +(a.area?'<div style="font-size:10.5px;color:var(--accent);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.area)+'</div>':'')
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">'
+        +'<span style="font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+icon+' '+esc(a.personal_nombre||a.ingeniero_nombre||'—')+'</span>'
+        +'<div style="display:flex;align-items:center;gap:5px">'
+          +(a.porcentaje>0?'<div style="width:36px;height:3px;background:#e9ecef;border-radius:2px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,a.porcentaje)+'%;background:'+(a.porcentaje>=100?'#2f9e44':'var(--accent)')+';border-radius:2px"></div></div>':'')
+          +'<span style="font-size:10px;font-weight:700;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'var(--accent)':'var(--text3)')+'">'+a.porcentaje+'%</span>'
+        +'</div>'
+      +'</div>'
+      +(canEdit()&&a.estado!=='completado'?'<div style="margin-top:7px;display:flex;gap:4px">'
+          +'<button onclick="event.stopPropagation();cycleEstado(\''+a.id+'\')" style="flex:1;padding:3px 0;border-radius:7px;border:1px solid #dee2e6;background:#f8f9fa;color:var(--text2);font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font)">▸ Estado</button>'
+          +'<button onclick="event.stopPropagation();marcarActCompletada(\''+a.id+'\')" style="padding:3px 8px;border-radius:7px;border:1px solid #a9e6b8;background:#d3f9d8;color:#2f9e44;font-size:10px;font-weight:700;cursor:pointer">✓</button>'
+        +'</div>':'')
+      +'</div>';
+  }
+
+  var colsHtml=cols.map(function(col){
+    var items=acts.filter(function(a){return a.estado===col.id;});
+    return '<div style="'+(isDesk?'':'min-width:260px;max-width:280px;')+'flex-shrink:0;flex:1">'
+      +'<div style="background:'+col.bg+';border:1.5px solid '+col.border+';border-radius:10px;padding:8px 10px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">'
+        +'<span style="font-size:12px;font-weight:700;color:'+col.color+'">'+col.label+'</span>'
+        +'<span style="background:#fff;color:'+col.color+';border:1px solid '+col.border+';border-radius:20px;padding:1px 9px;font-size:11px;font-weight:700">'+items.length+'</span>'
+      +'</div>'
+      +(items.length?items.map(kanbanCard).join(''):'<div style="padding:20px 10px;text-align:center;color:var(--text3);font-size:11px;border:1.5px dashed var(--border);border-radius:10px">Vacío</div>')
+      +'</div>';
+  }).join('');
+
+  el.innerHTML='<div style="padding:12px 14px 0">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+      +'<div style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+(acts.length)+' actividades</div>'
+      +(canEdit()?'<button class="ibtn primary" onclick="requireEdit(showAddAct)" style="font-size:11px">+ Nueva</button>':'')
+    +'</div>'
+    +'<div style="display:'+(isDesk?'grid;grid-template-columns:repeat(4,1fr);gap:12px':'flex;gap:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px')+'">'+colsHtml+'</div>'
+    +'<div style="height:80px"></div>'
+    +'</div>';
+}
+
+// ── RENDER OBRA (En Obra + Actividades + Kanban) ─────
 function renderObra(){
   var subnav = document.getElementById('c-obra-subnav');
   if(subnav){
     subnav.style.cssText = subNavStyle();
     subnav.innerHTML =
-      subNavBtn('⚡ En Progreso', S.obraVista==='activa', "S.obraVista='activa';renderObra()")+
-      subNavBtn('📋 Todas las actividades', S.obraVista==='todas', "S.obraVista='todas';renderObra()");
+      subNavBtn('⚡ En Progreso',  S.obraVista==='activa',  "S.obraVista='activa';renderObra()")+
+      subNavBtn('🗂️ Kanban',       S.obraVista==='kanban',  "S.obraVista='kanban';renderObra()")+
+      subNavBtn('📋 Todas',        S.obraVista==='todas',   "S.obraVista='todas';renderObra()");
   }
-  var enobra = document.getElementById('c-enobra');
-  var act    = document.getElementById('c-act');
+  var enobra  = document.getElementById('c-enobra');
+  var act     = document.getElementById('c-act');
+  var kanban  = document.getElementById('c-kanban');
+  // hide all first
+  if(enobra)  enobra.style.display='none';
+  if(act)     act.style.display='none';
+  if(kanban)  kanban.style.display='none';
   if(S.obraVista==='todas'){
-    if(enobra) enobra.style.display='none';
-    if(act)    act.style.display='block';
+    if(act) act.style.display='block';
     renderActs();
+  } else if(S.obraVista==='kanban'){
+    if(kanban) kanban.style.display='block';
+    renderKanban();
   } else {
     if(enobra) enobra.style.display='block';
-    if(act)    act.style.display='none';
     renderEnObra();
     loadTareas();
   }
