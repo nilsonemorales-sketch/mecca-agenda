@@ -618,7 +618,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_28';
+const APP_VERSION='20260601_29';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -5610,57 +5610,75 @@ function renderAptoReport(){
     el.innerHTML=h; return;
   }
 
-  // Tabla de actividades
-  h+='<div style="overflow-x:auto;border-radius:12px;border:1.5px solid var(--border)">';
-  h+='<table style="width:100%;border-collapse:collapse;min-width:620px;font-size:11.5px">';
-  h+='<thead><tr style="background:var(--bg3)">';
-  h+='<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:60px">PRIORIDAD</th>';
-  h+='<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--text3)">DESCRIPCIÓN</th>';
-  h+='<th style="padding:8px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:110px">CONTRATISTA</th>';
-  h+='<th style="padding:8px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:90px">UBICACIÓN</th>';
-  h+='<th style="padding:8px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:100px">RESPONSABLE</th>';
-  h+='<th style="padding:8px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:70px">FECHA</th>';
-  h+='<th style="padding:8px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:50px">%</th>';
-  h+='<th style="padding:8px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:100px">ESTADO</th>';
-  h+='</tr></thead><tbody>';
-
   var hoy=new Date().toISOString().slice(0,10);
-  acts.forEach(function(a,i){
+
+  // Build groups: each contractor + Personal x la casa
+  var grupos=[];
+  var contratistasUnicos=[...new Set(acts.filter(function(a){return a.tipo_personal==='contratista'&&a.personal_nombre;}).map(function(a){return a.personal_nombre;}))].sort();
+  contratistasUnicos.forEach(function(c){
+    var g=acts.filter(function(a){return a.tipo_personal==='contratista'&&a.personal_nombre===c;});
+    if(g.length) grupos.push({titulo:'🔨 '+c,color:'#6741d9',bgColor:'#f3f0ff',borderColor:'#c5b3ff',acts:g});
+  });
+  var sinCont=acts.filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;});
+  if(sinCont.length) grupos.push({titulo:'⚠️ Sin contratista asignado',color:'#e03131',bgColor:'#fff5f5',borderColor:'#ffa8a8',acts:sinCont});
+  var propios=acts.filter(function(a){return a.tipo_personal==='propio';});
+  if(propios.length) grupos.push({titulo:'👷 Personal x la casa',color:'#1a56db',bgColor:'#dbe4ff',borderColor:'#748ffc',acts:propios});
+  var ingenieros=acts.filter(function(a){return a.tipo_personal==='ingeniero';});
+  if(ingenieros.length) grupos.push({titulo:'👤 Tareas administrativas',color:'#495057',bgColor:'#f1f3f5',borderColor:'#ced4da',acts:ingenieros});
+
+  function actRow(a, i){
     var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
     var est=retrasada?'retrasada':a.estado;
-    var ec=ECOL[est]||'#868e96';
-    var eb=EBG[est]||'#f1f3f5';
-    var pc=PCOL[a.prioridad]||'#868e96';
-    var pb=PBG[a.prioridad]||'#f1f3f5';
+    var ec=ECOL[est]||'#868e96'; var eb=EBG[est]||'#f1f3f5';
+    var pc=PCOL[a.prioridad]||'#868e96'; var pb=PBG[a.prioridad]||'#f1f3f5';
     var bg=i%2===0?'var(--bg2)':'var(--bg)';
     var ai=S.acts.indexOf(a);
-    var contratista=a.tipo_personal==='contratista'?(a.personal_nombre||'⚠️ Sin asignar'):a.tipo_personal==='propio'?('👷 '+(a.personal_nombre||'Personal')):'👤 Admin';
-    var sinCont=a.tipo_personal==='contratista'&&!a.personal_nombre;
-    h+='<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer" onclick="editAct('+ai+')">';
-    // Prioridad
-    h+='<td style="padding:8px 10px">';
-    if(a.prioridad) h+='<span style="background:'+pb+';color:'+pc+';border:1px solid '+pc+'40;border-radius:6px;padding:3px 7px;font-size:10px;font-weight:700;white-space:nowrap">'+esc(a.prioridad.toUpperCase())+'</span>';
-    h+='</td>';
-    // Descripción
-    h+='<td style="padding:8px 10px">';
-    h+='<div style="font-weight:600;color:var(--text)">'+esc(a.descripcion)+'</div>';
-    if(a.notas) h+='<div style="font-size:10px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px">'+esc(a.notas)+'</div>';
-    h+='</td>';
-    // Contratista
-    h+='<td style="padding:8px 8px;font-size:10.5px;color:'+(sinCont?'#e03131':'var(--text2)')+';font-weight:'+(sinCont?'700':'400')+'">'+esc(contratista)+'</td>';
-    // Ubicación
-    h+='<td style="padding:8px 8px;color:var(--accent);font-size:10.5px">'+esc(a.area||'—')+'</td>';
-    // Responsable
-    h+='<td style="padding:8px 8px;font-size:10.5px;color:var(--text2)">'+esc(a.ingeniero_nombre||'—')+'</td>';
-    // Fecha
-    h+='<td style="padding:8px 8px;text-align:center;font-size:10.5px;color:'+(retrasada?'#e03131':'var(--text3)')+';white-space:nowrap">'+(a.fecha?fmtF(a.fecha):'—')+'</td>';
-    // %
-    h+='<td style="padding:8px 8px;text-align:center;font-weight:700;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'var(--accent)':'var(--text3)')+'">'+a.porcentaje+'%</td>';
-    // Estado
-    h+='<td style="padding:8px 8px"><span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;white-space:nowrap">'+esc(est)+'</span></td>';
-    h+='</tr>';
+    return '<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer" onclick="editAct('+ai+')">'
+      +'<td style="padding:7px 10px">'+(a.prioridad?'<span style="background:'+pb+';color:'+pc+';border:1px solid '+pc+'40;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;white-space:nowrap">'+esc(a.prioridad.toUpperCase())+'</span>':'')+'</td>'
+      +'<td style="padding:7px 10px"><div style="font-weight:600;color:var(--text)">'+esc(a.descripcion)+'</div>'+(a.notas?'<div style="font-size:10px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;max-width:300px">'+esc(a.notas)+'</div>':'')+'</td>'
+      +'<td style="padding:7px 8px;color:var(--accent);font-size:10.5px">'+esc(a.area||'—')+'</td>'
+      +'<td style="padding:7px 8px;font-size:10.5px;color:var(--text2)">'+esc(a.ingeniero_nombre||'—')+'</td>'
+      +'<td style="padding:7px 8px;text-align:center;font-size:10.5px;color:'+(retrasada?'#e03131':'var(--text3)')+';font-weight:'+(retrasada?'700':'400')+';white-space:nowrap">'+(a.fecha?fmtF(a.fecha):'—')+'</td>'
+      +'<td style="padding:7px 8px;text-align:center;font-weight:700;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'var(--accent)':'var(--text3)')+'">'+a.porcentaje+'%</td>'
+      +'<td style="padding:7px 8px"><span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">'+esc(est)+'</span></td>'
+      +'</tr>';
+  }
+
+  function tableHeader(){
+    return '<thead><tr style="background:var(--bg3)">'
+      +'<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);width:60px">PRIORIDAD</th>'
+      +'<th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3)">DESCRIPCIÓN</th>'
+      +'<th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);width:90px">UBICACIÓN</th>'
+      +'<th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);width:100px">RESPONSABLE</th>'
+      +'<th style="padding:7px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--text3);width:75px">FECHA</th>'
+      +'<th style="padding:7px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--text3);width:48px">%</th>'
+      +'<th style="padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);width:100px">ESTADO</th>'
+      +'</tr></thead>';
+  }
+
+  grupos.forEach(function(g){
+    var gDone=g.acts.filter(function(a){return a.estado==='completado';}).length;
+    var gPct=Math.round(g.acts.reduce(function(s,a){return s+(a.porcentaje||0);},0)/g.acts.length);
+    var gRet=g.acts.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+    h+='<div style="margin-bottom:14px;border:1.5px solid '+g.borderColor+';border-radius:12px;overflow:hidden">';
+    // Group header
+    h+='<div style="background:'+g.bgColor+';padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">';
+    h+='<div style="display:flex;align-items:center;gap:10px">';
+    h+='<span style="font-size:13px;font-weight:800;color:'+g.color+'">'+esc(g.titulo)+'</span>';
+    h+='<span style="font-size:11px;color:var(--text3)">'+g.acts.length+' actividad'+(g.acts.length!==1?'es':'')+'</span>';
+    if(gRet) h+='<span style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700">⏰ '+gRet+' retrasada'+(gRet>1?'s':'')+'</span>';
+    h+='</div>';
+    h+='<div style="display:flex;align-items:center;gap:8px">';
+    h+='<span style="font-size:11px;color:var(--text3)">'+gDone+'/'+g.acts.length+' hechas</span>';
+    h+='<span style="font-size:13px;font-weight:800;color:'+g.color+'">'+gPct+'%</span>';
+    h+='</div></div>';
+    // Table
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:580px;font-size:11.5px">';
+    h+=tableHeader();
+    h+='<tbody>'+g.acts.map(actRow).join('')+'</tbody></table></div>';
+    h+='</div>';
   });
-  h+='</tbody></table></div>';
+
   h+='</div>';
   el.innerHTML=h;
 }
@@ -5674,61 +5692,80 @@ function printAptoReport(apto){
   var PBG={urgente:'#ffe3e3',alta:'#fff3bf',normal:'#d3f9d8'};
   var completadas=acts.filter(function(a){return a.estado==='completado';}).length;
   var pct=acts.length?Math.round(acts.reduce(function(s,a){return s+(a.porcentaje||0);},0)/acts.length):0;
-  var rows=acts.map(function(a){
+  var retrasadasCnt=acts.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+
+  // Build groups
+  var grupos=[];
+  var contsU=[...new Set(acts.filter(function(a){return a.tipo_personal==='contratista'&&a.personal_nombre;}).map(function(a){return a.personal_nombre;}))].sort();
+  contsU.forEach(function(c){
+    var g=acts.filter(function(a){return a.tipo_personal==='contratista'&&a.personal_nombre===c;});
+    if(g.length) grupos.push({titulo:'Contratista: '+c,color:'#4b2d9e',bg:'#ede8ff',g:g});
+  });
+  var sc=acts.filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;});
+  if(sc.length) grupos.push({titulo:'⚠️ Sin contratista asignado',color:'#c92a2a',bg:'#fff5f5',g:sc});
+  var pr=acts.filter(function(a){return a.tipo_personal==='propio';});
+  if(pr.length) grupos.push({titulo:'Personal x la casa',color:'#1864ab',bg:'#e7f5ff',g:pr});
+  var ing=acts.filter(function(a){return a.tipo_personal==='ingeniero';});
+  if(ing.length) grupos.push({titulo:'Tareas administrativas',color:'#343a40',bg:'#f1f3f5',g:ing});
+
+  function pRow(a){
     var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
     var est=retrasada?'retrasada':a.estado;
-    var ec=ECOL[est]||'#868e96';
-    var eb=EBG[est]||'#f1f3f5';
-    var pc=PCOL[a.prioridad]||'#868e96';
-    var pb=PBG[a.prioridad]||'#f1f3f5';
-    var sinCont=a.tipo_personal==='contratista'&&!a.personal_nombre;
-    var contratista=a.tipo_personal==='contratista'?(a.personal_nombre||'⚠️ Sin asignar'):a.tipo_personal==='propio'?('👷 '+(a.personal_nombre||'Personal')):'👤 Admin';
-    return '<tr style="border-bottom:1px solid #dee2e6">'
-      +'<td style="padding:7px 9px">'+(a.prioridad?'<span style="background:'+pb+';color:'+pc+';border:1px solid '+pc+'40;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">'+a.prioridad.toUpperCase()+'</span>':'—')+'</td>'
-      +'<td style="padding:7px 9px;font-weight:600;color:#212529">'+esc(a.descripcion)+(a.notas?'<div style="font-size:10px;color:#868e96;margin-top:2px">'+esc(a.notas)+'</div>':'')+'</td>'
-      +'<td style="padding:7px 9px;font-size:10.5px;color:'+(sinCont?'#e03131':'#495057')+';font-weight:'+(sinCont?'700':'400')+'">'+esc(contratista)+'</td>'
-      +'<td style="padding:7px 9px;color:#1a56db;font-size:10.5px">'+esc(a.area||'—')+'</td>'
-      +'<td style="padding:7px 9px;font-size:10.5px;color:#495057">'+esc(a.ingeniero_nombre||'—')+'</td>'
-      +'<td style="padding:7px 9px;text-align:center;font-size:10.5px;color:'+(retrasada?'#e03131':'#495057')+'">'+(a.fecha?fmtF(a.fecha):'—')+'</td>'
-      +'<td style="padding:7px 9px;text-align:center;font-weight:700;font-size:11px;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'#1a56db':'#868e96')+'">'+a.porcentaje+'%</td>'
-      +'<td style="padding:7px 9px"><span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">'+est+'</span></td>'
+    var ec=ECOL[est]||'#868e96'; var eb=EBG[est]||'#f1f3f5';
+    var pc=PCOL[a.prioridad]||'#868e96'; var pb=PBG[a.prioridad]||'#f1f3f5';
+    return '<tr>'
+      +'<td>'+(a.prioridad?'<span style="background:'+pb+';color:'+pc+';border:1px solid '+pc+'40;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700">'+a.prioridad.toUpperCase()+'</span>':'—')+'</td>'
+      +'<td style="font-weight:600;color:#212529">'+esc(a.descripcion)+(a.notas?'<div style="font-size:10px;color:#868e96;margin-top:1px">'+esc(a.notas)+'</div>':'')+'</td>'
+      +'<td style="color:#1a56db;font-size:10.5px">'+esc(a.area||'—')+'</td>'
+      +'<td style="color:#495057;font-size:10.5px">'+esc(a.ingeniero_nombre||'—')+'</td>'
+      +'<td style="text-align:center;color:'+(retrasada?'#c92a2a':'#495057')+';font-weight:'+(retrasada?'700':'400')+'">'+(a.fecha?fmtF(a.fecha):'—')+'</td>'
+      +'<td style="text-align:center;font-weight:700;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'#1a56db':'#868e96')+'">'+a.porcentaje+'%</td>'
+      +'<td><span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700">'+est+'</span></td>'
       +'</tr>';
+  }
+
+  var TH='<thead><tr style="background:#1e1b4b;color:#fff">'
+    +'<th style="width:65px">Prioridad</th><th>Descripción</th>'
+    +'<th style="width:95px">Ubicación</th><th style="width:105px">Responsable</th>'
+    +'<th style="width:75px;text-align:center">Fecha</th>'
+    +'<th style="width:38px;text-align:center">%</th><th style="width:88px">Estado</th>'
+    +'</tr></thead>';
+
+  var sections=grupos.map(function(g){
+    var gDone=g.g.filter(function(a){return a.estado==='completado';}).length;
+    var gPct=Math.round(g.g.reduce(function(s,a){return s+(a.porcentaje||0);},0)/g.g.length);
+    return '<div style="margin-bottom:18px">'
+      +'<div style="background:'+g.bg+';padding:8px 12px;border-left:4px solid '+g.color+';margin-bottom:0;display:flex;justify-content:space-between;align-items:center">'
+        +'<span style="font-size:13px;font-weight:800;color:'+g.color+'">'+esc(g.titulo)+'</span>'
+        +'<span style="font-size:11px;color:#495057">'+gDone+'/'+g.g.length+' hechas &nbsp;·&nbsp; <b>'+gPct+'%</b></span>'
+      +'</div>'
+      +'<table style="margin-bottom:0">'+TH+'<tbody>'+g.g.map(pRow).join('')+'</tbody></table>'
+      +'</div>';
   }).join('');
 
-  var retrasadasCnt=acts.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
   var win=window.open('','_blank','width=1000,height=700');
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
     +'<title>Supervisión '+esc(apto)+' — Mecca Residence</title>'
-    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Calibri,Arial,sans-serif;font-size:12px;color:#212529;padding:24px 28px}'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Calibri,Arial,sans-serif;font-size:12px;color:#212529;padding:20px 26px}'
     +'h1{font-size:17px;font-weight:800;color:#1e1b4b;margin-bottom:3px}'
-    +'.sub{font-size:11px;color:#868e96;margin-bottom:14px}'
-    +'.meta{display:flex;gap:16px;margin-bottom:14px;padding:10px 14px;background:#f8f9fa;border-radius:8px;border:1px solid #dee2e6;flex-wrap:wrap}'
-    +'.meta-item{text-align:center;min-width:60px}.meta-item .v{font-size:20px;font-weight:800}.meta-item .l{font-size:10px;color:#868e96}'
-    +'table{width:100%;border-collapse:collapse;border:1px solid #dee2e6}'
-    +'thead tr{background:#1e1b4b;color:#fff}'
-    +'thead th{padding:9px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15)}'
+    +'.sub{font-size:11px;color:#868e96;margin-bottom:12px}'
+    +'.meta{display:flex;gap:14px;margin-bottom:16px;padding:9px 14px;background:#f8f9fa;border-radius:6px;border:1px solid #dee2e6;flex-wrap:wrap}'
+    +'.meta-item{text-align:center;min-width:55px}.meta-item .v{font-size:19px;font-weight:800}.meta-item .l{font-size:10px;color:#868e96}'
+    +'table{width:100%;border-collapse:collapse;border:1px solid #dee2e6;border-top:none}'
+    +'thead th{padding:8px 9px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15)}'
     +'tbody tr:nth-child(even){background:#f8f9fa}'
-    +'tbody td{border-right:1px solid #dee2e6;vertical-align:top}'
-    +'@media print{body{padding:10px}@page{size:A4 landscape;margin:12mm}}</style>'
+    +'tbody td{padding:6px 9px;border-right:1px solid #dee2e6;border-bottom:1px solid #dee2e6;vertical-align:top}'
+    +'@media print{body{padding:8px}@page{size:A4 landscape;margin:10mm}.no-break{page-break-inside:avoid}}</style>'
     +'</head><body>'
-    +'<h1>Supervisión — Ubicación: '+esc(apto)+'</h1>'
+    +'<h1>Supervisión — '+esc(apto)+'</h1>'
     +'<div class="sub">Mecca Residence &nbsp;·&nbsp; Generado el '+fmtF(hoy)+'</div>'
     +'<div class="meta">'
     +'<div class="meta-item"><div class="v" style="color:#1a56db">'+acts.length+'</div><div class="l">Total</div></div>'
     +'<div class="meta-item"><div class="v" style="color:#2f9e44">'+completadas+'</div><div class="l">Completadas</div></div>'
-    +(retrasadasCnt?'<div class="meta-item"><div class="v" style="color:#e03131">'+retrasadasCnt+'</div><div class="l">Retrasadas</div></div>':'')
-    +'<div class="meta-item"><div class="v" style="color:'+(pct>=80?'#2f9e44':pct>=50?'#e67700':'#e03131')+'">'+pct+'%</div><div class="l">Avance</div></div>'
+    +(retrasadasCnt?'<div class="meta-item"><div class="v" style="color:#c92a2a">'+retrasadasCnt+'</div><div class="l">Retrasadas</div></div>':'')
+    +'<div class="meta-item"><div class="v" style="color:'+(pct>=80?'#2f9e44':pct>=50?'#e67700':'#c92a2a')+'">'+pct+'%</div><div class="l">Avance global</div></div>'
     +'</div>'
-    +'<table><thead><tr>'
-    +'<th style="width:68px">Prioridad</th>'
-    +'<th>Descripción</th>'
-    +'<th style="width:110px">Contratista</th>'
-    +'<th style="width:100px">Ubicación</th>'
-    +'<th style="width:105px">Responsable</th>'
-    +'<th style="width:76px;text-align:center">Fecha límite</th>'
-    +'<th style="width:40px;text-align:center">%</th>'
-    +'<th style="width:90px">Estado</th>'
-    +'</tr></thead><tbody>'+rows+'</tbody></table>'
+    +sections
     +'<script>window.onload=function(){window.print();}<\/script>'
     +'</body></html>');
   win.document.close();
