@@ -1287,23 +1287,6 @@ function dateNavHTML(){
 }
 
 // ── RENDER HOY ────────────────────────────────────────
-// Cycle attendance state with a single tap
-var _ASIST_CYCLE=['presente','tarde','medio día','ausente'];
-function quickAsist(pid){
-  const a=S.asist.find(x=>x.personal_id===pid)||{};
-  const cur=_ASIST_CYCLE.indexOf(a.estado||'');
-  const next=_ASIST_CYCLE[(cur+1)%_ASIST_CYCLE.length];
-  marcarAsist(pid, next);
-  // Update bubble immediately without full re-render
-  const el=document.getElementById('qasist-'+pid);
-  if(el){
-    const DOT_C={presente:'#2f9e44',tarde:'#f08c00','medio día':'#1a56db',ausente:'#e03131'};
-    el.style.background=(DOT_C[next]||'#adb5bd')+'22';
-    el.querySelector('.qa-dot').style.background=DOT_C[next]||'#adb5bd';
-    el.querySelector('.qa-est').textContent=next==='medio día'?'½d':next.slice(0,3);
-  }
-}
-
 function renderHoy(){
   const propios=S.personal.filter(p=>p.tipo==='propio');
   const pres=S.asist.filter(a=>['presente','tarde','medio día'].includes(a.estado)).length;
@@ -1311,38 +1294,19 @@ function renderHoy(){
   const actDone=S.acts.filter(a=>a.estado==='completado').length;
   const retrasadas=(S.actsActivas||[]).filter(a=>a.fecha&&a.fecha<S.fecha&&a.estado!=='completado').length;
   const pct=propios.length?Math.round(pres/propios.length*100):0;
-  const DOT_C={presente:'#2f9e44',tarde:'#f08c00','medio día':'#1a56db',ausente:'#e03131'};
-
-  // Quick attendance bubbles
-  const bubbles=propios.length===0?'<span style="font-size:12px;color:var(--text3)">Sin personal registrado</span>'
-    :propios.map(p=>{
-      const a=S.asist.find(x=>x.personal_id===p.id)||{};
-      const dc=DOT_C[a.estado||'']||'#adb5bd';
-      const lbl=a.estado==='medio día'?'½d':(a.estado||'—').slice(0,3);
-      return`<button id="qasist-${p.id}" onclick="quickAsist('${p.id}')"
-        title="${esc(p.nombre)} — toca para cambiar asistencia"
-        style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 6px;border-radius:12px;border:none;background:${dc}22;cursor:pointer;min-width:52px;transition:background .2s">
-        <div class="p-av" style="width:34px;height:34px;font-size:11px;background:${avColor(p.nombre)}22;color:${avColor(p.nombre)};border:2px solid ${dc}">${initials(p.nombre)}</div>
-        <span class="qa-dot" style="width:8px;height:8px;border-radius:50%;background:${dc};display:block"></span>
-        <span class="qa-est" style="font-size:9px;font-weight:700;color:${dc};font-family:var(--mono);white-space:nowrap">${lbl}</span>
-      </button>`;
-    }).join('');
 
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
 
-    <!-- Quick attendance strip -->
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:10px 12px;margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <span style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Asistencia — toca para marcar</span>
-        <span style="font-size:11px;color:var(--text3)">${pres}/${propios.length} presentes</span>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Asistencia hoy</div>
+        <div style="font-size:13px;font-weight:600;color:${pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--red)'};margin-top:2px">${pres}/${propios.length} presentes</div>
+        ${propios.length>0?`<div style="margin-top:5px;height:4px;width:120px;background:var(--bg4);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${pct>=80?'#2f9e44':pct>=50?'#f08c00':'#e03131'};border-radius:2px;transition:width .3s"></div>
+        </div>`:''}
       </div>
-      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none">
-        ${bubbles}
-      </div>
-      ${propios.length>0?`<div style="margin-top:8px;height:4px;background:var(--bg4);border-radius:2px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:${pct>=80?'#2f9e44':pct>=50?'#f08c00':'#e03131'};border-radius:2px;transition:width .3s"></div>
-      </div>`:''}
+      <button onclick="goTab('equipo');S.equipoVista='asistencia';renderEquipo()" style="padding:8px 14px;border-radius:var(--r);border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Marcar →</button>
     </div>
 
     <div class="stats-row">
