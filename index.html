@@ -4651,9 +4651,11 @@ async function loadCompras(){
   try{
     const ocs=await sb('obra_ordenes_compra?order=fecha.desc,created_at.desc&limit=200');
     S.compras=ocs;
+    S.comprasError=false;
     if(S.currentTab==='compras') renderCompras();
   }catch(e){
     S.compras=[];
+    S.comprasError=true;
     if(S.currentTab==='compras') renderCompras();
   }
 }
@@ -4748,10 +4750,11 @@ function renderCompras(){
   const counts={borrador:0,pendiente:0,aprobada:0,recibida:0,cancelada:0};
   all.forEach(o=>{if(counts[o.estado]!==undefined) counts[o.estado]++;});
 
-  const setupMsg = all.length===0&&!S.comprasEstadoFiltro
-    ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:var(--r2);padding:14px 16px;margin-bottom:14px;font-size:12px;color:#92400e">
-        <div style="font-weight:700;margin-bottom:4px">⚙️ Tabla no encontrada o sin datos</div>
-        <div>Crea la tabla <code>obra_ordenes_compra</code> en Supabase con los campos: id, fecha, numero_orden, descripcion, proveedor, items, monto_estimado, monto_real, estado, notas, ingeniero_id, ingeniero_nombre, created_at</div>
+  const setupMsg = S.comprasError
+    ? `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:var(--r2);padding:14px 16px;margin-bottom:14px;font-size:12px;color:#7f1d1d">
+        <div style="font-weight:700;margin-bottom:4px">⚠️ Error al cargar órdenes de compra</div>
+        <div>Verifica que la tabla <code>obra_ordenes_compra</code> existe en Supabase y que tiene los permisos correctos.</div>
+        <button onclick="loadCompras()" style="margin-top:8px;padding:6px 14px;border-radius:var(--r);border:1.5px solid #dc2626;background:#fff;color:#dc2626;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">↺ Reintentar</button>
       </div>`
     : '';
 
