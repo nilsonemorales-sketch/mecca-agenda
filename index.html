@@ -618,7 +618,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_29';
+const APP_VERSION='20260601_30';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1848,14 +1848,83 @@ function getNivelesUnicos(){
 }
 
 // Sort so retrasadas → urgentes → en-progreso → resto; within each group by fecha asc
+// ── PREDECESORAS ──────────────────────────────────────
+function buildPredSection(currentId, currentPreds){
+  // currentPreds: array of IDs already selected
+  var candidates=S.acts.filter(function(a){return a.id!==currentId;});
+  if(!candidates.length) return '';
+  var selSet=new Set(currentPreds||[]);
+  var selCount=selSet.size;
+  var html='<div class="fw" style="margin-top:4px">';
+  html+='<details style="background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--r);overflow:hidden">';
+  html+='<summary style="padding:10px 14px;cursor:pointer;font-size:13px;font-weight:700;color:var(--text);user-select:none;list-style:none;display:flex;align-items:center;gap:8px">';
+  html+='🔗 Predecesoras'+(selCount?' <span style="background:var(--accent);color:#fff;border-radius:20px;padding:1px 8px;font-size:11px">'+selCount+'</span>':'<span style="font-size:11px;color:var(--text3);font-weight:400"> — sin dependencias</span>');
+  html+='</summary>';
+  html+='<div style="padding:10px 14px;border-top:1px solid var(--border)">';
+  html+='<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Selecciona las actividades que deben completarse ANTES de esta:</div>';
+  html+='<input type="text" id="pred-search" placeholder="🔍 Buscar..." style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:var(--font);margin-bottom:8px;background:var(--bg2);color:var(--text)" oninput="filterPredList()">';
+  html+='<div id="pred-list" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">';
+  candidates.forEach(function(c){
+    var checked=selSet.has(c.id);
+    var lbl=esc((c.area?'['+c.area+'] ':'')+c.descripcion);
+    html+='<label style="display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;background:'+(checked?'var(--bg4)':'var(--bg2)')+';border:1px solid '+(checked?'var(--accent)':'var(--border)')+'" data-desc="'+lbl.toLowerCase()+'">';
+    html+='<input type="checkbox" name="pred-cb" value="'+c.id+'" '+(checked?'checked':'')+' style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0" onchange="updatePredsField()">';
+    html+='<span style="font-size:11.5px;color:var(--text);line-height:1.35"><b>'+esc(c.descripcion)+'</b>'+(c.area?'<br><span style="color:var(--accent);font-size:10.5px">📍 '+esc(c.area)+'</span>':'')+'</span>';
+    html+='</label>';
+  });
+  html+='</div>';
+  html+='</div>';
+  html+='</details>';
+  html+='<input type="hidden" id="a-preds" value="'+(selCount?JSON.stringify([...selSet]):'')+'"/>';
+  html+='</div>';
+  return html;
+}
+function filterPredList(){
+  var q=(document.getElementById('pred-search').value||'').toLowerCase();
+  document.querySelectorAll('#pred-list label').forEach(function(el){
+    el.style.display=(!q||el.dataset.desc.includes(q))?'':'none';
+  });
+}
+function updatePredsField(){
+  var ids=[...document.querySelectorAll('input[name="pred-cb"]:checked')].map(function(cb){return cb.value;});
+  var f=document.getElementById('a-preds');
+  if(f) f.value=ids.length?JSON.stringify(ids):'';
+  // Update label count
+  var sum=document.querySelector('details summary');
+  if(sum) sum.querySelector('span').textContent=ids.length?' '+ids.length:'';
+}
+function getPreds(a){
+  if(!a||!a.predecesoras) return [];
+  try{ return JSON.parse(a.predecesoras)||[]; }catch(e){ return []; }
+}
+function isBlocked(a){
+  var ids=getPreds(a);
+  if(!ids.length) return false;
+  return ids.some(function(id){
+    var p=S.acts.find(function(x){return x.id===id;});
+    return p&&p.estado!=='completado';
+  });
+}
+function getPendingPreds(a){
+  return getPreds(a).map(function(id){return S.acts.find(function(x){return x.id===id;});}).filter(function(p){return p&&p.estado!=='completado';});
+}
+// After completing an act, auto-unblock successors (re-render only — DB state stays)
+function checkSuccessors(){
+  // Just trigger a re-render so blocked badges update instantly
+  if(S.obraVista==='kanban') renderKanban();
+  else if(S.obraVista==='todas') renderActs();
+  else renderEnObra();
+}
+
 function sortByPriority(acts){
   var hoy=new Date().toISOString().slice(0,10);
   function rank(a){
-    if(a.fecha&&a.fecha<hoy&&a.estado!=='completado') return 0;  // retrasada
-    if(a.prioridad==='urgente'&&a.estado!=='completado')        return 1;  // urgente
-    if(a.estado==='en-progreso')                                return 2;
-    if(a.estado==='pendiente')                                  return 3;
-    if(a.estado==='pausada')                                    return 4;
+    if(isBlocked(a)&&a.estado!=='completado')              return 6;  // bloqueada al fondo
+    if(a.fecha&&a.fecha<hoy&&a.estado!=='completado')      return 0;  // retrasada
+    if(a.prioridad==='urgente'&&a.estado!=='completado')   return 1;  // urgente
+    if(a.estado==='en-progreso')                           return 2;
+    if(a.estado==='pendiente')                             return 3;
+    if(a.estado==='pausada')                               return 4;
     return 5;
   }
   return acts.slice().sort(function(a,b){
@@ -2157,8 +2226,9 @@ function actsDesktopTable(acts, showDate){
     // Date
     html+='<td style="padding:7px 8px;color:'+(retrasada?'#e03131':'var(--text3)')+';white-space:nowrap;font-weight:'+(retrasada?'700':'400')+'">'+esc(a.fecha||'—')+'</td>';
     // Description
+    var blocked=isBlocked(a)&&a.estado!=='completado';
     html+='<td style="padding:7px 8px;max-width:280px">';
-    html+='<div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.descripcion)+'</div>';
+    html+='<div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.descripcion)+(blocked?'<span style="display:inline-block;margin-left:6px;background:#f1f3f5;color:#868e96;border:1px solid #dee2e6;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:700">🔒 bloqueada</span>':'')+'</div>';
     if(a.notas) html+='<div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.notas)+'</div>';
     html+='</td>';
     // Area
@@ -2192,6 +2262,7 @@ function actHTML(a, ai, tipo){
   const retrasada=a.fecha<hoy&&a.estado!=='completado';
   
   var prioBadge = a.prioridad==='urgente' ? '<span style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;margin-left:6px">🔴 URGENTE</span>' : '';
+  var blockedBadge = (isBlocked(a)&&a.estado!=='completado') ? '<span style="background:#f1f3f5;color:#868e96;border:1px solid #dee2e6;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;margin-left:6px">🔒 bloqueada</span>' : '';
   const estadoLabel = vencida||retrasada ?
     '<span class="pill" style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8">🔴 retrasada</span>' :
     `<span class="pill ${a.estado.replace(' ','-')}" style="cursor:pointer" title="Clic para cambiar estado" onclick="event.stopPropagation();cycleEstado('${a.id}')">${a.estado} ▸</span>`;
@@ -2199,7 +2270,7 @@ function actHTML(a, ai, tipo){
   return`<div class="act-item ${tipo}" style="${(vencida||retrasada)?'border-left:3px solid #e03131;':a.estado==='en-progreso'?'border-left:3px solid #1a56db;':''}">
     <div style="margin-bottom:6px">${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">📍 ${esc(a.area)}</span>`:`<span style="background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" onclick="setArea('${a.id}')">⚠️ Sin ubicacion — toca para agregar</span>`}</div>
     <div class="act-top">
-      <span class="act-desc">${esc(a.descripcion)}</span>${prioBadge}
+      <span class="act-desc">${esc(a.descripcion)}</span>${prioBadge}${blockedBadge}
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
         ${estadoLabel}
         ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px" onclick="editAct(${ai})">✏️</button>`:''}
@@ -2238,6 +2309,7 @@ async function marcarActCompletada(id){
   S.actsActivas=S.actsActivas?S.actsActivas.filter(function(x){return x.id!==id;}):[];
   renderActs(); renderHoy(); renderEnObra();
   if(S.obraVista==='kanban') renderKanban();
+  checkSuccessors();
   setSS('syncing','...');
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
@@ -2284,6 +2356,7 @@ async function cycleEstado(actId){
   if(a.estado==='completado')a.porcentaje=100;
   renderHoy();renderActs();
   if(S.obraVista==='kanban') renderKanban();
+  checkSuccessors();
   setSS('syncing','...');
   try{
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
@@ -2502,6 +2575,7 @@ function showAddActPropio(ai, ctx){
       <span style="font-size:11px;color:var(--text3)">Duración: </span>
       <span style="font-family:var(--mono);color:var(--accent);font-weight:600" id="dur-propio-lbl">${calcDurLbl(a.fecha_inicio,a.fecha_fin)}</span>
     </div>
+    ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
@@ -2594,6 +2668,7 @@ function showAddActContratista(ai, preContratista, ctx){
       <textarea id="a-n" class="ta" placeholder="Condiciones, materiales, acuerdos...">${esc(a.notas)}</textarea></div>
 
     <input type="hidden" id="a-tipo" value="contratista">
+    ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
@@ -2681,6 +2756,7 @@ function showAddActIngeniero(ai){
     <input type="hidden" id="a-plan" value="0">
     <input type="hidden" id="a-real" value="0">
     <input type="hidden" id="a-tipo" value="ingeniero">
+    ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
@@ -2711,6 +2787,7 @@ async function saveActIngeniero(ai){
     fecha_inicio:(document.getElementById('a-fi')||{value:''}).value,
     fecha_fin:(document.getElementById('a-ff')||{value:''}).value,
     fecha:S.fecha, foto_pendiente:false,
+    predecesoras:(document.getElementById('a-preds')||{value:''}).value.trim()||null,
   };
   closeModal(); setSS('syncing','Guardando...');
   try{
@@ -2812,6 +2889,7 @@ async function saveAct(ai){
     ingeniero_nombre:getFld('a-ing','')||S.user?.nombre||'',
     fecha:S.fecha,
     foto_pendiente:true,
+    predecesoras:getFld('a-preds','').trim()||null,
   };
   closeModal();setSS('syncing','Guardando...');
   try{
@@ -5053,7 +5131,16 @@ function buildActCardObra(a){
       '</div>'
     : '';
 
+  var blocked=isBlocked(a)&&a.estado!=='completado';
+  var pendPreds=blocked?getPendingPreds(a):[];
+  var blockedBanner=blocked
+    ?'<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:4px 10px;font-size:11px;color:#868e96;font-weight:600;margin-bottom:6px">'+
+        '🔒 Bloqueada — espera: '+pendPreds.map(function(p){return esc(p.descripcion.slice(0,30));}).join(', ')+
+      '</div>'
+    :'';
+
   return '<div style="background:#fff;border:1.5px solid '+bc+';border-left:4px solid '+ec+';border-radius:var(--r2);padding:12px 14px;margin-bottom:10px'+(retrasada?';background:#fffafa':'')+'">'+
+    blockedBanner+
     retrasadaBanner+
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">'+
       '<div style="flex:1;min-width:0">'+
@@ -5394,6 +5481,7 @@ function renderKanban(){
       +(sinCont?'<div style="font-size:9px;color:#856404;font-weight:700;margin-bottom:3px">⚠️ SIN CONTRATISTA — toca para asignar</div>':'')
       +(retrasada?'<div style="font-size:9px;color:#c92a2a;font-weight:700;margin-bottom:3px">⏰ RETRASADA</div>':'')
       +(a.prioridad==='urgente'&&!retrasada?'<div style="font-size:9px;color:#e03131;font-weight:700;margin-bottom:3px">🔴 URGENTE</div>':'')
+      +((isBlocked(a)&&a.estado!=='completado')?'<div style="font-size:9px;color:#868e96;font-weight:700;margin-bottom:3px">🔒 BLOQUEADA</div>':'')
       +'<div style="font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;margin-bottom:5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+esc(a.descripcion)+'</div>'
       +(a.area?'<div style="font-size:10.5px;color:var(--accent);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📍 '+esc(a.area)+'</div>':'')
       +'<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:'+(canEdit()&&a.estado!=='completado'?'6':'0')+'px">'
