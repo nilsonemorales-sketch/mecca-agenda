@@ -1197,7 +1197,7 @@ function requireEdit(action){
         <option value="moises">Ing. Moises Jimenez</option>
       </select></div>
     <div class="fw"><label class="fl">PIN</label>
-      <input type="password" id="lp" placeholder="••••" style="font-size:28px;letter-spacing:10px;text-align:center;min-height:60px" inputmode="numeric" maxlength="10" onkeydown="if(event.key==='Enter')doLoginAndRun(${JSON.stringify(action.toString())})">
+      <input type="password" id="lp" placeholder="••••" style="font-size:28px;letter-spacing:10px;text-align:center;min-height:60px" inputmode="numeric" maxlength="10" onkeydown="if(event.key==='Enter')doLoginAndRun_cb()">
       <div style="color:var(--red);font-size:12px;margin-top:4px;display:none" id="lerr">PIN incorrecto</div></div>
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
