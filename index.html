@@ -328,20 +328,14 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
   </div>
 
   <div class="tabs">
-    <div class="tab" id="tab-enobra" onclick="goTab('enobra',this)">🏗️ En Obra</div>
-    <div class="tab active" onclick="goTab('hoy',this)">📋 Hoy</div>
-    <div class="tab" onclick="goTab('asistencia',this)">👷 Asistencia</div>
-    <div class="tab" onclick="goTab('actividades',this)">⚡ Actividades</div>
-    <div class="tab" onclick="goTab('reportes',this)">📊 Reportes</div>
-    <div class="tab" onclick="goTab('semana',this)">📅 Semana</div>
-    <div class="tab" onclick="goTab('penalidades',this)">⚠️ Penalidades</div>
-    <div class="tab" onclick="goTab('personal',this)">👥 Personal</div>
-    <div class="tab" onclick="goTab('historial',this)" id="tab-historial">📜 Historial</div>
-    <div class="tab" onclick="goTab('fotos',this)" id="tab-fotos">📷 Fotos</div>
+    <div class="tab active" data-tab="hoy" onclick="goTab('hoy')">📋 Hoy</div>
+    <div class="tab" data-tab="obra" onclick="goTab('obra')">🏗️ Obra</div>
+    <div class="tab" data-tab="equipo" onclick="goTab('equipo')">👷 Equipo</div>
+    <div class="tab" data-tab="reportes" onclick="goTab('reportes')">📊 Reportes</div>
+    <div class="tab" data-tab="fotos" onclick="goTab('fotos')">📷 Fotos</div>
   </div>
 
   <div class="body">
-    <div class="view" id="view-enobra"><div id="c-enobra"></div></div>
     <div class="view active" id="view-hoy"><div id="c-hoy"><div class="shimmer-block" style="padding:16px">
   <div style="height:60px;background:var(--bg3);border-radius:var(--r);margin-bottom:10px;animation:shimmer 1.2s infinite"></div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
@@ -352,41 +346,54 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
   </div>
   <div style="height:160px;background:var(--bg3);border-radius:var(--r2);animation:shimmer 1.2s infinite"></div>
 </div></div></div>
-    <div class="view" id="view-asistencia"><div id="c-asist"></div></div>
-    <div class="view" id="view-actividades"><div id="c-act"></div></div>
-    <div class="view" id="view-reportes"><div id="c-rep"></div></div>
-    <div class="view" id="view-semana"><div id="c-sem"></div></div>
-    <div class="view" id="view-penalidades"><div id="c-pen"></div></div>
-    <div class="view" id="view-personal"><div id="c-pers"></div></div>
-    <div class="view" id="view-historial"><div id="c-hist"></div></div>
+
+    <!-- OBRA: Actividades en obra + listado completo -->
+    <div class="view" id="view-obra">
+      <div id="c-obra-subnav"></div>
+      <div id="c-enobra"></div>
+      <div id="c-act" style="display:none"></div>
+    </div>
+
+    <!-- EQUIPO: Asistencia + Personal + Penalidades -->
+    <div class="view" id="view-equipo">
+      <div id="c-equipo-subnav"></div>
+      <div id="c-asist"></div>
+      <div id="c-pers" style="display:none"></div>
+      <div id="c-pen" style="display:none"></div>
+    </div>
+
+    <!-- REPORTES: Dashboard + Semana + Historial -->
+    <div class="view" id="view-reportes">
+      <div id="c-rep-subnav"></div>
+      <div id="c-rep"></div>
+      <div id="c-sem" style="display:none"></div>
+      <div id="c-hist" style="display:none"></div>
+    </div>
+
     <div class="view" id="view-fotos"><div id="c-fotos"></div></div>
   </div>
 
   <!-- BOTTOM NAV (mobile) -->
   <nav class="bottom-nav" id="bottom-nav">
-    <button class="bnav-btn" id="bn-enobra" onclick="goTab('enobra',null);updateBNav('enobra')">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      <span class="blbl">En Obra</span>
-    </button>
-    <button class="bnav-btn active" id="bn-hoy" onclick="goTab('hoy',null);updateBNav('hoy')">
+    <button class="bnav-btn active" id="bn-hoy" onclick="goTab('hoy')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       <span class="blbl">Hoy</span>
     </button>
-    <button class="bnav-btn" id="bn-asistencia" onclick="goTab('asistencia',null);updateBNav('asistencia')">
+    <button class="bnav-btn" id="bn-obra" onclick="goTab('obra')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span class="blbl">Obra</span>
+    </button>
+    <button class="bnav-btn" id="bn-equipo" onclick="goTab('equipo')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      <span class="blbl">Asistencia</span>
+      <span class="blbl">Equipo</span>
     </button>
-    <button class="bnav-btn" id="bn-actividades" onclick="goTab('actividades',null);updateBNav('actividades')">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      <span class="blbl">Actividades</span>
-    </button>
-    <button class="bnav-btn" id="bn-reportes" onclick="goTab('reportes',null);updateBNav('reportes')">
+    <button class="bnav-btn" id="bn-reportes" onclick="goTab('reportes')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       <span class="blbl">Reportes</span>
     </button>
-    <button class="bnav-btn" id="bn-more" onclick="toggleDrawer()">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-      <span class="blbl">Más</span>
+    <button class="bnav-btn" id="bn-fotos" onclick="goTab('fotos')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      <span class="blbl">Fotos</span>
     </button>
   </nav>
 </div>
@@ -406,15 +413,14 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
   </div>
   <div class="dw-sec">
     <div class="dw-title">NAVEGACIÓN</div>
-    <button class="dw-btn" onclick="goTabD('enobra')"><svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/></svg> En Obra</button>
-    <button class="dw-btn" onclick="goTabD('hoy')">📋 Resumen del día</button>
-    <button class="dw-btn" onclick="goTabD('asistencia')">👷 Asistencia</button>
-    <button class="dw-btn" onclick="goTabD('actividades')">⚡ Actividades</button>
-    <button class="dw-btn" onclick="goTabD('reportes')">📊 Reportes</button>
-    <button class="dw-btn" onclick="goTabD('semana')">📅 Plan semanal</button>
-    <button class="dw-btn" onclick="goTabD('penalidades')">⚠️ Penalidades</button>
-    <button class="dw-btn" onclick="goTabD('personal')">👥 Personal</button>
-    <button class="dw-btn" onclick="goTabD('historial')">📜 Historial Ingenieros</button>
+    <button class="dw-btn" onclick="goTabD('hoy')">📋 Hoy — Resumen del día</button>
+    <button class="dw-btn" onclick="goTabD('obra')">🏗️ Obra — Actividades en obra</button>
+    <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='asistencia'">👷 Equipo — Asistencia</button>
+    <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='personal'">👥 Equipo — Personal</button>
+    <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='penalidades'">⚠️ Equipo — Penalidades</button>
+    <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='dashboard'">📊 Reportes — Dashboard</button>
+    <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='semana'">📅 Reportes — Plan semanal</button>
+    <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='historial'">📜 Reportes — Historial</button>
     <button class="dw-btn" onclick="goTabD('fotos')">📷 Galería de fotos</button>
   </div>
   <div class="dw-sec">
@@ -944,6 +950,9 @@ let S={
   fotosFiltroIng:'todos', fotosFiltroUbic:'', fotosFecha:'', fotosFechaFin:'', fotosData:[],
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
+  obraVista:'activa',       // 'activa' | 'todas'
+  equipoVista:'asistencia', // 'asistencia' | 'personal' | 'penalidades'
+  reportesVista:'dashboard',// 'dashboard' | 'semana' | 'historial'
 };
 
 function today(){return new Date().toISOString().slice(0,10);}
@@ -1216,23 +1225,19 @@ function updateUserUI(){
     const b=document.getElementById('inactividad-banner');
     if(b) b.style.display='none';
   }
-  // Show admin-only tabs only for Nilson
-  const adminOnly=['tab-historial','tab-fotos'];
-  adminOnly.forEach(id=>{
-    const t=document.getElementById(id);
-    if(t) t.style.display=isAdmin()?'block':'none';
-  });
+  // All tabs visible to all users (historial/penalidades accessible via sub-tabs)
   updateFAB();
 }
 
 // ── FAB ───────────────────────────────────────────────
 const FAB_ACTIONS={
-  enobra:()=>requireEdit(showAddActSmart),
-  asistencia:()=>null,
-  actividades:()=>requireEdit(showAddActSmart),
-  personal:()=>requireEdit(showAddPersonalChoice),
-  penalidades:()=>requireEdit(showAddPen),
-  semana:()=>requireEdit(showAddPlan),
+  hoy:    ()=>requireEdit(showAddActSmart),
+  obra:   ()=>requireEdit(showAddActSmart),
+  equipo: ()=>{
+    if(S.equipoVista==='penalidades') requireEdit(showAddPen);
+    else if(S.equipoVista==='personal') requireEdit(showAddPersonalChoice);
+    else null; // asistencia: no FAB needed, inline buttons
+  },
   reportes:()=>exportarPDF(),
 };
 function updateFAB(){
@@ -1267,67 +1272,110 @@ function dateNavHTML(){
 }
 
 // ── RENDER HOY ────────────────────────────────────────
+// Cycle attendance state with a single tap
+var _ASIST_CYCLE=['presente','tarde','medio día','ausente'];
+function quickAsist(pid){
+  const a=S.asist.find(x=>x.personal_id===pid)||{};
+  const cur=_ASIST_CYCLE.indexOf(a.estado||'');
+  const next=_ASIST_CYCLE[(cur+1)%_ASIST_CYCLE.length];
+  marcarAsist(pid, next);
+  // Update bubble immediately without full re-render
+  const el=document.getElementById('qasist-'+pid);
+  if(el){
+    const DOT_C={presente:'#2f9e44',tarde:'#f08c00','medio día':'#1a56db',ausente:'#e03131'};
+    el.style.background=(DOT_C[next]||'#adb5bd')+'22';
+    el.querySelector('.qa-dot').style.background=DOT_C[next]||'#adb5bd';
+    el.querySelector('.qa-est').textContent=next==='medio día'?'½d':next.slice(0,3);
+  }
+}
+
 function renderHoy(){
   const propios=S.personal.filter(p=>p.tipo==='propio');
   const pres=S.asist.filter(a=>['presente','tarde','medio día'].includes(a.estado)).length;
   const aus=S.asist.filter(a=>a.estado==='ausente').length;
-  const actP=S.acts.filter(a=>a.tipo_personal==='propio').length;
-  const actC=S.acts.filter(a=>a.tipo_personal==='contratista').length;
   const actDone=S.acts.filter(a=>a.estado==='completado').length;
+  const retrasadas=(S.actsActivas||[]).filter(a=>a.fecha&&a.fecha<S.fecha&&a.estado!=='completado').length;
   const pct=propios.length?Math.round(pres/propios.length*100):0;
+  const DOT_C={presente:'#2f9e44',tarde:'#f08c00','medio día':'#1a56db',ausente:'#e03131'};
+
+  // Quick attendance bubbles
+  const bubbles=propios.length===0?'<span style="font-size:12px;color:var(--text3)">Sin personal registrado</span>'
+    :propios.map(p=>{
+      const a=S.asist.find(x=>x.personal_id===p.id)||{};
+      const dc=DOT_C[a.estado||'']||'#adb5bd';
+      const lbl=a.estado==='medio día'?'½d':(a.estado||'—').slice(0,3);
+      return`<button id="qasist-${p.id}" onclick="quickAsist('${p.id}')"
+        title="${esc(p.nombre)} — toca para cambiar asistencia"
+        style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 6px;border-radius:12px;border:none;background:${dc}22;cursor:pointer;min-width:52px;transition:background .2s">
+        <div class="p-av" style="width:34px;height:34px;font-size:11px;background:${avColor(p.nombre)}22;color:${avColor(p.nombre)};border:2px solid ${dc}">${initials(p.nombre)}</div>
+        <span class="qa-dot" style="width:8px;height:8px;border-radius:50%;background:${dc};display:block"></span>
+        <span class="qa-est" style="font-size:9px;font-weight:700;color:${dc};font-family:var(--mono);white-space:nowrap">${lbl}</span>
+      </button>`;
+    }).join('');
 
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
+
+    <!-- Quick attendance strip -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:10px 12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Asistencia — toca para marcar</span>
+        <span style="font-size:11px;color:var(--text3)">${pres}/${propios.length} presentes</span>
+      </div>
+      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none">
+        ${bubbles}
+      </div>
+      ${propios.length>0?`<div style="margin-top:8px;height:4px;background:var(--bg4);border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${pct>=80?'#2f9e44':pct>=50?'#f08c00':'#e03131'};border-radius:2px;transition:width .3s"></div>
+      </div>`:''}
+    </div>
+
     <div class="stats-row">
       <div class="scard"><div class="v" style="color:var(--green)">${pres}</div><div class="l">Presentes</div></div>
       <div class="scard"><div class="v" style="color:var(--red)">${aus}</div><div class="l">Ausentes</div></div>
-      <div class="scard"><div class="v" style="color:var(--accent)">${actDone}/${S.acts.length}</div><div class="l">Actividades</div></div>
-      <div class="scard"><div class="v" style="color:var(--blue)">${pct}%</div><div class="l">Asistencia</div></div>
+      <div class="scard"><div class="v" style="color:var(--accent)">${actDone}/${S.acts.length}</div><div class="l">Completadas</div></div>
+      <div class="scard"><div class="v" style="color:${retrasadas>0?'#e03131':'var(--text3)'}">${retrasadas}</div><div class="l">Retrasadas</div></div>
     </div>
 
-    <div class="card">
-      <div class="card-hdr">
-        <span class="card-title">👷 Personal x la casa hoy</span>
-        <span style="font-size:11px;color:var(--text3)">${pres}/${propios.length}</span>
-      </div>
-      <div class="card-body">
-        ${propios.length===0?'<div class="empty">Sin personal registrado</div>'
-        :propios.map(p=>{
-          const a=S.asist.find(x=>x.personal_id===p.id);
-          return`<div class="p-item">
-            <div class="p-av" style="background:${avColor(p.nombre)}22;color:${avColor(p.nombre)}">${initials(p.nombre)}</div>
-            <div class="p-info"><div class="p-name">${esc(p.nombre)}</div><div class="p-sub">${esc(p.oficio||'—')}</div></div>
-            ${a?`<span class="pill ${a.estado.replace(' ','-')}">${a.estado}</span>
-              ${a.hora_entrada?`<span style="font-size:10px;font-family:var(--mono);color:var(--text3)">${a.hora_entrada}${a.hora_salida?' - '+a.hora_salida:''}</span>`:''}
-            `:'<span style="font-size:11px;color:var(--text3)">—</span>'}
-          </div>`;}).join('')}
-      </div>
-    </div>
-
-    ${S.acts.length>0?`
     <div class="card">
       <div class="card-hdr"><span class="card-title">⚡ Actividades del día</span>
-        ${canEdit()?`<button class="ibtn" style="font-size:11px" onclick="goTab('actividades',null);showAddAct()">+ Agregar</button>`:''}
+        ${canEdit()?`<button class="ibtn" style="font-size:11px" onclick="goTab('obra');S.obraVista='todas';renderObra();setTimeout(showAddAct,100)">+ Agregar</button>`:''}
       </div>
       <div class="card-body">
-        ${S.acts.slice(0,5).map(a=>`
-          <div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
-            <div style="width:4px;height:36px;border-radius:2px;background:${a.tipo_personal==='contratista'?'var(--purple)':'var(--accent)'};flex-shrink:0"></div>
+        ${S.acts.length===0
+          ?`<div class="empty" style="padding:16px">Sin actividades registradas${canEdit()?'.<br>Toca + para agregar.':''}</div>`
+          :S.acts.slice(0,6).map(a=>`
+            <div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px" onclick="goTab('obra');S.obraVista='todas';renderObra()">
+              <div style="width:4px;height:36px;border-radius:2px;background:${a.tipo_personal==='contratista'?'var(--purple)':'var(--accent)'};flex-shrink:0"></div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.descripcion)}</div>
+                <div style="font-size:11px;color:var(--text3)">${a.area?esc(a.area)+' · ':''} ${a.personal_nombre?esc(a.personal_nombre):''}</div>
+              </div>
+              <span class="pill ${a.estado.replace(' ','-')}">${a.estado}</span>
+            </div>`).join('')+
+          (S.acts.length>6?`<div style="font-size:11px;color:var(--accent);text-align:center;padding:10px 0;cursor:pointer;font-weight:600" onclick="goTab('obra');S.obraVista='todas';renderObra()">Ver todas (${S.acts.length}) →</div>`:'')}
+      </div>
+    </div>
+
+    ${(S.actsActivas||[]).filter(a=>a.fecha<S.fecha&&a.estado!=='completado').length>0?`
+    <div class="card" style="border:1.5px solid #ffa8a8">
+      <div class="card-hdr" style="background:#fff5f5">
+        <span class="card-title" style="color:#c92a2a">⏰ Actividades retrasadas</span>
+        <span style="font-size:11px;color:#c92a2a;font-weight:700">${retrasadas}</span>
+      </div>
+      <div class="card-body">
+        ${(S.actsActivas||[]).filter(a=>a.fecha<S.fecha&&a.estado!=='completado').slice(0,4).map(a=>{
+          const d=Math.round((new Date(S.fecha)-new Date(a.fecha))/(864e5));
+          return`<div style="padding:6px 0;border-bottom:1px solid #ffd6d6;display:flex;align-items:center;gap:8px">
             <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.descripcion)}</div>
-              <div style="font-size:11px;color:var(--text3)">${a.area||''} ${a.personal_nombre?'· '+a.personal_nombre:''}</div>
+              <div style="font-size:12px;font-weight:500;color:#c92a2a">${esc(a.descripcion)}</div>
+              <div style="font-size:11px;color:#e03131">${d} día${d!==1?'s':''} de retraso · ${a.area?esc(a.area):'Sin área'}</div>
             </div>
-            <span class="pill ${a.estado.replace(' ','-')}">${a.estado}</span>
-          </div>`).join('')}
-        ${S.acts.length>5?`<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px 0">+${S.acts.length-5} más</div>`:''}
+            <span style="background:#ffe3e3;color:#c92a2a;font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px">⏰ ${d}d</span>
+          </div>`;}).join('')}
+        ${retrasadas>4?`<div style="font-size:11px;color:#e03131;text-align:center;padding:8px 0;font-weight:600;cursor:pointer" onclick="goTab('obra');S.obraVista='activa';renderObra()">Ver todas →</div>`:''}
       </div>
-    </div>`:
-    `<div class="card">
-      <div class="card-hdr"><span class="card-title">⚡ Actividades del día</span>
-        ${canEdit()?`<button class="ibtn" style="font-size:11px" onclick="showAddAct()">+ Agregar</button>`:''}
-      </div>
-      <div class="card-body"><div class="empty" style="padding:16px">Sin actividades registradas${canEdit()?'.<br>Toca + para agregar.':''}</div></div>
-    </div>`}`;
+    </div>`:''}`;
 }
 
 // ── RENDER ASISTENCIA ─────────────────────────────────
@@ -3972,7 +4020,7 @@ function getFilteredActsHTML(){
     if(canEdit()){
       var onInt="interrumpirActDesdeObra('"+id+"','"+desc.replace(/'/g,"\'")+"')";
       var onDone="marcarActCompletada('"+id+"')";
-      var onEdit="goTab('actividades',null);editActById('"+id+"')";
+      var onEdit="goTab('obra');editActById('"+id+"')";
       btns='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">';
       btns+='<button class="tarea-btn amarillo" style="font-size:11px;padding:7px;flex:1" onclick="'+onInt+'">Interrumpir</button>';
       btns+='<button class="tarea-btn verde" style="font-size:11px;padding:7px;flex:1" onclick="'+onDone+'">Lista</button>';
@@ -4203,11 +4251,16 @@ function btn(cls, id, label, oc){
   return '<button id="'+id+'" class="tarea-btn '+cls+'" onclick="'+oc+'">'+label+'</button>';
 }
 
+function editActById(id){
+  var ai=S.acts.findIndex(function(x){return x.id===id;});
+  if(ai>=0) showAddAct(ai);
+}
 function goObraEdit(k){
   var id = window._OA[k];
   if(!id) return;
-  goTab('actividades', null);
-  editActById(id);
+  S.obraVista='todas'; // switch to list view for editing
+  goTab('obra');
+  setTimeout(function(){ editActById(id); }, 50);
 }
 
 function pausarDesdeObra(k){
@@ -4304,33 +4357,36 @@ function mostrarPausaObra(id, desc){
   };
 }
 // ── NAVIGATION ────────────────────────────────────────────────
-function goTab(tab, payload){
+function goTab(tab){
+  // Legacy tab redirects — old internal calls still work
+  var legacyMap={enobra:'obra',asistencia:'equipo',actividades:'obra',
+    personal:'equipo',penalidades:'equipo',semana:'reportes',historial:'reportes'};
+  if(legacyMap[tab]){
+    if(tab==='enobra')   S.obraVista='activa';
+    if(tab==='actividades') S.obraVista='todas';
+    if(tab==='asistencia')  S.equipoVista='asistencia';
+    if(tab==='personal')    S.equipoVista='personal';
+    if(tab==='penalidades') S.equipoVista='penalidades';
+    if(tab==='semana')      S.reportesVista='semana';
+    if(tab==='historial')   S.reportesVista='historial';
+    tab=legacyMap[tab];
+  }
   S.currentTab=tab;
-  var views={
-    enobra:"view-enobra",hoy:"view-hoy",asistencia:"view-asistencia",
-    actividades:"view-actividades",reportes:"view-reportes",semana:"view-semana",
-    penalidades:"view-penalidades",personal:"view-personal",
-    historial:"view-historial",fotos:"view-fotos"
-  };
-  Object.keys(views).forEach(function(k){
-    var el=document.getElementById(views[k]);
-    if(el) el.classList.toggle("active", k===tab);
+  var VIEWS=['hoy','obra','equipo','reportes','fotos'];
+  VIEWS.forEach(function(v){
+    var el=document.getElementById('view-'+v);
+    if(el) el.classList.toggle('active', v===tab);
   });
-  document.querySelectorAll(".tab").forEach(function(b){
-    b.classList.toggle("active", b.dataset.tab===tab);
+  document.querySelectorAll('.tab').forEach(function(b){
+    b.classList.toggle('active', b.dataset.tab===tab);
   });
   updateBNav(tab);
   updateFAB();
-  if(tab==="hoy") renderHoy();
-  else if(tab==="asistencia") renderAsist();
-  else if(tab==="actividades") renderActs();
-  else if(tab==="reportes") renderReportes();
-  else if(tab==="enobra"){ renderEnObra(); loadTareas(); }
-  else if(tab==="penalidades") renderPens();
-  else if(tab==="personal") renderPersonal();
-  else if(tab==="historial") renderHistorial();
-  else if(tab==="fotos") renderFotos();
-  else if(tab==="semana") renderSemana();
+  if(tab==='hoy')      renderHoy();
+  else if(tab==='obra')     renderObra();
+  else if(tab==='equipo')   renderEquipo();
+  else if(tab==='reportes') renderReportesHub();
+  else if(tab==='fotos')    renderFotos();
 }
 
 // ── DRAWER & NAV HELPERS ──────────────────────────
@@ -4348,13 +4404,108 @@ function closeDrawer(){
 }
 function goTabD(tab){
   closeDrawer();
-  goTab(tab,null);
+  goTab(tab);
 }
 function switchTabD(tab){ goTabD(tab); }
 function updateBNav(tab){
   document.querySelectorAll('.bnav-btn').forEach(function(b){
     b.classList.toggle('active', b.id==='bn-'+tab);
   });
+}
+
+// ── SUB-NAV STYLE HELPER ─────────────────────────────
+function subNavStyle(active){
+  return 'display:flex;gap:6px;padding:10px 14px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;background:var(--bg1);border-bottom:1px solid var(--border);margin-bottom:0;position:sticky;top:0;z-index:10;'+
+    'padding-bottom:8px';
+}
+function subNavBtn(label, isActive, onclick){
+  return '<button onclick="'+onclick+'" style="flex-shrink:0;padding:7px 16px;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;border:1.5px solid '+(isActive?'var(--accent)':'var(--border2)')+';background:'+(isActive?'var(--accent)':'var(--bg2)')+';color:'+(isActive?'#fff':'var(--text2)')+';transition:all .15s">'+label+'</button>';
+}
+
+// ── RENDER OBRA (En Obra + Actividades) ──────────────
+function renderObra(){
+  var subnav = document.getElementById('c-obra-subnav');
+  if(subnav){
+    subnav.style.cssText = subNavStyle();
+    subnav.innerHTML =
+      subNavBtn('⚡ En Progreso', S.obraVista==='activa', "S.obraVista='activa';renderObra()")+
+      subNavBtn('📋 Todas las actividades', S.obraVista==='todas', "S.obraVista='todas';renderObra()");
+  }
+  var enobra = document.getElementById('c-enobra');
+  var act    = document.getElementById('c-act');
+  if(S.obraVista==='todas'){
+    if(enobra) enobra.style.display='none';
+    if(act)    act.style.display='block';
+    renderActs();
+  } else {
+    if(enobra) enobra.style.display='block';
+    if(act)    act.style.display='none';
+    renderEnObra();
+    loadTareas();
+  }
+}
+
+// ── RENDER EQUIPO (Asistencia + Personal + Penalidades) ──
+function renderEquipo(){
+  var subnav = document.getElementById('c-equipo-subnav');
+  if(subnav){
+    subnav.style.cssText = subNavStyle();
+    subnav.innerHTML =
+      subNavBtn('👷 Asistencia',  S.equipoVista==='asistencia',  "S.equipoVista='asistencia';renderEquipo()")+
+      subNavBtn('👥 Personal',    S.equipoVista==='personal',    "S.equipoVista='personal';renderEquipo()")+
+      subNavBtn('⚠️ Penalidades', S.equipoVista==='penalidades', "S.equipoVista='penalidades';renderEquipo()");
+  }
+  var asist = document.getElementById('c-asist');
+  var pers  = document.getElementById('c-pers');
+  var pen   = document.getElementById('c-pen');
+  if(S.equipoVista==='personal'){
+    if(asist) asist.style.display='none';
+    if(pers)  pers.style.display='block';
+    if(pen)   pen.style.display='none';
+    renderPersonal();
+  } else if(S.equipoVista==='penalidades'){
+    if(asist) asist.style.display='none';
+    if(pers)  pers.style.display='none';
+    if(pen)   pen.style.display='block';
+    renderPens();
+  } else {
+    if(asist) asist.style.display='block';
+    if(pers)  pers.style.display='none';
+    if(pen)   pen.style.display='none';
+    renderAsist();
+  }
+  updateFAB();
+}
+
+// ── RENDER REPORTES HUB (Dashboard + Semana + Historial) ──
+function renderReportesHub(){
+  var subnav = document.getElementById('c-rep-subnav');
+  if(subnav){
+    subnav.style.cssText = subNavStyle();
+    subnav.innerHTML =
+      subNavBtn('📊 Dashboard',  S.reportesVista==='dashboard',  "S.reportesVista='dashboard';renderReportesHub()")+
+      subNavBtn('📅 Semana',     S.reportesVista==='semana',     "S.reportesVista='semana';renderReportesHub()")+
+      subNavBtn('📜 Historial',  S.reportesVista==='historial',  "S.reportesVista='historial';renderReportesHub()");
+  }
+  var rep  = document.getElementById('c-rep');
+  var sem  = document.getElementById('c-sem');
+  var hist = document.getElementById('c-hist');
+  if(S.reportesVista==='semana'){
+    if(rep)  rep.style.display='none';
+    if(sem)  sem.style.display='block';
+    if(hist) hist.style.display='none';
+    renderSemana();
+  } else if(S.reportesVista==='historial'){
+    if(rep)  rep.style.display='none';
+    if(sem)  sem.style.display='none';
+    if(hist) hist.style.display='block';
+    renderHistorial();
+  } else {
+    if(rep)  rep.style.display='block';
+    if(sem)  sem.style.display='none';
+    if(hist) hist.style.display='none';
+    renderReportes();
+  }
 }
 
 
