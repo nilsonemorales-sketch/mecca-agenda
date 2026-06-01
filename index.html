@@ -615,7 +615,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_13';
+const APP_VERSION='20260601_14';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1487,6 +1487,114 @@ function dateNavHTML(){
 }
 
 // ── RENDER HOY ────────────────────────────────────────
+// ── ASISTENCIA INLINE WIDGET ─────────────────────────────────
+var CICLO_ASIST=['presente','tarde','medio día','ausente'];
+var ASIST_C={presente:'#2f9e44',tarde:'#e67700','medio día':'#1971c2',ausente:'#e03131'};
+var ASIST_BG={presente:'#d3f9d8',tarde:'#fff3bf','medio día':'#dbe4ff',ausente:'#ffe3e3'};
+
+function buildAsistWidgetHoy(propios){
+  if(!propios.length) return '';
+  var sinMarcar=propios.filter(function(p){
+    var a=S.asist.find(function(x){return x.personal_id===p.id;});
+    return !a||!a.estado;
+  }).length;
+  var chips=propios.map(function(p){
+    var a=S.asist.find(function(x){return x.personal_id===p.id;});
+    var est=a&&a.estado?a.estado:'';
+    var next=CICLO_ASIST[(CICLO_ASIST.indexOf(est)+1)%CICLO_ASIST.length];
+    var c=ASIST_C[est]||'#adb5bd';
+    var bg=ASIST_BG[est]||'var(--bg3)';
+    var short=p.nombre.split(' ')[0];
+    return`<button onclick="marcarAsist('${p.id}','${next}')" style="background:${bg};border:1.5px solid ${c}30;border-radius:12px;padding:8px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;transition:all .15s;min-width:0;font-family:var(--font)">
+      <div style="font-size:12.5px;font-weight:700;color:${est?c:'var(--text)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:68px">${esc(short)}</div>
+      <div style="font-size:9.5px;font-weight:600;color:${est?c:'#adb5bd'}">${est||'— tocar'}</div>
+    </button>`;
+  }).join('');
+  return`<div class="card" style="margin-bottom:10px">
+    <div class="card-hdr" style="padding:10px 14px">
+      <span class="card-title">👥 Asistencia</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${sinMarcar>0&&canEdit()?`<button onclick="marcarTodosPresentes()" style="background:#d3f9d8;color:#2f9e44;border:1.5px solid #a9e6b8;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Todos</button>`:''}
+        <button onclick="goTab('equipo');S.equipoVista='asistencia';renderEquipo()" style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;padding:4px 2px">Detalle →</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:10px 12px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:8px">
+        ${chips}
+      </div>
+    </div>
+  </div>`;
+}
+
+async function marcarTodosPresentes(){
+  if(!canEdit()){requireEdit(marcarTodosPresentes);return;}
+  const propios=S.personal.filter(function(p){return p.tipo==='propio';});
+  for(var i=0;i<propios.length;i++){
+    var p=propios[i];
+    var a=S.asist.find(function(x){return x.personal_id===p.id;});
+    if(!a||!a.estado) await marcarAsist(p.id,'presente');
+  }
+}
+
+// ── QUICK ACTION SHEET (mobile tap on activity) ────────────
+function showQuickActSheet(actId){
+  var a=S.acts.find(function(x){return x.id===actId;});
+  if(!a)return;
+  var ai=S.acts.indexOf(a);
+  var nextEst=CICLO_ESTADOS[(CICLO_ESTADOS.indexOf(a.estado)+1)%CICLO_ESTADOS.length];
+  var ECOLOR={completado:'#2f9e44','en-progreso':'#1a56db',pendiente:'#868e96',pausada:'#e67700'};
+  var EBGC={completado:'#d3f9d8','en-progreso':'#dbe4ff',pendiente:'#f1f3f5',pausada:'#fff3bf'};
+  document.getElementById('mcontent').innerHTML=`
+    <div class="mhandle"></div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">${esc(a.descripcion)}</div>
+      <div style="font-size:12px;color:var(--text3)">${esc(a.area||'')}${a.personal_nombre?' · '+esc(a.personal_nombre):''}</div>
+      <div style="margin-top:8px"><span style="background:${EBGC[a.estado]||'#f1f3f5'};color:${ECOLOR[a.estado]||'#868e96'};border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700">${a.estado}</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      ${a.estado!=='completado'?`<button onclick="marcarActCompletada('${a.id}');closeModal()" style="padding:14px;border-radius:14px;border:2px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Completar</button>`:'<div></div>'}
+      <button onclick="cycleEstado('${a.id}');closeModal()" style="padding:14px;border-radius:14px;border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">▷ ${esc(nextEst)}</button>
+    </div>
+    ${canEdit()?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}');closeModal()" style="padding:12px;border-radius:14px;border:2px solid #1a56db;background:#dbe4ff;color:#1a56db;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">▶ Iniciar</button>`:'<div></div>'}
+      <button onclick="closeModal();setTimeout(()=>editAct(${ai}),100)" style="padding:12px;border-radius:14px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">✏️ Editar</button>
+    </div>`:''}
+    <button onclick="closeModal()" style="width:100%;padding:12px;border-radius:14px;border:1.5px solid var(--border2);background:none;color:var(--text3);font-size:13px;cursor:pointer;font-family:var(--font)">Cerrar</button>`;
+  openModal();
+}
+
+// ── SWIPE GESTURE SUPPORT ─────────────────────────────────
+var _swipeData=null;
+function _swipeStart(e,actId){
+  if(e.touches.length!==1)return;
+  _swipeData={x:e.touches[0].clientX,y:e.touches[0].clientY,id:actId,el:e.currentTarget,moved:false};
+}
+function _swipeMove(e){
+  if(!_swipeData)return;
+  var dx=e.touches[0].clientX-_swipeData.x;
+  var dy=Math.abs(e.touches[0].clientY-_swipeData.y);
+  if(dy>30){_swipeData=null;return;} // vertical scroll, cancel
+  if(dx>20){
+    _swipeData.moved=true;
+    var pct=Math.min(1,dx/100);
+    _swipeData.el.style.transform='translateX('+Math.min(dx*0.6,60)+'px)';
+    _swipeData.el.style.background='rgba(47,158,68,'+pct*0.15+')';
+  }
+}
+function _swipeEnd(e){
+  if(!_swipeData)return;
+  var dx=e.changedTouches[0].clientX-_swipeData.x;
+  var el=_swipeData.el;
+  el.style.transform='';el.style.background='';
+  if(dx>80&&_swipeData.moved&&canEdit()){
+    el.style.transition='all .3s';
+    el.style.transform='translateX(110%)';el.style.opacity='0';
+    setTimeout(function(){el.style.transition='';el.style.transform='';el.style.opacity='';},350);
+    marcarActCompletada(_swipeData.id);
+  }
+  _swipeData=null;
+}
+
 function renderHoy(){
   const propios=S.personal.filter(p=>p.tipo==='propio');
   const pres=S.asist.filter(a=>['presente','tarde','medio día'].includes(a.estado)).length;
@@ -1494,20 +1602,38 @@ function renderHoy(){
   const actDone=S.acts.filter(a=>a.estado==='completado').length;
   const retrasadas=(S.actsActivas||[]).filter(a=>a.fecha&&a.fecha<S.fecha&&a.estado!=='completado').length;
   const pct=propios.length?Math.round(pres/propios.length*100):0;
+  const isDesktop=window.innerWidth>600;
+
+  // Mobile activity list with swipe + tap-to-action
+  function mobileActRow(a){
+    var estCls=a.estado.replace(' ','-');
+    var ECOLOR={completado:'#2f9e44','en-progreso':'#1a56db',pendiente:'#868e96',pausada:'#e67700',retrasada:'#e03131'};
+    var EBGC={completado:'#d3f9d8','en-progreso':'#dbe4ff',pendiente:'#f1f3f5',pausada:'#fff3bf',retrasada:'#ffe3e3'};
+    var c=ECOLOR[a.estado]||'#868e96';
+    var bg=EBGC[a.estado]||'#f1f3f5';
+    var nextEst=CICLO_ESTADOS[(CICLO_ESTADOS.indexOf(a.estado)+1)%CICLO_ESTADOS.length];
+    return`<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:8px;transition:transform .15s,background .15s;position:relative"
+        ontouchstart="_swipeStart(event,'${a.id}')"
+        ontouchmove="_swipeMove(event)"
+        ontouchend="_swipeEnd(event)">
+      <div style="width:3px;min-height:38px;border-radius:2px;background:${a.tipo_personal==='contratista'?'#7048e8':'var(--accent)'};flex-shrink:0;align-self:stretch"></div>
+      <div style="flex:1;min-width:0" onclick="showQuickActSheet('${a.id}')">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${a.estado==='completado'?'var(--text3)':'var(--text)'};${a.estado==='completado'?'text-decoration:line-through':''}">${esc(a.descripcion)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:1px">${a.area?esc(a.area):''}${a.personal_nombre?' · '+esc(a.personal_nombre.split(' ')[0]):''}</div>
+      </div>
+      <button onclick="cycleEstado('${a.id}')" style="background:${bg};color:${c};border:1.5px solid ${c}30;border-radius:8px;padding:5px 9px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:var(--font)">${a.estado} ▸</button>
+    </div>`;
+  }
 
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
-
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+    ${isDesktop?`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
       <div>
         <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Asistencia hoy</div>
         <div style="font-size:13px;font-weight:600;color:${pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--red)'};margin-top:2px">${pres}/${propios.length} presentes</div>
-        ${propios.length>0?`<div style="margin-top:5px;height:4px;width:120px;background:var(--bg4);border-radius:2px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:${pct>=80?'#2f9e44':pct>=50?'#f08c00':'#e03131'};border-radius:2px;transition:width .3s"></div>
-        </div>`:''}
       </div>
       <button onclick="goTab('equipo');S.equipoVista='asistencia';renderEquipo()" style="padding:8px 14px;border-radius:var(--r);border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Marcar →</button>
-    </div>
+    </div>`:buildAsistWidgetHoy(propios)}
 
     <div class="stats-row">
       <div class="scard"><div class="v" style="color:var(--green)">${pres}</div><div class="l">Presentes</div></div>
@@ -1517,45 +1643,39 @@ function renderHoy(){
     </div>
 
     <div class="card">
-      <div class="card-hdr"><span class="card-title">⚡ Actividades del día</span>
+      <div class="card-hdr">
+        <span class="card-title">⚡ Actividades del día</span>
         <div style="display:flex;gap:6px;align-items:center">
-          <span style="font-size:11px;color:var(--text3)">${S.acts.filter(a=>a.estado==='completado').length}/${S.acts.length} completadas</span>
-          ${canEdit()?`<button class="ibtn" style="font-size:11px" onclick="requireEdit(showAddActSmart)">+ Agregar</button>`:''}
+          <span style="font-size:11px;color:var(--text3)">${actDone}/${S.acts.length} hechas</span>
+          ${canEdit()?`<button class="ibtn" style="font-size:11px" onclick="requireEdit(showAddActSmart)">+ Nueva</button>`:''}
         </div>
       </div>
-      <div class="card-body" style="padding:${window.innerWidth>600?'0':'14px 16px'}">
+      <div class="card-body" style="padding:${isDesktop?'0':'8px 14px'}">
         ${S.acts.length===0
-          ?`<div class="empty" style="padding:16px">Sin actividades registradas${canEdit()?'.<br>Presiona N o toca + para agregar.':''}</div>`
-          :window.innerWidth>600
-            ? actsDesktopTable(S.acts, false)
-            : S.acts.slice(0,6).map(a=>`
-            <div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px" onclick="goTab('obra');S.obraVista='todas';renderObra()">
-              <div style="width:4px;height:36px;border-radius:2px;background:${a.tipo_personal==='contratista'?'var(--purple)':'var(--accent)'};flex-shrink:0"></div>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.descripcion)}</div>
-                <div style="font-size:11px;color:var(--text3)">${a.area?esc(a.area)+' · ':''} ${a.personal_nombre?esc(a.personal_nombre):''}</div>
-              </div>
-              <span class="pill ${a.estado.replace(' ','-')}">${a.estado}</span>
-            </div>`).join('')+
-          (S.acts.length>6&&window.innerWidth<=600?`<div style="font-size:11px;color:var(--accent);text-align:center;padding:10px 0;cursor:pointer;font-weight:600" onclick="goTab('obra');S.obraVista='todas';renderObra()">Ver todas (${S.acts.length}) →</div>`:'')}
+          ?`<div class="empty" style="padding:16px">Sin actividades${canEdit()?'. Toca <b>+ Nueva</b> para agregar':''}</div>`
+          :isDesktop
+            ? actsDesktopTable(S.acts,false)
+            : `${S.acts.map(mobileActRow).join('')}
+               ${!isDesktop&&canEdit()?`<div style="padding:10px 0;text-align:center;color:var(--text3);font-size:11px">← deslizar derecha para completar</div>`:''}`
+        }
       </div>
     </div>
 
     ${(S.actsActivas||[]).filter(a=>a.fecha<S.fecha&&a.estado!=='completado').length>0?`
     <div class="card" style="border:1.5px solid #ffa8a8">
       <div class="card-hdr" style="background:#fff5f5">
-        <span class="card-title" style="color:#c92a2a">⏰ Actividades retrasadas</span>
+        <span class="card-title" style="color:#c92a2a">⏰ Retrasadas</span>
         <span style="font-size:11px;color:#c92a2a;font-weight:700">${retrasadas}</span>
       </div>
       <div class="card-body">
         ${(S.actsActivas||[]).filter(a=>a.fecha<S.fecha&&a.estado!=='completado').slice(0,4).map(a=>{
           const d=Math.round((new Date(S.fecha)-new Date(a.fecha))/(864e5));
-          return`<div style="padding:6px 0;border-bottom:1px solid #ffd6d6;display:flex;align-items:center;gap:8px">
+          return`<div style="padding:8px 0;border-bottom:1px solid #ffd6d6;display:flex;align-items:center;gap:8px" onclick="showQuickActSheet('${a.id}')">
             <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:500;color:#c92a2a">${esc(a.descripcion)}</div>
-              <div style="font-size:11px;color:#e03131">${d} día${d!==1?'s':''} de retraso · ${a.area?esc(a.area):'Sin área'}</div>
+              <div style="font-size:12px;font-weight:600;color:#c92a2a">${esc(a.descripcion)}</div>
+              <div style="font-size:11px;color:#e03131">${d}d de retraso · ${a.area?esc(a.area):'Sin área'}</div>
             </div>
-            <span style="background:#ffe3e3;color:#c92a2a;font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px">⏰ ${d}d</span>
+            <button onclick="event.stopPropagation();cycleEstado('${a.id}')" style="background:#ffe3e3;color:#c92a2a;border:1px solid #ffa8a8;border-radius:8px;padding:5px 9px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:var(--font)">${a.estado} ▸</button>
           </div>`;}).join('')}
         ${retrasadas>4?`<div style="font-size:11px;color:#e03131;text-align:center;padding:8px 0;font-weight:600;cursor:pointer" onclick="goTab('obra');S.obraVista='activa';renderObra()">Ver todas →</div>`:''}
       </div>
