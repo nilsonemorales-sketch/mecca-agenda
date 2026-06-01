@@ -616,7 +616,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_18';
+const APP_VERSION='20260601_19';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1125,6 +1125,7 @@ let S={
   equipoVista:'asistencia', // 'asistencia' | 'personal' | 'penalidades'
   reportesVista:'dashboard',// 'dashboard' | 'semana' | 'historial'
   compras:[], comprasEstadoFiltro:'',
+  kbf:{tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false},
 };
 
 function today(){return new Date().toISOString().slice(0,10);}
@@ -2205,6 +2206,7 @@ async function marcarActCompletada(id){
   if(a){a.estado='completado';a.porcentaje=100;}
   S.actsActivas=S.actsActivas?S.actsActivas.filter(function(x){return x.id!==id;}):[];
   renderActs(); renderHoy(); renderEnObra();
+  if(S.obraVista==='kanban') renderKanban();
   setSS('syncing','...');
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
@@ -2250,6 +2252,7 @@ async function cycleEstado(actId){
   a.estado=CICLO_ESTADOS[(cur+1)%CICLO_ESTADOS.length];
   if(a.estado==='completado')a.porcentaje=100;
   renderHoy();renderActs();
+  if(S.obraVista==='kanban') renderKanban();
   setSS('syncing','...');
   try{
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
@@ -5219,40 +5222,112 @@ function subNavBtn(label, isActive, onclick){
 }
 
 // ── KANBAN VIEW ───────────────────────────────────────
+// Apply kanban-specific filters (independent from "Todas" tab filters)
+function applyKbf(acts){
+  var f=S.kbf||{};
+  var hoy=new Date().toISOString().slice(0,10);
+  var r=acts;
+  if(f.tipo)     r=r.filter(function(a){return a.tipo_personal===f.tipo;});
+  if(f.persona)  r=r.filter(function(a){return (a.personal_nombre||a.ingeniero_nombre)===f.persona;});
+  if(f.nivel)    r=r.filter(function(a){return (a.area||'').startsWith(f.nivel);});
+  if(f.retrasadas) r=r.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';});
+  if(f.urgentes) r=r.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
+  return r;
+}
+
+function kbfChip(label, active, onclick, danger){
+  var ac=danger?'#e03131':'var(--accent)';
+  var abg=danger?'#fff5f5':'var(--accent)';
+  return '<button onclick="'+onclick+'" style="flex-shrink:0;padding:6px 13px;border-radius:20px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:var(--font);border:1.5px solid '+(active?ac:'var(--border2)')+';background:'+(active?abg:'var(--bg2)')+';color:'+(active?'#fff':'var(--text2)')+';white-space:nowrap;transition:all .12s">'+label+'</button>';
+}
+
 function renderKanban(){
   var el=document.getElementById('c-kanban');
   if(!el) return;
-  var acts=applyActFilters(S.acts);
+  if(!S.kbf) S.kbf={tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false};
+  var f=S.kbf;
   var hoy=new Date().toISOString().slice(0,10);
-  // Columns definition
+  var all=S.acts;
+  var acts=applyKbf(all);
+  var isDesk=window.innerWidth>600;
+
+  // Derive unique person list based on tipo filter
+  var personas=(function(){
+    var src=f.tipo?all.filter(function(a){return a.tipo_personal===f.tipo;}):all;
+    return [...new Set(src.map(function(a){return a.personal_nombre||a.ingeniero_nombre||'';}).filter(Boolean))].sort();
+  })();
+  // Derive unique niveles
+  var niveles=[...new Set(all.map(function(a){var m=(a.area||'').match(/^(N\d+)/);return m?m[1]:null;}).filter(Boolean))].sort();
+
+  var hasFilter=f.tipo||f.persona||f.nivel||f.retrasadas||f.urgentes;
+  var retCnt=all.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+  var urgCnt=all.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';}).length;
+
+  // ── Filter bar ──
+  var filterBar='<div style="background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 14px;position:sticky;top:0;z-index:20">';
+
+  // Row 1: Tipo chips
+  filterBar+='<div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:6px">';
+  filterBar+=kbfChip('Todos',!f.tipo,"S.kbf.tipo='';S.kbf.persona='';renderKanban()");
+  filterBar+=kbfChip('👷 Personal',f.tipo==='propio',"S.kbf.tipo=S.kbf.tipo==='propio'?'':'propio';S.kbf.persona='';renderKanban()");
+  filterBar+=kbfChip('🔨 Contratistas',f.tipo==='contratista',"S.kbf.tipo=S.kbf.tipo==='contratista'?'':'contratista';S.kbf.persona='';renderKanban()");
+  filterBar+=kbfChip('👤 Admin',f.tipo==='ingeniero',"S.kbf.tipo=S.kbf.tipo==='ingeniero'?'':'ingeniero';S.kbf.persona='';renderKanban()");
+  filterBar+='</div>';
+
+  // Row 2: Persona chips (shown if there are people)
+  if(personas.length>1){
+    filterBar+='<div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:6px">';
+    personas.forEach(function(p){
+      filterBar+=kbfChip(p.split(' ')[0],f.persona===p,"S.kbf.persona=S.kbf.persona==='"+p.replace(/'/g,"\\'")+"'?'':'"+p.replace(/'/g,"\\'")+  "';renderKanban()");
+    });
+    filterBar+='</div>';
+  }
+
+  // Row 3: Nivel + toggles + clear
+  filterBar+='<div style="display:flex;gap:6px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px">';
+  if(niveles.length){
+    filterBar+='<span style="font-size:10px;color:var(--text3);font-weight:700;white-space:nowrap">Nivel:</span>';
+    niveles.forEach(function(n){
+      filterBar+=kbfChip(n,f.nivel===n,"S.kbf.nivel=S.kbf.nivel==='"+n+"'?'':'"+n+"';renderKanban()");
+    });
+    filterBar+='<span style="color:var(--border);flex-shrink:0">|</span>';
+  }
+  if(retCnt) filterBar+=kbfChip('⏰ '+retCnt+' retrasadas',f.retrasadas,"S.kbf.retrasadas=!S.kbf.retrasadas;renderKanban()",f.retrasadas);
+  if(urgCnt) filterBar+=kbfChip('🔴 '+urgCnt+' urgentes',f.urgentes,"S.kbf.urgentes=!S.kbf.urgentes;renderKanban()",f.urgentes);
+  if(hasFilter) filterBar+=kbfChip('× Limpiar',true,"S.kbf={tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false};renderKanban()",true);
+  filterBar+='</div>';
+  filterBar+='</div>';
+
+  // ── Columns ──
   var cols=[
     {id:'pendiente',   label:'⏳ Pendiente',   color:'#868e96', bg:'#f1f3f5', border:'#dee2e6'},
     {id:'en-progreso', label:'🔄 En progreso', color:'#1a56db', bg:'#dbe4ff', border:'#748ffc'},
     {id:'pausada',     label:'⏸ Pausada',      color:'#e67700', bg:'#fff3bf', border:'#fcc419'},
     {id:'completado',  label:'✅ Completado',  color:'#2f9e44', bg:'#d3f9d8', border:'#69db7c'},
   ];
-  var isDesk=window.innerWidth>600;
 
   function kanbanCard(a){
     var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
     var bc=retrasada?'#ffa8a8':'var(--border)';
-    var TIPO_ICON={'propio':'👷','contratista':'🔨','ingeniero':'👤'};
+    var TIPO_ICON={propio:'👷',contratista:'🔨',ingeniero:'👤'};
     var icon=TIPO_ICON[a.tipo_personal]||'';
     var ai=S.acts.indexOf(a);
     return '<div style="background:#fff;border:1px solid '+bc+';border-radius:10px;padding:10px 11px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s" onclick="editAct('+ai+')" onmouseover="this.style.boxShadow=\'0 3px 10px rgba(0,0,0,.12)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,.06)\'">'
       +(retrasada?'<div style="font-size:9px;color:#c92a2a;font-weight:700;margin-bottom:3px">⏰ RETRASADA</div>':'')
+      +(a.prioridad==='urgente'&&!retrasada?'<div style="font-size:9px;color:#e03131;font-weight:700;margin-bottom:3px">🔴 URGENTE</div>':'')
       +'<div style="font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;margin-bottom:5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+esc(a.descripcion)+'</div>'
-      +(a.area?'<div style="font-size:10.5px;color:var(--accent);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.area)+'</div>':'')
-      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">'
+      +(a.area?'<div style="font-size:10.5px;color:var(--accent);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📍 '+esc(a.area)+'</div>':'')
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:'+(canEdit()&&a.estado!=='completado'?'6':'0')+'px">'
         +'<span style="font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+icon+' '+esc(a.personal_nombre||a.ingeniero_nombre||'—')+'</span>'
         +'<div style="display:flex;align-items:center;gap:5px">'
           +(a.porcentaje>0?'<div style="width:36px;height:3px;background:#e9ecef;border-radius:2px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,a.porcentaje)+'%;background:'+(a.porcentaje>=100?'#2f9e44':'var(--accent)')+';border-radius:2px"></div></div>':'')
           +'<span style="font-size:10px;font-weight:700;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'var(--accent)':'var(--text3)')+'">'+a.porcentaje+'%</span>'
         +'</div>'
       +'</div>'
-      +(canEdit()&&a.estado!=='completado'?'<div style="margin-top:7px;display:flex;gap:4px">'
-          +'<button onclick="event.stopPropagation();cycleEstado(\''+a.id+'\')" style="flex:1;padding:3px 0;border-radius:7px;border:1px solid #dee2e6;background:#f8f9fa;color:var(--text2);font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font)">▸ Estado</button>'
-          +'<button onclick="event.stopPropagation();marcarActCompletada(\''+a.id+'\')" style="padding:3px 8px;border-radius:7px;border:1px solid #a9e6b8;background:#d3f9d8;color:#2f9e44;font-size:10px;font-weight:700;cursor:pointer">✓</button>'
+      +(canEdit()&&a.estado!=='completado'
+        ?'<div style="display:flex;gap:4px">'
+          +'<button onclick="event.stopPropagation();cycleEstado(\''+a.id+'\')" style="flex:1;padding:4px 0;border-radius:7px;border:1px solid #dee2e6;background:#f8f9fa;color:var(--text2);font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font)">▸ Estado</button>'
+          +'<button onclick="event.stopPropagation();marcarActCompletada(\''+a.id+'\')" style="padding:4px 10px;border-radius:7px;border:1px solid #a9e6b8;background:#d3f9d8;color:#2f9e44;font-size:10px;font-weight:700;cursor:pointer">✓</button>'
         +'</div>':'')
       +'</div>';
   }
@@ -5268,9 +5343,10 @@ function renderKanban(){
       +'</div>';
   }).join('');
 
-  el.innerHTML='<div style="padding:12px 14px 0">'
+  el.innerHTML=filterBar
+    +'<div style="padding:10px 14px 0">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
-      +'<div style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+(acts.length)+' actividades</div>'
+      +'<div style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+acts.length+(hasFilter?' de '+all.length:'')+' actividades</div>'
       +(canEdit()?'<button class="ibtn primary" onclick="requireEdit(showAddAct)" style="font-size:11px">+ Nueva</button>':'')
     +'</div>'
     +'<div style="display:'+(isDesk?'grid;grid-template-columns:repeat(4,1fr);gap:12px':'flex;gap:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px')+'">'+colsHtml+'</div>'
