@@ -616,7 +616,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_22';
+const APP_VERSION='20260601_23';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1656,8 +1656,8 @@ function renderHoy(){
         ${S.acts.length===0
           ?`<div class="empty" style="padding:16px">Sin actividades${canEdit()?'. Toca <b>+ Nueva</b> para agregar':''}</div>`
           :isDesktop
-            ? actsDesktopTable(S.acts,false)
-            : `${S.acts.map(mobileActRow).join('')}
+            ? actsDesktopTable(sortByPriority(S.acts),false)
+            : `${sortByPriority(S.acts).map(mobileActRow).join('')}
                ${!isDesktop&&canEdit()?`<div style="padding:10px 0;text-align:center;color:var(--text3);font-size:11px">← deslizar derecha para completar</div>`:''}`
         }
       </div>
@@ -1844,6 +1844,24 @@ function getNivelesUnicos(){
   }).filter(Boolean))].sort();
 }
 
+// Sort so retrasadas → urgentes → en-progreso → resto; within each group by fecha asc
+function sortByPriority(acts){
+  var hoy=new Date().toISOString().slice(0,10);
+  function rank(a){
+    if(a.fecha&&a.fecha<hoy&&a.estado!=='completado') return 0;  // retrasada
+    if(a.prioridad==='urgente'&&a.estado!=='completado')        return 1;  // urgente
+    if(a.estado==='en-progreso')                                return 2;
+    if(a.estado==='pendiente')                                  return 3;
+    if(a.estado==='pausada')                                    return 4;
+    return 5;
+  }
+  return acts.slice().sort(function(a,b){
+    var d=rank(a)-rank(b);
+    if(d!==0) return d;
+    return (a.fecha||'9999')>(b.fecha||'9999')?1:-1;
+  });
+}
+
 function applyActFilters(acts){
   let filtered = acts;
   // Hide completed unless showing all
@@ -1859,7 +1877,7 @@ function applyActFilters(acts){
   if(av.responsable) filtered = filtered.filter(a=>a.ingeniero_nombre===av.responsable);
   if(av.tipo) filtered = filtered.filter(a=>a.tipo_personal===av.tipo);
   if(av.sinContratista) filtered = filtered.filter(a=>a.tipo_personal==='contratista'&&!a.personal_nombre);
-  return filtered;
+  return sortByPriority(filtered);
 }
 
 // Build filter groups for activities
@@ -4784,13 +4802,14 @@ async function loadTareas(){
 }
 
 function getFilteredActsActs(){
-  return S.actsActivas.filter(function(a){
+  var filtered=S.actsActivas.filter(function(a){
     if(S.enObraFiltroTipo && a.tipo_personal!==S.enObraFiltroTipo) return false;
     if(S.enObraFiltroContratista && a.personal_nombre!==S.enObraFiltroContratista) return false;
     if(S.enObraFiltroPersonal && a.personal_nombre!==S.enObraFiltroPersonal) return false;
     if(S.enObraFiltroEstado && a.estado!==S.enObraFiltroEstado) return false;
     return true;
   });
+  return sortByPriority(filtered);
 }
 
 function getFilteredActsHTML(){
@@ -5266,7 +5285,7 @@ function applyKbf(acts){
   if(f.retrasadas) r=r.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';});
   if(f.urgentes) r=r.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
   if(f.sinContratista) r=r.filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;});
-  return r;
+  return sortByPriority(r);
 }
 
 function kbfChip(label, active, onclick, danger){
