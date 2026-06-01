@@ -616,7 +616,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_23';
+const APP_VERSION='20260601_24';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1870,7 +1870,7 @@ function applyActFilters(acts){
   if(S.actFiltroRapido) filtered = filtered.filter(a=>a.estado===S.actFiltroRapido);
   // Advanced filters
   const av = S.actFiltroAvanzado;
-  if(av.contratista) filtered = filtered.filter(a=>a.personal_nombre===av.contratista&&a.tipo_personal==='contratista');
+  if(av.contratista && av.contratista!=='__sin_asignar__') filtered = filtered.filter(a=>a.personal_nombre===av.contratista&&a.tipo_personal==='contratista');
   if(av.personal) filtered = filtered.filter(a=>a.personal_nombre===av.personal&&a.tipo_personal==='propio');
   if(av.prioridad) filtered = filtered.filter(a=>a.prioridad===av.prioridad);
   if(av.nivel) filtered = filtered.filter(a=>(a.area||'').startsWith(av.nivel));
@@ -1963,8 +1963,9 @@ function buildActsFiltros(){
 
   // Contratista
   h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Contratista</div>';
-  h+=filtroDropdown('af-cont',av.contratista||'',contOpts,'Todos',
-    "S.actFiltroAvanzado={...S.actFiltroAvanzado,contratista:this.value,tipo:this.value?'contratista':''};renderActs()");
+  var contOptsConSinAsignar=[{val:'__sin_asignar__',label:'⚠️ Sin asignar'}].concat(contOpts);
+  h+=filtroDropdown('af-cont',av.contratista||'',contOptsConSinAsignar,'Todos',
+    "S.actFiltroAvanzado={...S.actFiltroAvanzado,contratista:this.value,sinContratista:this.value==='__sin_asignar__',tipo:this.value?'contratista':''};renderActs()");
   h+='</div>';
 
   // Responsable
