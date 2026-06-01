@@ -333,6 +333,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="tab" data-tab="equipo" onclick="goTab('equipo')">👷 Equipo</div>
     <div class="tab" data-tab="reportes" onclick="goTab('reportes')">📊 Reportes</div>
     <div class="tab" data-tab="fotos" onclick="goTab('fotos')">📷 Fotos</div>
+    <div class="tab" data-tab="compras" onclick="goTab('compras')">🛒 Compras</div>
   </div>
 
   <div class="body">
@@ -371,6 +372,12 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     </div>
 
     <div class="view" id="view-fotos"><div id="c-fotos"></div></div>
+
+    <!-- COMPRAS: Órdenes de Compra -->
+    <div class="view" id="view-compras">
+      <div id="c-compras-subnav"></div>
+      <div id="c-compras"></div>
+    </div>
   </div>
 
   <!-- BOTTOM NAV (mobile) -->
@@ -394,6 +401,10 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <button class="bnav-btn" id="bn-fotos" onclick="goTab('fotos')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
       <span class="blbl">Fotos</span>
+    </button>
+    <button class="bnav-btn" id="bn-compras" onclick="goTab('compras')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+      <span class="blbl">OC</span>
     </button>
   </nav>
 </div>
@@ -422,6 +433,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='semana'">📅 Reportes — Plan semanal</button>
     <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='historial'">📜 Reportes — Historial</button>
     <button class="dw-btn" onclick="goTabD('fotos')">📷 Galería de fotos</button>
+    <button class="dw-btn" onclick="goTabD('compras')">🛒 Órdenes de Compra</button>
   </div>
   <div class="dw-sec">
     <div class="dw-title">SESIÓN</div>
@@ -953,6 +965,7 @@ let S={
   obraVista:'activa',       // 'activa' | 'todas'
   equipoVista:'asistencia', // 'asistencia' | 'personal' | 'penalidades'
   reportesVista:'dashboard',// 'dashboard' | 'semana' | 'historial'
+  compras:[], comprasEstadoFiltro:'',
 };
 
 function today(){return new Date().toISOString().slice(0,10);}
@@ -1096,6 +1109,7 @@ async function loadSecundario(){
     renderSemana();
   }catch(e){}
   renderPersonal();
+  loadCompras().catch(()=>{});
   if(isAdmin()){
     try{
       const pens=await sb('obra_penalidades?order=fecha.desc&limit=100');
@@ -1239,6 +1253,7 @@ const FAB_ACTIONS={
     else null; // asistencia: no FAB needed, inline buttons
   },
   reportes:()=>exportarPDF(),
+  compras:()=>requireEdit(showAddOrden),
 };
 function updateFAB(){
   const fab=document.getElementById('fab');
@@ -1648,16 +1663,10 @@ function buildActsFiltros(){
   h+='</div>';
   h+='</div>';
 
-  // Agrupar por
+  // Prioridad
   h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Prioridad</div>';
   h+=filtroDropdown('af-prio',av.prioridad||'',[{val:'urgente',label:'🔴 Solo urgentes'}],'Todas',
     "S.actFiltroAvanzado={...S.actFiltroAvanzado,prioridad:this.value};renderActs()");
-  h+='</div>';
-  h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Agrupar por</div>';
-  h+=filtroDropdown('af-grupo',S.actFiltro||'tipo',
-    [{val:'tipo',label:'Tipo (propio / contratista)'},{val:'contratista',label:'Por contratista'},{val:'nivel',label:'Por nivel'},{val:'apto',label:'Por apartamento'},{val:'responsable',label:'Por responsable'},{val:'critico',label:'Por estado / críticos'}],
-    '',
-    "S.actFiltro=this.value;renderActs()");
   h+='</div>';
 
   var hasFilters=S.actFiltroRapido||(av.nivel||av.contratista||av.responsable||av.tipo);
@@ -1674,9 +1683,19 @@ function renderActs(){
   const filtered = applyActFilters(allActs);
   const groups = getActGroupsFromActs(filtered);
 
+  const grupoPills = [
+    {id:'tipo',       label:'📊 Tipo'},
+    {id:'contratista',label:'🔨 Contratista'},
+    {id:'nivel',      label:'📍 Nivel'},
+    {id:'responsable',label:'👤 Responsable'},
+    {id:'critico',    label:'🚦 Estado'},
+  ].map(p=>`<button onclick="S.actFiltro='${p.id}';renderActs()" style="flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);border:1.5px solid ${S.actFiltro===p.id?'var(--accent)':'var(--border2)'};background:${S.actFiltro===p.id?'var(--accent)':'var(--bg2)'};color:${S.actFiltro===p.id?'#fff':'var(--text2)'}">
+    ${p.label}
+  </button>`).join('');
+
   document.getElementById('c-act').innerHTML=`
     ${dateNavHTML()}
-    <div style="display:flex;gap:8px;margin-bottom:10px">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
       <button onclick="S.actMostrarTodas=false;loadActsAll().then(()=>renderActs())" style="flex:1;padding:10px;border-radius:10px;border:2px solid ${!S.actMostrarTodas?'#1a56db':'#dee2e6'};background:${!S.actMostrarTodas?'#e8f0fe':'#fff'};color:${!S.actMostrarTodas?'#1a56db':'#495057'};font-size:13px;font-weight:600;cursor:pointer">
         ⚡ Solo activas
       </button>
@@ -1684,18 +1703,40 @@ function renderActs(){
         📋 Todas
       </button>
     </div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Agrupar por</div>
+      <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px">
+        ${grupoPills}
+      </div>
+    </div>
     ${buildActsFiltros()}
-    <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:8px">${filtered.length} actividad${filtered.length!==1?'es':''} ${Object.values(S.actFiltroAvanzado||{}).some(v=>v)||S.actFiltroRapido?'filtradas':'total'}</div>
+    <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">${filtered.length} actividad${filtered.length!==1?'es':''} ${Object.values(S.actFiltroAvanzado||{}).some(v=>v)||S.actFiltroRapido?'filtradas':'total'}</div>
 
     ${groups.length===0
       ?`<div class="empty">Sin actividades para los filtros seleccionados</div>`
-      :groups.map(g=>`
-        <div class="sec-hdr">
-          <span class="sec-title">${g.titulo}</span>
-          <span class="sec-count">${g.items.length}</span>
+      :groups.map(g=>{
+        const done=g.items.filter(a=>a.estado==='completado').length;
+        const pct=g.items.length?Math.round(done/g.items.length*100):0;
+        const retrasadas=g.items.filter(a=>a.fecha&&a.fecha<today()&&a.estado!=='completado').length;
+        return `
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:10px 12px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text)">${g.titulo}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${g.items.length} actividad${g.items.length!==1?'es':''}${retrasadas>0?` · <span style="color:#e03131;font-weight:600">${retrasadas} retrasada${retrasadas!==1?'s':''}</span>`:''}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${pct===100
+              ?'<span style="background:#d3f9d8;color:#2f9e44;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700">✓ 100%</span>'
+              :pct>0
+                ?`<div style="text-align:right"><span style="font-size:13px;font-weight:700;color:var(--accent)">${pct}%</span><div style="width:48px;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-top:2px"><div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px"></div></div></div>`
+                :'<span style="background:var(--bg3);color:var(--text3);padding:3px 10px;border-radius:12px;font-size:11px">0%</span>'
+            }
+          </div>
         </div>
         ${g.items.map(a=>actHTML(a,S.acts.indexOf(a),a.tipo_personal)).join('')}
-        <div class="sep"></div>`).join('')}
+        <div class="sep"></div>`;
+      }).join('')}
     <div style="height:80px"></div>`;
 }
 
@@ -4372,7 +4413,7 @@ function goTab(tab){
     tab=legacyMap[tab];
   }
   S.currentTab=tab;
-  var VIEWS=['hoy','obra','equipo','reportes','fotos'];
+  var VIEWS=['hoy','obra','equipo','reportes','fotos','compras'];
   VIEWS.forEach(function(v){
     var el=document.getElementById('view-'+v);
     if(el) el.classList.toggle('active', v===tab);
@@ -4387,6 +4428,7 @@ function goTab(tab){
   else if(tab==='equipo')   renderEquipo();
   else if(tab==='reportes') renderReportesHub();
   else if(tab==='fotos')    renderFotos();
+  else if(tab==='compras')  renderCompras();
 }
 
 // ── DRAWER & NAV HELPERS ──────────────────────────
@@ -4543,6 +4585,264 @@ setInterval(async function(){
 }, 90000);
 
 loadAll();
+
+// ── ÓRDENES DE COMPRA ─────────────────────────────────
+
+async function loadCompras(){
+  try{
+    const ocs=await sb('obra_ordenes_compra?order=fecha.desc,created_at.desc&limit=200');
+    S.compras=ocs;
+    if(S.currentTab==='compras') renderCompras();
+  }catch(e){
+    S.compras=[];
+    if(S.currentTab==='compras') renderCompras();
+  }
+}
+
+function ocEstadoStyle(estado){
+  const map={
+    borrador:  {bg:'#f8f9fa',color:'#6c757d',border:'#dee2e6',label:'Borrador'},
+    pendiente: {bg:'#fffbeb',color:'#d97706',border:'#fcd34d',label:'Pendiente'},
+    aprobada:  {bg:'#eff6ff',color:'#2563eb',border:'#bfdbfe',label:'Aprobada'},
+    recibida:  {bg:'#ecfdf5',color:'#059669',border:'#6ee7b7',label:'Recibida'},
+    cancelada: {bg:'#fef2f2',color:'#dc2626',border:'#fca5a5',label:'Cancelada'},
+  };
+  return map[estado]||{bg:'#f8f9fa',color:'#6c757d',border:'#dee2e6',label:estado||'—'};
+}
+
+function fmtMonto(n){
+  if(!n&&n!==0) return '—';
+  return 'RD$'+Number(n).toLocaleString('es-DO',{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+
+function ordenHTML(o){
+  const st=ocEstadoStyle(o.estado);
+  const diff=o.monto_real&&o.monto_estimado?Number(o.monto_real)-Number(o.monto_estimado):null;
+  return`<div style="background:#fff;border:1.5px solid var(--border);border-radius:var(--r2);margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow-xs)">
+    <div style="padding:12px 14px;border-left:4px solid ${st.border}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+            <span style="font-size:11px;font-family:var(--mono);font-weight:700;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:6px">${esc(o.numero_orden||'—')}</span>
+            <span style="background:${st.bg};color:${st.color};border:1px solid ${st.border};padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700">${st.label}</span>
+          </div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.3">${esc(o.descripcion||'Sin descripción')}</div>
+        </div>
+        ${canEdit()?`<div style="display:flex;gap:4px;flex-shrink:0">
+          <button onclick="showEditOrden('${o.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:4px" title="Editar">✏️</button>
+          <button onclick="confirmDeleteOrden('${o.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:4px" title="Eliminar">🗑️</button>
+        </div>`:''}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--text2);margin-bottom:6px">
+        ${o.proveedor?`<span>🏪 ${esc(o.proveedor)}</span>`:''}
+        ${o.fecha?`<span>📅 ${fmtF(o.fecha)}</span>`:''}
+        ${o.ingeniero_nombre?`<span>👤 ${esc(o.ingeniero_nombre)}</span>`:''}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        ${o.monto_estimado?`<div style="background:var(--bg3);border-radius:8px;padding:4px 10px">
+          <div style="font-size:10px;color:var(--text3);font-weight:600">ESTIMADO</div>
+          <div style="font-size:14px;font-weight:800;color:var(--text)">${fmtMonto(o.monto_estimado)}</div>
+        </div>`:''}
+        ${o.monto_real?`<div style="background:${diff<0?'#d3f9d8':diff>0?'#ffe3e3':'var(--bg3)'};border-radius:8px;padding:4px 10px">
+          <div style="font-size:10px;color:var(--text3);font-weight:600">REAL</div>
+          <div style="font-size:14px;font-weight:800;color:${diff<0?'#2f9e44':diff>0?'#e03131':'var(--text)'}">${fmtMonto(o.monto_real)}</div>
+        </div>`:''}
+        ${diff!==null?`<span style="font-size:11px;font-weight:600;color:${diff<0?'#2f9e44':diff>0?'#e03131':'var(--text3)'}">
+          ${diff<0?'▼ Ahorro '+fmtMonto(Math.abs(diff)):diff>0?'▲ Sobre '+fmtMonto(diff):'= Exacto'}
+        </span>`:''}
+      </div>
+      ${o.items?`<div style="margin-top:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text2);white-space:pre-line;line-height:1.5">${esc(o.items)}</div>`:''}
+      ${o.notas?`<div style="margin-top:6px;font-size:12px;color:var(--text3);font-style:italic">💬 ${esc(o.notas)}</div>`:''}
+    </div>
+    ${canEdit()&&o.estado!=='recibida'&&o.estado!=='cancelada'?`
+    <div style="display:flex;border-top:1px solid var(--border)">
+      ${o.estado==='borrador'?`<button onclick="cambiarEstadoOrden('${o.id}','pendiente')" style="flex:1;padding:10px;border:none;background:#fffbeb;color:#d97706;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">▶ Enviar a aprobación</button>`:''}
+      ${o.estado==='pendiente'?`<button onclick="cambiarEstadoOrden('${o.id}','aprobada')" style="flex:1;padding:10px;border:none;background:#eff6ff;color:#2563eb;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">✓ Aprobar</button>`:''}
+      ${o.estado==='aprobada'?`<button onclick="cambiarEstadoOrden('${o.id}','recibida')" style="flex:1;padding:10px;border:none;background:#ecfdf5;color:#059669;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">📦 Marcar recibida</button>`:''}
+      <button onclick="cambiarEstadoOrden('${o.id}','cancelada')" style="padding:10px 14px;border:none;border-left:1px solid var(--border);background:#fef2f2;color:#dc2626;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">✕ Cancelar</button>
+    </div>`:''}
+  </div>`;
+}
+
+function renderCompras(){
+  const oc=document.getElementById('c-compras');
+  if(!oc) return;
+
+  // Sub-nav
+  const subnav=document.getElementById('c-compras-subnav');
+  if(subnav){
+    subnav.style.cssText=subNavStyle();
+    subnav.innerHTML=
+      subNavBtn('📋 Todas', !S.comprasEstadoFiltro, "S.comprasEstadoFiltro='';renderCompras()")+
+      subNavBtn('⏳ Pendientes', S.comprasEstadoFiltro==='pendiente', "S.comprasEstadoFiltro='pendiente';renderCompras()")+
+      subNavBtn('✓ Aprobadas', S.comprasEstadoFiltro==='aprobada', "S.comprasEstadoFiltro='aprobada';renderCompras()")+
+      subNavBtn('📦 Recibidas', S.comprasEstadoFiltro==='recibida', "S.comprasEstadoFiltro='recibida';renderCompras()")+
+      subNavBtn('📝 Borradores', S.comprasEstadoFiltro==='borrador', "S.comprasEstadoFiltro='borrador';renderCompras()");
+  }
+
+  const all=S.compras||[];
+  const filtered=S.comprasEstadoFiltro?all.filter(o=>o.estado===S.comprasEstadoFiltro):all;
+
+  // Summary stats
+  const totalEst=all.reduce((s,o)=>s+(Number(o.monto_estimado)||0),0);
+  const totalReal=all.filter(o=>o.monto_real).reduce((s,o)=>s+(Number(o.monto_real)||0),0);
+  const counts={borrador:0,pendiente:0,aprobada:0,recibida:0,cancelada:0};
+  all.forEach(o=>{if(counts[o.estado]!==undefined) counts[o.estado]++;});
+
+  const setupMsg = all.length===0&&!S.comprasEstadoFiltro
+    ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:var(--r2);padding:14px 16px;margin-bottom:14px;font-size:12px;color:#92400e">
+        <div style="font-weight:700;margin-bottom:4px">⚙️ Tabla no encontrada o sin datos</div>
+        <div>Crea la tabla <code>obra_ordenes_compra</code> en Supabase con los campos: id, fecha, numero_orden, descripcion, proveedor, items, monto_estimado, monto_real, estado, notas, ingeniero_id, ingeniero_nombre, created_at</div>
+      </div>`
+    : '';
+
+  oc.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px 14px;box-shadow:var(--shadow-xs)">
+        <div style="font-size:22px;font-weight:800;color:var(--accent)">${all.length}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Total OC</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+          ${counts.pendiente?`<span style="background:#fffbeb;color:#d97706;border:1px solid #fcd34d;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:600">${counts.pendiente} pend.</span>`:''}
+          ${counts.aprobada?`<span style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:600">${counts.aprobada} aprob.</span>`:''}
+          ${counts.recibida?`<span style="background:#ecfdf5;color:#059669;border:1px solid #6ee7b7;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:600">${counts.recibida} recib.</span>`:''}
+        </div>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px 14px;box-shadow:var(--shadow-xs)">
+        <div style="font-size:16px;font-weight:800;color:var(--text)">${fmtMonto(totalEst)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Monto estimado</div>
+        ${totalReal?`<div style="font-size:13px;font-weight:700;color:#059669;margin-top:4px">${fmtMonto(totalReal)} real</div>`:''}
+      </div>
+    </div>
+    ${setupMsg}
+    ${filtered.length===0
+      ?`<div class="empty">${S.comprasEstadoFiltro?'No hay órdenes con ese estado':'Sin órdenes de compra registradas'}<br><br>${canEdit()?'<button class="ibtn primary" onclick="showAddOrden()" style="margin:0 auto">+ Nueva orden</button>':''}</div>`
+      :filtered.map(o=>ordenHTML(o)).join('')}
+    <div style="height:80px"></div>`;
+}
+
+function showAddOrden(id){
+  const edit=!!id;
+  const o=edit?S.compras.find(x=>x.id===id):null;
+  const nextNum='OC-'+(String((S.compras.length||0)+1).padStart(3,'0'));
+  const mc=document.getElementById('mcontent');
+  mc.innerHTML=`
+    <div class="mhandle"></div>
+    <h3>🛒 ${edit?'Editar Orden de Compra':'Nueva Orden de Compra'}</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="fw"><label class="fl">Nro. Orden</label>
+        <input type="text" id="oc-num" value="${esc(o?.numero_orden||nextNum)}" placeholder="OC-001" style="font-family:var(--mono)"></div>
+      <div class="fw"><label class="fl">Fecha</label>
+        <input type="date" id="oc-fecha" value="${o?.fecha||today()}"></div>
+    </div>
+    <div class="fw"><label class="fl">Descripción / Título *</label>
+      <input type="text" id="oc-desc" value="${esc(o?.descripcion||'')}" placeholder="Ej: Tuberías PVC para instalación sanitaria..."></div>
+    <div class="fw"><label class="fl">Proveedor</label>
+      <input type="text" id="oc-prov" value="${esc(o?.proveedor||'')}" placeholder="Nombre de la empresa o persona"></div>
+    <div class="fw"><label class="fl">Items / Materiales</label>
+      <textarea id="oc-items" class="ta" placeholder="Un ítem por línea, ej:&#10;10 sacos cemento Portland&#10;50 bloques #6&#10;5 galones pintura blanca">${esc(o?.items||'')}</textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="fw"><label class="fl">Monto estimado (RD$)</label>
+        <input type="number" id="oc-est" value="${o?.monto_estimado||''}" placeholder="0.00" min="0" step="0.01"></div>
+      <div class="fw"><label class="fl">Monto real (RD$)</label>
+        <input type="number" id="oc-real" value="${o?.monto_real||''}" placeholder="0.00" min="0" step="0.01"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="fw"><label class="fl">Estado</label>
+        <select id="oc-estado" class="sel">
+          <option value="borrador" ${(o?.estado||'borrador')==='borrador'?'selected':''}>📝 Borrador</option>
+          <option value="pendiente" ${o?.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
+          <option value="aprobada" ${o?.estado==='aprobada'?'selected':''}>✓ Aprobada</option>
+          <option value="recibida" ${o?.estado==='recibida'?'selected':''}>📦 Recibida</option>
+          <option value="cancelada" ${o?.estado==='cancelada'?'selected':''}>✕ Cancelada</option>
+        </select></div>
+      <div class="fw"><label class="fl">Responsable</label>
+        <select id="oc-ing" class="sel">
+          <option value="">Sin asignar</option>
+          ${Object.values(USERS).map(u=>`<option value="${u.nombre}" ${o?.ingeniero_nombre===u.nombre?'selected':''}>${u.nombre}</option>`).join('')}
+        </select></div>
+    </div>
+    <div class="fw"><label class="fl">Notas</label>
+      <textarea id="oc-notas" class="ta" placeholder="Observaciones, condiciones de entrega...">${esc(o?.notas||'')}</textarea></div>
+    <div class="mactions">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn primary" onclick="saveOrden(${edit?`'${id}'`:'null'})">💾 Guardar</button>
+    </div>`;
+  openModal();
+  setTimeout(()=>document.getElementById('oc-desc').focus(),100);
+}
+
+function showEditOrden(id){ showAddOrden(id); }
+
+async function saveOrden(id){
+  const desc=document.getElementById('oc-desc').value.trim();
+  if(!desc){document.getElementById('oc-desc').focus();return;}
+  const ingNombre=document.getElementById('oc-ing').value;
+  const ingObj=ingNombre?Object.entries(USERS).find(([k,u])=>u.nombre===ingNombre):null;
+  const data={
+    numero_orden: document.getElementById('oc-num').value.trim()||'OC-???',
+    fecha:        document.getElementById('oc-fecha').value,
+    descripcion:  desc,
+    proveedor:    document.getElementById('oc-prov').value.trim(),
+    items:        document.getElementById('oc-items').value.trim(),
+    monto_estimado: parseFloat(document.getElementById('oc-est').value)||null,
+    monto_real:     parseFloat(document.getElementById('oc-real').value)||null,
+    estado:       document.getElementById('oc-estado').value,
+    notas:        document.getElementById('oc-notas').value.trim(),
+    ingeniero_nombre: ingNombre||null,
+    ingeniero_id:    ingObj?ingObj[0]:null,
+  };
+  closeModal();
+  setSS('syncing','Guardando...');
+  try{
+    if(id&&id!=='null'){
+      await sb('obra_ordenes_compra?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(data)});
+      const idx=S.compras.findIndex(x=>x.id===id);
+      if(idx>=0) S.compras[idx]={...S.compras[idx],...data};
+    } else {
+      const newOc={id:uid(),created_at:new Date().toISOString(),...data};
+      await sb('obra_ordenes_compra',{method:'POST',prefer:'return=minimal',body:JSON.stringify(newOc)});
+      S.compras.unshift(newOc);
+    }
+    setSS('ok','✓ Guardado');
+    renderCompras();
+  }catch(e){setSS('err','Error guardando: '+e.message);}
+}
+
+async function cambiarEstadoOrden(id,nuevoEstado){
+  const o=S.compras.find(x=>x.id===id);
+  if(!o) return;
+  o.estado=nuevoEstado;
+  renderCompras();
+  try{
+    await sb('obra_ordenes_compra?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:nuevoEstado})});
+    setSS('ok','✓ Estado actualizado');
+  }catch(e){setSS('err','Error');}
+}
+
+function confirmDeleteOrden(id){
+  const o=S.compras.find(x=>x.id===id);
+  if(!o) return;
+  document.getElementById('mcontent').innerHTML=`
+    <div class="mhandle"></div>
+    <h3>🗑️ ¿Eliminar orden?</h3>
+    <p style="color:var(--text2);font-size:14px;margin-bottom:16px">Se eliminará permanentemente <strong>${esc(o.numero_orden)} — ${esc(o.descripcion)}</strong>.</p>
+    <div class="mactions">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn danger" onclick="deleteOrden('${id}')">Eliminar</button>
+    </div>`;
+  openModal();
+}
+
+async function deleteOrden(id){
+  closeModal();
+  S.compras=S.compras.filter(x=>x.id!==id);
+  renderCompras();
+  setSS('syncing','Eliminando...');
+  try{
+    await sb('obra_ordenes_compra?id=eq.'+id,{method:'DELETE',prefer:'return=minimal'});
+    setSS('ok','✓ Eliminada');
+  }catch(e){setSS('err','Error eliminando');}
+}
 
 </script>
 </body>
