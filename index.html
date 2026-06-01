@@ -616,7 +616,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_21';
+const APP_VERSION='20260601_22';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1125,7 +1125,7 @@ let S={
   equipoVista:'asistencia', // 'asistencia' | 'personal' | 'penalidades'
   reportesVista:'dashboard',// 'dashboard' | 'semana' | 'historial'
   compras:[], comprasEstadoFiltro:'',
-  kbf:{tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false},
+  kbf:{tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false,sinContratista:false},
 };
 
 function today(){return new Date().toISOString().slice(0,10);}
@@ -1858,6 +1858,7 @@ function applyActFilters(acts){
   if(av.nivel) filtered = filtered.filter(a=>(a.area||'').startsWith(av.nivel));
   if(av.responsable) filtered = filtered.filter(a=>a.ingeniero_nombre===av.responsable);
   if(av.tipo) filtered = filtered.filter(a=>a.tipo_personal===av.tipo);
+  if(av.sinContratista) filtered = filtered.filter(a=>a.tipo_personal==='contratista'&&!a.personal_nombre);
   return filtered;
 }
 
@@ -1976,7 +1977,12 @@ function buildActsFiltros(){
 
   h+='</div>';
 
-  var hasFilters=S.actFiltroRapido||(av.nivel||av.contratista||av.personal||av.responsable||av.tipo);
+  var scCnt=(S.acts||[]).filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;}).length;
+  if(scCnt){
+    h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,sinContratista:!S.actFiltroAvanzado.sinContratista};renderActs()" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid '+(av.sinContratista?'#e03131':'#f08c00')+';background:'+(av.sinContratista?'#fff5f5':'#fff3bf')+';color:'+(av.sinContratista?'#e03131':'#856404')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);margin-bottom:6px">⚠️ '+(av.sinContratista?'Mostrando':'Ver')+' '+scCnt+' actividad'+(scCnt!==1?'es':'')+' sin contratista asignado</button>';
+  }
+
+  var hasFilters=S.actFiltroRapido||(av.nivel||av.contratista||av.personal||av.responsable||av.tipo||av.sinContratista);
   if(hasFilters){
     h+='<button onclick="S.actFiltroRapido=\'\';S.actFiltroAvanzado={};renderActs()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid #e03131;background:#fff5f5;color:#e03131;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">× Limpiar filtros</button>';
   }
@@ -2135,8 +2141,11 @@ function actsDesktopTable(acts, showDate){
     html+='</td>';
     // Area
     html+='<td style="padding:7px 8px;color:var(--accent);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">'+esc(a.area||'—')+'</td>';
-    // Assigned
-    html+='<td style="padding:7px 8px;color:var(--text2);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">'+esc(a.personal_nombre||a.ingeniero_nombre||'—')+'</td>';
+    // Assigned — warn if contratista activity has no contractor
+    var sinCont=a.tipo_personal==='contratista'&&!a.personal_nombre;
+    html+='<td style="padding:7px 8px;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px">'
+      +(sinCont?'<span style="color:#e03131;font-weight:700;cursor:pointer" onclick="event.stopPropagation();editAct('+ai+')" title="Asignar contratista">⚠️ Sin contratista</span>':('<span style="color:var(--text2)">'+esc(a.personal_nombre||a.ingeniero_nombre||'—')+'</span>'))
+      +'</td>';
     // Progress % (clickable)
     html+='<td style="padding:7px 8px;text-align:center" onclick="event.stopPropagation()">';
     html+='<span style="font-size:12px;font-weight:700;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'var(--accent)':'var(--text3)')+';cursor:pointer" onclick="showPctPopover(\''+a.id+'\',this)" title="Clic para editar %">'+a.porcentaje+'%</span>';
@@ -2746,6 +2755,19 @@ function calcPct(){
 async function saveAct(ai){
   const desc=document.getElementById('a-d').value.trim();if(!desc)return;
   const getFld=(id,def='')=>{const el=document.getElementById(id);return el?el.value:def;};
+  // Block saving a contratista activity without a contractor assigned
+  if(getFld('a-tipo')==='contratista'&&!getFld('a-pers','').trim()){
+    const sel=document.getElementById('a-pers');
+    if(sel){sel.style.border='2px solid #e03131';sel.style.borderRadius='var(--r)';sel.focus();}
+    var errMsg=document.getElementById('a-pers-err');
+    if(!errMsg){
+      errMsg=document.createElement('div');errMsg.id='a-pers-err';
+      errMsg.style.cssText='color:#e03131;font-size:11px;font-weight:600;margin-top:4px';
+      if(sel)sel.parentNode.insertBefore(errMsg,sel.nextSibling);
+    }
+    errMsg.textContent='⚠️ Debes seleccionar un contratista';
+    return;
+  }
   // Area: use the tracked selections array, fallback to the single-select dropdown
   const areaVal = _ubicacionesSeleccionadas.length>0
     ? _ubicacionesSeleccionadas[0]
@@ -5243,6 +5265,7 @@ function applyKbf(acts){
   if(f.nivel)    r=r.filter(function(a){return (a.area||'').startsWith(f.nivel);});
   if(f.retrasadas) r=r.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';});
   if(f.urgentes) r=r.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
+  if(f.sinContratista) r=r.filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;});
   return r;
 }
 
@@ -5287,9 +5310,10 @@ function renderKanban(){
   // Derive unique niveles
   var niveles=[...new Set(all.map(function(a){var m=(a.area||'').match(/^(N\d+)/);return m?m[1]:null;}).filter(Boolean))].sort();
 
-  var hasFilter=f.tipo||f.persona||f.nivel||f.retrasadas||f.urgentes;
+  var hasFilter=f.tipo||f.persona||f.nivel||f.retrasadas||f.urgentes||f.sinContratista;
   var retCnt=all.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
   var urgCnt=all.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';}).length;
+  var scCnt=all.filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;}).length;
 
   // ── Filter bar ──
   var filterBar='<div style="background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 14px;position:sticky;top:0;z-index:20">';
@@ -5323,7 +5347,8 @@ function renderKanban(){
   }
   if(retCnt) filterBar+=kbfChip('⏰ '+retCnt+' retrasadas',f.retrasadas,"S.kbf.retrasadas=!S.kbf.retrasadas;renderKanban()",f.retrasadas);
   if(urgCnt) filterBar+=kbfChip('🔴 '+urgCnt+' urgentes',f.urgentes,"S.kbf.urgentes=!S.kbf.urgentes;renderKanban()",f.urgentes);
-  if(hasFilter) filterBar+=kbfChip('× Limpiar',true,"S.kbf={tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false};renderKanban()",true);
+  if(scCnt) filterBar+=kbfChip('⚠️ '+scCnt+' sin contratista',f.sinContratista,"S.kbf.sinContratista=!S.kbf.sinContratista;renderKanban()",f.sinContratista);
+  if(hasFilter) filterBar+=kbfChip('× Limpiar',true,"S.kbf={tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false,sinContratista:false};renderKanban()",true);
   filterBar+='</div>';
   filterBar+='</div>';
 
@@ -5337,11 +5362,13 @@ function renderKanban(){
 
   function kanbanCard(a){
     var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
-    var bc=retrasada?'#ffa8a8':'var(--border)';
+    var sinCont=a.tipo_personal==='contratista'&&!a.personal_nombre;
+    var bc=sinCont?'#fcc419':retrasada?'#ffa8a8':'var(--border)';
     var TIPO_ICON={propio:'👷',contratista:'🔨',ingeniero:'👤'};
     var icon=TIPO_ICON[a.tipo_personal]||'';
     var ai=S.acts.indexOf(a);
-    return '<div style="background:#fff;border:1px solid '+bc+';border-radius:10px;padding:10px 11px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s" onclick="editAct('+ai+')" onmouseover="this.style.boxShadow=\'0 3px 10px rgba(0,0,0,.12)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,.06)\'">'
+    return '<div style="background:'+(sinCont?'#fffdf0':'#fff')+';border:1.5px solid '+bc+';border-radius:10px;padding:10px 11px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s" onclick="editAct('+ai+')" onmouseover="this.style.boxShadow=\'0 3px 10px rgba(0,0,0,.12)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,.06)\'">'
+      +(sinCont?'<div style="font-size:9px;color:#856404;font-weight:700;margin-bottom:3px">⚠️ SIN CONTRATISTA — toca para asignar</div>':'')
       +(retrasada?'<div style="font-size:9px;color:#c92a2a;font-weight:700;margin-bottom:3px">⏰ RETRASADA</div>':'')
       +(a.prioridad==='urgente'&&!retrasada?'<div style="font-size:9px;color:#e03131;font-weight:700;margin-bottom:3px">🔴 URGENTE</div>':'')
       +'<div style="font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;margin-bottom:5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+esc(a.descripcion)+'</div>'
