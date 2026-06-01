@@ -618,7 +618,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_27';
+const APP_VERSION='20260601_28';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2134,7 +2134,7 @@ function actsDesktopTable(acts, showDate){
   var html='<table style="width:100%;border-collapse:collapse;font-size:12.5px">';
   html+='<thead><tr style="background:var(--bg3);border-bottom:2px solid var(--border)">';
   html+='<th style="padding:7px 10px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:110px">ESTADO</th>';
-  if(showDate) html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:72px">FECHA</th>';
+  html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:80px">FECHA</th>';
   html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700">DESCRIPCIÓN</th>';
   html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:120px">ÁREA</th>';
   html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:120px">ASIGNADO</th>';
@@ -2155,7 +2155,7 @@ function actsDesktopTable(acts, showDate){
     html+='<span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:8px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block" title="Clic para cambiar estado" onclick="cycleEstado(\''+a.id+'\')">'+esc(est)+' ▸</span>';
     html+='</td>';
     // Date
-    if(showDate) html+='<td style="padding:7px 8px;color:var(--text3);white-space:nowrap">'+esc(a.fecha||'—')+'</td>';
+    html+='<td style="padding:7px 8px;color:'+(retrasada?'#e03131':'var(--text3)')+';white-space:nowrap;font-weight:'+(retrasada?'700':'400')+'">'+esc(a.fecha||'—')+'</td>';
     // Description
     html+='<td style="padding:7px 8px;max-width:280px">';
     html+='<div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.descripcion)+'</div>';
