@@ -96,7 +96,7 @@ body{padding-left:var(--sl);padding-right:var(--sr)}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
 
 /* ── BODY ── */
-.body{flex:1;overflow:hidden}
+.body{flex:1;overflow:hidden;background:var(--bg)}
 .view{display:none;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px;padding-bottom:calc(24px + var(--sb))}
 .view.active{display:block}
 
@@ -615,7 +615,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_14';
+const APP_VERSION='20260601_15';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2091,7 +2091,7 @@ function actsDesktopTable(acts, showDate){
     var ec=ECOLOR[est]||'#868e96';
     var eb=EBG[est]||'#f1f3f5';
     var ai=S.acts.indexOf(a);
-    var bg=i%2===0?'var(--bg2)':'var(--bg1)';
+    var bg=i%2===0?'var(--bg2)':'var(--bg)';
     html+='<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\''+bg+'\'" onclick="editAct('+ai+')">';
     // Status pill (clickable to cycle)
     html+='<td style="padding:7px 10px" onclick="event.stopPropagation()">';
@@ -5051,7 +5051,7 @@ function toggleSidebar(){
 
 // ── SUB-NAV STYLE HELPER ─────────────────────────────
 function subNavStyle(active){
-  return 'display:flex;gap:6px;padding:10px 14px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;background:var(--bg1);border-bottom:1px solid var(--border);margin-bottom:0;position:sticky;top:0;z-index:10;'+
+  return 'display:flex;gap:6px;padding:10px 14px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;background:var(--bg2);border-bottom:1px solid var(--border);margin-bottom:0;position:sticky;top:0;z-index:10;'+
     'padding-bottom:8px';
 }
 function subNavBtn(label, isActive, onclick){
