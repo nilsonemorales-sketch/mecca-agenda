@@ -525,6 +525,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <div id="c-rep-subnav"></div>
       <div id="c-rep"></div>
       <div id="c-proy" style="display:none"></div>
+      <div id="c-apto" style="display:none"></div>
       <div id="c-sem" style="display:none"></div>
       <div id="c-hist" style="display:none"></div>
     </div>
@@ -617,7 +618,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_25';
+const APP_VERSION='20260601_26';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1124,7 +1125,8 @@ let S={
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
   equipoVista:'asistencia', // 'asistencia' | 'personal' | 'penalidades'
-  reportesVista:'dashboard',// 'dashboard' | 'proyeccion' | 'semana' | 'historial'
+  reportesVista:'dashboard',// 'dashboard' | 'proyeccion' | 'apto' | 'semana' | 'historial'
+  repAptoSel:'',
   compras:[], comprasEstadoFiltro:'',
   kbf:{tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false,sinContratista:false},
 };
@@ -5501,36 +5503,32 @@ function renderReportesHub(){
     subnav.innerHTML =
       subNavBtn('📊 Dashboard',   S.reportesVista==='dashboard',   "S.reportesVista='dashboard';renderReportesHub()")+
       subNavBtn('📈 Proyección',  S.reportesVista==='proyeccion',  "S.reportesVista='proyeccion';renderReportesHub()")+
+      subNavBtn('🏠 Por Apto',    S.reportesVista==='apto',        "S.reportesVista='apto';renderReportesHub()")+
       subNavBtn('📅 Semana',      S.reportesVista==='semana',      "S.reportesVista='semana';renderReportesHub()")+
       subNavBtn('📜 Historial',   S.reportesVista==='historial',   "S.reportesVista='historial';renderReportesHub()");
   }
   var rep  = document.getElementById('c-rep');
   var proy = document.getElementById('c-proy');
+  var apto = document.getElementById('c-apto');
   var sem  = document.getElementById('c-sem');
   var hist = document.getElementById('c-hist');
+  function hideAll(){
+    [rep,proy,apto,sem,hist].forEach(function(e){if(e)e.style.display='none';});
+  }
   if(S.reportesVista==='proyeccion'){
-    if(rep)  rep.style.display='none';
-    if(proy) proy.style.display='block';
-    if(sem)  sem.style.display='none';
-    if(hist) hist.style.display='none';
+    hideAll(); if(proy) proy.style.display='block';
     renderProyeccion();
+  } else if(S.reportesVista==='apto'){
+    hideAll(); if(apto) apto.style.display='block';
+    renderAptoReport();
   } else if(S.reportesVista==='semana'){
-    if(rep)  rep.style.display='none';
-    if(proy) proy.style.display='none';
-    if(sem)  sem.style.display='block';
-    if(hist) hist.style.display='none';
+    hideAll(); if(sem) sem.style.display='block';
     renderSemana();
   } else if(S.reportesVista==='historial'){
-    if(rep)  rep.style.display='none';
-    if(proy) proy.style.display='none';
-    if(sem)  sem.style.display='none';
-    if(hist) hist.style.display='block';
+    hideAll(); if(hist) hist.style.display='block';
     renderHistorial();
   } else {
-    if(rep)  rep.style.display='block';
-    if(proy) proy.style.display='none';
-    if(sem)  sem.style.display='none';
-    if(hist) hist.style.display='none';
+    hideAll(); if(rep) rep.style.display='block';
     renderReportes();
   }
 }
@@ -5538,6 +5536,189 @@ function renderReportesHub(){
 
 
 
+
+// ── REPORTE POR APARTAMENTO ───────────────────────────
+function getAptos(){
+  // Extract apartment identifier from area like "N2 Apto A-1 Sala" → "A-1"
+  // or fallback to full area string grouped by unique location segment
+  var aptos=new Set();
+  S.acts.forEach(function(a){
+    if(!a.area) return;
+    var m=a.area.match(/Apto\s+([\w-]+)/i)||a.area.match(/([A-Z]\d*-\d+[A-Z]?)/)||a.area.match(/^(N\d+)/);
+    aptos.add(m?m[1]:a.area.split(' ')[0]||a.area);
+  });
+  return [...aptos].sort();
+}
+
+function getAptoActs(apto){
+  return sortByPriority(S.acts.filter(function(a){
+    if(!a.area) return false;
+    var m=a.area.match(/Apto\s+([\w-]+)/i)||a.area.match(/([A-Z]\d*-\d+[A-Z]?)/)||a.area.match(/^(N\d+)/);
+    var id=m?m[1]:a.area.split(' ')[0]||a.area;
+    return id===apto;
+  }));
+}
+
+function renderAptoReport(){
+  var el=document.getElementById('c-apto');
+  if(!el) return;
+  var aptos=getAptos();
+  var sel=S.repAptoSel||aptos[0]||'';
+  if(!S.repAptoSel&&aptos.length) S.repAptoSel=aptos[0];
+
+  var ECOL={completado:'#2f9e44','en-progreso':'#1a56db',pendiente:'#868e96',pausada:'#e67700',retrasada:'#e03131',bloqueada:'#862e9c','no-iniciada':'#495057'};
+  var EBG={completado:'#d3f9d8','en-progreso':'#dbe4ff',pendiente:'#f1f3f5',pausada:'#fff3bf',retrasada:'#ffe3e3',bloqueada:'#f3d9fa','no-iniciada':'#f1f3f5'};
+  var PCOL={urgente:'#e03131',alta:'#e67700',normal:'#2f9e44'};
+  var PBG={urgente:'#ffe3e3',alta:'#fff3bf',normal:'#d3f9d8'};
+
+  var SEL='width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg2);color:var(--text);font-size:13px;font-family:var(--font);-webkit-appearance:none;appearance:none';
+
+  var h='<div style="padding:0 0 80px">';
+
+  // Selector de apartamento
+  h+='<div style="background:var(--bg2);border:1.5px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px">';
+  h+='<div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Seleccionar ubicación</div>';
+  h+='<select style="'+SEL+'" onchange="S.repAptoSel=this.value;renderAptoReport()">';
+  aptos.forEach(function(a){h+='<option value="'+esc(a)+'" '+(a===sel?'selected':'')+'>'+esc(a)+'</option>';});
+  h+='</select>';
+  h+='</div>';
+
+  if(!sel){el.innerHTML=h+'</div>';return;}
+
+  var acts=getAptoActs(sel);
+  var completadas=acts.filter(function(a){return a.estado==='completado';}).length;
+  var retrasadas=acts.filter(function(a){var hoy=new Date().toISOString().slice(0,10);return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+  var pctGlobal=acts.length?Math.round(acts.reduce(function(s,a){return s+(a.porcentaje||0);},0)/acts.length):0;
+
+  // Header del reporte
+  h+='<div style="background:var(--bg2);border:1.5px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
+  h+='<div>';
+  h+='<div style="font-size:15px;font-weight:800;color:var(--text)">🏠 Supervisión — '+esc(sel)+'</div>';
+  h+='<div style="font-size:11px;color:var(--text3);margin-top:3px">'+acts.length+' actividades · '+completadas+' completadas · '+pctGlobal+'% avance'+(retrasadas?' · <span style="color:#e03131">⏰ '+retrasadas+' retrasadas</span>':'')+'</div>';
+  h+='</div>';
+  h+='<button onclick="printAptoReport(\''+esc(sel)+'\')" style="padding:10px 18px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨️ Imprimir / PDF</button>';
+  h+='</div>';
+  // Barra de avance general
+  h+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">';
+  h+='<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:4px"><span>Avance general</span><span style="font-weight:700;color:'+(pctGlobal>=80?'#2f9e44':pctGlobal>=50?'#e67700':'#e03131')+'">'+pctGlobal+'%</span></div>';
+  h+='<div style="height:8px;background:var(--bg4);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pctGlobal+'%;background:'+(pctGlobal>=80?'#2f9e44':pctGlobal>=50?'#e67700':'#e03131')+';border-radius:4px;transition:width .4s"></div></div>';
+  h+='</div></div>';
+
+  if(!acts.length){
+    h+='<div class="empty" style="padding:30px">Sin actividades para esta ubicación</div></div>';
+    el.innerHTML=h; return;
+  }
+
+  // Tabla de actividades
+  h+='<div style="overflow-x:auto;border-radius:12px;border:1.5px solid var(--border)">';
+  h+='<table style="width:100%;border-collapse:collapse;min-width:620px;font-size:11.5px">';
+  h+='<thead><tr style="background:var(--bg3)">';
+  h+='<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:60px">PRIORIDAD</th>';
+  h+='<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--text3)">DESCRIPCIÓN</th>';
+  h+='<th style="padding:8px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:90px">UBICACIÓN</th>';
+  h+='<th style="padding:8px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:100px">RESPONSABLE</th>';
+  h+='<th style="padding:8px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:70px">FECHA</th>';
+  h+='<th style="padding:8px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:50px">%</th>';
+  h+='<th style="padding:8px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);white-space:nowrap;width:100px">ESTADO</th>';
+  h+='</tr></thead><tbody>';
+
+  var hoy=new Date().toISOString().slice(0,10);
+  acts.forEach(function(a,i){
+    var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
+    var est=retrasada?'retrasada':a.estado;
+    var ec=ECOL[est]||'#868e96';
+    var eb=EBG[est]||'#f1f3f5';
+    var pc=PCOL[a.prioridad]||'#868e96';
+    var pb=PBG[a.prioridad]||'#f1f3f5';
+    var bg=i%2===0?'var(--bg2)':'var(--bg)';
+    var ai=S.acts.indexOf(a);
+    h+='<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer" onclick="editAct('+ai+')">';
+    // Prioridad
+    h+='<td style="padding:8px 10px">';
+    if(a.prioridad) h+='<span style="background:'+pb+';color:'+pc+';border:1px solid '+pc+'40;border-radius:6px;padding:3px 7px;font-size:10px;font-weight:700;white-space:nowrap">'+esc(a.prioridad.toUpperCase())+'</span>';
+    h+='</td>';
+    // Descripción
+    h+='<td style="padding:8px 10px">';
+    h+='<div style="font-weight:600;color:var(--text)">'+esc(a.descripcion)+'</div>';
+    if(a.notas) h+='<div style="font-size:10px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px">'+esc(a.notas)+'</div>';
+    h+='</td>';
+    // Ubicación
+    h+='<td style="padding:8px 8px;color:var(--accent);font-size:10.5px">'+esc(a.area||'—')+'</td>';
+    // Responsable
+    h+='<td style="padding:8px 8px;font-size:10.5px;color:var(--text2)">'+esc(a.ingeniero_nombre||a.personal_nombre||'—')+'</td>';
+    // Fecha
+    h+='<td style="padding:8px 8px;text-align:center;font-size:10.5px;color:'+(retrasada?'#e03131':'var(--text3)')+';white-space:nowrap">'+(a.fecha?fmtF(a.fecha):'—')+'</td>';
+    // %
+    h+='<td style="padding:8px 8px;text-align:center;font-weight:700;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'var(--accent)':'var(--text3)')+'">'+a.porcentaje+'%</td>';
+    // Estado
+    h+='<td style="padding:8px 8px"><span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;white-space:nowrap">'+esc(est)+'</span></td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='</div>';
+  el.innerHTML=h;
+}
+
+function printAptoReport(apto){
+  var acts=getAptoActs(apto);
+  var hoy=new Date().toISOString().slice(0,10);
+  var ECOL={completado:'#2f9e44','en-progreso':'#1a56db',pendiente:'#868e96',pausada:'#e67700',retrasada:'#e03131',bloqueada:'#862e9c','no-iniciada':'#495057'};
+  var EBG={completado:'#d3f9d8','en-progreso':'#dbe4ff',pendiente:'#f1f3f5',pausada:'#fff3bf',retrasada:'#ffe3e3',bloqueada:'#f3d9fa','no-iniciada':'#f1f3f5'};
+  var PCOL={urgente:'#e03131',alta:'#e67700',normal:'#2f9e44'};
+  var PBG={urgente:'#ffe3e3',alta:'#fff3bf',normal:'#d3f9d8'};
+  var completadas=acts.filter(function(a){return a.estado==='completado';}).length;
+  var pct=acts.length?Math.round(acts.reduce(function(s,a){return s+(a.porcentaje||0);},0)/acts.length):0;
+  var rows=acts.map(function(a){
+    var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
+    var est=retrasada?'retrasada':a.estado;
+    var ec=ECOL[est]||'#868e96';
+    var eb=EBG[est]||'#f1f3f5';
+    var pc=PCOL[a.prioridad]||'#868e96';
+    var pb=PBG[a.prioridad]||'#f1f3f5';
+    return '<tr style="border-bottom:1px solid #dee2e6">'
+      +'<td style="padding:7px 9px">'+(a.prioridad?'<span style="background:'+pb+';color:'+pc+';border:1px solid '+pc+'40;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700">'+a.prioridad.toUpperCase()+'</span>':'—')+'</td>'
+      +'<td style="padding:7px 9px;font-weight:600;color:#212529">'+esc(a.descripcion)+(a.notas?'<div style="font-size:10px;color:#868e96;margin-top:2px">'+esc(a.notas)+'</div>':'')+'</td>'
+      +'<td style="padding:7px 9px;color:#1a56db;font-size:10.5px">'+esc(a.area||'—')+'</td>'
+      +'<td style="padding:7px 9px;font-size:10.5px;color:#495057">'+esc(a.ingeniero_nombre||a.personal_nombre||'—')+'</td>'
+      +'<td style="padding:7px 9px;text-align:center;font-size:10.5px;color:'+(retrasada?'#e03131':'#495057')+'">'+(a.fecha?fmtF(a.fecha):'—')+'</td>'
+      +'<td style="padding:7px 9px;text-align:center;font-weight:700;font-size:11px;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'#1a56db':'#868e96')+'">'+a.porcentaje+'%</td>'
+      +'<td style="padding:7px 9px"><span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700">'+est+'</span></td>'
+      +'</tr>';
+  }).join('');
+
+  var win=window.open('','_blank','width=900,height=700');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    +'<title>Supervisión '+apto+' — Mecca Residence</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Calibri,Arial,sans-serif;font-size:12px;color:#212529;padding:24px 28px}'
+    +'h1{font-size:16px;font-weight:800;color:#1e1b4b;margin-bottom:4px}'
+    +'.sub{font-size:11px;color:#868e96;margin-bottom:16px}'
+    +'.meta{display:flex;gap:20px;margin-bottom:14px;padding:10px 14px;background:#f8f9fa;border-radius:8px;border:1px solid #dee2e6}'
+    +'.meta-item{text-align:center}.meta-item .v{font-size:20px;font-weight:800}.meta-item .l{font-size:10px;color:#868e96}'
+    +'table{width:100%;border-collapse:collapse;border:1px solid #dee2e6;border-radius:8px;overflow:hidden}'
+    +'thead tr{background:#1e1b4b;color:#fff}'
+    +'thead th{padding:9px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}'
+    +'tbody tr:nth-child(even){background:#f8f9fa}'
+    +'.bar-wrap{height:8px;background:#e9ecef;border-radius:4px;overflow:hidden;margin-top:6px}'
+    +'.bar{height:100%;border-radius:4px}'
+    +'@media print{body{padding:12px}@page{size:A4 landscape;margin:15mm}}</style>'
+    +'</head><body>'
+    +'<h1>🏠 Supervisión — '+esc(apto)+'</h1>'
+    +'<div class="sub">Mecca Residence · Generado el '+fmtF(hoy)+'</div>'
+    +'<div class="meta">'
+    +'<div class="meta-item"><div class="v" style="color:#1a56db">'+acts.length+'</div><div class="l">Total</div></div>'
+    +'<div class="meta-item"><div class="v" style="color:#2f9e44">'+completadas+'</div><div class="l">Completadas</div></div>'
+    +'<div class="meta-item"><div class="v" style="color:'+(pct>=80?'#2f9e44':pct>=50?'#e67700':'#e03131')+'">'+pct+'%</div><div class="l">Avance</div></div>'
+    +'</div>'
+    +'<table><thead><tr>'
+    +'<th style="width:72px">Prioridad</th><th>Descripción</th><th style="width:100px">Ubicación</th>'
+    +'<th style="width:110px">Responsable</th><th style="width:80px;text-align:center">Fecha</th>'
+    +'<th style="width:44px;text-align:center">%</th><th style="width:95px">Estado</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<script>window.onload=function(){window.print();}<\/script>'
+    +'</body></html>');
+  win.document.close();
+}
 
 // ── PROYECCIÓN GENERAL ────────────────────────────────
 function renderProyeccion(){
