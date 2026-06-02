@@ -478,6 +478,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       </div>
     </div>
     <div class="hdr-r">
+      <button id="btn-refresh" onclick="loadAll()" title="Actualizar datos" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:transform .4s ease,background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↺</button>
       <span class="ubadge guest" id="ubadge" onclick="showLogin()">👤 Entrar</span>
       <button class="ibtn primary" onclick="exportarPDF()" style="font-size:11px">PDF</button>
     </div>
@@ -638,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_67';
+const APP_VERSION='20260602_68';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1248,10 +1249,9 @@ function setSS(t,m){
 
 async function loadAll(){
   setSS('syncing','Cargando...');
-  // Show retry button in hoy if loading takes too long
-  // Spin refresh button
+  // Spin refresh button while loading
   const refBtn=document.getElementById('btn-refresh');
-  if(refBtn) refBtn.style.transform='rotate(180deg)';
+  if(refBtn){refBtn.style.transition='none';refBtn.style.animation='spin 0.7s linear infinite';}
   const retryTimer=setTimeout(()=>{
     const el=document.getElementById('c-hoy');
     if(el&&el.querySelector('.shimmer-block')){
@@ -1277,7 +1277,7 @@ async function loadAll(){
     try{sessionStorage.setItem('mecca_cache_'+S.fecha,JSON.stringify({personal,asist,acts}));}catch(e){}
     setSS('ok','✓ '+hhmm());
     const rb=document.getElementById('btn-refresh');
-    if(rb) rb.style.transform='';
+    if(rb){rb.style.animation='';rb.style.transition='transform .4s ease,background .15s';}
     clearTimeout(retryTimer);
     renderHoy(); renderAsist(); renderActs(); renderReportes();
     updateAsistPct();
