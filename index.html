@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_70';
+const APP_VERSION='20260602_71';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -4555,14 +4555,16 @@ async function generarPDF(opts){
 
     // ── SECCIÓN BANNER ────────────────────────────────────────────
     function secBanner(label, accentColor){
-      chk(12);
+      chk(13);
       var ac=accentColor||ACC;
-      var tint=[Math.round(ac[0]*0.1+255*0.9),Math.round(ac[1]*0.1+255*0.9),Math.round(ac[2]*0.1+255*0.9)];
-      fc(tint);doc.roundedRect(M,y,RW,8,1,1,'F');
-      fc(ac);doc.rect(M,y,3.5,8,'F');
-      tc(TXT);doc.setFontSize(8.5);doc.setFont('helvetica','bold');
-      doc.text(safe(label),M+7.5,y+5.3);
-      y+=11;
+      // Light gray background + left accent bar
+      fc(LGRAY);doc.rect(M,y,RW,9,'F');
+      fc(ac);doc.rect(M,y,4,9,'F');
+      // Bottom accent border
+      dc(ac);doc.setLineWidth(0.5);doc.line(M,y+9,W-M,y+9);
+      tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');
+      doc.text(safe(label),M+8.5,y+6.3);
+      y+=12;
     }
 
     function hrLine(){
@@ -4622,19 +4624,20 @@ async function generarPDF(opts){
       var bw=(RW-12)/5;
       boxes.forEach(function(b,i){
         var bx=M+i*(bw+3);
-        // Card background
-        fc(LGRAY);doc.roundedRect(bx,y,bw,17,1.5,1.5,'F');
-        // Top accent bar
-        fc(b.c);doc.roundedRect(bx,y,bw,3,1.5,1.5,'F');
-        fc(b.c);doc.rect(bx,y+1.5,bw,1.5,'F');
+        // White card with border
+        fc(WHT);doc.roundedRect(bx,y,bw,16,1.5,1.5,'F');
+        dc(BOR);doc.setLineWidth(0.3);doc.roundedRect(bx,y,bw,16,1.5,1.5,'S');
+        // Colored top cap
+        fc(b.c);doc.roundedRect(bx,y,bw,2,1,1,'F');
+        fc(b.c);doc.rect(bx,y+1,bw,1,'F');
         // Number
         tc(b.c);doc.setFontSize(14);doc.setFont('helvetica','bold');
-        doc.text(String(b.v),bx+bw/2,y+11.5,{align:'center'});
+        doc.text(String(b.v),bx+bw/2,y+11,{align:'center'});
         // Label
         tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
-        doc.text(b.l,bx+bw/2,y+15.5,{align:'center'});
+        doc.text(b.l,bx+bw/2,y+14.5,{align:'center'});
       });
-      y+=21;hrLine();
+      y+=20;hrLine();
     }
 
     // ── ASISTENCIA ────────────────────────────────────────────────
@@ -4648,16 +4651,15 @@ async function generarPDF(opts){
       } else {
         // Cabecera de tabla
         chk(7);
-        var _assTint=[Math.round(ACC[0]*0.07+255*0.93),Math.round(ACC[1]*0.07+255*0.93),Math.round(ACC[2]*0.07+255*0.93)];
-        fc(_assTint);doc.rect(M,y-1,RW,7,'F');
-        fc(ACC);doc.rect(M,y-1,2.5,7,'F');
+        fc(LGRAY2);doc.rect(M,y,RW,7,'F');
+        dc(BOR);doc.setLineWidth(0.3);doc.line(M,y+7,W-M,y+7);
         tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
-        doc.text('TRABAJADOR',M+3,y+3.5);
-        doc.text('ESTADO',M+68,y+3.5);
-        doc.text('ENTRADA',M+95,y+3.5);
-        doc.text('SALIDA',M+115,y+3.5);
-        doc.text('HORAS',M+135,y+3.5);
-        if(fi!==ff) doc.text('FECHA',M+155,y+3.5);
+        doc.text('TRABAJADOR',M+3,y+4.5);
+        doc.text('ESTADO',M+68,y+4.5);
+        doc.text('ENTRADA',M+95,y+4.5);
+        doc.text('SALIDA',M+115,y+4.5);
+        doc.text('HORAS',M+135,y+4.5);
+        if(fi!==ff) doc.text('FECHA',M+155,y+4.5);
         y+=7;
         _rowIdx=0;
         asist.forEach(function(a){
@@ -4669,30 +4671,30 @@ async function generarPDF(opts){
           if(a.hora_entrada&&a.hora_salida){
             try{var hrs=calcHorasEfectivas(a.hora_entrada,a.hora_salida,a.fecha,a.horas_extra);hrsInfo=fmtHoras(hrs.efectivas)+(hrs.extra>0?' +'+hrs.extra+'h':'');}catch(ex){hrsInfo='';}
           }
+          var aNoteLines=a.nota?doc.splitTextToSize(safe(a.nota),RW-12).slice(0,3):[];
+          var aRowH=7+(aNoteLines.length>0?aNoteLines.length*3.5+1:0);
           _rowIdx++;
-          if(_rowIdx%2===0){fc(LGRAY);doc.rect(M,y-1,RW,6,'F');}
-          // Punto de estado
-          fc(sc);doc.circle(M+3,y+1.8,1.3,'F');
-          // Nombre
+          if(_rowIdx%2===0){fc(LGRAY);doc.rect(M,y,RW,aRowH,'F');}
+          // Status dot
+          fc(sc);doc.circle(M+3,y+3.5,1.4,'F');
+          // Name
           tc(TXT);doc.setFontSize(8);doc.setFont('helvetica','bold');
-          doc.text(safe(p.nombre),M+7,y+4);
+          doc.text(safe(p.nombre),M+7,y+4.5);
           // Estado
           tc(sc);doc.setFontSize(7);doc.setFont('helvetica','normal');
-          doc.text(safe(a.estado).toUpperCase(),M+68,y+4);
+          doc.text(safe(a.estado).toUpperCase(),M+68,y+4.5);
           // Horario
           tc(MUT);doc.setFontSize(7);
-          doc.text(a.hora_entrada||'—',M+95,y+4);
-          doc.text(a.hora_salida||'—',M+115,y+4);
-          doc.text(hrsInfo,M+135,y+4);
-          if(fi!==ff) doc.text(a.fecha||'',M+155,y+4);
-          // Nota de tardanza / justificación
-          if(a.nota){
-            tc([150,150,150]);doc.setFontSize(6);
-            doc.text(safe(a.nota).slice(0,45),M+7,y+7);
-            y+=8;
-          } else {
-            y+=6.5;
+          doc.text(a.hora_entrada||'—',M+95,y+4.5);
+          doc.text(a.hora_salida||'—',M+115,y+4.5);
+          doc.text(hrsInfo,M+135,y+4.5);
+          if(fi!==ff) doc.text(a.fecha||'',M+155,y+4.5);
+          if(aNoteLines.length>0){
+            tc([150,155,165]);doc.setFontSize(6);doc.setFont('helvetica','italic');
+            aNoteLines.forEach(function(nl,ni){doc.text(nl,M+7,y+8+ni*3.5);});
           }
+          dc([228,232,240]);doc.setLineWidth(0.15);doc.line(M,y+aRowH,W-M,y+aRowH);
+          y+=aRowH+0.5;
         });
       }
       hrLine();
@@ -4703,105 +4705,95 @@ async function generarPDF(opts){
     //          sameday =[#7,   Desc62,Area28,Estado25,Asignado30,Resp30]
     function actTableHeader(accentColor){
       chk(8);
-      var ac=accentColor||ACC;
-      var tint=[Math.round(ac[0]*0.07+255*0.93),Math.round(ac[1]*0.07+255*0.93),Math.round(ac[2]*0.07+255*0.93)];
-      fc(tint);doc.rect(M,y-1,RW,7,'F');
-      fc(ac);doc.rect(M,y-1,2.5,7,'F');
+      fc(LGRAY2);doc.rect(M,y,RW,7,'F');
+      dc(BOR);doc.setLineWidth(0.3);doc.line(M,y+7,W-M,y+7);
       tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
       if(fi!==ff){
-        doc.text('FECHA',       M+4,   y+4);
-        doc.text('DESCRIPCION', M+23,  y+4);
-        doc.text('AREA',        M+78,  y+4);
-        doc.text('ESTADO',      M+102, y+4);
-        doc.text('ASIGNADO',    M+125, y+4);
-        doc.text('RESPONSABLE', M+157, y+4);
+        doc.text('FECHA',       M+3,   y+4.5);
+        doc.text('DESCRIPCION', M+22,  y+4.5);
+        doc.text('AREA',        M+77,  y+4.5);
+        doc.text('ESTADO',      M+101, y+4.5);
+        doc.text('ASIGNADO',    M+124, y+4.5);
+        doc.text('RESPONSABLE', M+156, y+4.5);
       } else {
-        doc.text('#',           M+4,   y+4);
-        doc.text('DESCRIPCION', M+13,  y+4);
-        doc.text('AREA',        M+76,  y+4);
-        doc.text('ESTADO',      M+104, y+4);
-        doc.text('ASIGNADO',    M+129, y+4);
-        doc.text('RESPONSABLE', M+160, y+4);
+        doc.text('#',           M+3,   y+4.5);
+        doc.text('DESCRIPCION', M+12,  y+4.5);
+        doc.text('AREA',        M+75,  y+4.5);
+        doc.text('ESTADO',      M+103, y+4.5);
+        doc.text('ASIGNADO',    M+128, y+4.5);
+        doc.text('RESPONSABLE', M+159, y+4.5);
       }
-      y+=6; _rowIdx=0;
+      y+=7; _rowIdx=0;
     }
 
     function actTableRow(a, idx, accentColor){
       var ec=ESTADO_C[a.estado]||MUT;
       var el=ESTADO_L[a.estado]||safe(a.estado).toUpperCase();
-      var hasNote=!!(a.notas&&a.notas.trim());
-      var rowH=hasNote?8:6;
+      // Pre-calculate notes for accurate row height
+      var noteLines=[];
+      if(a.notas&&a.notas.trim()){
+        var nw=fi!==ff?148:158;
+        noteLines=doc.splitTextToSize('Obs: '+safe(a.notas),nw).slice(0,4);
+      }
+      var mainH=7;
+      var rowH=mainH+(noteLines.length>0?noteLines.length*3.5+2:0);
       chk(rowH+1);
-      if(_rowIdx%2===0){fc(LGRAY);doc.rect(M,y-1,RW,rowH+1,'F');}
+      if(_rowIdx%2===0){fc(LGRAY);doc.rect(M,y,RW,rowH,'F');}
       _rowIdx++;
-      // Urgente: left highlight
-      if(a.prioridad==='urgente'){fc(RED);doc.rect(M,y-1,1.5,rowH+1,'F');}
+      if(a.prioridad==='urgente'){fc(RED);doc.rect(M,y,1.5,rowH,'F');}
+      var cy=y+mainH/2+1.5;
       if(fi!==ff){
-        // Fecha col
-        tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','normal');
-        doc.text(safe(a.fecha||''),M+3,y+rowH/2+1);
-        // Desc col (54mm)
+        tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+        doc.text(safe(a.fecha||''),M+3,cy);
         tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
         var dl=doc.splitTextToSize(safe(a.descripcion),52);
-        doc.text(dl[0]||'',M+22,y+rowH/2+1);
-        // Area col
+        doc.text(dl[0]||'',M+22,cy);
         tc(ACC);doc.setFontSize(7);doc.setFont('helvetica','normal');
-        doc.text(safe(a.area||'').slice(0,16),M+77,y+rowH/2+1);
-        // Estado badge inline
+        doc.text(safe(a.area||'').slice(0,16),M+77,cy);
         var estW=doc.getTextWidth(el)+5;if(estW<14)estW=14;
-        fc(ec);doc.roundedRect(M+101,y+rowH/2-3,estW,4.5,0.8,0.8,'F');
+        fc(ec);doc.roundedRect(M+101,cy-3.5,estW,4.5,0.8,0.8,'F');
         tc(WHT);doc.setFontSize(6);doc.setFont('helvetica','bold');
-        doc.text(el,M+103.5,y+rowH/2+1);
-        // Asignado
-        tc(TXT);doc.setFontSize(7);doc.setFont('helvetica','normal');
-        doc.text(safe(a.personal_nombre||'—').slice(0,18),M+124,y+rowH/2+1);
-        // Responsable
-        doc.text(safe(a.ingeniero_nombre||'—').slice(0,18),M+156,y+rowH/2+1);
-        // % progress mini bar if set
+        doc.text(el,M+103.5,cy);
+        tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+        doc.text(safe(a.personal_nombre||'—').slice(0,18),M+124,cy);
+        doc.text(safe(a.ingeniero_nombre||'—').slice(0,18),M+156,cy);
         if(a.porcentaje>0){
-          var px=M+101,pw=28,ph=1.5,pby=y+rowH-1.5;
+          var px=M+101,pw=28,ph=1.5,pby=y+mainH-2;
           fc(BOR);doc.rect(px,pby,pw,ph,'F');
           fc(a.porcentaje>=100?GRN:a.porcentaje>=50?ACC:AMB);
           doc.rect(px,pby,Math.max(0.5,pw*a.porcentaje/100),ph,'F');
         }
       } else {
-        // Row number
-        tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','normal');
-        doc.text(String(idx),M+3,y+rowH/2+1);
-        // Desc col (62mm)
+        tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+        doc.text(String(idx),M+3,cy);
         tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
         var dl2=doc.splitTextToSize(safe(a.descripcion),60);
-        doc.text(dl2[0]||'',M+12,y+rowH/2+1);
-        // Area
+        doc.text(dl2[0]||'',M+12,cy);
         tc(ACC);doc.setFontSize(7);doc.setFont('helvetica','normal');
-        doc.text(safe(a.area||'').slice(0,16),M+75,y+rowH/2+1);
-        // Estado badge
+        doc.text(safe(a.area||'').slice(0,16),M+75,cy);
         var el2w=doc.getTextWidth(el)+5;if(el2w<14)el2w=14;
-        fc(ec);doc.roundedRect(M+103,y+rowH/2-3,el2w,4.5,0.8,0.8,'F');
+        fc(ec);doc.roundedRect(M+103,cy-3.5,el2w,4.5,0.8,0.8,'F');
         tc(WHT);doc.setFontSize(6);doc.setFont('helvetica','bold');
-        doc.text(el,M+105.5,y+rowH/2+1);
-        // Asignado
-        tc(TXT);doc.setFontSize(7);doc.setFont('helvetica','normal');
-        doc.text(safe(a.personal_nombre||'—').slice(0,17),M+128,y+rowH/2+1);
-        // Responsable
-        doc.text(safe(a.ingeniero_nombre||'—').slice(0,17),M+159,y+rowH/2+1);
-        // % mini bar
+        doc.text(el,M+105.5,cy);
+        tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+        doc.text(safe(a.personal_nombre||'—').slice(0,17),M+128,cy);
+        doc.text(safe(a.ingeniero_nombre||'—').slice(0,17),M+159,cy);
         if(a.porcentaje>0){
-          var px2=M+103,pw2=25,ph2=1.5,pby2=y+rowH-1.5;
+          var px2=M+103,pw2=25,ph2=1.5,pby2=y+mainH-2;
           fc(BOR);doc.rect(px2,pby2,pw2,ph2,'F');
           fc(a.porcentaje>=100?GRN:a.porcentaje>=50?ACC:AMB);
           doc.rect(px2,pby2,Math.max(0.5,pw2*a.porcentaje/100),ph2,'F');
         }
       }
-      // Note row
-      if(hasNote){
-        tc([140,140,140]);doc.setFontSize(6);doc.setFont('helvetica','italic');
-        var noteX=fi!==ff?M+22:M+12;
-        var noteW=fi!==ff?150:160;
-        var noteL=doc.splitTextToSize('Obs: '+safe(a.notas),noteW);
-        doc.text(noteL[0]||'',noteX,y+rowH-0.5);
+      // Notes — multi-line, contained within row
+      if(noteLines.length>0){
+        tc([150,155,165]);doc.setFontSize(6);doc.setFont('helvetica','italic');
+        var nx=fi!==ff?M+22:M+12;
+        noteLines.forEach(function(nl,ni){doc.text(nl,nx,y+mainH+2+ni*3.5);});
       }
-      y+=rowH+1;
+      // Row separator
+      dc([228,232,240]);doc.setLineWidth(0.15);doc.line(M,y+rowH,W-M,y+rowH);
+      y+=rowH+0.5;
     }
 
     // ── ACTIVIDADES PERSONAL X LA CASA ────────────────────────────
@@ -4822,56 +4814,51 @@ async function generarPDF(opts){
       secBanner('RETRASADAS  ('+retrs.length+') — pendientes de dias anteriores',RED);
       // Header: Fecha | Descripcion | Area | Estado | Dias | Asignado | Responsable
       chk(7);
-      var _redTint=[Math.round(RED[0]*0.07+255*0.93),Math.round(RED[1]*0.07+255*0.93),Math.round(RED[2]*0.07+255*0.93)];
-      fc(_redTint);doc.rect(M,y-1,RW,7,'F');
-      fc(RED);doc.rect(M,y-1,2.5,7,'F');
+      fc(LGRAY2);doc.rect(M,y,RW,7,'F');
+      dc(BOR);doc.setLineWidth(0.3);doc.line(M,y+7,W-M,y+7);
       tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
-      doc.text('FECHA ORG.',  M+3,   y+3.5);
-      doc.text('DESCRIPCION', M+22,  y+3.5);
-      doc.text('AREA',        M+77,  y+3.5);
-      doc.text('ESTADO',      M+101, y+3.5);
-      doc.text('DIAS',        M+127, y+3.5);
-      doc.text('ASIGNADO',    M+138, y+3.5);
-      doc.text('RESPONSABLE', M+162, y+3.5);
+      doc.text('FECHA ORG.',  M+3,   y+4.5);
+      doc.text('DESCRIPCION', M+22,  y+4.5);
+      doc.text('AREA',        M+77,  y+4.5);
+      doc.text('ESTADO',      M+101, y+4.5);
+      doc.text('DIAS',        M+127, y+4.5);
+      doc.text('ASIGNADO',    M+138, y+4.5);
+      doc.text('RESPONSABLE', M+162, y+4.5);
       y+=7; _rowIdx=0;
       retrs.forEach(function(a){
         var ec2=ESTADO_C[a.estado]||MUT;
         var el2=ESTADO_L[a.estado]||safe(a.estado).toUpperCase();
         var diasR=fechaVenc(a)?Math.round((new Date(fi)-new Date(fechaVenc(a)))/(1000*60*60*24)):0;
-        var hasNote=!!(a.notas&&a.notas.trim());
-        var rowH=hasNote?8:6;
+        var rNoteLines=[];
+        if(a.notas&&a.notas.trim()){rNoteLines=doc.splitTextToSize('Obs: '+safe(a.notas),148).slice(0,4);}
+        var rMainH=7;
+        var rowH=rMainH+(rNoteLines.length>0?rNoteLines.length*3.5+2:0);
         chk(rowH+1);
-        if(_rowIdx%2===0){fc([255,248,248]);doc.rect(M,y-1,RW,rowH+1,'F');}
+        if(_rowIdx%2===0){fc([255,248,248]);doc.rect(M,y,RW,rowH,'F');}
         _rowIdx++;
-        // Fecha
-        tc([180,30,30]);doc.setFontSize(7);doc.setFont('helvetica','bold');
-        doc.text(safe(a.fecha||''),M+3,y+rowH/2+1);
-        // Desc
+        var rcy=y+rMainH/2+1.5;
+        tc([180,30,30]);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+        doc.text(safe(a.fecha||''),M+3,rcy);
         tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
         var rdl=doc.splitTextToSize(safe(a.descripcion),52);
-        doc.text(rdl[0]||'',M+22,y+rowH/2+1);
-        // Area
+        doc.text(rdl[0]||'',M+22,rcy);
         tc(RED);doc.setFontSize(7);doc.setFont('helvetica','normal');
-        doc.text(safe(a.area||'').slice(0,16),M+77,y+rowH/2+1);
-        // Estado badge
+        doc.text(safe(a.area||'').slice(0,16),M+77,rcy);
         var rw=doc.getTextWidth(el2)+5;if(rw<14)rw=14;
-        fc(ec2);doc.roundedRect(M+101,y+rowH/2-3,rw,4.5,0.8,0.8,'F');
+        fc(ec2);doc.roundedRect(M+101,rcy-3.5,rw,4.5,0.8,0.8,'F');
         tc(WHT);doc.setFontSize(6);doc.setFont('helvetica','bold');
-        doc.text(el2,M+103.5,y+rowH/2+1);
-        // Dias retraso
+        doc.text(el2,M+103.5,rcy);
         tc(RED);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
-        doc.text(diasR+'d',M+130,y+rowH/2+1);
-        // Asignado
-        tc(TXT);doc.setFontSize(7);doc.setFont('helvetica','normal');
-        doc.text(safe(a.personal_nombre||'—').slice(0,13),M+138,y+rowH/2+1);
-        // Responsable
-        doc.text(safe(a.ingeniero_nombre||'—').slice(0,13),M+162,y+rowH/2+1);
-        if(hasNote){
-          tc([140,140,140]);doc.setFontSize(6);doc.setFont('helvetica','italic');
-          var rnl=doc.splitTextToSize('Obs: '+safe(a.notas),150);
-          doc.text(rnl[0]||'',M+22,y+rowH-0.5);
+        doc.text(diasR+'d',M+130,rcy);
+        tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+        doc.text(safe(a.personal_nombre||'—').slice(0,13),M+138,rcy);
+        doc.text(safe(a.ingeniero_nombre||'—').slice(0,13),M+162,rcy);
+        if(rNoteLines.length>0){
+          tc([150,155,165]);doc.setFontSize(6);doc.setFont('helvetica','italic');
+          rNoteLines.forEach(function(nl,ni){doc.text(nl,M+22,y+rMainH+2+ni*3.5);});
         }
-        y+=rowH+1;
+        dc([228,232,240]);doc.setLineWidth(0.15);doc.line(M,y+rowH,W-M,y+rowH);
+        y+=rowH+0.5;
       });
       hrLine();
     }
@@ -4892,21 +4879,21 @@ async function generarPDF(opts){
           var cProg=cActs.filter(function(a){return a.estado==='en-progreso';}).length;
           var cPend=cActs.length-cComp-cProg;
           var pctC=cActs.length>0?Math.round(cComp/cActs.length*100):0;
-          chk(17);
-          // Contractor group header
-          var purTint=[Math.round(PUR[0]*0.1+255*0.9),Math.round(PUR[1]*0.1+255*0.9),Math.round(PUR[2]*0.1+255*0.9)];
-          fc(purTint);doc.roundedRect(M,y,RW,11,1.2,1.2,'F');
-          fc(PUR);doc.rect(M,y,3.5,11,'F');
-          tc(TXT);doc.setFontSize(8);doc.setFont('helvetica','bold');
-          doc.text(safe(c),M+6.5,y+5);
+          chk(15);
+          // Contractor group header (minimalist)
+          fc(LGRAY);doc.rect(M,y,RW,9,'F');
+          fc(PUR);doc.rect(M,y,4,9,'F');
+          dc(PUR);doc.setLineWidth(0.5);doc.line(M,y+9,W-M,y+9);
+          tc(TXT);doc.setFontSize(8.5);doc.setFont('helvetica','bold');
+          doc.text(safe(c),M+8,y+5.8);
           tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-          doc.text(cComp+' OK  '+cProg+' prog  '+cPend+' pend',W-M,y+4.5,{align:'right'});
+          doc.text(cComp+' OK  '+cProg+' prog  '+cPend+' pend',W-M,y+3.5,{align:'right'});
           var barCC=pctC>=80?GRN:pctC>=40?AMB:RED;
-          fc(BOR);doc.rect(M+4,y+7.5,RW-4.5,1.8,'F');
-          fc(barCC);doc.rect(M+4,y+7.5,Math.max(0.5,(RW-4.5)*pctC/100),1.8,'F');
+          fc([220,220,225]);doc.rect(M+90,y+5.5,RW-90,2,'F');
+          fc(barCC);doc.rect(M+90,y+5.5,Math.max(0.5,(RW-90)*pctC/100),2,'F');
           tc(barCC);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
-          doc.text(pctC+'%',W-M,y+10,{align:'right'});
-          y+=13;
+          doc.text(pctC+'%',W-M,y+8.5,{align:'right'});
+          y+=11;
           // Table header for this contractor
           actTableHeader(PUR);
           cActs.forEach(function(a,i){ actTableRow(a,i+1,PUR); });
@@ -4921,13 +4908,12 @@ async function generarPDF(opts){
       secBanner('SITUACIONES REGISTRADAS  ('+pens.length+')',RED);
       // Cabecera tabla
       chk(7);
-      var _penTint=[Math.round(RED[0]*0.07+255*0.93),Math.round(RED[1]*0.07+255*0.93),Math.round(RED[2]*0.07+255*0.93)];
-      fc(_penTint);doc.rect(M,y-1,RW,7,'F');
-      fc(RED);doc.rect(M,y-1,2.5,7,'F');
+      fc(LGRAY2);doc.rect(M,y,RW,7,'F');
+      dc(BOR);doc.setLineWidth(0.3);doc.line(M,y+7,W-M,y+7);
       tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
-      doc.text('FECHA',M+3,y+3.5);
-      doc.text('PERSONA',M+20,y+3.5);
-      doc.text('TIPO DE SITUACION',M+72,y+3.5);
+      doc.text('FECHA',M+3,y+4.5);
+      doc.text('PERSONA',M+20,y+4.5);
+      doc.text('TIPO DE SITUACION',M+72,y+4.5);
       y+=7;_rowIdx=0;
       pens.forEach(function(p){
         chk(12);
