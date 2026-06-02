@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_77';
+const APP_VERSION='20260602_78';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2599,7 +2599,7 @@ function actsDesktopTable(acts, showDate){
 }
 
 function actHTML(a, ai, tipo){
-  const fotos=(a.fotos||'').split('||').filter(Boolean);
+  const fotos=fotoUrls(a.fotos);
   const hoy=new Date().toISOString().slice(0,10);
   const retrasada=isRetrasada(a);
   const vencida=retrasada;
@@ -2651,6 +2651,12 @@ function actHTML(a, ai, tipo){
 
 // ── FOTO REQUERIDA PARA COMPLETAR ────────────────────
 function tieneFoto(a){ return a&&a.fotos&&a.fotos.split('||').filter(Boolean).length>0; }
+function parseFotos(s){
+  return (s||'').split('||').filter(Boolean).map(function(e){
+    var i=e.indexOf('::');return i>0?{url:e.slice(0,i),by:e.slice(i+2)}:{url:e,by:null};
+  });
+}
+function fotoUrls(s){return parseFotos(s).map(function(f){return f.url;});}
 
 function syncEstadoPct(sel){
   var pct=document.getElementById('a-pct');
@@ -2692,7 +2698,8 @@ async function subirFotoYCompletar(input, actId){
   setSS('syncing','Subiendo foto...');
   try{
     var url=await uploadFoto(file,actId);
-    var fotos=[(a.fotos||'').split('||').filter(Boolean),url].flat().join('||');
+    var fotoEntry=url+(S.user&&S.user.nombre?'::'+S.user.nombre:'');
+    var fotos=[(a.fotos||'').split('||').filter(Boolean),fotoEntry].flat().join('||');
     a.fotos=fotos; a.foto_pendiente=false;
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos,foto_pendiente:false})});
     setSS('ok','✓ Foto subida');
@@ -2970,7 +2977,8 @@ async function _guardarFotoAct(file,actId){
     var a=(S.actsActivas||[]).find(function(x){return x.id===actId;})
        ||(S.acts||[]).find(function(x){return x.id===actId;});
     if(a){
-      var fotos=[(a.fotos||'').split('||').filter(Boolean),url].flat().join('||');
+      var fotoEntry=url+(S.user&&S.user.nombre?'::'+S.user.nombre:'');
+      var fotos=[(a.fotos||'').split('||').filter(Boolean),fotoEntry].flat().join('||');
       a.fotos=fotos;
       await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos})});
     }
@@ -2989,7 +2997,8 @@ async function subirFoto(input, ai){
   setSS('syncing','Subiendo foto...');
   try{
     const url=await uploadFoto(file,a.id);
-    const fotos=[(a.fotos||'').split('||').filter(Boolean),url].flat().join('||');
+    const fotoEntry=url+(S.user&&S.user.nombre?'::'+S.user.nombre:'');
+    const fotos=[(a.fotos||'').split('||').filter(Boolean),fotoEntry].flat().join('||');
     a.fotos=fotos;a.foto_pendiente=false;
     await sb('obra_actividades?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos})});
     setSS('ok','Foto guardada ✓');reRenderActs();
@@ -3882,7 +3891,8 @@ async function subirFotoCompletada(input, actId){
   setSS('syncing','Subiendo foto...');
   try{
     var url=await uploadFoto(file,actId);
-    var fotos=[(a.fotos||'').split('||').filter(Boolean),url].flat().join('||');
+    var fotoEntry=url+(S.user&&S.user.nombre?'::'+S.user.nombre:'');
+    var fotos=[(a.fotos||'').split('||').filter(Boolean),fotoEntry].flat().join('||');
     a.fotos=fotos; a.foto_pendiente=false;
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos,foto_pendiente:false})});
     setSS('ok','✓ Foto subida');
@@ -5156,7 +5166,7 @@ function renderHistorial(){
         </div>
         <div id="acts-${uid_}">
           ${myActs.map(a=>{
-            const fotos=(a.fotos||'').split('||').filter(Boolean);
+            const fotos=fotoUrls(a.fotos);
             const sinF=a.foto_pendiente&&!fotos.length;
             return`<div style="padding:8px;background:var(--bg3);border:1px solid var(--border);border-left:3px solid ${a.tipo_personal==='contratista'?'var(--purple)':'var(--accent)'};border-radius:var(--r);margin-bottom:6px">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:4px">
@@ -5171,7 +5181,7 @@ function renderHistorial(){
               </div>
               ${sinF?`<div style="font-size:10px;color:var(--amber);margin-top:4px">📷 Sin foto</div>`:''}
               ${fotos.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">
-                ${fotos.map(f=>`<img src="${f}" style="width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--border2);cursor:pointer" onclick="verFoto('${f}')" loading="lazy">`).join('')}
+                ${fotos.map(f=>`<img src="${f}" style="width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--border2);cursor:pointer" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${a.fecha}','${esc(a.area||'')}')" loading="lazy">`).join('')}
                 <button onclick="descargarFotos(${JSON.stringify(fotos)}, '${a.fecha}', '${esc(a.area||'')}')" style="width:56px;height:56px;border-radius:6px;border:1px solid var(--accent);background:rgba(200,240,96,.08);color:var(--accent);font-size:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">↓<span style="font-size:8px">Bajar</span></button>
               </div>`:''}
             </div>`;}).join('')}
@@ -5598,7 +5608,7 @@ function renderFotos(){
     ${data.length===0?'<div class="empty">Sin fotos para los filtros seleccionados</div>'
     :fechas.map(fecha=>{
       const acts=byFecha[fecha]||[];
-      const fotosDelDia=acts.reduce((acc,a)=>[...acc,...(a.fotos||'').split('||').filter(Boolean)],[]);
+      const fotosDelDia=acts.reduce((acc,a)=>[...acc,...fotoUrls(a.fotos)],[]);
       return`<div style="margin-bottom:18px">
         <!-- DIA HEADER -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">
@@ -5610,8 +5620,9 @@ function renderFotos(){
         </div>
 
         ${acts.map(a=>{
-          const fotos=(a.fotos||'').split('||').filter(Boolean);
-          if(!fotos.length)return'';
+          const fotosP=parseFotos(a.fotos);
+          if(!fotosP.length)return'';
+          const fotosUrls_=fotosP.map(f=>f.url);
           const ing=Object.values(USERS).find(u=>u.nombre===a.ingeniero_nombre);
           const ingColor=ing?.color||'var(--text3)';
           return`<div style="margin-bottom:12px">
@@ -5620,28 +5631,31 @@ function renderFotos(){
               <div style="flex:1;min-width:0">
                 <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.descripcion)}</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--text3);margin-top:2px">
-            
                   ${a.ingeniero_nombre?`<span style="color:${ingColor}">👤 ${esc(a.ingeniero_nombre)}</span>`:''}
                   ${a.personal_nombre?`<span>👷 ${esc(a.personal_nombre)}</span>`:''}
                   <span class="pill ${(a.estado||'').replace(' ','-')}" style="font-size:9px">${a.estado}</span>
                 </div>
               </div>
-              <button onclick="descargarFotos(${JSON.stringify(fotos)},'${fecha}','${esc(a.area||'general')}')" style="padding:4px 8px;border-radius:var(--r);border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:10px;cursor:pointer;flex-shrink:0">↓</button>
+              <button onclick="descargarFotos(${JSON.stringify(fotosUrls_)},'${fecha}','${esc(a.area||'general')}')" style="padding:4px 8px;border-radius:var(--r);border:1px solid var(--border2);background:transparent;color:var(--text3);font-size:10px;cursor:pointer;flex-shrink:0">↓</button>
             </div>
             <!-- FOTO GRID -->
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px">
-              ${fotos.map((f,fi)=>`
-                <div style="position:relative;aspect-ratio:1;border-radius:var(--r);overflow:hidden;border:1px solid var(--border2)">
-                  <img src="${f}" style="width:100%;height:100%;object-fit:cover;cursor:pointer" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${fecha}','${esc(a.area||'')}','${esc(a.ingeniero_nombre||'')}')" loading="lazy">
-                  <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.7));padding:4px;font-size:9px;color:white;font-family:var(--mono)">${fi+1}/${fotos.length}</div>
-                </div>`).join('')}
+              ${fotosP.map((f,fi)=>{
+                const uploaderLabel=f.by?f.by.split(' ').slice(-1)[0]:'';
+                return`<div style="position:relative;aspect-ratio:1;border-radius:var(--r);overflow:hidden;border:1px solid var(--border2)">
+                  <img src="${f.url}" style="width:100%;height:100%;object-fit:cover;cursor:pointer" onclick="verFotoInfo('${f.url}','${esc(a.descripcion)}','${fecha}','${esc(a.area||'')}','${esc(a.ingeniero_nombre||'')}','${esc(f.by||'')}')" loading="lazy">
+                  <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.75));padding:3px 5px;display:flex;align-items:center;justify-content:space-between">
+                    <span style="font-size:9px;color:white;font-family:var(--mono)">${fi+1}/${fotosP.length}</span>
+                    ${uploaderLabel?`<span style="font-size:9px;color:#c8f060;font-family:var(--mono);font-weight:600">📤${uploaderLabel}</span>`:''}
+                  </div>
+                </div>`;}).join('')}
             </div>
           </div>`;}).join('')}
       </div>`;}).join('')}
     <div style="height:70px"></div>`;
 }
 
-function verFotoInfo(url, desc, fecha, area, ing){
+function verFotoInfo(url, desc, fecha, area, ing, uploader){
   const viewer=document.getElementById('fviewer');
   const img=document.getElementById('fviewer-img');
   img.src=url;
@@ -5652,15 +5666,16 @@ function verFotoInfo(url, desc, fecha, area, ing){
     info.style.cssText='position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.9));padding:16px;color:white';
     viewer.appendChild(info);
   }
-  const areaHtml = area ? '<span>📍 '+esc(area)+'</span>' : '';
-  const ingHtml  = ing  ? '<span>👤 '+esc(ing)+'</span>'  : '';
+  const areaHtml     = area     ? '<span>📍 '+esc(area)+'</span>' : '';
+  const ingHtml      = ing      ? '<span>👤 '+esc(ing)+'</span>'  : '';
+  const uploaderHtml = uploader ? '<span style="color:#c8f060">📤 '+esc(uploader)+'</span>' : '';
   const safeUrl  = url.replace(/'/g,"\'");
   const safeFecha= fecha.replace(/'/g,"\'");
   const safeArea = (area||'foto').replace(/'/g,"\'");
   info.innerHTML =
     '<div style="font-size:13px;font-weight:500;margin-bottom:4px">'+esc(desc)+'</div>'+
     '<div style="font-size:11px;opacity:.7;display:flex;gap:12px;flex-wrap:wrap">'+
-      '<span>📅 '+fmtF(fecha)+'</span>'+areaHtml+ingHtml+
+      '<span>📅 '+fmtF(fecha)+'</span>'+areaHtml+ingHtml+uploaderHtml+
     '</div>'+
     '<button onclick="descargarFotos([\''+safeUrl+'\'],\''+safeFecha+'\',\''+safeArea+'\')" '+
     'style="margin-top:8px;padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:white;font-size:12px;cursor:pointer">↓ Descargar</button>';
