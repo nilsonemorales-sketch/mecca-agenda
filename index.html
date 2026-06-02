@@ -524,6 +524,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <div id="c-cont" style="display:none"></div>
       <div id="c-pers" style="display:none"></div>
       <div id="c-pen" style="display:none"></div>
+      <div id="c-bonif" style="display:none"></div>
     </div>
 
     <!-- REPORTES: Dashboard + Semana + Historial -->
@@ -596,6 +597,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='contratistas'">🔨 Equipo — Contratistas</button>
     <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='personal'">👥 Equipo — Personal</button>
     <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='penalidades'">⚠️ Equipo — Penalidades</button>
+    <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='bonificaciones';renderEquipo()">🏆 Equipo — Bonificaciones</button>
     <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='dashboard'">📊 Reportes — Dashboard</button>
     <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='semana'">📅 Reportes — Plan semanal</button>
     <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='historial'">📜 Reportes — Historial</button>
@@ -625,7 +627,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_55';
+const APP_VERSION='20260602_56';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1097,6 +1099,8 @@ const PUNTOS_CONFIG={
   'Trabajador destacado':    {cat:'Reconocimiento',puntos:-3, tipo:'positivo'},
   'Buen desempeno':          {cat:'Reconocimiento',puntos:-2, tipo:'positivo'},
   'Trabajo sobresaliente':   {cat:'Reconocimiento',puntos:-4, tipo:'positivo'},
+  'Registro puntual asistencia':{cat:'Gestión',    puntos:-3, tipo:'positivo'},
+  'Falta de registro contratista':{cat:'Gestión',  puntos:3,  tipo:'negativo'},
 };
 
 const NIVELES_DESEMPENO=[
@@ -1131,11 +1135,12 @@ let S={
   hoyFiltroEstado:'', hoyFiltroTipo:'', hoyAgrupacion:'', hoyPeriodoOpen:false,
   hoyPeriodoDesde:'', hoyPeriodoHasta:'', hoyPeriodoData:null,
   contVistaMode:'diario', contRepDesde:'', contRepHasta:'', contRepData:null,
+  bonifMes:'',
   fotosFiltroIng:'todos', fotosFiltroUbic:'', fotosFecha:'', fotosFechaFin:'', fotosData:[],
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
-  equipoVista:'asistencia', // 'asistencia' | 'personal' | 'penalidades'
+  equipoVista:'asistencia', // 'asistencia' | 'contratistas' | 'personal' | 'penalidades' | 'bonificaciones'
   reportesVista:'dashboard',// 'dashboard' | 'proyeccion' | 'apto' | 'semana' | 'historial'
   repAptoSel:'',
   compras:[], comprasEstadoFiltro:'',
@@ -2649,28 +2654,32 @@ async function subirFotoYCompletar(input, actId){
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos,foto_pendiente:false})});
     setSS('ok','✓ Foto subida');
     closeModal();
-    // Now complete the activity
     doMarcarCompletada(actId);
   }catch(e){setSS('err','Error subiendo foto');document.getElementById('foto-req-btn').textContent='📷 Toca para subir foto';}
 }
 
-async function completarSinFotoAdmin(actId){
-  if(!isAdmin()) return;
-  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
-  closeModal();
-  // Auto-generate penalty for the responsible engineer
-  var ingNombre=a.ingeniero_nombre||'';
-  if(ingNombre){
-    var ingEntry=Object.entries(USERS).find(function(e){return e[1].nombre===ingNombre;});
-    var pen={id:uid(),personal_id:ingEntry?'ing_'+ingEntry[0]:'',personal_nombre:ingNombre,
-      fecha:today(),tipo:'Actividad sin foto',
-      descripcion:'Completada sin foto: '+a.descripcion+(a.area?' — '+a.area:''),
-      monto:0,aplicada:true,ingeniero_id:S.user?.id||''};
-    S.pens.unshift(pen);
-    try{await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(pen)});}catch(e){}
-    setSS('ok','⚠️ Penalidad generada para '+ingNombre);
+// Resolve engineer from an activity record (uses ingeniero_id first, falls back to nombre)
+function resolveIngenieroDeAct(a){
+  var ingId=a.ingeniero_id||'';
+  if(ingId && USERS[ingId]) return {id:ingId, user:USERS[ingId]};
+  if(a.ingeniero_nombre){
+    var entry=Object.entries(USERS).find(function(e){return e[1].nombre===a.ingeniero_nombre;});
+    if(entry) return {id:entry[0], user:entry[1]};
   }
-  doMarcarCompletada(actId);
+  return null;
+}
+
+async function generarPenalidadSinFoto(a){
+  var ing=resolveIngenieroDeAct(a); if(!ing) return;
+  var pen={id:uid(),personal_id:'ing_'+ing.id,personal_nombre:ing.user.nombre,
+    fecha:today(),tipo:'Actividad sin foto',
+    descripcion:'Completada sin foto: '+a.descripcion+(a.area?' — '+a.area:''),
+    monto:0,aplicada:true,ingeniero_id:S.user?.id||''};
+  S.pens.unshift(pen);
+  if(S.currentTab==='equipo'&&S.equipoVista==='penalidades') renderPens();
+  try{await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(pen)});}
+  catch(e){console.error('Error guardando penalidad sin foto:',e);}
+  setSS('ok','⚠️ Penalidad "sin foto" aplicada a '+ing.user.nombre);
 }
 
 async function doMarcarCompletada(actId){
@@ -2699,10 +2708,7 @@ function reRenderActs(){
 async function marcarActCompletada(id){
   var a=S.acts.find(function(x){return x.id===id;});
   if(!a) return;
-  if(!tieneFoto(a)){
-    showFotoRequerida(id);
-    return;
-  }
+  if(!tieneFoto(a)) await generarPenalidadSinFoto(a);
   doMarcarCompletada(id);
 }
 
@@ -3192,22 +3198,10 @@ async function saveActIngeniero(ai){
     predecesoras:(document.getElementById('a-preds')||{value:''}).value.trim()||null,
   };
   const editIdIng=(document.getElementById('a-edit-id')||{value:''}).value.trim();
-  // Non-admin cannot complete without photo
-  if(a.estado==='completado'&&editIdIng&&!isAdmin()){
+  // Auto-penalize if completing without photo
+  if(a.estado==='completado'&&editIdIng){
     var existIngAct=S.acts.find(function(x){return x.id===editIdIng;});
-    if(!tieneFoto(existIngAct)){
-      var errFotoIng=document.getElementById('completado-sin-foto-err');
-      if(!errFotoIng){
-        errFotoIng=document.createElement('div');errFotoIng.id='completado-sin-foto-err';
-        errFotoIng.style.cssText='background:#ffe3e3;border:1.5px solid #e03131;border-radius:8px;padding:10px 12px;color:#c92a2a;font-size:12px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px';
-        errFotoIng.innerHTML='<span style="font-size:18px">📷</span><span>Se requiere foto para completar esta actividad. Solo el administrador puede completar sin foto.</span>';
-        var estSelIng=document.getElementById('a-est');
-        if(estSelIng) estSelIng.parentNode.insertBefore(errFotoIng,estSelIng.nextSibling);
-      }
-      var selIng=document.getElementById('a-est');
-      if(selIng){selIng.style.border='2px solid #e03131';setTimeout(function(){selIng.style.border='';},2000);}
-      return;
-    }
+    if(existIngAct&&!tieneFoto(existIngAct)) await generarPenalidadSinFoto(Object.assign({},existIngAct,a));
   }
   closeModal(); setSS('syncing','Guardando...');
   try{
@@ -6183,7 +6177,7 @@ async function marcarAsistCont(pid, estado){
     try{await sb('obra_asistencia?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:estado})});setSS('ok','✓');}
     catch(e){setSS('err','Error');}
   } else {
-    a={id:uid(),personal_id:pid,fecha:S.fecha,estado:estado,hora_entrada:'',hora_salida:'',horas_extra:0,notas:''};
+    a={id:uid(),personal_id:pid,fecha:S.fecha,estado:estado,hora_entrada:'',hora_salida:'',horas_extra:0,notas:'',ingeniero_id:S.user?.id||''};
     S.asist.push(a);
     renderAsistContratistas();
     setSS('syncing','Guardando...');
@@ -6297,16 +6291,18 @@ function renderEquipo(){
   if(subnav){
     subnav.style.cssText = subNavStyle();
     subnav.innerHTML =
-      subNavBtn('👷 P. Propio',   S.equipoVista==='asistencia',   "S.equipoVista='asistencia';renderEquipo()")+
-      subNavBtn('🔨 Contratistas',S.equipoVista==='contratistas', "S.equipoVista='contratistas';renderEquipo()")+
-      subNavBtn('👥 Personal',    S.equipoVista==='personal',     "S.equipoVista='personal';renderEquipo()")+
-      subNavBtn('⚠️ Penalidades', S.equipoVista==='penalidades',  "S.equipoVista='penalidades';renderEquipo()");
+      subNavBtn('👷 P. Propio',   S.equipoVista==='asistencia',      "S.equipoVista='asistencia';renderEquipo()")+
+      subNavBtn('🔨 Contratistas',S.equipoVista==='contratistas',     "S.equipoVista='contratistas';renderEquipo()")+
+      subNavBtn('👥 Personal',    S.equipoVista==='personal',         "S.equipoVista='personal';renderEquipo()")+
+      subNavBtn('⚠️ Penalidades', S.equipoVista==='penalidades',      "S.equipoVista='penalidades';renderEquipo()")+
+      (isAdmin()?subNavBtn('🏆 Bonificaciones',S.equipoVista==='bonificaciones',"S.equipoVista='bonificaciones';renderEquipo()"):'');
   }
   var asist = document.getElementById('c-asist');
   var cont  = document.getElementById('c-cont');
   var pers  = document.getElementById('c-pers');
   var pen   = document.getElementById('c-pen');
-  function hideAll(){ [asist,cont,pers,pen].forEach(function(e){if(e)e.style.display='none';}); }
+  var bonif = document.getElementById('c-bonif');
+  function hideAll(){ [asist,cont,pers,pen,bonif].forEach(function(e){if(e)e.style.display='none';}); }
   if(S.equipoVista==='personal'){
     hideAll(); if(pers) pers.style.display='block';
     renderPersonal();
@@ -6316,11 +6312,215 @@ function renderEquipo(){
   } else if(S.equipoVista==='contratistas'){
     hideAll(); if(cont) cont.style.display='block';
     renderAsistContratistas();
+  } else if(S.equipoVista==='bonificaciones' && isAdmin()){
+    hideAll(); if(bonif) bonif.style.display='block';
+    renderBonificaciones();
   } else {
     hideAll(); if(asist) asist.style.display='block';
     renderAsist();
   }
   updateFAB();
+}
+
+// ── BONIFICACIONES ────────────────────────────────────────
+function renderBonificaciones(){
+  var el=document.getElementById('c-bonif'); if(!el) return;
+  if(!S.bonifMes) S.bonifMes=new Date().toISOString().slice(0,7);
+  var mes=S.bonifMes;
+
+  // Contractor attendance records for this month (filtered in-memory from S.asist)
+  var conts=S.personal.filter(function(p){return p.tipo==='contratista'&&p.activo;});
+  var contIds=conts.map(function(p){return p.id;});
+  var asistMes=S.asist.filter(function(r){
+    return contIds.indexOf(r.personal_id)>=0 && (r.fecha||'').startsWith(mes) &&
+      (r.estado==='presente'||r.estado==='medio día');
+  });
+
+  // Group registrations per engineer
+  var regPorIng={};
+  Object.keys(USERS).forEach(function(k){ regPorIng[k]=new Set(); });
+  asistMes.forEach(function(r){
+    var ing=r.ingeniero_id||'';
+    if(ing && regPorIng[ing]) regPorIng[ing].add(r.fecha);
+  });
+  // Convert sets to counts and arrays
+  var ingData=Object.entries(USERS).map(function(e){
+    var key=e[0]; var u=e[1];
+    var dias=Array.from(regPorIng[key]||new Set()).sort();
+    return {key:key,user:u,dias:dias,count:dias.length};
+  });
+  // Sort by registrations desc
+  ingData.sort(function(a,b){return b.count-a.count;});
+
+  // Penalties this month per engineer
+  function pensMes(nombre){
+    return (S.pens||[]).filter(function(p){return p.personal_nombre===nombre&&(p.fecha||'').startsWith(mes);});
+  }
+
+  // Today check
+  var hoy=new Date().toISOString().slice(0,10);
+  var registradoHoy=asistMes.some(function(r){return r.fecha===hoy;});
+
+  var h='<div style="padding:8px 0">';
+
+  // Month picker
+  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">';
+  h+='<label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Mes</label>';
+  h+='<input type="month" value="'+mes+'" onchange="S.bonifMes=this.value;renderBonificaciones()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;font-weight:600">';
+  h+='</div>';
+
+  // Today status banner
+  h+='<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;margin-bottom:14px;background:'+(registradoHoy?'#d3f9d8':'#ffe3e3')+';border:1.5px solid '+(registradoHoy?'#2f9e44':'#e03131')+'40">';
+  h+='<span style="font-size:20px">'+(registradoHoy?'✅':'🚨')+'</span>';
+  h+='<div style="flex:1"><div style="font-size:13px;font-weight:700;color:'+(registradoHoy?'#2f9e44':'#c92a2a')+'">'+(registradoHoy?'Asistencia de contratistas registrada hoy':'Sin registro de contratistas hoy')+'</div>';
+  h+='<div style="font-size:11px;color:var(--text3)">'+hoy+'</div></div>';
+  if(!registradoHoy){
+    h+='<button onclick="checkRegistroContratas()" style="padding:7px 12px;border-radius:var(--r);border:none;background:#e03131;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">⚠️ Penalizar</button>';
+  }
+  h+='</div>';
+
+  // Engineer scorecards
+  h+='<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Ingenieros — '+mesNombre(mes)+'</div>';
+  ingData.forEach(function(d,idx){
+    var pts=calcPuntosPersona(d.user.nombre);
+    var nivel=getNivelDesempeno(pts);
+    var isTop=idx===0&&d.count>0;
+    h+='<div class="card" style="margin-bottom:10px;'+(isTop?'border-color:#f08c00;background:linear-gradient(135deg,#fff9db,var(--bg))':'')+'"">';
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 14px 6px">';
+    h+='<div class="p-av" style="width:40px;height:40px;font-size:14px;background:'+d.user.color+'22;color:'+d.user.color+'">'+initials(d.user.nombre)+'</div>';
+    h+='<div style="flex:1"><div style="font-size:14px;font-weight:700">'+esc(d.user.nombre)+(isTop?' 🥇':'')+'</div>';
+    h+='<div style="font-size:11px;color:var(--text3)">'+d.user.rol+'</div></div>';
+    h+='<div style="text-align:right"><div style="font-size:22px;font-weight:800;color:var(--accent)">'+d.count+'</div><div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase">días reg.</div></div>';
+    h+='</div>';
+    h+='<div style="display:flex;gap:0;border-top:1px solid var(--border)">';
+    h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:16px;font-weight:800;color:'+nivel.color+'">'+pts+'</div><div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase">pts mes</div></div>';
+    h+='<div style="width:1px;background:var(--border)"></div>';
+    h+='<div style="flex:1;text-align:center;padding:8px 4px"><div style="font-size:12px;font-weight:700;color:'+nivel.color+'">'+nivel.icon+' '+nivel.nivel+'</div><div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase">nivel</div></div>';
+    h+='</div>';
+    if(d.dias.length){
+      h+='<div style="padding:8px 14px 10px;border-top:1px solid var(--border)40">';
+      h+='<div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:4px">Días registrados</div>';
+      h+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
+      d.dias.forEach(function(f){
+        h+='<span style="font-size:10px;background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:2px 6px;font-weight:600">'+f.slice(8)+'</span>';
+      });
+      h+='</div></div>';
+    }
+    h+='</div>';
+  });
+
+  // Monthly bonus panel
+  h+='<div style="margin-top:16px;padding:14px;background:var(--bg2);border-radius:12px;border:1.5px solid var(--border)">';
+  h+='<div style="font-size:13px;font-weight:700;margin-bottom:10px">🏆 Bonificación mensual</div>';
+  var topEng=ingData[0];
+  if(topEng&&topEng.count>0){
+    h+='<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Ing. con más registros: <strong style="color:var(--accent)">'+esc(topEng.user.nombre)+' ('+topEng.count+' días)</strong></div>';
+    h+='<button onclick="otorgarBonifMensual(\''+topEng.key+'\')" style="width:100%;padding:10px;border-radius:var(--r);border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">🥇 Otorgar bonificación a '+esc(topEng.user.nombre)+'</button>';
+  } else {
+    h+='<div style="font-size:12px;color:var(--text3)">No hay registros de contratistas este mes.</div>';
+  }
+  h+='</div>';
+
+  // Action: verify each day of the month for missing registrations
+  h+='<div style="margin-top:12px;padding:14px;background:var(--bg2);border-radius:12px;border:1.5px solid var(--border)">';
+  h+='<div style="font-size:13px;font-weight:700;margin-bottom:6px">⚠️ Penalizar días sin registro</div>';
+  h+='<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Aplica penalidad a ambos ingenieros por cada día hábil sin registro en el mes seleccionado.</div>';
+  h+='<button onclick="penalizarDiasSinRegistro(\''+mes+'\')" style="width:100%;padding:10px;border-radius:var(--r);border:none;background:#e03131;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Aplicar penalidades del mes</button>';
+  h+='</div>';
+
+  h+='<div style="height:70px"></div>';
+  h+='</div>';
+  el.innerHTML=h;
+}
+
+function mesNombre(ym){
+  var meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var parts=ym.split('-');
+  return (meses[parseInt(parts[1])-1]||'')+' '+parts[0];
+}
+
+// Check today's contractor registration; if none, penalize both Edgar and Moises
+async function checkRegistroContratas(){
+  var hoy=new Date().toISOString().slice(0,10);
+  var conts=S.personal.filter(function(p){return p.tipo==='contratista'&&p.activo;});
+  var contIds=conts.map(function(p){return p.id;});
+  var registradoHoy=S.asist.some(function(r){
+    return contIds.indexOf(r.personal_id)>=0 && r.fecha===hoy &&
+      (r.estado==='presente'||r.estado==='medio día');
+  });
+  if(registradoHoy){setSS('ok','✓ Ya hay registro de contratistas para hoy');renderBonificaciones();return;}
+  // Penalize both engineers
+  var targets=['edgar','moises'].filter(function(k){return !!USERS[k];});
+  var count=0;
+  for(var i=0;i<targets.length;i++){
+    var k=targets[i]; var u=USERS[k];
+    var pen={id:uid(),personal_id:'ing_'+k,personal_nombre:u.nombre,
+      fecha:hoy,tipo:'Falta de registro contratista',
+      descripcion:'Sin registro de asistencia de contratistas: '+hoy,
+      monto:0,aplicada:true,ingeniero_id:S.user?.id||''};
+    S.pens.unshift(pen);
+    try{await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(pen)});count++;}
+    catch(e){console.error('Error pen contratista:',e);}
+  }
+  setSS('ok','⚠️ Penalidad aplicada a '+count+' ingeniero(s)');
+  renderBonificaciones();
+  if(S.equipoVista==='penalidades') renderPens();
+}
+
+// Penalize both engineers for every working day in `mes` without contractor registration
+async function penalizarDiasSinRegistro(mes){
+  if(!confirm('¿Aplicar penalidades por todos los días sin registro en '+mesNombre(mes)+'?')) return;
+  var conts=S.personal.filter(function(p){return p.tipo==='contratista'&&p.activo;});
+  var contIds=conts.map(function(p){return p.id;});
+  // Collect days that DO have registration
+  var diasConReg=new Set();
+  S.asist.forEach(function(r){
+    if(contIds.indexOf(r.personal_id)>=0&&(r.fecha||'').startsWith(mes)&&
+      (r.estado==='presente'||r.estado==='medio día')) diasConReg.add(r.fecha);
+  });
+  // Build list of weekdays in the month up to today
+  var hoy=new Date().toISOString().slice(0,10);
+  var d=new Date(mes+'-01'); var dias=[];
+  while(d.toISOString().slice(0,10)<=hoy&&d.toISOString().slice(0,7)===mes){
+    var dow=d.getDay(); // 0=sun,6=sat
+    var f=d.toISOString().slice(0,10);
+    if(dow>0&&dow<6&&!diasConReg.has(f)) dias.push(f);
+    d.setDate(d.getDate()+1);
+  }
+  if(!dias.length){setSS('ok','✓ No hay días sin registro');return;}
+  var targets=['edgar','moises'].filter(function(k){return !!USERS[k];});
+  var count=0;
+  for(var i=0;i<dias.length;i++){
+    for(var j=0;j<targets.length;j++){
+      var k=targets[j]; var u=USERS[k];
+      var pen={id:uid(),personal_id:'ing_'+k,personal_nombre:u.nombre,
+        fecha:dias[i],tipo:'Falta de registro contratista',
+        descripcion:'Sin registro contratistas: '+dias[i],
+        monto:0,aplicada:true,ingeniero_id:S.user?.id||''};
+      S.pens.unshift(pen);
+      try{await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(pen)});count++;}
+      catch(e){console.error('Error pen dia:',e);}
+    }
+  }
+  setSS('ok','⚠️ '+count+' penalidades aplicadas ('+dias.length+' días × '+targets.length+' ingenieros)');
+  renderBonificaciones();
+}
+
+// Award monthly bonus to the engineer with most contractor registrations
+async function otorgarBonifMensual(ingKey){
+  var u=USERS[ingKey]; if(!u) return;
+  var mes=S.bonifMes||new Date().toISOString().slice(0,7);
+  if(!confirm('¿Otorgar bonificación "Registro puntual asistencia" a '+u.nombre+' por '+mesNombre(mes)+'?')) return;
+  var pen={id:uid(),personal_id:'ing_'+ingKey,personal_nombre:u.nombre,
+    fecha:mes+'-01',tipo:'Registro puntual asistencia',
+    descripcion:'Más registros de asistencia de contratistas en '+mesNombre(mes),
+    monto:0,aplicada:true,ingeniero_id:S.user?.id||''};
+  S.pens.unshift(pen);
+  try{
+    await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(pen)});
+    setSS('ok','🏆 Bonificación otorgada a '+u.nombre);
+  }catch(e){setSS('err','Error al guardar bonificación');console.error(e);}
+  renderBonificaciones();
 }
 
 // ── RENDER REPORTES HUB (Dashboard + Semana + Historial) ──
