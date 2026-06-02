@@ -625,7 +625,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_51';
+const APP_VERSION='20260602_52';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -3281,6 +3281,23 @@ async function saveAct(ai){
     predecesoras:getFld('a-preds','').trim()||null,
   };
   const editId = getFld('a-edit-id','').trim();
+  // Non-admin cannot complete without photo
+  if(a.estado==='completado'&&editId&&!isAdmin()){
+    var existAct=S.acts.find(function(x){return x.id===editId;});
+    if(!tieneFoto(existAct)){
+      var errFoto=document.getElementById('completado-sin-foto-err');
+      if(!errFoto){
+        errFoto=document.createElement('div');errFoto.id='completado-sin-foto-err';
+        errFoto.style.cssText='background:#ffe3e3;border:1.5px solid #e03131;border-radius:8px;padding:10px 12px;color:#c92a2a;font-size:12px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px';
+        errFoto.innerHTML='<span style="font-size:18px">📷</span><span>Se requiere foto para completar esta actividad. Solo el administrador puede completar sin foto.</span>';
+        var estSel=document.getElementById('a-est');
+        if(estSel) estSel.parentNode.insertBefore(errFoto,estSel.nextSibling);
+      }
+      estSel=document.getElementById('a-est');
+      if(estSel){estSel.style.border='2px solid #e03131';setTimeout(function(){estSel.style.border='';},2000);}
+      return;
+    }
+  }
   closeModal();setSS('syncing','Guardando...');
   try{
     if(!editId){
