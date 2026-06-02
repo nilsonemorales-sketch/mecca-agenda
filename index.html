@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_80';
+const APP_VERSION='20260602_81';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2958,32 +2958,39 @@ function fotoActObra(actId){
   if(!inp){
     inp=document.createElement('input');
     inp.type='file'; inp.id='foto-obra-input';
-    inp.accept='image/*'; inp.setAttribute('capture','environment');
+    inp.accept='image/*'; inp.multiple=true;
     inp.style.display='none';
     document.body.appendChild(inp);
   }
   inp.onchange=function(){
-    var file=inp.files[0];if(!file)return;
-    _guardarFotoAct(file,actId);
+    var files=Array.from(inp.files);if(!files.length)return;
+    _guardarFotoAct(files,actId);
     inp.value='';
   };
   inp.value=''; inp.click();
 }
 
-async function _guardarFotoAct(file,actId){
-  setSS('syncing','Subiendo foto...');
+async function _guardarFotoAct(files,actId){
+  if(!Array.isArray(files)) files=[files];
+  var n=files.length;
+  setSS('syncing','Subiendo '+n+' foto'+(n>1?'s':'')+'...');
   try{
-    var url=await uploadFoto(file,actId);
     var a=(S.actsActivas||[]).find(function(x){return x.id===actId;})
        ||(S.acts||[]).find(function(x){return x.id===actId;});
+    var uploader=S.user&&S.user.nombre?'::'+S.user.nombre:'';
+    var nuevas=[];
+    for(var i=0;i<files.length;i++){
+      setSS('syncing','Subiendo foto '+(i+1)+' de '+n+'...');
+      var url=await uploadFoto(files[i],actId);
+      nuevas.push(url+uploader);
+    }
     if(a){
-      var fotoEntry=url+(S.user&&S.user.nombre?'::'+S.user.nombre:'');
-      var fotos=[(a.fotos||'').split('||').filter(Boolean),fotoEntry].flat().join('||');
+      var fotos=[(a.fotos||'').split('||').filter(Boolean)].concat(nuevas).flat().join('||');
       a.fotos=fotos;
       await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos})});
     }
-    setSS('ok','Foto guardada ✓');
-    showToast('✓ Foto guardada','ok');
+    setSS('ok',n+' foto'+(n>1?'s':'')+' guardada'+(n>1?'s':'')+' ✓');
+    showToast('&#10003; '+(n>1?n+' fotos guardadas':'Foto guardada'),'ok');
     renderEnObra();
   }catch(e){
     setSS('err','Error subiendo foto');
