@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_78';
+const APP_VERSION='20260602_79';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -5642,11 +5642,15 @@ function renderFotos(){
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px">
               ${fotosP.map((f,fi)=>{
                 const uploaderLabel=f.by?f.by.split(' ').slice(-1)[0]:'';
+                const safeActId=a.id.replace(/'/g,"\\'");
+                const safeUrl=f.url.replace(/'/g,"\\'");
                 return`<div style="position:relative;aspect-ratio:1;border-radius:var(--r);overflow:hidden;border:1px solid var(--border2)">
                   <img src="${f.url}" style="width:100%;height:100%;object-fit:cover;cursor:pointer" onclick="verFotoInfo('${f.url}','${esc(a.descripcion)}','${fecha}','${esc(a.area||'')}','${esc(a.ingeniero_nombre||'')}','${esc(f.by||'')}')" loading="lazy">
                   <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.75));padding:3px 5px;display:flex;align-items:center;justify-content:space-between">
                     <span style="font-size:9px;color:white;font-family:var(--mono)">${fi+1}/${fotosP.length}</span>
-                    ${uploaderLabel?`<span style="font-size:9px;color:#c8f060;font-family:var(--mono);font-weight:600">📤${uploaderLabel}</span>`:''}
+                    ${uploaderLabel
+                      ?`<span style="font-size:9px;color:#c8f060;font-family:var(--mono);font-weight:600">📤${uploaderLabel}</span>`
+                      :`<button onclick="editarUploaderFoto('${safeActId}','${safeUrl}')" style="font-size:9px;color:#ffc;font-family:var(--mono);background:none;border:none;cursor:pointer;padding:0">✏️?</button>`}
                   </div>
                 </div>`;}).join('')}
             </div>
@@ -5680,6 +5684,46 @@ function verFotoInfo(url, desc, fecha, area, ing, uploader){
     '<button onclick="descargarFotos([\''+safeUrl+'\'],\''+safeFecha+'\',\''+safeArea+'\')" '+
     'style="margin-top:8px;padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:white;font-size:12px;cursor:pointer">↓ Descargar</button>';
   viewer.style.display='flex';
+}
+
+function editarUploaderFoto(actId, fotoUrl){
+  var a=S.fotosData.find(function(x){return x.id===actId;});
+  if(!a) return;
+  var opts=Object.values(USERS).map(function(u){
+    var sel=(parseFotos(a.fotos).find(function(f){return f.url===fotoUrl;})||{}).by===u.nombre?' selected':'';
+    return '<option value="'+esc(u.nombre)+'"'+sel+'>'+esc(u.nombre)+'</option>';
+  }).join('');
+  var mc=document.getElementById('mcontent');
+  mc.innerHTML=
+    '<div class="mhandle"></div>'+
+    '<h3>&#128247; &#191;Qui&#233;n subi&#243; esta foto?</h3>'+
+    '<img src="'+fotoUrl+'" style="width:100%;max-height:180px;object-fit:cover;border-radius:var(--r);margin-bottom:14px">'+
+    '<div class="fw"><label class="fl">Subida por</label>'+
+    '<select id="foto-uploader-sel" class="sel"><option value="">Sin info</option>'+opts+'</select></div>'+
+    '<div class="mactions">'+
+    '<button class="btn" onclick="closeModal()">Cancelar</button>'+
+    '<button class="btn primary" onclick="guardarUploaderFoto(\''+actId.replace(/'/g,"\\'")+"','"+fotoUrl.replace(/'/g,"\\'")+'\')">Guardar</button>'+
+    '</div>';
+  window._editFotoActId=actId; window._editFotoUrl=fotoUrl;
+  openModal();
+}
+
+async function guardarUploaderFoto(actId, fotoUrl){
+  var nombre=(document.getElementById('foto-uploader-sel')||{}).value||'';
+  var a=S.fotosData.find(function(x){return x.id===actId;});
+  if(!a) return;
+  var newFotos=parseFotos(a.fotos).map(function(f){
+    var base=f.url;
+    var by=f.url===fotoUrl ? nombre : (f.by||'');
+    return by ? base+'::'+by : base;
+  }).join('||');
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:newFotos})});
+    a.fotos=newFotos;
+    closeModal();
+    setSS('ok','&#10003; Actualizado');
+    renderFotos();
+  }catch(e){ setSS('err','Error guardando'); }
 }
 
 // ════════════════════════════════════════════════════
