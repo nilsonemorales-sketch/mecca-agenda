@@ -625,7 +625,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_53';
+const APP_VERSION='20260602_54';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2604,6 +2604,14 @@ function actHTML(a, ai, tipo){
 // ── FOTO REQUERIDA PARA COMPLETAR ────────────────────
 function tieneFoto(a){ return a&&a.fotos&&a.fotos.split('||').filter(Boolean).length>0; }
 
+function syncEstadoPct(sel){
+  var pct=document.getElementById('a-pct');
+  var lbl=document.getElementById('a-pct-lbl');
+  if(!pct) return;
+  if(sel.value==='completado'){pct.value=100;if(lbl)lbl.textContent='100%';}
+  else if(sel.value==='pendiente'&&parseInt(pct.value)===100){pct.value=0;if(lbl)lbl.textContent='0%';}
+}
+
 function showFotoRequerida(actId){
   var a=S.acts.find(function(x){return x.id===actId;});
   if(!a) return;
@@ -2933,7 +2941,7 @@ function showAddActPropio(ai, ctx){
           }).join('')+'<input type="hidden" id="a-pers" value="'+esc(a.personal_nombre||'')+'">';
         })()}
       </div>      <div class="fw"><label class="fl">Estado</label>
-        <select id="a-est" class="sel">
+        <select id="a-est" class="sel" onchange="syncEstadoPct(this)">
           <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
           <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>🔄 En progreso</option>
           <option value="completado" ${a.estado==='completado'?'selected':''}>✅ Completado</option>
@@ -3020,7 +3028,7 @@ function showAddActContratista(ai, preContratista, ctx){
     </div>
 
     <div class="fw"><label class="fl">Estado</label>
-      <select id="a-est" class="sel" style="font-size:15px">
+      <select id="a-est" class="sel" style="font-size:15px" onchange="syncEstadoPct(this)">
         <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
         <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>🔄 En progreso</option>
         <option value="completado" ${a.estado==='completado'?'selected':''}>✅ Completado</option>
@@ -3115,7 +3123,7 @@ function showAddActIngeniero(ai){
 
     <div class="fgrid">
       <div class="fw"><label class="fl">Estado</label>
-        <select id="a-est" class="sel">
+        <select id="a-est" class="sel" onchange="syncEstadoPct(this)">
           <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
           <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>🔄 En progreso</option>
           <option value="completado" ${a.estado==='completado'?'selected':''}>✅ Completado</option>
