@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_73';
+const APP_VERSION='20260602_74';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2946,8 +2946,17 @@ async function iniciarActividad(id){
 
 // ── FOTO RÁPIDA DESDE OBRA ────────────────────────────────────────
 function abrirCamaraObra(){
+  if(!S.user){showLogin();return;}
   var inp=document.getElementById('foto-obra-input');
-  if(inp){inp.value='';inp.click();}
+  if(!inp){
+    inp=document.createElement('input');
+    inp.type='file'; inp.id='foto-obra-input';
+    inp.accept='image/*'; inp.setAttribute('capture','environment');
+    inp.style.display='none';
+    inp.addEventListener('change',function(){onFotoObraCapturada(inp);});
+    document.body.appendChild(inp);
+  }
+  inp.value=''; inp.click();
 }
 
 function onFotoObraCapturada(input){
@@ -5860,11 +5869,10 @@ function renderEnObra(){
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         ${retrasadas.length?`<span style="background:#ffe3e3;color:#c92a2a;border:1px solid #ffa8a8;font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:8px;font-weight:700">⏰ ${retrasadas.length} retrasada${retrasadas.length>1?'s':''}</span>`:''}
         ${urgentes.length?`<span style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8;font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:8px">🔴 ${urgentes.length} urgente${urgentes.length>1?'s':''}</span>`:''}
-        ${canEdit()?`<button onclick="abrirCamaraObra()" style="background:#1a56db;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px">📷 Foto</button>`:''}
-        <button onclick="loadTareas()" style="background:none;border:1.5px solid #dee2e6;border-radius:8px;padding:5px 8px;cursor:pointer;color:#495057;font-size:13px">↺</button>
+        <button onclick="abrirCamaraObra()" style="background:#1a56db;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px">&#128247; Foto</button>
+        <button onclick="loadTareas()" style="background:none;border:1.5px solid #dee2e6;border-radius:8px;padding:5px 8px;cursor:pointer;color:#495057;font-size:13px">&#8635;</button>
       </div>
     </div>
-    <input type="file" id="foto-obra-input" accept="image/*" capture="environment" style="display:none" onchange="onFotoObraCapturada(this)">
 
     <!-- STATS -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">
