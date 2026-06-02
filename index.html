@@ -625,7 +625,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_49';
+const APP_VERSION='20260602_50';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2600,12 +2600,21 @@ function actHTML(a, ai, tipo){
 }
 
 
+// ── RENDER ALL ACTIVITY VIEWS ─────────────────────────
+// Call after any mutation to S.acts to keep all visible modules in sync.
+function reRenderActs(){
+  renderHoy();
+  renderActs();
+  renderEnObra();
+  if(S.obraVista==='kanban') renderKanban();
+  if(S.currentTab==='reportes') renderReportesHub();
+}
+
 async function marcarActCompletada(id){
   var a=S.acts.find(function(x){return x.id===id;});
   if(a){a.estado='completado';a.porcentaje=100;}
   S.actsActivas=S.actsActivas?S.actsActivas.filter(function(x){return x.id!==id;}):[];
-  renderActs(); renderHoy(); renderEnObra();
-  if(S.obraVista==='kanban') renderKanban();
+  reRenderActs();
   checkSuccessors();
   setSS('syncing','...');
   try{
@@ -2651,8 +2660,7 @@ async function cycleEstado(actId){
   var cur=CICLO_ESTADOS.indexOf(a.estado);
   a.estado=CICLO_ESTADOS[(cur+1)%CICLO_ESTADOS.length];
   if(a.estado==='completado')a.porcentaje=100;
-  renderHoy();renderActs();
-  if(S.obraVista==='kanban') renderKanban();
+  reRenderActs();
   checkSuccessors();
   setSS('syncing','...');
   try{
@@ -2669,7 +2677,7 @@ async function quickSetPct(actId,pct){
   a.porcentaje=pct;
   if(pct>=100){a.estado='completado';}
   else if(pct>0&&a.estado==='pendiente'){a.estado='en-progreso';}
-  renderHoy();renderActs();
+  reRenderActs();
   try{
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
       body:JSON.stringify({porcentaje:pct,estado:a.estado})});
@@ -2719,7 +2727,7 @@ async function togglePrioridadAct(id){
   a.prioridad=nueva;
   var aa=S.actsActivas?S.actsActivas.find(function(x){return x.id===id;}):null;
   if(aa) aa.prioridad=nueva;
-  renderActs();
+  reRenderActs();
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({prioridad:nueva})});
     setSS('ok',nueva==='urgente'?'🔴 Marcada urgente':'Prioridad normal');
@@ -2732,7 +2740,7 @@ async function iniciarActividad(id){
   a.estado='en-progreso';
   var ai=S.actsActivas?S.actsActivas.findIndex(function(x){return x.id===id;}):- 1;
   if(ai<0&&S.actsActivas) S.actsActivas.unshift(a);
-  renderActs(); renderHoy();
+  reRenderActs();
   setSS('syncing','...');
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'en-progreso'})});
@@ -2750,7 +2758,7 @@ async function subirFoto(input, ai){
     const fotos=[(a.fotos||'').split('||').filter(Boolean),url].flat().join('||');
     a.fotos=fotos;a.foto_pendiente=false;
     await sb('obra_actividades?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos})});
-    setSS('ok','Foto guardada ✓');renderActs();renderHoy();
+    setSS('ok','Foto guardada ✓');reRenderActs();
   }catch(e){setSS('err','Error subiendo foto');}
 }
 
@@ -3111,8 +3119,7 @@ async function saveActIngeniero(ai){
       if(realIdxIng>=0) Object.assign(S.acts[realIdxIng],a);
       await sb('obra_actividades?id=eq.'+editIdIng,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
     }
-    setSS('ok','✓ '+hhmm()); renderHoy(); renderActs();
-    if(S.obraVista==='kanban') renderKanban();
+    setSS('ok','✓ '+hhmm()); reRenderActs();
   }catch(e){
     setSS('err','Error guardando');
     alert('No se pudo guardar la actividad.\n\n'+e.message.slice(0,120)+'\n\nRevisa tu conexión e inténtalo de nuevo.');
@@ -3220,8 +3227,7 @@ async function saveAct(ai){
       if(realIdx>=0) Object.assign(S.acts[realIdx],a);
       await sb('obra_actividades?id=eq.'+editId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
     }
-    setSS('ok','✓ '+hhmm());renderHoy();renderActs();renderReportes();
-    if(S.obraVista==='kanban') renderKanban();
+    setSS('ok','✓ '+hhmm()); reRenderActs();
     if(S.currentTab==='enobra') loadTareas();
   }catch(e){
     setSS('err','Error guardando');
