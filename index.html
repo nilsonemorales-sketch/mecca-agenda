@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_72';
+const APP_VERSION='20260602_73';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2942,6 +2942,71 @@ async function iniciarActividad(id){
     setSS('ok','✓ Iniciada');
     loadTareas();
   }catch(e){setSS('err','Error');}
+}
+
+// ── FOTO RÁPIDA DESDE OBRA ────────────────────────────────────────
+function abrirCamaraObra(){
+  var inp=document.getElementById('foto-obra-input');
+  if(inp){inp.value='';inp.click();}
+}
+
+function onFotoObraCapturada(input){
+  var file=input.files[0];if(!file)return;
+  // Build activity options (en-progreso first, then pendiente/pausada)
+  var orden=['en-progreso','pendiente','pausada'];
+  var acts=[].concat(
+    S.actsActivas.filter(function(a){return a.estado==='en-progreso';}),
+    S.actsActivas.filter(function(a){return a.estado==='pendiente';}),
+    S.actsActivas.filter(function(a){return a.estado==='pausada';})
+  );
+  var opts=acts.map(function(a){
+    var label=(a.descripcion||'').slice(0,45)+(a.area?' — '+a.area.slice(0,20):'');
+    return '<option value="'+a.id+'">'+esc(label)+'</option>';
+  }).join('');
+  if(!acts.length){showToast('No hay actividades activas para asociar la foto','err');return;}
+  // Preview the photo
+  var objUrl=URL.createObjectURL(file);
+  var mc=document.getElementById('mcontent');
+  mc.innerHTML=
+    '<div class="mhandle"></div>'+
+    '<h3>📷 Guardar foto</h3>'+
+    '<img src="'+objUrl+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:var(--r);margin-bottom:14px">'+
+    '<div class="fw"><label class="fl">Actividad</label>'+
+    '<select id="foto-act-sel" class="sel">'+opts+'</select></div>'+
+    '<div class="mactions">'+
+    '<button class="btn" onclick="closeModal();URL.revokeObjectURL(\''+objUrl+'\')">Cancelar</button>'+
+    '<button class="btn primary" id="btn-guardar-foto-obra" onclick="guardarFotoObra(\''+objUrl+'\')">Guardar foto</button>'+
+    '</div>';
+  mc.dataset.fotoObraFile=true;
+  window._fotoObraFile=file;
+  window._fotoObraObjUrl=objUrl;
+  openModal();
+}
+
+async function guardarFotoObra(objUrl){
+  var actId=document.getElementById('foto-act-sel').value;
+  if(!actId)return;
+  var btn=document.getElementById('btn-guardar-foto-obra');
+  if(btn){btn.disabled=true;btn.textContent='Subiendo...';}
+  try{
+    var url=await uploadFoto(window._fotoObraFile,actId);
+    // Update activity fotos field
+    var a=S.actsActivas.find(function(x){return x.id===actId;})||S.acts.find(function(x){return x.id===actId;});
+    if(a){
+      var fotos=[(a.fotos||'').split('||').filter(Boolean),url].flat().join('||');
+      a.fotos=fotos;
+      await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos})});
+    }
+    closeModal();
+    URL.revokeObjectURL(window._fotoObraObjUrl);
+    window._fotoObraFile=null;window._fotoObraObjUrl=null;
+    setSS('ok','Foto guardada ✓');
+    showToast('✓ Foto guardada','ok');
+  }catch(e){
+    setSS('err','Error subiendo foto');
+    if(btn){btn.disabled=false;btn.textContent='Guardar foto';}
+    showToast('❌ Error: '+(e.message||e),'err');
+  }
 }
 
 async function subirFoto(input, ai){
@@ -5795,9 +5860,11 @@ function renderEnObra(){
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         ${retrasadas.length?`<span style="background:#ffe3e3;color:#c92a2a;border:1px solid #ffa8a8;font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:8px;font-weight:700">⏰ ${retrasadas.length} retrasada${retrasadas.length>1?'s':''}</span>`:''}
         ${urgentes.length?`<span style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8;font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:8px">🔴 ${urgentes.length} urgente${urgentes.length>1?'s':''}</span>`:''}
+        ${canEdit()?`<button onclick="abrirCamaraObra()" style="background:#1a56db;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px">📷 Foto</button>`:''}
         <button onclick="loadTareas()" style="background:none;border:1.5px solid #dee2e6;border-radius:8px;padding:5px 8px;cursor:pointer;color:#495057;font-size:13px">↺</button>
       </div>
     </div>
+    <input type="file" id="foto-obra-input" accept="image/*" capture="environment" style="display:none" onchange="onFotoObraCapturada(this)">
 
     <!-- STATS -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">
