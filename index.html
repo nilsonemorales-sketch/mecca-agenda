@@ -623,7 +623,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_44';
+const APP_VERSION='20260601_45';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2443,52 +2443,74 @@ function actsDesktopTable(acts, showDate){
   if(!acts.length) return '<div class="empty" style="padding:16px">Sin actividades</div>';
   var ECOLOR={'completado':'#2f9e44','en-progreso':'#1a56db','pendiente':'#868e96','pausada':'#f08c00','retrasada':'#e03131'};
   var EBG={'completado':'#d3f9d8','en-progreso':'#dbe4ff','pendiente':'#f1f3f5','pausada':'#fff3bf','retrasada':'#ffe3e3'};
+  var hoy=new Date().toISOString().slice(0,10);
   var html='<table style="width:100%;border-collapse:collapse;font-size:12.5px">';
   html+='<thead><tr style="background:var(--bg3);border-bottom:2px solid var(--border)">';
   html+='<th style="padding:7px 10px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:110px">ESTADO</th>';
-  html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:80px">FECHA</th>';
   html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700">DESCRIPCIÓN</th>';
-  html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:120px">ÁREA</th>';
-  html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:120px">ASIGNADO</th>';
-  html+='<th style="padding:7px 8px;text-align:center;font-size:11px;color:var(--text3);font-weight:700;width:60px">%</th>';
-  if(canEdit()) html+='<th style="width:60px"></th>';
+  html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:110px">ÁREA</th>';
+  html+='<th style="padding:7px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;width:115px">ASIGNADO</th>';
+  html+='<th style="padding:7px 8px;text-align:center;font-size:11px;color:var(--text3);font-weight:700;width:72px">INICIO</th>';
+  html+='<th style="padding:7px 8px;text-align:center;font-size:11px;color:var(--text3);font-weight:700;width:72px">FIN</th>';
+  html+='<th style="padding:7px 8px;text-align:center;font-size:11px;color:var(--text3);font-weight:700;width:55px">%</th>';
+  if(canEdit()) html+='<th style="width:36px"></th>';
   html+='</tr></thead><tbody>';
   acts.forEach(function(a,i){
-    var hoy=new Date().toISOString().slice(0,10);
     var retrasada=isRetrasada(a);
+    var proxima=isProximaRetraso(a);
     var est=retrasada?'retrasada':a.estado;
     var ec=ECOLOR[est]||'#868e96';
     var eb=EBG[est]||'#f1f3f5';
-    var ai=S.acts.indexOf(a);
     var bg=i%2===0?'var(--bg2)':'var(--bg)';
+    var fi=a.fecha_inicio||a.fecha||'';
+    var ff=a.fecha_fin||'';
+    // Days remaining / overdue
+    var diasLabel=''; var diasColor='var(--text3)';
+    if(ff){
+      var diff=Math.round((new Date(ff+'T12:00:00')-new Date(hoy+'T12:00:00'))/864e5);
+      if(retrasada){diasLabel=Math.abs(diff)+'d atrás';diasColor='#e03131';}
+      else if(diff===0){diasLabel='hoy';diasColor='#e67700';}
+      else if(diff<=2){diasLabel='en '+diff+'d';diasColor='#e67700';}
+      else{diasLabel='en '+diff+'d';diasColor='var(--text3)';}
+    }
     html+='<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\''+bg+'\'" onclick="editAct(\''+a.id+'\')">';
-    // Status pill (clickable to cycle)
+    // Status
     html+='<td style="padding:7px 10px" onclick="event.stopPropagation()">';
+    html+='<div style="display:flex;flex-direction:column;gap:2px">';
     html+='<span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:8px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block" title="Clic para cambiar estado" onclick="cycleEstado(\''+a.id+'\')">'+esc(est)+' ▸</span>';
-    html+='</td>';
-    // Date
-    html+='<td style="padding:7px 8px;color:'+(retrasada?'#e03131':'var(--text3)')+';white-space:nowrap;font-weight:'+(retrasada?'700':'400')+'">'+esc(a.fecha||'—')+'</td>';
+    if(proxima) html+='<span style="font-size:9.5px;font-weight:700;color:#e67700">⚠️ '+(diasLabel||'próxima')+'</span>';
+    html+='</div></td>';
     // Description
     var blocked=isBlocked(a)&&a.estado!=='completado';
-    html+='<td style="padding:7px 8px;max-width:280px">';
-    html+='<div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.descripcion)+(blocked?'<span style="display:inline-block;margin-left:6px;background:#f1f3f5;color:#868e96;border:1px solid #dee2e6;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:700">🔒 bloqueada</span>':'')+'</div>';
-    if(a.notas) html+='<div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.notas)+'</div>';
+    html+='<td style="padding:7px 8px;max-width:260px">';
+    html+='<div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.descripcion)+(blocked?'<span style="margin-left:6px;background:#f1f3f5;color:#868e96;border:1px solid #dee2e6;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:700">🔒</span>':'')+(a.prioridad==='urgente'?'<span style="margin-left:5px;font-size:9px;color:#e03131;font-weight:800">●URG</span>':'')+'</div>';
+    if(a.notas) html+='<div style="font-size:10.5px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.notas)+'</div>';
     html+='</td>';
     // Area
-    html+='<td style="padding:7px 8px;color:var(--accent);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">'+esc(a.area||'—')+'</td>';
-    // Assigned — warn if contratista activity has no contractor
+    html+='<td style="padding:7px 8px;color:var(--accent);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">'+esc(a.area||'—')+'</td>';
+    // Assigned
     var sinCont=a.tipo_personal==='contratista'&&!a.personal_nombre;
-    html+='<td style="padding:7px 8px;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px">'
-      +(sinCont?'<span style="color:#e03131;font-weight:700;cursor:pointer" onclick="event.stopPropagation();editAct(\''+a.id+'\')" title="Asignar contratista">⚠️ Sin contratista</span>':('<span style="color:var(--text2)">'+esc(a.personal_nombre||a.ingeniero_nombre||'—')+'</span>'))
+    html+='<td style="padding:7px 8px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:115px">'
+      +(sinCont?'<span style="color:#e03131;font-weight:700;cursor:pointer" onclick="event.stopPropagation();editAct(\''+a.id+'\')" title="Asignar contratista">⚠️ Sin asignar</span>':('<span style="color:var(--text2)">'+esc(a.personal_nombre||a.ingeniero_nombre||'—')+'</span>'))
       +'</td>';
-    // Progress % (clickable)
+    // Inicio
+    html+='<td style="padding:7px 8px;text-align:center;font-size:11px;color:var(--text3);white-space:nowrap">'+
+      (fi?'<span>'+fi.slice(5)+'</span>':'—')+'</td>';
+    // Fin
+    html+='<td style="padding:7px 8px;text-align:center;font-size:11px;white-space:nowrap">';
+    if(ff){
+      html+='<div style="font-weight:700;color:'+ec+'">'+ff.slice(5)+'</div>';
+      if(diasLabel) html+='<div style="font-size:9.5px;color:'+diasColor+'">'+diasLabel+'</div>';
+    } else { html+='<span style="color:var(--text3)">—</span>'; }
+    html+='</td>';
+    // Progress %
     html+='<td style="padding:7px 8px;text-align:center" onclick="event.stopPropagation()">';
     html+='<span style="font-size:12px;font-weight:700;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'var(--accent)':'var(--text3)')+';cursor:pointer" onclick="showPctPopover(\''+a.id+'\',this)" title="Clic para editar %">'+a.porcentaje+'%</span>';
     if(a.porcentaje>0) html+='<div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:3px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,a.porcentaje)+'%;background:'+(a.porcentaje>=100?'#2f9e44':'var(--accent)')+';border-radius:2px"></div></div>';
     html+='</td>';
     // Actions
     if(canEdit()){
-      html+='<td style="padding:7px 6px;text-align:center;white-space:nowrap" onclick="event.stopPropagation()">';
+      html+='<td style="padding:7px 4px;text-align:center" onclick="event.stopPropagation()">';
       if(a.estado!=='completado') html+='<button title="Completar" onclick="marcarActCompletada(\''+a.id+'\')" style="background:#d3f9d8;color:#2f9e44;border:1px solid #a9e6b8;border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;font-weight:700">✓</button>';
       html+='</td>';
     }
