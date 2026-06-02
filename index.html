@@ -638,7 +638,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_66';
+const APP_VERSION='20260602_67';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -3863,7 +3863,7 @@ function showAddPenParaPersona(nombre){
 }
 
 function showAddPen(){
-  const ingenieros=Object.entries(USERS).map(([k,u])=>({id:resolvePersonalId(k)||'ing_'+k,nombre:u.nombre,tipo:'ingeniero'}));
+  const ingenieros=Object.entries(USERS).map(([k,u])=>({id:resolvePersonalId(k),nombre:u.nombre,tipo:'ingeniero'}));
   const propios=S.personal.filter(p=>p.tipo==='propio').map(p=>({id:p.id,nombre:p.nombre,tipo:'propio'}));
   const conts=S.personal.filter(p=>p.tipo==='contratista').map(p=>({id:p.id,nombre:p.nombre,tipo:'contratista'}));
 
@@ -3931,7 +3931,10 @@ function updatePuntosPreview(){
 async function savePenForm(){
   const pv=document.getElementById('pp').value;if(!pv)return;
   const parts=pv.split('|');
-  const pid=parts[0],pnombre=parts[1];
+  const pidRaw=parts[0];
+  // null/empty/string-"null" means engineer not in obra_personal → omit FK, savePen will delete it
+  const pid=(pidRaw&&pidRaw!=='null')?pidRaw:null;
+  const pnombre=parts[1];
   const tipo=document.getElementById('pt').value;
   const cfg=PUNTOS_CONFIG[tipo]||{puntos:1};
   const p={id:uid(),personal_id:pid,personal_nombre:pnombre,
@@ -6725,16 +6728,17 @@ function mesNombre(ym){
 async function savePen(pen){
   var full=Object.assign({},pen);
   if(!full.ingeniero_id) full.ingeniero_id=S.user?.id||'sistema';
+  // If personal_id is null/falsy, omit it — nullable FK accepts NULL in PostgreSQL
+  if(!full.personal_id) delete full.personal_id;
   try{
     await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(full)});
     return true;
   }catch(e){
     var msg=e.message||String(e);
     console.error('SUPABASE ERROR (savePen):', msg, JSON.stringify(full));
-    // If error is about ingeniero_id column not existing, retry without it
     if(msg.includes('ingeniero_id')||msg.toLowerCase().includes('schema cache')){
       try{
-        var fallback=Object.assign({},pen); delete fallback.ingeniero_id;
+        var fallback=Object.assign({},full); delete fallback.ingeniero_id;
         await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(fallback)});
         return true;
       }catch(e2){
