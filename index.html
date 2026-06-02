@@ -627,7 +627,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_56';
+const APP_VERSION='20260602_57';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1245,6 +1245,7 @@ async function loadAll(){
     ]);
     clearTimeout(retryTimer);
     S.personal=personal; S.asist=asist; S.acts=acts;
+    autoCompletarPct100();
     // Cache for instant reload
     try{sessionStorage.setItem('mecca_cache_'+S.fecha,JSON.stringify({personal,asist,acts}));}catch(e){}
     setSS('ok','✓ '+hhmm());
@@ -2712,6 +2713,21 @@ async function marcarActCompletada(id){
   doMarcarCompletada(id);
 }
 
+// Auto-close any activity stuck at 100% without estado=completado (historical data fix)
+async function autoCompletarPct100(){
+  var toFix=S.acts.filter(function(a){return parseInt(a.porcentaje)>=100&&a.estado!=='completado';});
+  if(!toFix.length) return;
+  toFix.forEach(function(a){a.estado='completado';a.porcentaje=100;});
+  // Remove them from in-memory list (they'll be filtered out as completado)
+  S.acts=S.acts.filter(function(a){return a.estado!=='completado';});
+  // Patch DB silently in background
+  for(var i=0;i<toFix.length;i++){
+    var a=toFix[i];
+    try{await sb('obra_actividades?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});}
+    catch(e){console.warn('autoCompletarPct100 patch failed for',a.id,e);}
+  }
+}
+
 async function loadActsAll(){
   setSS('syncing','Cargando...');
   try{
@@ -2719,6 +2735,7 @@ async function loadActsAll(){
       S.acts=await sb('obra_actividades?order=fecha.desc,created_at.desc&limit=500');
     } else {
       S.acts=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300');
+      autoCompletarPct100();
     }
     setSS('ok','✓ '+hhmm());
   }catch(e){setSS('err','Error cargando');}
@@ -3198,6 +3215,9 @@ async function saveActIngeniero(ai){
     predecesoras:(document.getElementById('a-preds')||{value:''}).value.trim()||null,
   };
   const editIdIng=(document.getElementById('a-edit-id')||{value:''}).value.trim();
+  // Force consistency: pct=100 → completado, completado → pct=100
+  if(a.estado==='completado') a.porcentaje=100;
+  if(a.porcentaje>=100) a.estado='completado';
   // Auto-penalize if completing without photo
   if(a.estado==='completado'&&editIdIng){
     var existIngAct=S.acts.find(function(x){return x.id===editIdIng;});
@@ -3306,23 +3326,10 @@ async function saveAct(ai){
     predecesoras:getFld('a-preds','').trim()||null,
   };
   const editId = getFld('a-edit-id','').trim();
-  // Non-admin cannot complete without photo
-  if(a.estado==='completado'&&editId&&!isAdmin()){
-    var existAct=S.acts.find(function(x){return x.id===editId;});
-    if(!tieneFoto(existAct)){
-      var errFoto=document.getElementById('completado-sin-foto-err');
-      if(!errFoto){
-        errFoto=document.createElement('div');errFoto.id='completado-sin-foto-err';
-        errFoto.style.cssText='background:#ffe3e3;border:1.5px solid #e03131;border-radius:8px;padding:10px 12px;color:#c92a2a;font-size:12px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px';
-        errFoto.innerHTML='<span style="font-size:18px">📷</span><span>Se requiere foto para completar esta actividad. Solo el administrador puede completar sin foto.</span>';
-        var estSel=document.getElementById('a-est');
-        if(estSel) estSel.parentNode.insertBefore(errFoto,estSel.nextSibling);
-      }
-      estSel=document.getElementById('a-est');
-      if(estSel){estSel.style.border='2px solid #e03131';setTimeout(function(){estSel.style.border='';},2000);}
-      return;
-    }
-  }
+  // If setting to completado, force pct=100
+  if(a.estado==='completado') a.porcentaje=100;
+  // If pct reaches 100, force estado=completado
+  if(a.porcentaje>=100) a.estado='completado';
   closeModal();setSS('syncing','Guardando...');
   try{
     if(!editId){
@@ -3343,21 +3350,10 @@ async function saveAct(ai){
       if(realIdx>=0) Object.assign(S.acts[realIdx],a);
       await sb('obra_actividades?id=eq.'+editId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
     }
-    // Auto-penalize if set to completado without foto
+    // Auto-penalize if completed without foto
     if(a.estado==='completado'&&editId){
       var savedAct=S.acts.find(function(x){return x.id===editId;});
-      if(!tieneFoto(savedAct)){
-        var ingNomb=a.ingeniero_nombre||savedAct?.ingeniero_nombre||'';
-        if(ingNomb){
-          var ie=Object.entries(USERS).find(function(e){return e[1].nombre===ingNomb;});
-          var autoPen={id:uid(),personal_id:ie?'ing_'+ie[0]:'',personal_nombre:ingNomb,
-            fecha:today(),tipo:'Actividad sin foto',
-            descripcion:'Marcada completada sin foto: '+a.descripcion+(a.area?' — '+a.area:''),
-            monto:0,aplicada:true,ingeniero_id:S.user?.id||''};
-          S.pens.unshift(autoPen);
-          try{await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(autoPen)});}catch(e){}
-        }
-      }
+      if(savedAct&&!tieneFoto(savedAct)) await generarPenalidadSinFoto(Object.assign({},savedAct,a));
     }
     setSS('ok','✓ '+hhmm()); reRenderActs();
     if(S.currentTab==='enobra') loadTareas();
