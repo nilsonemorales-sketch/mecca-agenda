@@ -625,7 +625,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_50';
+const APP_VERSION='20260602_51';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1093,6 +1093,7 @@ const PUNTOS_CONFIG={
   'Inactividad en obra':     {cat:'Actividad',     puntos:3,  tipo:'negativo'},
   'Retraso en entrega':      {cat:'Actividad',     puntos:2,  tipo:'negativo'},
   'Trabajo deficiente':      {cat:'Actividad',     puntos:3,  tipo:'negativo'},
+  'Actividad sin foto':      {cat:'Actividad',     puntos:3,  tipo:'negativo'},
   'Trabajador destacado':    {cat:'Reconocimiento',puntos:-3, tipo:'positivo'},
   'Buen desempeno':          {cat:'Reconocimiento',puntos:-2, tipo:'positivo'},
   'Trabajo sobresaliente':   {cat:'Reconocimiento',puntos:-4, tipo:'positivo'},
@@ -2600,6 +2601,82 @@ function actHTML(a, ai, tipo){
 }
 
 
+// ── FOTO REQUERIDA PARA COMPLETAR ────────────────────
+function tieneFoto(a){ return a&&a.fotos&&a.fotos.split('||').filter(Boolean).length>0; }
+
+function showFotoRequerida(actId){
+  var a=S.acts.find(function(x){return x.id===actId;});
+  if(!a) return;
+  var mc=document.getElementById('mcontent');
+  mc.innerHTML=
+    '<div class="mhandle"></div>'+
+    '<div style="text-align:center;padding:8px 0 4px">'+
+    '<div style="font-size:36px;margin-bottom:8px">📷</div>'+
+    '<h3 style="margin:0 0 6px">Foto requerida</h3>'+
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:16px">Se necesita al menos una foto para completar esta actividad.</div>'+
+    '</div>'+
+    '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;font-weight:600;color:var(--text)">'+esc(a.descripcion)+(a.area?'<div style="font-size:11px;color:var(--accent);font-weight:400;margin-top:2px">'+esc(a.area)+'</div>':'')+'</div>'+
+    '<label style="display:block;width:100%;cursor:pointer">'+
+    '<div id="foto-req-btn" style="width:100%;padding:14px;border-radius:var(--r);border:2px dashed var(--accent);background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700;text-align:center;box-sizing:border-box">'+
+    '📷 Toca para subir foto</div>'+
+    '<input type="file" accept="image/*" capture="environment" style="display:none" onchange="subirFotoYCompletar(this,\''+actId+'\')">'+
+    '</label>'+
+    '<div style="margin-top:10px;text-align:center">'+
+    (isAdmin()?'<button onclick="completarSinFotoAdmin(\''+actId+'\')" style="background:none;border:none;color:#e03131;font-size:11px;cursor:pointer;text-decoration:underline;font-family:var(--font)">⚠️ Completar sin foto (genera penalidad)</button>':
+    '<span style="font-size:11px;color:var(--text3)">Contacta al administrador para completar sin foto</span>')+
+    '</div>'+
+    '<div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button></div>';
+  openModal();
+}
+
+async function subirFotoYCompletar(input, actId){
+  var file=input.files[0]; if(!file) return;
+  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
+  document.getElementById('foto-req-btn').textContent='⏳ Subiendo foto...';
+  setSS('syncing','Subiendo foto...');
+  try{
+    var url=await uploadFoto(file,actId);
+    var fotos=[(a.fotos||'').split('||').filter(Boolean),url].flat().join('||');
+    a.fotos=fotos; a.foto_pendiente=false;
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos,foto_pendiente:false})});
+    setSS('ok','✓ Foto subida');
+    closeModal();
+    // Now complete the activity
+    doMarcarCompletada(actId);
+  }catch(e){setSS('err','Error subiendo foto');document.getElementById('foto-req-btn').textContent='📷 Toca para subir foto';}
+}
+
+async function completarSinFotoAdmin(actId){
+  if(!isAdmin()) return;
+  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
+  closeModal();
+  // Auto-generate penalty for the responsible engineer
+  var ingNombre=a.ingeniero_nombre||'';
+  if(ingNombre){
+    var ingEntry=Object.entries(USERS).find(function(e){return e[1].nombre===ingNombre;});
+    var pen={id:uid(),personal_id:ingEntry?'ing_'+ingEntry[0]:'',personal_nombre:ingNombre,
+      fecha:today(),tipo:'Actividad sin foto',
+      descripcion:'Completada sin foto: '+a.descripcion+(a.area?' — '+a.area:''),
+      monto:0,aplicada:true,ingeniero_id:S.user?.id||''};
+    S.pens.unshift(pen);
+    try{await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(pen)});}catch(e){}
+    setSS('ok','⚠️ Penalidad generada para '+ingNombre);
+  }
+  doMarcarCompletada(actId);
+}
+
+async function doMarcarCompletada(actId){
+  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
+  a.estado='completado'; a.porcentaje=100;
+  S.actsActivas=S.actsActivas?S.actsActivas.filter(function(x){return x.id!==actId}):[];
+  reRenderActs(); checkSuccessors();
+  setSS('syncing','...');
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
+    setSS('ok','✓ Completada');
+  }catch(e){setSS('err','Error');}
+}
+
 // ── RENDER ALL ACTIVITY VIEWS ─────────────────────────
 // Call after any mutation to S.acts to keep all visible modules in sync.
 function reRenderActs(){
@@ -2612,15 +2689,12 @@ function reRenderActs(){
 
 async function marcarActCompletada(id){
   var a=S.acts.find(function(x){return x.id===id;});
-  if(a){a.estado='completado';a.porcentaje=100;}
-  S.actsActivas=S.actsActivas?S.actsActivas.filter(function(x){return x.id!==id;}):[];
-  reRenderActs();
-  checkSuccessors();
-  setSS('syncing','...');
-  try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
-    setSS('ok','✓ Completada');
-  }catch(e){setSS('err','Error');}
+  if(!a) return;
+  if(!tieneFoto(a)){
+    showFotoRequerida(id);
+    return;
+  }
+  doMarcarCompletada(id);
 }
 
 async function loadActsAll(){
@@ -3227,6 +3301,22 @@ async function saveAct(ai){
       if(realIdx>=0) Object.assign(S.acts[realIdx],a);
       await sb('obra_actividades?id=eq.'+editId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
     }
+    // Auto-penalize if set to completado without foto
+    if(a.estado==='completado'&&editId){
+      var savedAct=S.acts.find(function(x){return x.id===editId;});
+      if(!tieneFoto(savedAct)){
+        var ingNomb=a.ingeniero_nombre||savedAct?.ingeniero_nombre||'';
+        if(ingNomb){
+          var ie=Object.entries(USERS).find(function(e){return e[1].nombre===ingNomb;});
+          var autoPen={id:uid(),personal_id:ie?'ing_'+ie[0]:'',personal_nombre:ingNomb,
+            fecha:today(),tipo:'Actividad sin foto',
+            descripcion:'Marcada completada sin foto: '+a.descripcion+(a.area?' — '+a.area:''),
+            monto:0,aplicada:true,ingeniero_id:S.user?.id||''};
+          S.pens.unshift(autoPen);
+          try{await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(autoPen)});}catch(e){}
+        }
+      }
+    }
     setSS('ok','✓ '+hhmm()); reRenderActs();
     if(S.currentTab==='enobra') loadTareas();
   }catch(e){
@@ -3492,76 +3582,155 @@ function penTipoPersona(p){
 }
 
 function renderPens(){
-  const el=document.getElementById('c-pen');
+  var el=document.getElementById('c-pen');
   if(!el) return;
   if(!isAdmin()){
-    el.innerHTML=`<div class="empty" style="padding:40px 20px">
-      <div style="font-size:32px;margin-bottom:12px">🔒</div>
-      <div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px">Acceso restringido</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Las penalidades solo están disponibles para el Administrador</div>
-      <button class="ibtn primary" onclick="requireEdit(()=>{})" style="margin:0 auto">Iniciar sesión como Admin</button>
-    </div>`;
+    el.innerHTML='<div class="empty" style="padding:40px 20px"><div style="font-size:32px;margin-bottom:12px">🔒</div><div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px">Acceso restringido</div><div style="font-size:12px;color:var(--text3);margin-bottom:16px">Las penalidades solo están disponibles para el Administrador</div><button class="ibtn primary" onclick="requireEdit(()=>{})" style="margin:0 auto">Iniciar sesión como Admin</button></div>';
     return;
   }
-  const total=0; // Sin montos económicos
-  // Calculate points per person this month
-  const mes=new Date().toISOString().slice(0,7);
-  const puntosMap={};
-  S.pens.filter(p=>p.fecha?.startsWith(mes)).forEach(p=>{
-    const cfg=PUNTOS_CONFIG[p.tipo];
-    const pts=cfg?cfg.puntos:1;
-    puntosMap[p.personal_nombre]=(puntosMap[p.personal_nombre]||0)+pts;
+  var mes=new Date().toISOString().slice(0,7);
+
+  // ── Engineer performance cards ──
+  var ings=Object.entries(USERS).map(function(e){
+    var k=e[0]; var u=e[1];
+    var pts=calcPuntosPersona(u.nombre);
+    var niv=getNivelDesempeno(pts);
+    var pensMes=S.pens.filter(function(p){return p.personal_nombre===u.nombre&&p.fecha&&p.fecha.startsWith(mes);});
+    return{k:k,nombre:u.nombre,rol:u.rol,pts:pts,niv:niv,pensMes:pensMes.length};
+  }).sort(function(a,b){return b.pts-a.pts;});
+
+  // ── Acts completed without photo ──
+  var actsSinFoto=S.acts.filter(function(a){return a.estado==='completado'&&!tieneFoto(a);});
+
+  // ── Penalty list with filters ──
+  var chips=FILTROS_PEN.map(function(f){
+    var act=S.penFiltro===f.id;
+    return'<button onclick="S.penFiltro=\''+f.id+'\';renderPens()" style="flex-shrink:0;padding:6px 12px;border-radius:16px;border:1px solid '+(act?'var(--red)':'var(--border2)')+';background:'+(act?'rgba(240,96,96,.12)':'var(--bg3)')+';color:'+(act?'var(--red)':'var(--text2)')+';font-size:11px;font-family:var(--mono);cursor:pointer;white-space:nowrap">'+f.label+'</button>';
+  }).join('');
+  var filtered=S.pens.filter(function(p){return S.penFiltro==='todos'||penTipoPersona(p)===S.penFiltro;});
+  var personas=[...new Set(filtered.map(function(p){return p.personal_nombre;}))];
+
+  var h='';
+
+  // SECTION 1: Engineer cards
+  h+='<div style="margin-bottom:16px">';
+  h+='<div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px">👤 Rendimiento ingenieros — '+new Date().toLocaleString('es-DO',{month:'long'})+' '+mes.slice(0,4)+'</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:4px">';
+  ings.forEach(function(ing){
+    var niv=ing.niv;
+    h+='<div style="background:var(--bg2);border:1.5px solid '+niv.color+'40;border-radius:12px;padding:12px 10px;text-align:center;cursor:pointer" onclick="S.penFiltro=\'ingeniero\';renderPens()">';
+    h+='<div style="width:36px;height:36px;border-radius:50%;background:'+avColor(ing.nombre)+'22;color:'+avColor(ing.nombre)+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin:0 auto 8px">'+initials(ing.nombre)+'</div>';
+    h+='<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">'+esc(ing.nombre.split(' ')[0])+'</div>';
+    h+='<div style="font-size:22px;font-weight:800;font-family:var(--mono);color:'+niv.color+';line-height:1">'+ing.pts+'</div>';
+    h+='<div style="font-size:9.5px;color:var(--text3);margin-top:1px">puntos</div>';
+    h+='<div style="margin-top:6px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;display:inline-block;background:'+niv.bg+';color:'+niv.color+'">'+niv.icon+' '+niv.nivel+'</div>';
+    if(ing.pensMes) h+='<div style="font-size:9.5px;color:var(--text3);margin-top:4px">'+ing.pensMes+' situación'+( ing.pensMes!==1?'es':'')+' este mes</div>';
+    h+='</div>';
   });
-  const pendTotal=S.pens.filter(p=>!p.aplicada).length;
-  const chips=FILTROS_PEN.map(f=>`<button onclick="S.penFiltro='${f.id}';renderPens()" style="flex-shrink:0;padding:6px 12px;border-radius:16px;border:1px solid ${S.penFiltro===f.id?'var(--red)':'var(--border2)'};background:${S.penFiltro===f.id?'rgba(240,96,96,.12)':'var(--bg3)'};color:${S.penFiltro===f.id?'var(--red)':'var(--text2)'};font-size:11px;font-family:var(--mono);cursor:pointer;white-space:nowrap">${f.label}</button>`).join('');
-  const filtered=S.pens.filter(p=>S.penFiltro==='todos'||penTipoPersona(p)===S.penFiltro);
+  h+='</div></div>';
 
-  // Group by person
-  const personas=[...new Set(filtered.map(p=>p.personal_nombre))];
+  // SECTION 2: Completed without photo
+  if(actsSinFoto.length){
+    h+='<div style="background:#fff3bf;border:1.5px solid #f08c00;border-radius:12px;padding:12px 14px;margin-bottom:16px">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    h+='<div style="font-size:12px;font-weight:700;color:#7d4e00">📷 '+actsSinFoto.length+' actividad'+(actsSinFoto.length!==1?'es':'')+' completada'+(actsSinFoto.length!==1?'s':'')+' sin foto</div>';
+    h+='</div>';
+    actsSinFoto.slice(0,6).forEach(function(a){
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #fde68a;gap:8px">';
+      h+='<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:#7d4e00;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.descripcion)+'</div>';
+      if(a.area) h+='<div style="font-size:10.5px;color:#856404">'+esc(a.area)+'</div>';
+      if(a.ingeniero_nombre) h+='<div style="font-size:10px;color:var(--text3)">'+esc(a.ingeniero_nombre)+'</div>';
+      h+='</div>';
+      h+='<button onclick="showFotoParaCompletada(\''+a.id+'\')" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r);border:1.5px solid #d97706;background:transparent;color:#d97706;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">📷 Subir</button>';
+      h+='</div>';
+    });
+    if(actsSinFoto.length>6) h+='<div style="font-size:11px;color:#856404;margin-top:6px;text-align:center">... y '+(actsSinFoto.length-6)+' más</div>';
+    h+='</div>';
+  }
 
-  document.getElementById('c-pen').innerHTML=`
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-start;justify-content:space-between">
-      <div>
-        <div style="font-size:14px;font-weight:500">Registro de situaciones</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">
-          ${S.pens.length} situación${S.pens.length!==1?'es':''} registrada${S.pens.length!==1?'s':''}
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none">
-      ${chips}
-    </div>
-    ${filtered.length===0?`<div class="empty">Sin penalidades${S.penFiltro!=='todos'?' en esta categoría':''}</div>`
-    :personas.map(persona=>{
-      const pens=filtered.filter(p=>p.personal_nombre===persona);
-      const totalPers=0;
-      const tipo=penTipoPersona(pens[0]);
-      const tipoIcon=tipo==='ingeniero'?'👤':tipo==='contratista'?'🔨':'👷';
-      const ac=avColor(persona);
-      return`<div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border)">
-          <div style="width:34px;height:34px;border-radius:50%;background:${ac}22;color:${ac};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0">${initials(persona)}</div>
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:500">${tipoIcon} ${esc(persona)}</div>
-            <div style="font-size:10px;font-family:var(--mono);color:var(--text3)">${pens.length} situación${pens.length>1?'es':''}</div>
-          </div>
-        </div>
-        ${pens.map((p,_pi)=>{
-          const pi=S.pens.indexOf(p);
-          return`<div class="pen-item" style="margin-left:8px">
-            <div class="pen-top">
-              <span style="font-size:12px;font-weight:500;color:var(--red)">⚠️ ${esc(p.tipo)}</span>
-    
-            </div>
-            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${fmtF(p.fecha)}</div>
-            ${(()=>{const cfg=PUNTOS_CONFIG[p.tipo];const pts=cfg?cfg.puntos:1;const color=pts<0?'#2f9e44':pts>=4?'#e03131':'#f08c00';return`<div style="display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px;background:${pts<0?'#d3f9d8':pts>=4?'#ffe3e3':'#fff3bf'};color:${color};margin-bottom:6px">${pts>0?'+'+pts:pts} puntos este mes</div>`})()}
-          ${p.descripcion?`<div style="font-size:12px;color:var(--text2);margin-bottom:6px;line-height:1.4">${esc(p.descripcion)}</div>`:''}
-            <div style="display:flex;align-items:center;justify-content:space-between">
-              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)">📋 Registrado</span>
-              ${canEdit()&&isAdmin()?`<button class="ibtn" style="font-size:10px;padding:3px 8px;color:var(--red)" onclick="delPen(${pi})">× Eliminar</button>`:''}
-            </div>
-          </div>`;}).join('')}
-      </div>`;}).join('')}`;
+  // SECTION 3: Penalty list
+  h+='<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;-webkit-overflow-scrolling:touch;scrollbar-width:none">'+chips+'</div>';
+  h+='<div style="font-size:11px;color:var(--text3);margin-bottom:10px">'+S.pens.length+' situación'+(S.pens.length!==1?'es':'')+' registrada'+(S.pens.length!==1?'s':'')+' en total</div>';
+
+  if(!filtered.length){
+    h+='<div class="empty">Sin penalidades'+(S.penFiltro!=='todos'?' en esta categoría':'')+'</div>';
+  } else {
+    personas.forEach(function(persona){
+      var pens=filtered.filter(function(p){return p.personal_nombre===persona;});
+      var tipo=penTipoPersona(pens[0]);
+      var tipoIcon=tipo==='ingeniero'?'👤':tipo==='contratista'?'🔨':'👷';
+      var ac=avColor(persona);
+      var ptsMes=calcPuntosPersona(persona);
+      var niv=getNivelDesempeno(ptsMes);
+      h+='<div style="margin-bottom:16px">';
+      h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:10px 12px;background:var(--bg2);border-radius:var(--r);border:1.5px solid '+niv.color+'30">';
+      h+='<div style="width:36px;height:36px;border-radius:50%;background:'+ac+'22;color:'+ac+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">'+initials(persona)+'</div>';
+      h+='<div style="flex:1"><div style="font-size:13px;font-weight:600">'+tipoIcon+' '+esc(persona)+'</div>';
+      h+='<div style="font-size:10px;color:var(--text3)">'+pens.length+' situación'+(pens.length>1?'es':'')+' · '+ptsMes+' pts este mes</div></div>';
+      h+='<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px;background:'+niv.bg+';color:'+niv.color+'">'+niv.icon+' '+niv.nivel+'</span>';
+      if(isAdmin()) h+='<button onclick="showAddPenParaPersona(\''+esc(persona).replace(/'/g,"\\'")+'\')" style="flex-shrink:0;padding:5px 8px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg);color:var(--text2);font-size:11px;cursor:pointer;font-family:var(--font)">+ Registrar</button>';
+      h+='</div>';
+      pens.forEach(function(p){
+        var pi=S.pens.indexOf(p);
+        var cfg=PUNTOS_CONFIG[p.tipo]||{puntos:1};
+        var pts=cfg.puntos;
+        var ptsColor=pts<0?'#2f9e44':pts>=5?'#e03131':pts>=3?'#f08c00':'#666';
+        var ptsBg=pts<0?'#d3f9d8':pts>=5?'#ffe3e3':pts>=3?'#fff3bf':'#f1f3f5';
+        h+='<div class="pen-item" style="margin-left:8px;margin-bottom:6px">';
+        h+='<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px">';
+        h+='<span style="font-size:12px;font-weight:700;color:'+(pts<0?'#2f9e44':'var(--red)')+'">'+esc(p.tipo)+'</span>';
+        h+='<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">';
+        h+='<span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:6px;background:'+ptsBg+';color:'+ptsColor+'">'+(pts>0?'+':'')+pts+' pts</span>';
+        if(isAdmin()) h+='<button class="ibtn" style="font-size:10px;padding:2px 7px;color:var(--red)" onclick="delPen('+pi+')">×</button>';
+        h+='</div></div>';
+        h+='<div style="font-size:11px;color:var(--text3);margin-bottom:4px">'+fmtF(p.fecha)+'</div>';
+        if(p.descripcion) h+='<div style="font-size:11.5px;color:var(--text2);line-height:1.4;padding:6px 8px;background:var(--bg2);border-radius:6px">'+esc(p.descripcion)+'</div>';
+        h+='</div>';
+      });
+      h+='</div>';
+    });
+  }
+  h+='<div style="height:70px"></div>';
+  el.innerHTML=h;
+}
+
+function showFotoParaCompletada(actId){
+  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
+  var mc=document.getElementById('mcontent');
+  mc.innerHTML='<div class="mhandle"></div>'+
+    '<h3>📷 Subir foto</h3>'+
+    '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;font-weight:600">'+esc(a.descripcion)+(a.area?'<div style="font-size:11px;color:var(--accent);font-weight:400;margin-top:2px">'+esc(a.area)+'</div>':'')+'</div>'+
+    '<label style="display:block;width:100%;cursor:pointer">'+
+    '<div style="width:100%;padding:14px;border-radius:var(--r);border:2px dashed var(--accent);background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700;text-align:center;box-sizing:border-box">📷 Toca para subir foto</div>'+
+    '<input type="file" accept="image/*" capture="environment" style="display:none" onchange="subirFotoCompletada(this,\''+actId+'\')">'+
+    '</label>'+
+    '<div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button></div>';
+  openModal();
+}
+
+async function subirFotoCompletada(input, actId){
+  var file=input.files[0]; if(!file) return;
+  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
+  setSS('syncing','Subiendo foto...');
+  try{
+    var url=await uploadFoto(file,actId);
+    var fotos=[(a.fotos||'').split('||').filter(Boolean),url].flat().join('||');
+    a.fotos=fotos; a.foto_pendiente=false;
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos,foto_pendiente:false})});
+    setSS('ok','✓ Foto subida');
+    closeModal(); renderPens(); reRenderActs();
+  }catch(e){setSS('err','Error subiendo foto');}
+}
+
+function showAddPenParaPersona(nombre){
+  showAddPen();
+  setTimeout(function(){
+    var sel=document.getElementById('pp');
+    if(!sel) return;
+    for(var i=0;i<sel.options.length;i++){
+      if(sel.options[i].text.includes(nombre)){sel.selectedIndex=i;break;}
+    }
+  },50);
 }
 
 function showAddPen(){
