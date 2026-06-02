@@ -623,7 +623,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_40';
+const APP_VERSION='20260601_41';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1232,7 +1232,7 @@ async function loadAll(){
     const[personal,asist,acts]=await Promise.all([
       sbWithTimeout('obra_personal?activo=eq.true&order=nombre', 10000),
       sbWithTimeout('obra_asistencia?fecha=eq.'+S.fecha, 10000),
-      sbWithTimeout('obra_actividades?fecha=eq.'+S.fecha+'&order=created_at&limit=50', 10000),
+      sbWithTimeout('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300', 10000),
     ]);
     clearTimeout(retryTimer);
     S.personal=personal; S.asist=asist; S.acts=acts;
@@ -1613,13 +1613,34 @@ function renderHoy(){
   const aus=S.asist.filter(a=>a.estado==='ausente').length;
   const marcados=S.asist.filter(a=>a.estado).length;
   const sinMarcar=propios.length-marcados;
-  const actDone=S.acts.filter(a=>a.estado==='completado').length;
-  const retrasadas=(S.actsActivas||[]).filter(a=>isRetrasada(a));
+  const hoy=S.fecha;
+
+  // Activities active today: started on or before today AND (no end date OR end date >= today)
+  // Retrasadas (end date already passed) are shown separately above
+  const actsActivasHoy=S.acts.filter(function(a){
+    if(a.estado==='completado') return false;
+    var fi=a.fecha_inicio||a.fecha||'';
+    var ff=a.fecha_fin||'';
+    if(!fi) return false;
+    if(fi>hoy) return false;           // not started yet
+    if(ff&&ff<hoy) return false;       // end date passed → retrasada, shown above
+    return true;
+  });
+  // Also include completadas for today to show the count
+  const completadasHoy=S.acts.filter(function(a){
+    if(a.estado!=='completado') return false;
+    var fi=a.fecha_inicio||a.fecha||'';
+    var ff=a.fecha_fin||'';
+    return (ff&&ff===hoy)||(fi&&fi===hoy);
+  });
+  const actsParaContar=[...actsActivasHoy,...completadasHoy];
+  const actDone=completadasHoy.length;
+  const retrasadas=(S.actsActivas&&S.actsActivas.length?S.actsActivas:S.acts).filter(a=>isRetrasada(a));
   const pct=propios.length?Math.round(pres/propios.length*100):0;
   const isDesktop=window.innerWidth>600;
 
   // Apply Hoy filters
-  var actsVista=sortByPriority(S.acts);
+  var actsVista=sortByPriority(actsActivasHoy);
   if(S.hoyFiltroEstado) actsVista=actsVista.filter(a=>a.estado===S.hoyFiltroEstado);
   if(S.hoyFiltroTipo)   actsVista=actsVista.filter(a=>a.tipo_personal===S.hoyFiltroTipo);
 
@@ -1678,7 +1699,7 @@ function renderHoy(){
     <div class="stats-row" style="margin-bottom:10px">
       <div class="scard"><div class="v" style="color:var(--green)">${pres}</div><div class="l">Presentes</div></div>
       <div class="scard"><div class="v" style="color:var(--red)">${aus}</div><div class="l">Ausentes</div></div>
-      <div class="scard"><div class="v" style="color:var(--accent)">${actDone}<span style="font-size:11px;color:var(--text3)">/${S.acts.length}</span></div><div class="l">Completadas</div></div>
+      <div class="scard"><div class="v" style="color:var(--accent)">${actDone}<span style="font-size:11px;color:var(--text3)">/${actsParaContar.length}</span></div><div class="l">Completadas</div></div>
       <div class="scard" onclick="${retrasadas.length?'document.getElementById(\'hoy-retrasadas\').scrollIntoView({behavior:\'smooth\'})':''}" style="${retrasadas.length?'cursor:pointer':''}">
         <div class="v" style="color:${retrasadas.length>0?'#e03131':'var(--text3)'}">${retrasadas.length}</div>
         <div class="l" style="color:${retrasadas.length>0?'#e03131':''}">Retrasadas</div>
@@ -1712,7 +1733,7 @@ function renderHoy(){
       <div class="card-hdr">
         <span class="card-title">⚡ Actividades del día</span>
         <div style="display:flex;gap:6px;align-items:center">
-          <span style="font-size:11px;color:var(--text3)">${actDone}/${S.acts.length} hechas</span>
+          <span style="font-size:11px;color:var(--text3)">${actDone}/${actsParaContar.length} hechas</span>
           ${canEdit()?`<button class="ibtn" style="font-size:11px" onclick="requireEdit(showAddActSmart)">+ Nueva</button>`:''}
         </div>
       </div>
