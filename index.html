@@ -623,7 +623,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_39';
+const APP_VERSION='20260601_40';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1614,7 +1614,7 @@ function renderHoy(){
   const marcados=S.asist.filter(a=>a.estado).length;
   const sinMarcar=propios.length-marcados;
   const actDone=S.acts.filter(a=>a.estado==='completado').length;
-  const retrasadas=(S.actsActivas||[]).filter(a=>a.fecha&&a.fecha<S.fecha&&a.estado!=='completado');
+  const retrasadas=(S.actsActivas||[]).filter(a=>isRetrasada(a));
   const pct=propios.length?Math.round(pres/propios.length*100):0;
   const isDesktop=window.innerWidth>600;
 
@@ -1624,26 +1624,30 @@ function renderHoy(){
   if(S.hoyFiltroTipo)   actsVista=actsVista.filter(a=>a.tipo_personal===S.hoyFiltroTipo);
 
   function actRow(a){
-    var retrasada=a.fecha&&a.fecha<S.fecha&&a.estado!=='completado';
+    var retrasada=isRetrasada(a);
+    var proxima=isProximaRetraso(a);
     var est=retrasada?'retrasada':a.estado;
     var ECOLOR={completado:'#2f9e44','en-progreso':'#1a56db',pendiente:'#868e96',pausada:'#e67700',retrasada:'#e03131'};
     var EBGC={completado:'#d3f9d8','en-progreso':'#dbe4ff',pendiente:'#f1f3f5',pausada:'#fff3bf',retrasada:'#ffe3e3'};
     var c=ECOLOR[est]||'#868e96'; var bg=EBGC[est]||'#f1f3f5';
     var done=a.estado==='completado';
     var urg=a.prioridad==='urgente';
+    var diasFv=proxima?Math.round((new Date(fechaVenc(a)+'T12:00:00')-new Date(today()+'T12:00:00'))/864e5):0;
+    var lbl=retrasada?'retrasada ▸':proxima?(diasFv===0?'vence hoy ▸':diasFv===1?'vence mañana ▸':'vence en '+diasFv+'d ▸'):est+' ▸';
+    var btnC=proxima&&!retrasada?'#e67700':c;
+    var btnBg=proxima&&!retrasada?'#fff3bf':bg;
     return`<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:8px;position:relative"
         ontouchstart="_swipeStart(event,'${a.id}')" ontouchmove="_swipeMove(event)" ontouchend="_swipeEnd(event)">
-      <div style="width:3px;min-height:38px;border-radius:2px;background:${retrasada?'#e03131':a.tipo_personal==='contratista'?'#7048e8':'var(--accent)'};flex-shrink:0;align-self:stretch"></div>
+      <div style="width:3px;min-height:38px;border-radius:2px;background:${retrasada?'#e03131':proxima?'#f08c00':a.tipo_personal==='contratista'?'#7048e8':'var(--accent)'};flex-shrink:0;align-self:stretch"></div>
       <div style="flex:1;min-width:0" onclick="showQuickActSheet('${a.id}')">
         <div style="font-size:13px;font-weight:${done?'400':'600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${done?'var(--text3)':'var(--text)'};${done?'text-decoration:line-through':''}">
           ${urg&&!done?'<span style="color:#e03131;font-size:9px;font-weight:800;vertical-align:middle;margin-right:3px">●</span>':''}${esc(a.descripcion)}
         </div>
-        <div style="font-size:11px;color:${retrasada?'#e03131':'var(--text3)'};margin-top:1px">
-          ${retrasada?Math.round((new Date(S.fecha)-new Date(a.fecha))/864e5)+'d retraso · ':''}\
-${a.area?esc(a.area):''}${a.personal_nombre?' · '+esc(a.personal_nombre.split(' ')[0]):''}
+        <div style="font-size:11px;color:${retrasada?'#e03131':proxima?'#e67700':'var(--text3)'};margin-top:1px">
+          ${retrasada?Math.round((new Date(today())-new Date(fechaVenc(a)))/864e5)+'d retraso · ':''}${proxima&&!retrasada?'⚠️ '+(diasFv===0?'Vence hoy':'Vence en '+diasFv+'d')+' · ':''}${a.area?esc(a.area):''}${a.personal_nombre?' · '+esc(a.personal_nombre.split(' ')[0]):''}
         </div>
       </div>
-      <button onclick="event.stopPropagation();cycleEstado('${a.id}')" style="background:${bg};color:${c};border:1.5px solid ${c}44;border-radius:8px;padding:5px 9px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:var(--font)">${est} ▸</button>
+      <button onclick="event.stopPropagation();cycleEstado('${a.id}')" style="background:${btnBg};color:${btnC};border:1.5px solid ${btnC}44;border-radius:8px;padding:5px 9px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:var(--font)">${lbl}</button>
     </div>`;
   }
 
@@ -2076,6 +2080,20 @@ function getPreds(a){
   if(!a||!a.predecesoras) return [];
   try{ return JSON.parse(a.predecesoras)||[]; }catch(e){ return []; }
 }
+// Vencimiento: usa fecha_fin si existe, si no usa fecha
+function fechaVenc(a){ return (a.fecha_fin&&a.fecha_fin>'')?a.fecha_fin:(a.fecha||''); }
+function isRetrasada(a){
+  var fv=fechaVenc(a);
+  return !!fv && fv<today() && a.estado!=='completado';
+}
+// Próxima a retraso: vence en 0-2 días y aún no completada
+function isProximaRetraso(a){
+  if(a.estado==='completado'||isRetrasada(a)) return false;
+  var fv=fechaVenc(a);
+  if(!fv) return false;
+  var diff=Math.round((new Date(fv+'T12:00:00')-new Date(today()+'T12:00:00'))/864e5);
+  return diff>=0&&diff<=2;
+}
 function isBlocked(a){
   var ids=getPreds(a);
   if(!ids.length) return false;
@@ -2096,20 +2114,20 @@ function checkSuccessors(){
 }
 
 function sortByPriority(acts){
-  var hoy=new Date().toISOString().slice(0,10);
   function rank(a){
-    if(isBlocked(a)&&a.estado!=='completado')              return 6;  // bloqueada al fondo
-    if(a.fecha&&a.fecha<hoy&&a.estado!=='completado')      return 0;  // retrasada
-    if(a.prioridad==='urgente'&&a.estado!=='completado')   return 1;  // urgente
-    if(a.estado==='en-progreso')                           return 2;
-    if(a.estado==='pendiente')                             return 3;
-    if(a.estado==='pausada')                               return 4;
-    return 5;
+    if(isBlocked(a)&&a.estado!=='completado')            return 6;
+    if(isRetrasada(a))                                   return 0;
+    if(isProximaRetraso(a))                              return 1;
+    if(a.prioridad==='urgente'&&a.estado!=='completado') return 2;
+    if(a.estado==='en-progreso')                         return 3;
+    if(a.estado==='pendiente')                           return 4;
+    if(a.estado==='pausada')                             return 5;
+    return 7;
   }
   return acts.slice().sort(function(a,b){
     var d=rank(a)-rank(b);
     if(d!==0) return d;
-    return (a.fecha||'9999')>(b.fecha||'9999')?1:-1;
+    return (fechaVenc(a)||'9999')>(fechaVenc(b)||'9999')?1:-1;
   });
 }
 
@@ -2377,7 +2395,7 @@ function actsDesktopTable(acts, showDate){
   html+='</tr></thead><tbody>';
   acts.forEach(function(a,i){
     var hoy=new Date().toISOString().slice(0,10);
-    var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
+    var retrasada=isRetrasada(a);
     var est=retrasada?'retrasada':a.estado;
     var ec=ECOLOR[est]||'#868e96';
     var eb=EBG[est]||'#f1f3f5';
@@ -2423,19 +2441,22 @@ function actsDesktopTable(acts, showDate){
 function actHTML(a, ai, tipo){
   const fotos=(a.fotos||'').split('||').filter(Boolean);
   const hoy=new Date().toISOString().slice(0,10);
-  const vencida=a.fecha_fin&&a.fecha_fin<hoy&&a.estado!=='completado';
-  const retrasada=a.fecha<hoy&&a.estado!=='completado';
+  const retrasada=isRetrasada(a);
+  const vencida=retrasada;
   
+  var proxima = isProximaRetraso(a);
+  var diasFv = proxima ? Math.round((new Date(fechaVenc(a)+'T12:00:00')-new Date(today()+'T12:00:00'))/864e5) : 0;
   var prioBadge = a.prioridad==='urgente' ? '<span style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;margin-left:6px">🔴 URGENTE</span>' : '';
+  var proximaBadge = proxima ? '<span style="background:#fff3bf;color:#e67700;border:1px solid #f08c00;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;margin-left:6px">⚠️ '+(diasFv===0?'Vence hoy':diasFv===1?'Vence mañana':'Vence en '+diasFv+'d')+'</span>' : '';
   var blockedBadge = (isBlocked(a)&&a.estado!=='completado') ? '<span style="background:#f1f3f5;color:#868e96;border:1px solid #dee2e6;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;margin-left:6px">🔒 bloqueada</span>' : '';
-  const estadoLabel = vencida||retrasada ?
+  const estadoLabel = retrasada ?
     '<span class="pill" style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8">🔴 retrasada</span>' :
     `<span class="pill ${a.estado.replace(' ','-')}" style="cursor:pointer" title="Clic para cambiar estado" onclick="event.stopPropagation();cycleEstado('${a.id}')">${a.estado} ▸</span>`;
 
   return`<div class="act-item ${tipo}" style="${(vencida||retrasada)?'border-left:3px solid #e03131;':a.estado==='en-progreso'?'border-left:3px solid #1a56db;':''}">
     <div style="margin-bottom:6px">${a.area?`<span style="background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">📍 ${esc(a.area)}</span>`:`<span style="background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer" onclick="setArea('${a.id}')">⚠️ Sin ubicacion — toca para agregar</span>`}</div>
     <div class="act-top">
-      <span class="act-desc">${esc(a.descripcion)}</span>${prioBadge}${blockedBadge}
+      <span class="act-desc">${esc(a.descripcion)}</span>${prioBadge}${proximaBadge}${blockedBadge}
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
         ${estadoLabel}
         ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px" onclick="editAct('${a.id}')">✏️</button>`:''}
@@ -5192,7 +5213,7 @@ function renderEnObra(){
   var pendiente=S.actsActivas.filter(function(a){return a.estado==='pendiente';});
   var pausada=S.actsActivas.filter(function(a){return a.estado==='pausada';});
   var urgentes=S.actsActivas.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
-  var retrasadas=S.actsActivas.filter(function(a){return a.fecha&&a.fecha<S.fecha&&a.estado!=='completado';});
+  var retrasadas=S.actsActivas.filter(function(a){return isRetrasada(a);});
 
   el.innerHTML=`
     <!-- HEADER -->
@@ -5256,7 +5277,7 @@ function buildActCardObra(a){
   var EB = {'en-progreso':'#e8f0fe','pendiente':'#f8f9fa','pausada':'#fff3bf','completado':'#d3f9d8'};
   var EL = {'en-progreso':'▶ En curso','pendiente':'⏳ Pendiente','pausada':'⏸ Pausada','completado':'✓ Lista'};
 
-  var retrasada = a.fecha && a.fecha < today() && a.estado !== 'completado';
+  var retrasada = isRetrasada(a);
   var diasRetraso = retrasada ? Math.round((new Date(today())-new Date(a.fecha))/(1000*60*60*24)) : 0;
 
   var ec = retrasada ? '#c92a2a' : (EC[a.estado]||'#868e96');
@@ -5561,7 +5582,7 @@ function applyKbf(acts){
     return raw.split(',').some(function(part){return part.trim().replace(/[,;]+$/,'').trim()===f.persona;});
   });
   if(f.nivel)    r=r.filter(function(a){return (a.area||'').startsWith(f.nivel);});
-  if(f.retrasadas) r=r.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';});
+  if(f.retrasadas) r=r.filter(function(a){return isRetrasada(a);});
   if(f.urgentes) r=r.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
   if(f.sinContratista) r=r.filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;});
   return sortByPriority(r);
@@ -5609,7 +5630,7 @@ function renderKanban(){
   var niveles=[...new Set(all.map(function(a){var m=(a.area||'').match(/^(N\d+)/);return m?m[1]:null;}).filter(Boolean))].sort();
 
   var hasFilter=f.tipo||f.persona||f.nivel||f.retrasadas||f.urgentes||f.sinContratista;
-  var retCnt=all.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+  var retCnt=all.filter(function(a){return isRetrasada(a);}).length;
   var urgCnt=all.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';}).length;
   var scCnt=all.filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;}).length;
 
@@ -5659,7 +5680,7 @@ function renderKanban(){
   ];
 
   function kanbanCard(a){
-    var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
+    var retrasada=isRetrasada(a);
     var sinCont=a.tipo_personal==='contratista'&&!a.personal_nombre;
     var bc=sinCont?'#fcc419':retrasada?'#ffa8a8':'var(--border)';
     var TIPO_ICON={propio:'👷',contratista:'🔨',ingeniero:'👤'};
@@ -5668,7 +5689,8 @@ function renderKanban(){
     return '<div style="background:'+(sinCont?'#fffdf0':'#fff')+';border:1.5px solid '+bc+';border-radius:10px;padding:10px 11px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s" onclick="editAct(\''+a.id+'\')" onmouseover="this.style.boxShadow=\'0 3px 10px rgba(0,0,0,.12)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,.06)\'">'
       +(sinCont?'<div style="font-size:9px;color:#856404;font-weight:700;margin-bottom:3px">⚠️ SIN CONTRATISTA — toca para asignar</div>':'')
       +(retrasada?'<div style="font-size:9px;color:#c92a2a;font-weight:700;margin-bottom:3px">⏰ RETRASADA</div>':'')
-      +(a.prioridad==='urgente'&&!retrasada?'<div style="font-size:9px;color:#e03131;font-weight:700;margin-bottom:3px">🔴 URGENTE</div>':'')
+      +(!retrasada&&isProximaRetraso(a)?'<div style="font-size:9px;color:#e67700;font-weight:700;margin-bottom:3px">⚠️ '+(()=>{var d=Math.round((new Date(fechaVenc(a)+'T12:00:00')-new Date(today()+'T12:00:00'))/864e5);return d===0?'Vence hoy':d===1?'Vence mañana':'Vence en '+d+'d';})()+'</div>':'')
+      +(a.prioridad==='urgente'&&!retrasada&&!isProximaRetraso(a)?'<div style="font-size:9px;color:#e03131;font-weight:700;margin-bottom:3px">🔴 URGENTE</div>':'')
       +((isBlocked(a)&&a.estado!=='completado')?'<div style="font-size:9px;color:#868e96;font-weight:700;margin-bottom:3px">🔒 BLOQUEADA</div>':'')
       +'<div style="font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;margin-bottom:5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+esc(a.descripcion)+'</div>'
       +(a.area?'<div style="font-size:10.5px;color:var(--accent);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📍 '+esc(a.area)+'</div>':'')
@@ -5867,7 +5889,7 @@ function renderAptoReport(){
 
   var acts=getAptoActs(sel);
   var completadas=acts.filter(function(a){return a.estado==='completado';}).length;
-  var retrasadas=acts.filter(function(a){var hoy=new Date().toISOString().slice(0,10);return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+  var retrasadas=acts.filter(function(a){var hoy=new Date().toISOString().slice(0,10);return isRetrasada(a);}).length;
   var pctGlobal=acts.length?Math.round(acts.reduce(function(s,a){return s+(a.porcentaje||0);},0)/acts.length):0;
 
   // Header del reporte
@@ -5907,7 +5929,7 @@ function renderAptoReport(){
   if(ingenieros.length) grupos.push({titulo:'👤 Tareas administrativas',color:'#495057',bgColor:'#f1f3f5',borderColor:'#ced4da',acts:ingenieros});
 
   function actRow(a, i){
-    var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
+    var retrasada=isRetrasada(a);
     var est=retrasada?'retrasada':a.estado;
     var ec=ECOL[est]||'#868e96'; var eb=EBG[est]||'#f1f3f5';
     var pc=PCOL[a.prioridad]||'#868e96'; var pb=PBG[a.prioridad]||'#f1f3f5';
@@ -5939,7 +5961,7 @@ function renderAptoReport(){
   grupos.forEach(function(g){
     var gDone=g.acts.filter(function(a){return a.estado==='completado';}).length;
     var gPct=Math.round(g.acts.reduce(function(s,a){return s+(a.porcentaje||0);},0)/g.acts.length);
-    var gRet=g.acts.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+    var gRet=g.acts.filter(function(a){return isRetrasada(a);}).length;
     h+='<div style="margin-bottom:14px;border:1.5px solid '+g.borderColor+';border-radius:12px;overflow:hidden">';
     // Group header
     h+='<div style="background:'+g.bgColor+';padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">';
@@ -5969,7 +5991,7 @@ function printAptoReport(apto){
   var completadas=acts.filter(function(a){return a.estado==='completado';}).length;
   var enProgreso=acts.filter(function(a){return a.estado==='en-progreso';}).length;
   var pct=acts.length?Math.round(acts.reduce(function(s,a){return s+(a.porcentaje||0);},0)/acts.length):0;
-  var retrasadasCnt=acts.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+  var retrasadasCnt=acts.filter(function(a){return isRetrasada(a);}).length;
   var pctColor=pct>=80?'#2f9e44':pct>=50?'#e67700':'#c92a2a';
 
   // Build groups
@@ -5988,7 +6010,7 @@ function printAptoReport(apto){
 
   // Estado abbreviations & colors
   function estInfo(a){
-    var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
+    var retrasada=isRetrasada(a);
     if(retrasada) return {lbl:'RETRASO',dot:'#c92a2a',bg:'#ffe3e3'};
     var map={completado:{lbl:'✓ LISTO',dot:'#2f9e44',bg:'#d3f9d8'},'en-progreso':{lbl:'EN OBRA',dot:'#1a56db',bg:'#dbe4ff'},pendiente:{lbl:'PENDIENTE',dot:'#868e96',bg:'#f1f3f5'},pausada:{lbl:'PAUSADA',dot:'#e67700',bg:'#fff3bf'},bloqueada:{lbl:'BLOQUEADA',dot:'#862e9c',bg:'#f3d9fa'}};
     return map[a.estado]||{lbl:a.estado,dot:'#868e96',bg:'#f1f3f5'};
@@ -6084,7 +6106,7 @@ function renderProyeccion(){
   // ── Cálculos base ──
   var total=acts.length;
   var completadas=acts.filter(function(a){return a.estado==='completado';}).length;
-  var retrasadas=acts.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+  var retrasadas=acts.filter(function(a){return isRetrasada(a);}).length;
   var sinContratista=acts.filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;}).length;
 
   // Avance global: promedio de porcentaje de todas las actividades
@@ -6117,7 +6139,7 @@ function renderProyeccion(){
     var nActs=acts.filter(function(a){return (a.area||'').startsWith(n);});
     var nPct=nActs.length?Math.round(nActs.reduce(function(s,a){return s+(a.porcentaje||0);},0)/nActs.length):0;
     var nDone=nActs.filter(function(a){return a.estado==='completado';}).length;
-    var nRet=nActs.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+    var nRet=nActs.filter(function(a){return isRetrasada(a);}).length;
     return{n:n,total:nActs.length,done:nDone,pct:nPct,ret:nRet};
   });
 
@@ -6127,7 +6149,7 @@ function renderProyeccion(){
     var cActs=acts.filter(function(a){return a.personal_nombre===c;});
     var cPct=Math.round(cActs.reduce(function(s,a){return s+(a.porcentaje||0);},0)/cActs.length);
     var cDone=cActs.filter(function(a){return a.estado==='completado';}).length;
-    var cRet=cActs.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+    var cRet=cActs.filter(function(a){return isRetrasada(a);}).length;
     return{nombre:c,total:cActs.length,done:cDone,pct:cPct,ret:cRet};
   }).sort(function(a,b){return a.pct-b.pct;});
 
