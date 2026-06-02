@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_69';
+const APP_VERSION='20260602_70';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -4495,11 +4495,11 @@ async function generarPDF(opts){
     }
 
     // Colors
-    const DARK=[20,20,35], BDX_PUR=[107,35,142], BDX_GRN=[45,110,45],
+    const DARK=[14,12,28], BDX_PUR=[107,35,142], BDX_GRN=[45,130,65],
           ACC=[26,86,219], GRN=[47,158,68], AMB=[224,138,0],
           RED=[224,49,49], PUR=[112,72,232], WHT=[255,255,255],
           BOR=[222,226,230], TXT=[33,37,41], MUT=[108,117,125],
-          LGRAY=[245,246,248];
+          LGRAY=[246,247,250], LGRAY2=[240,242,248];
 
     const ESTADO_C={'completado':GRN,'en-progreso':ACC,'pendiente':MUT,'pausada':AMB,'retrasada':RED};
     const ESTADO_L={'completado':'COMPLETADO','en-progreso':'EN PROGRESO','pendiente':'PENDIENTE','pausada':'PAUSADA','retrasada':'RETRASADA'};
@@ -4526,38 +4526,43 @@ async function generarPDF(opts){
 
     // ── HEADER (cada página) ──────────────────────────────────────
     function drawHeader(){
-      fc(DARK);doc.rect(0,0,W,17,'F');
-      fc(BDX_PUR);doc.rect(0,0,3,17,'F');
-      tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');
-      doc.text('BRIDEX SRL',M,7);
-      doc.setFontSize(5.5);doc.setFont('helvetica','normal');tc([180,180,200]);
-      doc.text('Arquitectura  Urbanismo  Construccion',M,11);
+      fc(DARK);doc.rect(0,0,W,18,'F');
+      fc(BDX_PUR);doc.rect(0,0,4,18,'F');
+      // Left: company block
+      tc(WHT);doc.setFontSize(11);doc.setFont('helvetica','bold');
+      doc.text('BRIDEX SRL',M+2,8);
+      tc([150,155,200]);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+      doc.text('Arquitectura  Urbanismo  Construccion',M+2,12);
       tc([200,215,255]);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
-      doc.text('PROYECTO: MECCA RESIDENCE 2026',M,15);
-      tc([160,180,220]);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-      doc.text(titulo,W-M,7,{align:'right'});
+      doc.text('MECCA RESIDENCE 2026',M+2,16);
+      // Vertical divider
+      dc([80,80,110]);doc.setLineWidth(0.25);doc.line(M+64,3,M+64,16.5);
+      // Right: report info
+      var pg=doc.internal.getCurrentPageInfo().pageNumber;
+      tc([200,225,255]);doc.setFontSize(9.5);doc.setFont('helvetica','bold');
+      doc.text(titulo,W-M,8,{align:'right'});
+      tc([160,185,240]);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text(periodo,W-M,12.5,{align:'right'});
       if(subtitulo){
         tc([200,180,255]);doc.setFontSize(5.5);
-        doc.text(subtitulo,W-M,11,{align:'right'});
-        tc([200,215,255]);doc.setFontSize(6);
-        doc.text(periodo,W-M,15,{align:'right'});
+        doc.text(subtitulo,W-M,16.5,{align:'right'});
       } else {
-        doc.text(periodo,W-M,11,{align:'right'});
-        tc([120,140,180]);doc.setFontSize(5.5);
-        doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,15,{align:'right'});
+        tc([120,145,200]);doc.setFontSize(6);
+        doc.text('Pag. '+pg,W-M,16.5,{align:'right'});
       }
-      fc(BDX_GRN);doc.rect(0,17,W,1.2,'F');
+      fc(BDX_GRN);doc.rect(0,18,W,1.5,'F');
     }
 
     // ── SECCIÓN BANNER ────────────────────────────────────────────
-    function secBanner(label, fillColor){
-      chk(11);
-      var col=fillColor||DARK;
-      fc(col);doc.roundedRect(M,y,RW,7,1.2,1.2,'F');
-      if(!fillColor){fc(BDX_PUR);doc.rect(M,y,3,7,'F');}
-      tc(WHT);doc.setFontSize(8);doc.setFont('helvetica','bold');
-      doc.text(safe(label),M+(fillColor?4:8),y+4.8);
-      y+=10;
+    function secBanner(label, accentColor){
+      chk(12);
+      var ac=accentColor||ACC;
+      var tint=[Math.round(ac[0]*0.1+255*0.9),Math.round(ac[1]*0.1+255*0.9),Math.round(ac[2]*0.1+255*0.9)];
+      fc(tint);doc.roundedRect(M,y,RW,8,1,1,'F');
+      fc(ac);doc.rect(M,y,3.5,8,'F');
+      tc(TXT);doc.setFontSize(8.5);doc.setFont('helvetica','bold');
+      doc.text(safe(label),M+7.5,y+5.3);
+      y+=11;
     }
 
     function hrLine(){
@@ -4617,15 +4622,19 @@ async function generarPDF(opts){
       var bw=(RW-12)/5;
       boxes.forEach(function(b,i){
         var bx=M+i*(bw+3);
-        fc(b.c);doc.roundedRect(bx,y,bw,15,1.5,1.5,'F');
-        // Número
-        tc(WHT);doc.setFontSize(13);doc.setFont('helvetica','bold');
-        doc.text(String(b.v),bx+bw/2,y+8,{align:'center'});
-        // Etiqueta
-        doc.setFontSize(6);doc.setFont('helvetica','normal');
-        doc.text(b.l,bx+bw/2,y+13,{align:'center'});
+        // Card background
+        fc(LGRAY);doc.roundedRect(bx,y,bw,17,1.5,1.5,'F');
+        // Top accent bar
+        fc(b.c);doc.roundedRect(bx,y,bw,3,1.5,1.5,'F');
+        fc(b.c);doc.rect(bx,y+1.5,bw,1.5,'F');
+        // Number
+        tc(b.c);doc.setFontSize(14);doc.setFont('helvetica','bold');
+        doc.text(String(b.v),bx+bw/2,y+11.5,{align:'center'});
+        // Label
+        tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+        doc.text(b.l,bx+bw/2,y+15.5,{align:'center'});
       });
-      y+=19;hrLine();
+      y+=21;hrLine();
     }
 
     // ── ASISTENCIA ────────────────────────────────────────────────
@@ -4639,7 +4648,9 @@ async function generarPDF(opts){
       } else {
         // Cabecera de tabla
         chk(7);
-        fc([230,235,245]);doc.rect(M,y-1,RW,6,'F');
+        var _assTint=[Math.round(ACC[0]*0.07+255*0.93),Math.round(ACC[1]*0.07+255*0.93),Math.round(ACC[2]*0.07+255*0.93)];
+        fc(_assTint);doc.rect(M,y-1,RW,7,'F');
+        fc(ACC);doc.rect(M,y-1,2.5,7,'F');
         tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
         doc.text('TRABAJADOR',M+3,y+3.5);
         doc.text('ESTADO',M+68,y+3.5);
@@ -4692,24 +4703,25 @@ async function generarPDF(opts){
     //          sameday =[#7,   Desc62,Area28,Estado25,Asignado30,Resp30]
     function actTableHeader(accentColor){
       chk(8);
-      var col=accentColor||ACC;
-      fc([230,235,245]);doc.rect(M,y-1,RW,7,'F');
-      fc(col);doc.rect(M,y-1,2,7,'F');
+      var ac=accentColor||ACC;
+      var tint=[Math.round(ac[0]*0.07+255*0.93),Math.round(ac[1]*0.07+255*0.93),Math.round(ac[2]*0.07+255*0.93)];
+      fc(tint);doc.rect(M,y-1,RW,7,'F');
+      fc(ac);doc.rect(M,y-1,2.5,7,'F');
       tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
       if(fi!==ff){
-        doc.text('FECHA',       M+3,   y+4);
-        doc.text('DESCRIPCION', M+22,  y+4);
-        doc.text('AREA',        M+77,  y+4);
-        doc.text('ESTADO',      M+101, y+4);
-        doc.text('ASIGNADO',    M+124, y+4);
-        doc.text('RESPONSABLE', M+156, y+4);
+        doc.text('FECHA',       M+4,   y+4);
+        doc.text('DESCRIPCION', M+23,  y+4);
+        doc.text('AREA',        M+78,  y+4);
+        doc.text('ESTADO',      M+102, y+4);
+        doc.text('ASIGNADO',    M+125, y+4);
+        doc.text('RESPONSABLE', M+157, y+4);
       } else {
-        doc.text('#',           M+3,   y+4);
-        doc.text('DESCRIPCION', M+12,  y+4);
-        doc.text('AREA',        M+75,  y+4);
-        doc.text('ESTADO',      M+103, y+4);
-        doc.text('ASIGNADO',    M+128, y+4);
-        doc.text('RESPONSABLE', M+159, y+4);
+        doc.text('#',           M+4,   y+4);
+        doc.text('DESCRIPCION', M+13,  y+4);
+        doc.text('AREA',        M+76,  y+4);
+        doc.text('ESTADO',      M+104, y+4);
+        doc.text('ASIGNADO',    M+129, y+4);
+        doc.text('RESPONSABLE', M+160, y+4);
       }
       y+=6; _rowIdx=0;
     }
@@ -4810,8 +4822,9 @@ async function generarPDF(opts){
       secBanner('RETRASADAS  ('+retrs.length+') — pendientes de dias anteriores',RED);
       // Header: Fecha | Descripcion | Area | Estado | Dias | Asignado | Responsable
       chk(7);
-      fc([250,235,235]);doc.rect(M,y-1,RW,6,'F');
-      fc(RED);doc.rect(M,y-1,2,6,'F');
+      var _redTint=[Math.round(RED[0]*0.07+255*0.93),Math.round(RED[1]*0.07+255*0.93),Math.round(RED[2]*0.07+255*0.93)];
+      fc(_redTint);doc.rect(M,y-1,RW,7,'F');
+      fc(RED);doc.rect(M,y-1,2.5,7,'F');
       tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
       doc.text('FECHA ORG.',  M+3,   y+3.5);
       doc.text('DESCRIPCION', M+22,  y+3.5);
@@ -4820,7 +4833,7 @@ async function generarPDF(opts){
       doc.text('DIAS',        M+127, y+3.5);
       doc.text('ASIGNADO',    M+138, y+3.5);
       doc.text('RESPONSABLE', M+162, y+3.5);
-      y+=6; _rowIdx=0;
+      y+=7; _rowIdx=0;
       retrs.forEach(function(a){
         var ec2=ESTADO_C[a.estado]||MUT;
         var el2=ESTADO_L[a.estado]||safe(a.estado).toUpperCase();
@@ -4879,18 +4892,21 @@ async function generarPDF(opts){
           var cProg=cActs.filter(function(a){return a.estado==='en-progreso';}).length;
           var cPend=cActs.length-cComp-cProg;
           var pctC=cActs.length>0?Math.round(cComp/cActs.length*100):0;
-          chk(14);
+          chk(17);
           // Contractor group header
-          fc([240,235,255]);doc.roundedRect(M,y,RW,7,1.2,1.2,'F');
-          fc(PUR);doc.rect(M,y,3,7,'F');
-          var barCC=pctC>=80?GRN:pctC>=40?AMB:RED;
-          fc(barCC);doc.rect(M+3,y,Math.max(0.5,(RW-3)*pctC/100),7,'F');
-          fc([240,235,255]);doc.rect(M+3,y+1,RW-3,5,'F');
-          tc(PUR);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
-          doc.text(safe(c),M+6,y+5);
+          var purTint=[Math.round(PUR[0]*0.1+255*0.9),Math.round(PUR[1]*0.1+255*0.9),Math.round(PUR[2]*0.1+255*0.9)];
+          fc(purTint);doc.roundedRect(M,y,RW,11,1.2,1.2,'F');
+          fc(PUR);doc.rect(M,y,3.5,11,'F');
+          tc(TXT);doc.setFontSize(8);doc.setFont('helvetica','bold');
+          doc.text(safe(c),M+6.5,y+5);
           tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-          doc.text(cComp+' OK  '+cProg+' prog  '+cPend+' pend  '+pctC+'%',W-M,y+5,{align:'right'});
-          y+=8;
+          doc.text(cComp+' OK  '+cProg+' prog  '+cPend+' pend',W-M,y+4.5,{align:'right'});
+          var barCC=pctC>=80?GRN:pctC>=40?AMB:RED;
+          fc(BOR);doc.rect(M+4,y+7.5,RW-4.5,1.8,'F');
+          fc(barCC);doc.rect(M+4,y+7.5,Math.max(0.5,(RW-4.5)*pctC/100),1.8,'F');
+          tc(barCC);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+          doc.text(pctC+'%',W-M,y+10,{align:'right'});
+          y+=13;
           // Table header for this contractor
           actTableHeader(PUR);
           cActs.forEach(function(a,i){ actTableRow(a,i+1,PUR); });
@@ -4904,12 +4920,15 @@ async function generarPDF(opts){
     if(secs.penalidades&&pens.length){
       secBanner('SITUACIONES REGISTRADAS  ('+pens.length+')',RED);
       // Cabecera tabla
-      chk(7);fc([250,235,235]);doc.rect(M,y-1,RW,6,'F');
+      chk(7);
+      var _penTint=[Math.round(RED[0]*0.07+255*0.93),Math.round(RED[1]*0.07+255*0.93),Math.round(RED[2]*0.07+255*0.93)];
+      fc(_penTint);doc.rect(M,y-1,RW,7,'F');
+      fc(RED);doc.rect(M,y-1,2.5,7,'F');
       tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
       doc.text('FECHA',M+3,y+3.5);
       doc.text('PERSONA',M+20,y+3.5);
       doc.text('TIPO DE SITUACION',M+72,y+3.5);
-      y+=6;_rowIdx=0;
+      y+=7;_rowIdx=0;
       pens.forEach(function(p){
         chk(12);
         _rowIdx++;
@@ -4934,12 +4953,12 @@ async function generarPDF(opts){
     var totalPags=doc.internal.getNumberOfPages();
     for(var pi=1;pi<=totalPags;pi++){
       doc.setPage(pi);
-      fc([245,246,248]);doc.rect(0,286,W,11,'F');
+      fc(LGRAY);doc.rect(0,286,W,11,'F');
       dc(BOR);doc.setLineWidth(0.3);doc.line(0,286,W,286);
       fc(BDX_PUR);doc.rect(0,286,4,11,'F');
       tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','normal');
       doc.text('BRIDEX SRL  |  Mecca Residence 2026  |  Agenda de Obra',M+3,292);
-      doc.text('Generado: '+new Date().toLocaleDateString('es-DO')+' '+hhmm()+(S.user?'  |  '+safe(S.user.nombre):''),W-M,292,{align:'right'});
+      doc.text('Pag. '+pi+'/'+totalPags+'  |  '+new Date().toLocaleDateString('es-DO')+' '+hhmm()+(S.user?'  |  '+safe(S.user.nombre):''),W-M,292,{align:'right'});
     }
 
     var _fname='BRIDEX_MeccaResidence';
