@@ -627,7 +627,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_60';
+const APP_VERSION='20260602_61';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2697,7 +2697,7 @@ async function generarPenalidadSinFoto(a){
   var pen={id:uid(),personal_id:'ing_'+ing.id,personal_nombre:ing.user.nombre,
     fecha:today(),tipo:'Actividad sin foto',
     descripcion:'Completada sin foto: '+a.descripcion+(a.area?' — '+a.area:''),
-    monto:0,aplicada:true};
+    monto:0,aplicada:true,ingeniero_id:S.user?.id||'sistema'};
   S.pens.unshift(pen);
   showToast('⚠️ Penalidad "sin foto" aplicada a '+ing.user.nombre,'warn');
   if(S.currentTab==='equipo'&&S.equipoVista==='penalidades') renderPens();
@@ -6552,21 +6552,15 @@ function mesNombre(ym){
 
 // Check today's contractor registration; if none, penalize both Edgar and Moises
 async function savePen(pen){
-  // Try full payload; on failure retry with minimal fields (avoids schema column errors)
+  // Ensure ingeniero_id always present (column may be NOT NULL in DB)
+  var full=Object.assign({ingeniero_id:S.user?.id||'sistema'},pen);
   try{
-    await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(pen)});
+    await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(full)});
     return true;
   }catch(e){
-    console.warn('savePen full failed, retrying minimal:',e.message);
-    try{
-      var min={id:pen.id,personal_id:pen.personal_id,personal_nombre:pen.personal_nombre,
-        fecha:pen.fecha,tipo:pen.tipo,descripcion:pen.descripcion,monto:0,aplicada:pen.aplicada};
-      await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(min)});
-      return true;
-    }catch(e2){
-      console.error('savePen failed entirely:',e2);
-      return false;
-    }
+    console.error('savePen failed:',e.message||e);
+    showToast('❌ Error BD: '+(e.message||'').slice(0,80),'err',7000);
+    return false;
   }
 }
 
@@ -6590,7 +6584,7 @@ async function checkRegistroContratas(){
     var pen={id:uid(),personal_id:'ing_'+k,personal_nombre:u.nombre,
       fecha:hoy,tipo:'Falta de registro contratista',
       descripcion:'Sin registro de asistencia de contratistas: '+hoy,
-      monto:0,aplicada:true};
+      monto:0,aplicada:true,ingeniero_id:S.user?.id||'sistema'};
     S.pens.unshift(pen);
     if(await savePen(pen)) ok++;
   }
@@ -6624,7 +6618,7 @@ async function penalizarDiasSinRegistro(mes){
       var pen={id:uid(),personal_id:'ing_'+k,personal_nombre:u.nombre,
         fecha:dias[i],tipo:'Falta de registro contratista',
         descripcion:'Sin registro contratistas: '+dias[i],
-        monto:0,aplicada:true};
+        monto:0,aplicada:true,ingeniero_id:S.user?.id||'sistema'};
       S.pens.unshift(pen);
       if(await savePen(pen)) ok++;
     }
@@ -6641,7 +6635,7 @@ async function otorgarBonifMensual(ingKey){
   var pen={id:uid(),personal_id:'ing_'+ingKey,personal_nombre:u.nombre,
     fecha:mes+'-01',tipo:'Registro puntual asistencia',
     descripcion:'Más registros de asistencia de contratistas en '+mesNombre(mes),
-    monto:0,aplicada:true};
+    monto:0,aplicada:true,ingeniero_id:S.user?.id||'sistema'};
   S.pens.unshift(pen);
   var ok=await savePen(pen);
   showToast(ok?'🏆 Bonificación otorgada a '+u.nombre:'❌ Error al guardar bonificación', ok?'ok':'err');
