@@ -627,7 +627,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_59';
+const APP_VERSION='20260602_60';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2717,19 +2717,6 @@ async function logEvento(tipo, descripcion, ingId){
   catch(e){console.warn('logEvento failed:',e);}
 }
 
-// ── TOAST NOTIFICATIONS ──────────────────────────────────
-function showToast(msg, type, ms){
-  ms=ms||4500;
-  var old=document.getElementById('app-toast');if(old)old.remove();
-  var t=document.createElement('div');t.id='app-toast';
-  var bg={ok:'#d3f9d8',warn:'#fff3bf',err:'#ffe3e3'}[type]||'#e7f5ff';
-  var col={ok:'#2f9e44',warn:'#e67700',err:'#c92a2a'}[type]||'#1a56db';
-  t.style.cssText='position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:99999;padding:13px 22px;border-radius:14px;font-size:13px;font-weight:700;font-family:inherit;box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:88vw;text-align:center;background:'+bg+';color:'+col+';border:2px solid '+col+';transition:opacity .35s';
-  t.textContent=msg;
-  document.body.appendChild(t);
-  setTimeout(function(){t.style.opacity='0';setTimeout(function(){t.remove();},350);},ms);
-}
-
 async function doMarcarCompletada(actId){
   var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
   closeModal();
@@ -2756,6 +2743,9 @@ function showToast(msg, type, ms){
   document.body.appendChild(t);
   setTimeout(function(){t.style.opacity='0';setTimeout(function(){t.remove();},350);},ms);
 }
+
+// ── RENDER ALL ACTIVITY VIEWS ─────────────────────────
+function reRenderActs(){
   renderHoy();
   renderActs();
   renderEnObra();
