@@ -618,7 +618,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_33';
+const APP_VERSION='20260601_34';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1562,7 +1562,7 @@ function showQuickActSheet(actId){
     </div>
     ${canEdit()?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}');closeModal()" style="padding:12px;border-radius:14px;border:2px solid #1a56db;background:#dbe4ff;color:#1a56db;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">▶ Iniciar</button>`:'<div></div>'}
-      <button onclick="closeModal();setTimeout(()=>editAct(${ai}),100)" style="padding:12px;border-radius:14px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">✏️ Editar</button>
+      <button onclick="closeModal();setTimeout(()=>editAct('${a.id}'),100)" style="padding:12px;border-radius:14px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">✏️ Editar</button>
     </div>`:''}
     <button onclick="closeModal()" style="width:100%;padding:12px;border-radius:14px;border:1.5px solid var(--border2);background:none;color:var(--text3);font-size:13px;cursor:pointer;font-family:var(--font)">Cerrar</button>`;
   openModal();
@@ -2218,7 +2218,7 @@ function actsDesktopTable(acts, showDate){
     var eb=EBG[est]||'#f1f3f5';
     var ai=S.acts.indexOf(a);
     var bg=i%2===0?'var(--bg2)':'var(--bg)';
-    html+='<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\''+bg+'\'" onclick="editAct('+ai+')">';
+    html+='<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\''+bg+'\'" onclick="editAct(\''+a.id+'\')">';
     // Status pill (clickable to cycle)
     html+='<td style="padding:7px 10px" onclick="event.stopPropagation()">';
     html+='<span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:8px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block" title="Clic para cambiar estado" onclick="cycleEstado(\''+a.id+'\')">'+esc(est)+' ▸</span>';
@@ -2236,7 +2236,7 @@ function actsDesktopTable(acts, showDate){
     // Assigned — warn if contratista activity has no contractor
     var sinCont=a.tipo_personal==='contratista'&&!a.personal_nombre;
     html+='<td style="padding:7px 8px;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px">'
-      +(sinCont?'<span style="color:#e03131;font-weight:700;cursor:pointer" onclick="event.stopPropagation();editAct('+ai+')" title="Asignar contratista">⚠️ Sin contratista</span>':('<span style="color:var(--text2)">'+esc(a.personal_nombre||a.ingeniero_nombre||'—')+'</span>'))
+      +(sinCont?'<span style="color:#e03131;font-weight:700;cursor:pointer" onclick="event.stopPropagation();editAct(\''+a.id+'\')" title="Asignar contratista">⚠️ Sin contratista</span>':('<span style="color:var(--text2)">'+esc(a.personal_nombre||a.ingeniero_nombre||'—')+'</span>'))
       +'</td>';
     // Progress % (clickable)
     html+='<td style="padding:7px 8px;text-align:center" onclick="event.stopPropagation()">';
@@ -2273,7 +2273,7 @@ function actHTML(a, ai, tipo){
       <span class="act-desc">${esc(a.descripcion)}</span>${prioBadge}${blockedBadge}
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
         ${estadoLabel}
-        ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px" onclick="editAct(${ai})">✏️</button>`:''}
+        ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px" onclick="editAct('${a.id}')">✏️</button>`:''}
       </div>
     </div>
     <div class="act-meta">
@@ -2506,7 +2506,12 @@ function showAddAct(ai){
   openModal();
 }
 
-function editAct(ai){showAddAct(ai);}
+// editAct accepts an activity ID string (robust against S.acts index changes from auto-refresh)
+function editAct(id){
+  var ai=S.acts.findIndex(function(x){return x.id===id;});
+  if(ai<0) return;
+  showAddAct(ai);
+}
 
 // ── FORM PERSONAL X LA CASA ──────────────────────────────
 function showAddActPropio(ai, ctx){
@@ -5476,7 +5481,7 @@ function renderKanban(){
     var TIPO_ICON={propio:'👷',contratista:'🔨',ingeniero:'👤'};
     var icon=TIPO_ICON[a.tipo_personal]||'';
     var ai=S.acts.indexOf(a);
-    return '<div style="background:'+(sinCont?'#fffdf0':'#fff')+';border:1.5px solid '+bc+';border-radius:10px;padding:10px 11px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s" onclick="editAct('+ai+')" onmouseover="this.style.boxShadow=\'0 3px 10px rgba(0,0,0,.12)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,.06)\'">'
+    return '<div style="background:'+(sinCont?'#fffdf0':'#fff')+';border:1.5px solid '+bc+';border-radius:10px;padding:10px 11px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s" onclick="editAct(\''+a.id+'\')" onmouseover="this.style.boxShadow=\'0 3px 10px rgba(0,0,0,.12)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,.06)\'">'
       +(sinCont?'<div style="font-size:9px;color:#856404;font-weight:700;margin-bottom:3px">⚠️ SIN CONTRATISTA — toca para asignar</div>':'')
       +(retrasada?'<div style="font-size:9px;color:#c92a2a;font-weight:700;margin-bottom:3px">⏰ RETRASADA</div>':'')
       +(a.prioridad==='urgente'&&!retrasada?'<div style="font-size:9px;color:#e03131;font-weight:700;margin-bottom:3px">🔴 URGENTE</div>':'')
@@ -5720,7 +5725,7 @@ function renderAptoReport(){
     var pc=PCOL[a.prioridad]||'#868e96'; var pb=PBG[a.prioridad]||'#f1f3f5';
     var bg=i%2===0?'var(--bg2)':'var(--bg)';
     var ai=S.acts.indexOf(a);
-    return '<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer" onclick="editAct('+ai+')">'
+    return '<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer" onclick="editAct(\''+a.id+'\')">'
       +'<td style="padding:7px 10px">'+(a.prioridad?'<span style="background:'+pb+';color:'+pc+';border:1px solid '+pc+'40;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;white-space:nowrap">'+esc(a.prioridad.toUpperCase())+'</span>':'')+'</td>'
       +'<td style="padding:7px 10px"><div style="font-weight:600;color:var(--text)">'+esc(a.descripcion)+'</div>'+(a.notas?'<div style="font-size:10px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;max-width:300px">'+esc(a.notas)+'</div>':'')+'</td>'
       +'<td style="padding:7px 8px;color:var(--accent);font-size:10.5px">'+esc(a.area||'—')+'</td>'
