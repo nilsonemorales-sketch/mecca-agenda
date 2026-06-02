@@ -623,7 +623,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_41';
+const APP_VERSION='20260601_42';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1125,7 +1125,7 @@ let S={
   semanaActual:null, currentTab:'hoy', busqueda:'',
   histFiltroIng:'todos', histFecha:'', histFechaFin:'', histActs:[], histAsist:[], histPens:[],
   tareas:[], tareasFiltro:'activas', actsActivas:[], enObraFiltro:'', enObraContratista:'', enObraFiltroTipo:'', enObraFiltroContratista:'', enObraFiltroPersonal:'', enObraFiltroEstado:'',
-  hoyFiltroEstado:'', hoyFiltroTipo:'', hoyPeriodoOpen:false,
+  hoyFiltroEstado:'', hoyFiltroTipo:'', hoyAgrupacion:'', hoyPeriodoOpen:false,
   hoyPeriodoDesde:'', hoyPeriodoHasta:'', hoyPeriodoData:null,
   fotosFiltroIng:'todos', fotosFiltroUbic:'', fotosFecha:'', fotosFechaFin:'', fotosData:[],
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
@@ -1738,8 +1738,8 @@ function renderHoy(){
         </div>
       </div>
 
-      <!-- Filters -->
-      <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none">
+      <!-- Filters row 1: estado + tipo -->
+      <div style="padding:8px 12px 4px;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none">
         ${fchip('Todas',!S.hoyFiltroEstado&&!S.hoyFiltroTipo,"S.hoyFiltroEstado='';S.hoyFiltroTipo='';renderHoy()")}
         ${fchip('🔄 En progreso',S.hoyFiltroEstado==='en-progreso',"S.hoyFiltroEstado=S.hoyFiltroEstado==='en-progreso'?'':'en-progreso';renderHoy()")}
         ${fchip('⏳ Pendiente',S.hoyFiltroEstado==='pendiente',"S.hoyFiltroEstado=S.hoyFiltroEstado==='pendiente'?'':'pendiente';renderHoy()")}
@@ -1748,11 +1748,50 @@ function renderHoy(){
         ${fchip('👷 Propio',S.hoyFiltroTipo==='propio',"S.hoyFiltroTipo=S.hoyFiltroTipo==='propio'?'':'propio';renderHoy()")}
         ${fchip('🔨 Contratista',S.hoyFiltroTipo==='contratista',"S.hoyFiltroTipo=S.hoyFiltroTipo==='contratista'?'':'contratista';renderHoy()")}
       </div>
+      <!-- Filters row 2: agrupación -->
+      <div style="padding:4px 12px 8px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none">
+        <span style="font-size:10px;color:var(--text3);font-weight:600;flex-shrink:0">Agrupar:</span>
+        ${fchip('Sin agrupar',!S.hoyAgrupacion,"S.hoyAgrupacion='';renderHoy()")}
+        ${fchip('🔨 Contratista',S.hoyAgrupacion==='contratista',"S.hoyAgrupacion=S.hoyAgrupacion==='contratista'?'':'contratista';renderHoy()")}
+        ${fchip('📍 Nivel',S.hoyAgrupacion==='nivel',"S.hoyAgrupacion=S.hoyAgrupacion==='nivel'?'':'nivel';renderHoy()")}
+      </div>
 
       <div style="padding:0 12px">
-        ${actsVista.length===0
-          ?`<div class="empty" style="padding:16px">${S.hoyFiltroEstado||S.hoyFiltroTipo?'Sin resultados con ese filtro':'Sin actividades para este día'}</div>`
-          :actsVista.map(actRow).join('')}
+        ${(()=>{
+          if(actsVista.length===0) return`<div class="empty" style="padding:16px">${S.hoyFiltroEstado||S.hoyFiltroTipo?'Sin resultados con ese filtro':'Sin actividades para este día'}</div>`;
+          if(!S.hoyAgrupacion) return actsVista.map(actRow).join('');
+          // Build groups
+          var grupos=[];
+          if(S.hoyAgrupacion==='contratista'){
+            var conts=[...new Set(actsVista.filter(a=>a.tipo_personal==='contratista').map(a=>a.personal_nombre||'⚠️ Sin asignar'))].sort();
+            conts.forEach(function(c){
+              var items=actsVista.filter(a=>a.tipo_personal==='contratista'&&(a.personal_nombre||'⚠️ Sin asignar')===c);
+              if(items.length) grupos.push({titulo:'🔨 '+c,color:'#4b2d9e',bg:'#f0ebff',items});
+            });
+            var propios=actsVista.filter(a=>a.tipo_personal==='propio');
+            if(propios.length) grupos.push({titulo:'👷 Personal propio',color:'#1864ab',bg:'#e8f4fd',items:propios});
+            var ings=actsVista.filter(a=>a.tipo_personal==='ingeniero');
+            if(ings.length) grupos.push({titulo:'📋 Administrativo',color:'#495057',bg:'#f1f3f5',items:ings});
+          } else {
+            var niveles=['N7','N6','N5','N4','N3','N2','N1','General'];
+            niveles.forEach(function(n){
+              var items=actsVista.filter(a=>(a.area||'').startsWith(n));
+              if(items.length) grupos.push({titulo:'📍 '+n,color:'#0c8599',bg:'#e3fafc',items});
+            });
+            var sinNivel=actsVista.filter(a=>!['N7','N6','N5','N4','N3','N2','N1','General'].some(n=>(a.area||'').startsWith(n)));
+            if(sinNivel.length) grupos.push({titulo:'📍 Sin nivel',color:'#868e96',bg:'#f1f3f5',items:sinNivel});
+          }
+          return grupos.map(function(g){
+            var gDone=g.items.filter(a=>a.estado==='completado').length;
+            return '<div style="margin-bottom:2px">'
+              +'<div style="background:'+g.bg+';border-left:3px solid '+g.color+';padding:5px 10px;display:flex;align-items:center;justify-content:space-between;margin:0 -12px">'
+                +'<span style="font-size:11px;font-weight:800;color:'+g.color+'">'+g.titulo+'</span>'
+                +'<span style="font-size:10px;color:var(--text3)">'+gDone+'/'+g.items.length+'</span>'
+              +'</div>'
+              +g.items.map(actRow).join('')
+              +'</div>';
+          }).join('');
+        })()}
         ${!isDesktop&&canEdit()&&actsVista.length?`<div style="padding:8px 0;text-align:center;color:var(--text3);font-size:10.5px">← Deslizar para completar</div>`:''}
       </div>
     </div>
