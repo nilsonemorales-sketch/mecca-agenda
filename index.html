@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_74';
+const APP_VERSION='20260602_75';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -5869,7 +5869,6 @@ function renderEnObra(){
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         ${retrasadas.length?`<span style="background:#ffe3e3;color:#c92a2a;border:1px solid #ffa8a8;font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:8px;font-weight:700">⏰ ${retrasadas.length} retrasada${retrasadas.length>1?'s':''}</span>`:''}
         ${urgentes.length?`<span style="background:#ffe3e3;color:#e03131;border:1px solid #ffa8a8;font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:8px">🔴 ${urgentes.length} urgente${urgentes.length>1?'s':''}</span>`:''}
-        <button onclick="abrirCamaraObra()" style="background:#1a56db;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px">&#128247; Foto</button>
         <button onclick="loadTareas()" style="background:none;border:1.5px solid #dee2e6;border-radius:8px;padding:5px 8px;cursor:pointer;color:#495057;font-size:13px">&#8635;</button>
       </div>
     </div>
@@ -6375,15 +6374,13 @@ function renderKanban(){
 function renderObra(){
   var subnav = document.getElementById('c-obra-subnav');
   if(subnav){
-    if(S.obraVista==='todas'){
-      subnav.style.display='none';
-    } else {
-      subnav.style.cssText = subNavStyle();
-      subnav.style.display='';
-      subnav.innerHTML =
-        subNavBtn('⚡ En Progreso', S.obraVista==='activa', "S.obraVista='activa';renderObra()")+
-        subNavBtn('🗂️ Kanban',      S.obraVista==='kanban', "S.obraVista='kanban';renderObra()");
-    }
+    subnav.style.cssText = subNavStyle();
+    subnav.style.display='';
+    var navPills = S.obraVista==='todas' ? '' :
+      subNavBtn('⚡ En Progreso', S.obraVista==='activa', "S.obraVista='activa';renderObra()")+
+      subNavBtn('🗂️ Kanban',      S.obraVista==='kanban', "S.obraVista='kanban';renderObra()");
+    subnav.innerHTML = navPills +
+      '<button onclick="abrirCamaraObra()" style="margin-left:auto;flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;border:none;background:#1a56db;color:#fff">&#128247; Foto</button>';
   }
   var enobra  = document.getElementById('c-enobra');
   var act     = document.getElementById('c-act');
