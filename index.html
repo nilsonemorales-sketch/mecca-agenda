@@ -623,7 +623,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_42';
+const APP_VERSION='20260601_43';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1743,7 +1743,7 @@ function renderHoy(){
         ${fchip('Todas',!S.hoyFiltroEstado&&!S.hoyFiltroTipo,"S.hoyFiltroEstado='';S.hoyFiltroTipo='';renderHoy()")}
         ${fchip('🔄 En progreso',S.hoyFiltroEstado==='en-progreso',"S.hoyFiltroEstado=S.hoyFiltroEstado==='en-progreso'?'':'en-progreso';renderHoy()")}
         ${fchip('⏳ Pendiente',S.hoyFiltroEstado==='pendiente',"S.hoyFiltroEstado=S.hoyFiltroEstado==='pendiente'?'':'pendiente';renderHoy()")}
-        ${fchip('✅ Listas',S.hoyFiltroEstado==='completado',"S.hoyFiltroEstado=S.hoyFiltroEstado==='completado'?'':'completado';renderHoy()")}
+        ${fchip('⏸ Pausada',S.hoyFiltroEstado==='pausada',"S.hoyFiltroEstado=S.hoyFiltroEstado==='pausada'?'':'pausada';renderHoy()")}
         <div style="width:1px;background:var(--border);flex-shrink:0;margin:2px 2px"></div>
         ${fchip('👷 Propio',S.hoyFiltroTipo==='propio',"S.hoyFiltroTipo=S.hoyFiltroTipo==='propio'?'':'propio';renderHoy()")}
         ${fchip('🔨 Contratista',S.hoyFiltroTipo==='contratista',"S.hoyFiltroTipo=S.hoyFiltroTipo==='contratista'?'':'contratista';renderHoy()")}
