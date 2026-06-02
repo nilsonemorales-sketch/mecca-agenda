@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_75';
+const APP_VERSION='20260602_76';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2944,8 +2944,8 @@ async function iniciarActividad(id){
   }catch(e){setSS('err','Error');}
 }
 
-// ── FOTO RÁPIDA DESDE OBRA ────────────────────────────────────────
-function abrirCamaraObra(){
+// ── FOTO POR ACTIVIDAD DESDE OBRA ─────────────────────────────────
+function fotoActObra(actId){
   if(!S.user){showLogin();return;}
   var inp=document.getElementById('foto-obra-input');
   if(!inp){
@@ -2953,68 +2953,33 @@ function abrirCamaraObra(){
     inp.type='file'; inp.id='foto-obra-input';
     inp.accept='image/*'; inp.setAttribute('capture','environment');
     inp.style.display='none';
-    inp.addEventListener('change',function(){onFotoObraCapturada(inp);});
     document.body.appendChild(inp);
   }
+  inp.onchange=function(){
+    var file=inp.files[0];if(!file)return;
+    _guardarFotoAct(file,actId);
+    inp.value='';
+  };
   inp.value=''; inp.click();
 }
 
-function onFotoObraCapturada(input){
-  var file=input.files[0];if(!file)return;
-  // Build activity options (en-progreso first, then pendiente/pausada)
-  var orden=['en-progreso','pendiente','pausada'];
-  var acts=[].concat(
-    S.actsActivas.filter(function(a){return a.estado==='en-progreso';}),
-    S.actsActivas.filter(function(a){return a.estado==='pendiente';}),
-    S.actsActivas.filter(function(a){return a.estado==='pausada';})
-  );
-  var opts=acts.map(function(a){
-    var label=(a.descripcion||'').slice(0,45)+(a.area?' — '+a.area.slice(0,20):'');
-    return '<option value="'+a.id+'">'+esc(label)+'</option>';
-  }).join('');
-  if(!acts.length){showToast('No hay actividades activas para asociar la foto','err');return;}
-  // Preview the photo
-  var objUrl=URL.createObjectURL(file);
-  var mc=document.getElementById('mcontent');
-  mc.innerHTML=
-    '<div class="mhandle"></div>'+
-    '<h3>📷 Guardar foto</h3>'+
-    '<img src="'+objUrl+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:var(--r);margin-bottom:14px">'+
-    '<div class="fw"><label class="fl">Actividad</label>'+
-    '<select id="foto-act-sel" class="sel">'+opts+'</select></div>'+
-    '<div class="mactions">'+
-    '<button class="btn" onclick="closeModal();URL.revokeObjectURL(\''+objUrl+'\')">Cancelar</button>'+
-    '<button class="btn primary" id="btn-guardar-foto-obra" onclick="guardarFotoObra(\''+objUrl+'\')">Guardar foto</button>'+
-    '</div>';
-  mc.dataset.fotoObraFile=true;
-  window._fotoObraFile=file;
-  window._fotoObraObjUrl=objUrl;
-  openModal();
-}
-
-async function guardarFotoObra(objUrl){
-  var actId=document.getElementById('foto-act-sel').value;
-  if(!actId)return;
-  var btn=document.getElementById('btn-guardar-foto-obra');
-  if(btn){btn.disabled=true;btn.textContent='Subiendo...';}
+async function _guardarFotoAct(file,actId){
+  setSS('syncing','Subiendo foto...');
   try{
-    var url=await uploadFoto(window._fotoObraFile,actId);
-    // Update activity fotos field
-    var a=S.actsActivas.find(function(x){return x.id===actId;})||S.acts.find(function(x){return x.id===actId;});
+    var url=await uploadFoto(file,actId);
+    var a=(S.actsActivas||[]).find(function(x){return x.id===actId;})
+       ||(S.acts||[]).find(function(x){return x.id===actId;});
     if(a){
       var fotos=[(a.fotos||'').split('||').filter(Boolean),url].flat().join('||');
       a.fotos=fotos;
       await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos})});
     }
-    closeModal();
-    URL.revokeObjectURL(window._fotoObraObjUrl);
-    window._fotoObraFile=null;window._fotoObraObjUrl=null;
     setSS('ok','Foto guardada ✓');
     showToast('✓ Foto guardada','ok');
+    renderEnObra();
   }catch(e){
     setSS('err','Error subiendo foto');
-    if(btn){btn.disabled=false;btn.textContent='Guardar foto';}
-    showToast('❌ Error: '+(e.message||e),'err');
+    showToast('&#10060; Error: '+(e.message||e),'err');
   }
 }
 
@@ -5940,18 +5905,21 @@ function buildActCardObra(a){
         btn('verde',   'k_iniciar_'+k,   '▶ Iniciar',    "accionActObra(window._OA['"+k+"'],'iniciar')")+
         btn('',        'k_urgente_'+k,   a.prioridad==='urgente'?'↓ Normal':'🔴 Urgente', "accionActObra(window._OA['"+k+"'],'urgente')")+
         btn('',        'k_edit_'+k,      '✏️ Editar',    "goObraEdit('"+k+"')")+
+        btn('',        'k_foto_'+k,      '&#128247; Foto', "fotoActObra('"+id+"')")+
         '</div>';
     } else if(a.estado==='en-progreso'){
       btns = '<div class="tarea-acciones">'+
         btn('amarillo','k_pausa_'+k,     '⏸ Interrumpir', "pausarDesdeObra('"+k+"')")+
         btn('verde',   'k_comp_'+k,      '✓ Completar',   "accionActObra(window._OA['"+k+"'],'completar')")+
         btn('',        'k_edit2_'+k,     '✏️ Editar',     "goObraEdit('"+k+"')")+
+        btn('',        'k_foto2_'+k,     '&#128247; Foto', "fotoActObra('"+id+"')")+
         '</div>';
     } else if(a.estado==='pausada'){
       btns = '<div class="tarea-acciones">'+
         btn('accent',  'k_ret_'+k,       '↺ Retomar',    "accionActObra(window._OA['"+k+"'],'retomar')")+
         btn('verde',   'k_comp2_'+k,     '✓ Completar',  "accionActObra(window._OA['"+k+"'],'completar')")+
         btn('',        'k_edit3_'+k,     '✏️ Editar',    "goObraEdit('"+k+"')")+
+        btn('',        'k_foto3_'+k,     '&#128247; Foto', "fotoActObra('"+id+"')")+
         '</div>';
     }
   }
@@ -6379,8 +6347,7 @@ function renderObra(){
     var navPills = S.obraVista==='todas' ? '' :
       subNavBtn('⚡ En Progreso', S.obraVista==='activa', "S.obraVista='activa';renderObra()")+
       subNavBtn('🗂️ Kanban',      S.obraVista==='kanban', "S.obraVista='kanban';renderObra()");
-    subnav.innerHTML = navPills +
-      '<button onclick="abrirCamaraObra()" style="margin-left:auto;flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;border:none;background:#1a56db;color:#fff">&#128247; Foto</button>';
+    subnav.innerHTML = navPills;
   }
   var enobra  = document.getElementById('c-enobra');
   var act     = document.getElementById('c-act');
