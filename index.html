@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_79';
+const APP_VERSION='20260602_80';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -5539,10 +5539,9 @@ async function loadFotos(){
   setSS('syncing','Cargando fotos...');
   el.innerHTML='<div class="empty"><div class="spinner"></div><br><br>Cargando fotos...</div>';
   try{
-    let q='obra_actividades?fotos=neq.&order=fecha.desc,created_at.desc&limit=100';
+    let q='obra_actividades?fotos=neq.&order=fecha.desc,created_at.desc&limit=200';
     if(S.fotosFecha) q+=`&fecha=gte.${S.fotosFecha}`;
     if(S.fotosFechaFin) q+=`&fecha=lte.${S.fotosFechaFin}`;
-    if(S.fotosFiltroIng!=='todos') q+=`&ingeniero_id=eq.${S.fotosFiltroIng}`;
     const acts=await sb(q);
     // Filter only those with actual fotos
     S.fotosData=acts.filter(a=>(a.fotos||'').split('||').filter(Boolean).length>0);
@@ -5555,16 +5554,20 @@ function renderFotos(){
   const el=document.getElementById('c-fotos');
   if(!el)return;
 
-  const ingFiltros=[
+  const porFiltros=[
     {id:'todos',label:'Todos'},
-    ...Object.entries(USERS).map(([k,u])=>({id:k,label:u.nombre.split(' ').slice(-1)[0],color:u.color}))
+    ...Object.values(USERS).map(u=>({id:u.nombre,label:u.nombre.split(' ').slice(-1)[0],color:u.color}))
   ];
+  if(!S.fotosFiltroIng) S.fotosFiltroIng='todos';
 
   // Get all unique ubicaciones from fotos data
   const ubicsList=[...new Set(S.fotosData.map(a=>a.area||'Sin ubicación'))].sort();
 
-  // Apply ubicacion filter
+  // Apply uploader filter client-side
   let data=S.fotosData;
+  if(S.fotosFiltroIng!=='todos'){
+    data=data.filter(a=>parseFotos(a.fotos).some(f=>f.by===S.fotosFiltroIng));
+  }
   if(S.fotosFiltroUbic) data=data.filter(a=>(a.area||'Sin ubicación')===S.fotosFiltroUbic);
 
   // Group by date
@@ -5576,17 +5579,21 @@ function renderFotos(){
   });
   const fechas=Object.keys(byFecha).sort().reverse();
 
-  // Count total fotos
-  const totalFotos=data.reduce((acc,a)=>(a.fotos||'').split('||').filter(Boolean).length+acc,0);
+  // Count total fotos (only matching uploader when filtered)
+  const totalFotos=data.reduce((acc,a)=>{
+    const fp=parseFotos(a.fotos);
+    const visible=S.fotosFiltroIng==='todos'?fp:fp.filter(f=>f.by===S.fotosFiltroIng);
+    return acc+visible.length;
+  },0);
 
   el.innerHTML=`
     <!-- FILTROS -->
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:12px">
       <div style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:8px">FILTRAR FOTOS · ${totalFotos} foto${totalFotos!==1?'s':''}</div>
 
-      <div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-bottom:5px">RESPONSABLE</div>
+      <div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-bottom:5px">SUBIDO POR</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-        ${ingFiltros.map(f=>`<button onclick="S.fotosFiltroIng='${f.id}';loadFotos()" style="padding:5px 11px;border-radius:14px;border:1px solid ${S.fotosFiltroIng===f.id?'var(--accent)':'var(--border2)'};background:${S.fotosFiltroIng===f.id?'rgba(200,240,96,.12)':'var(--bg3)'};color:${S.fotosFiltroIng===f.id?'var(--accent)':'var(--text2)'};font-size:11px;font-family:var(--mono);cursor:pointer;white-space:nowrap">${f.label}</button>`).join('')}
+        ${porFiltros.map(f=>`<button onclick="S.fotosFiltroIng='${f.id}';renderFotos()" style="padding:5px 11px;border-radius:14px;border:1px solid ${S.fotosFiltroIng===f.id?'var(--accent)':'var(--border2)'};background:${S.fotosFiltroIng===f.id?'rgba(200,240,96,.12)':'var(--bg3)'};color:${S.fotosFiltroIng===f.id?'var(--accent)':'var(--text2)'};font-size:11px;font-family:var(--mono);cursor:pointer;white-space:nowrap">${f.label}</button>`).join('')}
       </div>
 
       <div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-bottom:5px">UBICACIÓN</div>
@@ -5620,7 +5627,8 @@ function renderFotos(){
         </div>
 
         ${acts.map(a=>{
-          const fotosP=parseFotos(a.fotos);
+          const fotosAll=parseFotos(a.fotos);
+          const fotosP=S.fotosFiltroIng==='todos'?fotosAll:fotosAll.filter(f=>f.by===S.fotosFiltroIng);
           if(!fotosP.length)return'';
           const fotosUrls_=fotosP.map(f=>f.url);
           const ing=Object.values(USERS).find(u=>u.nombre===a.ingeniero_nombre);
