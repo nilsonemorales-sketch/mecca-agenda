@@ -623,7 +623,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_46';
+const APP_VERSION='20260602_47';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2446,23 +2446,19 @@ function actsDesktopTable(acts, showDate){
   var hoy=new Date().toISOString().slice(0,10);
   var html='<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">';
   html+='<colgroup>'
-    +'<col style="width:102px">'   // Estado
-    +'<col>'                        // Descripción (flexible)
-    +'<col style="width:90px">'    // Fechas
-    +'<col style="width:105px">'   // Área
-    +'<col style="width:110px">'   // Asignado
-    +'<col style="width:58px">'    // %
-    +'<col style="width:28px">'    // Alerta
-    +(canEdit()?'<col style="width:32px">':'')  // ✓
+    +'<col style="width:106px">'   // Estado
+    +'<col>'                        // Descripción (flexible — fechas + alerta van aquí)
+    +'<col style="width:110px">'   // Área
+    +'<col style="width:115px">'   // Responsable
+    +'<col style="width:60px">'    // %
+    +(canEdit()?'<col style="width:34px">':'')  // ✓
     +'</colgroup>';
   html+='<thead><tr style="background:var(--bg3);border-bottom:2px solid var(--border)">';
   html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">ESTADO</th>';
-  html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">DESCRIPCIÓN</th>';
-  html+='<th style="padding:6px 8px;text-align:center;font-size:10.5px;color:var(--text3);font-weight:700">FECHAS</th>';
+  html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">DESCRIPCIÓN / FECHAS</th>';
   html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">UBICACIÓN</th>';
   html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">RESPONSABLE</th>';
   html+='<th style="padding:6px 8px;text-align:center;font-size:10.5px;color:var(--text3);font-weight:700">%</th>';
-  html+='<th style="padding:6px 4px;text-align:center;font-size:10.5px;color:var(--text3);font-weight:700">!</th>';
   if(canEdit()) html+='<th></th>';
   html+='</tr></thead><tbody>';
 
@@ -2505,18 +2501,25 @@ function actsDesktopTable(acts, showDate){
       +'<span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:7px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block" onclick="cycleEstado(\''+a.id+'\')">'+esc(est)+' ▸</span>'
       +'</td>';
 
-    // Descripción + notas
-    html+='<td style="padding:6px 8px;overflow:hidden">'
-      +'<div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px">'+esc(a.descripcion)+'</div>';
-    if(a.notas) html+='<div style="font-size:10.5px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.notas)+'</div>';
-    html+='</td>';
-
-    // Fechas: inicio → fin apiladas
-    html+='<td style="padding:6px 8px;text-align:center;font-size:11px;white-space:nowrap">';
+    // Descripción + fechas + alerta (todo en una celda flexible)
+    var fechaLine='';
     if(fi||ff){
-      html+='<div style="color:var(--text3)">'+(fi?fi.slice(5):'—')+'</div>';
-      html+='<div style="font-weight:700;color:'+ec+'">'+(ff?ff.slice(5):'—')+(diasLabel?'<span style="margin-left:3px;font-size:9.5px;color:'+diasColor+'">'+diasLabel+'</span>':'')+'</div>';
-    } else { html+='<span style="color:var(--text3)">—</span>'; }
+      fechaLine='<span style="color:var(--text3)">'+(fi?fi.slice(5):'?')+'</span>'
+        +'<span style="color:var(--text3);margin:0 3px">→</span>'
+        +'<span style="font-weight:700;color:'+(retrasada?'#e03131':ff&&diasLabel?diasColor:'var(--text2)')+'">'+(ff?ff.slice(5):'abierta')+'</span>';
+      if(diasLabel) fechaLine+='<span style="margin-left:4px;font-size:9.5px;font-weight:700;background:'+(retrasada?'#ffe3e3':'#fff3bf')+';color:'+diasColor+';border-radius:4px;padding:0 4px">'+diasLabel+'</span>';
+    }
+    html+='<td style="padding:6px 8px;overflow:hidden">'
+      +'<div style="display:flex;align-items:center;gap:5px;min-width:0">'
+      +(alerta?'<span style="flex-shrink:0;font-size:12px;line-height:1">'+alerta+'</span>':'')
+      +'<span style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px">'+esc(a.descripcion)+'</span>'
+      +'</div>';
+    if(fechaLine||a.notas){
+      html+='<div style="display:flex;align-items:center;gap:8px;margin-top:2px;font-size:10.5px;flex-wrap:wrap">';
+      if(fechaLine) html+='<span>'+fechaLine+'</span>';
+      if(a.notas) html+='<span style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px">'+esc(a.notas)+'</span>';
+      html+='</div>';
+    }
     html+='</td>';
 
     // Área
@@ -2530,9 +2533,6 @@ function actsDesktopTable(acts, showDate){
       +'<span style="font-size:12px;font-weight:700;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'var(--accent)':'var(--text3)')+';cursor:pointer" onclick="showPctPopover(\''+a.id+'\',this)">'+a.porcentaje+'%</span>';
     if(a.porcentaje>0) html+='<div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:3px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,a.porcentaje)+'%;background:'+(a.porcentaje>=100?'#2f9e44':'var(--accent)')+'"></div></div>';
     html+='</td>';
-
-    // Alerta
-    html+='<td style="padding:6px 4px;text-align:center">'+alerta+'</td>';
 
     // Completar
     if(canEdit()){
