@@ -521,6 +521,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="view" id="view-equipo">
       <div id="c-equipo-subnav"></div>
       <div id="c-asist"></div>
+      <div id="c-cont" style="display:none"></div>
       <div id="c-pers" style="display:none"></div>
       <div id="c-pen" style="display:none"></div>
     </div>
@@ -592,6 +593,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <button class="dw-btn" onclick="goTabD('hoy')">📋 Hoy — Resumen del día</button>
     <button class="dw-btn" onclick="goTabD('obra')">🏗️ Obra — Actividades en obra</button>
     <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='asistencia'">👷 Equipo — Asistencia</button>
+    <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='contratistas'">🔨 Equipo — Contratistas</button>
     <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='personal'">👥 Equipo — Personal</button>
     <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='penalidades'">⚠️ Equipo — Penalidades</button>
     <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='dashboard'">📊 Reportes — Dashboard</button>
@@ -623,7 +625,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_48';
+const APP_VERSION='20260602_49';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1127,6 +1129,7 @@ let S={
   tareas:[], tareasFiltro:'activas', actsActivas:[], enObraFiltro:'', enObraContratista:'', enObraFiltroTipo:'', enObraFiltroContratista:'', enObraFiltroPersonal:'', enObraFiltroEstado:'',
   hoyFiltroEstado:'', hoyFiltroTipo:'', hoyAgrupacion:'', hoyPeriodoOpen:false,
   hoyPeriodoDesde:'', hoyPeriodoHasta:'', hoyPeriodoData:null,
+  contVistaMode:'diario', contRepDesde:'', contRepHasta:'', contRepData:null,
   fotosFiltroIng:'todos', fotosFiltroUbic:'', fotosFecha:'', fotosFechaFin:'', fotosData:[],
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
@@ -5874,32 +5877,230 @@ function renderObra(){
 }
 
 // ── RENDER EQUIPO (Asistencia + Personal + Penalidades) ──
+// ── ASISTENCIA CONTRATISTAS ───────────────────────────
+function renderAsistContratistas(){
+  var el=document.getElementById('c-cont');
+  if(!el) return;
+  var conts=S.personal.filter(function(p){return p.tipo==='contratista'&&p.activo;});
+  var asistHoy=conts.map(function(p){return{p:p,a:S.asist.find(function(x){return x.personal_id===p.id&&x.fecha===S.fecha;})||{}};});
+  var presentes=asistHoy.filter(function(x){return x.a.estado==='presente'||x.a.estado==='medio día';}).length;
+  var totalTrab=asistHoy.reduce(function(s,x){return s+(parseInt(x.a.horas_extra)||0);},0);
+  var isRep=S.contVistaMode==='reporte';
+
+  var h='<div style="display:flex;gap:8px;padding:12px 0 8px">';
+  h+='<button onclick="S.contVistaMode=\'diario\';renderAsistContratistas()" style="flex:1;padding:9px 6px;border-radius:var(--r);border:1.5px solid '+(isRep?'var(--border)':'var(--accent)')+';background:'+(isRep?'var(--bg2)':'var(--accent-soft)')+';color:'+(isRep?'var(--text2)':'var(--accent)')+';font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">📅 Asistencia diaria</button>';
+  h+='<button onclick="S.contVistaMode=\'reporte\';renderAsistContratistas()" style="flex:1;padding:9px 6px;border-radius:var(--r);border:1.5px solid '+(isRep?'var(--accent)':'var(--border)')+';background:'+(isRep?'var(--accent-soft)':'var(--bg2)')+';color:'+(isRep?'var(--accent)':'var(--text2)')+';font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">📊 Reporte período</button>';
+  h+='</div>';
+
+  if(!isRep){
+    h+=dateNavHTML();
+    // Summary banner
+    h+='<div style="display:flex;gap:0;background:var(--accent-soft);border:1.5px solid var(--accent)40;border-radius:14px;padding:12px 0;margin-bottom:12px">';
+    h+='<div style="flex:1;text-align:center"><div style="font-size:24px;font-weight:800;color:var(--accent)">'+presentes+'<span style="font-size:13px;font-weight:500;color:var(--text3)">/'+conts.length+'</span></div><div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Contratistas</div></div>';
+    h+='<div style="width:1px;background:var(--border)"></div>';
+    h+='<div style="flex:1;text-align:center"><div style="font-size:24px;font-weight:800;color:var(--accent)">'+totalTrab+'</div><div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Trabajadores en obra</div></div>';
+    h+='</div>';
+
+    if(!conts.length){
+      h+='<div class="empty">No hay contratistas registrados.<br>Agrega en la pestaña Personal.</div>';
+    } else {
+      asistHoy.forEach(function(x){
+        var p=x.p; var a=x.a;
+        var cant=parseInt(a.horas_extra)||0;
+        var estadoOk=a.estado==='presente'||a.estado==='medio día';
+        h+='<div class="card">';
+        h+='<div class="card-hdr">';
+        h+='<div style="display:flex;align-items:center;gap:8px">';
+        h+='<div class="p-av" style="width:36px;height:36px;font-size:12px;background:'+avColor(p.nombre)+'22;color:'+avColor(p.nombre)+'">'+initials(p.nombre)+'</div>';
+        h+='<div><div style="font-size:13px;font-weight:600">'+esc(p.nombre)+'</div><div style="font-size:11px;color:var(--text3)">'+esc(p.oficio||'—')+'</div></div>';
+        h+='</div>';
+        if(a.estado) h+='<span class="pill '+a.estado.replace(' ','-')+'">'+esc(a.estado)+'</span>';
+        else h+='<span style="font-size:11px;color:var(--text3)">Sin registrar</span>';
+        h+='</div>';
+        h+='<div class="card-body">';
+        if(canEdit()){
+          h+='<div class="asist-row" style="margin-bottom:8px">';
+          [{e:'presente',l:'✓ Presente'},{e:'ausente',l:'✗ Ausente'},{e:'justificado',l:'📋 Justificado'}].forEach(function(o){
+            h+='<button class="asist-chip '+(a.estado===o.e?'sel-'+o.e:'')+'" onclick="marcarAsistCont(\''+p.id+'\',\''+o.e+'\')">'+o.l+'</button>';
+          });
+          h+='</div>';
+          if(estadoOk){
+            h+='<div style="display:flex;gap:10px;align-items:flex-end;margin-top:4px">';
+            h+='<div style="flex:0 0 150px"><label class="fl">Trabajadores en obra</label>';
+            h+='<input type="number" min="0" max="999" step="1" value="'+cant+'" onchange="updAsist(\''+p.id+'\',\'horas_extra\',this.value)" style="font-size:22px;font-weight:800;text-align:center;color:var(--accent);padding:6px"></div>';
+            h+='<div style="flex:1"><label class="fl">Observaciones</label><input type="text" value="'+esc(a.notas||'')+'" placeholder="Notas opcionales..." onchange="updAsist(\''+p.id+'\',\'notas\',this.value)"></div>';
+            h+='</div>';
+            if(cant>0) h+='<div style="margin-top:8px;font-size:11px;color:var(--text3)">Total acumulado este mes: <strong style="color:var(--accent)">calculando...</strong></div>';
+          }
+        } else {
+          var txt=a.estado||'Sin registrar';
+          if(estadoOk&&cant>0) txt+=' · '+cant+' trabajadores';
+          if(a.notas) txt+=' · '+a.notas;
+          h+='<div style="font-size:12px;color:var(--text3);padding:4px 0">'+esc(txt)+'</div>';
+        }
+        h+='</div></div>';
+      });
+    }
+    h+='<div style="height:70px"></div>';
+  } else {
+    h+=renderRepContratistasHTML();
+  }
+  el.innerHTML=h;
+}
+
+async function marcarAsistCont(pid, estado){
+  if(!canEdit()) return;
+  var a=S.asist.find(function(x){return x.personal_id===pid&&x.fecha===S.fecha;});
+  if(a&&a.estado===estado){
+    a.estado=''; a.horas_extra=0;
+    renderAsistContratistas();
+    setSS('syncing','Desmarcando...');
+    try{await sb('obra_asistencia?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'',horas_extra:0})});setSS('ok','✓');}
+    catch(e){setSS('err','Error');}
+    return;
+  }
+  if(a){
+    a.estado=estado;
+    renderAsistContratistas();
+    setSS('syncing','Guardando...');
+    try{await sb('obra_asistencia?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:estado})});setSS('ok','✓');}
+    catch(e){setSS('err','Error');}
+  } else {
+    a={id:uid(),personal_id:pid,fecha:S.fecha,estado:estado,hora_entrada:'',hora_salida:'',horas_extra:0,notas:''};
+    S.asist.push(a);
+    renderAsistContratistas();
+    setSS('syncing','Guardando...');
+    try{await sb('obra_asistencia',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:JSON.stringify({...a})});setSS('ok','✓');}
+    catch(e){setSS('err','Error');}
+  }
+}
+
+function renderRepContratistasHTML(){
+  var hoy=new Date().toISOString().slice(0,10);
+  if(!S.contRepDesde) S.contRepDesde=hoy.slice(0,7)+'-01';
+  if(!S.contRepHasta) S.contRepHasta=hoy;
+  var INP='width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px';
+
+  var h='<div style="background:var(--bg2);border:1.5px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:12px">';
+  h+='<div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Seleccionar período</div>';
+  h+='<div style="display:flex;gap:10px;margin-bottom:10px">';
+  h+='<div style="flex:1"><label class="fl">Desde</label><input type="date" value="'+S.contRepDesde+'" onchange="S.contRepDesde=this.value;S.contRepData=null;renderAsistContratistas()" style="'+INP+'"></div>';
+  h+='<div style="flex:1"><label class="fl">Hasta</label><input type="date" value="'+S.contRepHasta+'" onchange="S.contRepHasta=this.value;S.contRepData=null;renderAsistContratistas()" style="'+INP+'"></div>';
+  h+='</div>';
+  h+='<button onclick="loadRepContratistas()" style="width:100%;padding:11px;border-radius:var(--r);border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📊 Generar reporte</button>';
+  h+='</div>';
+
+  var d=S.contRepData;
+  if(!d) return h+'<div style="color:var(--text3);font-size:12px;text-align:center;padding:24px">Selecciona el período y toca Generar reporte.</div>';
+
+  var conts=S.personal.filter(function(p){return p.tipo==='contratista'&&p.activo;});
+  var regs=d.registros||[];
+  var dias=[]; var cur=new Date(d.desde+'T12:00:00'); var fin=new Date(d.hasta+'T12:00:00');
+  while(cur<=fin){dias.push(cur.toISOString().slice(0,10));cur.setDate(cur.getDate()+1);}
+  var nDias=dias.length;
+
+  var rows=conts.map(function(p){
+    var pRegs=regs.filter(function(r){return r.personal_id===p.id;});
+    var presentes=pRegs.filter(function(r){return r.estado==='presente'||r.estado==='medio día';});
+    var ausentes=pRegs.filter(function(r){return r.estado==='ausente';}).length;
+    var justif=pRegs.filter(function(r){return r.estado==='justificado';}).length;
+    var totalTrab=presentes.reduce(function(s,r){return s+(parseInt(r.horas_extra)||0);},0);
+    var promTrab=presentes.length?Math.round(totalTrab/presentes.length*10)/10:0;
+    var sinReg=nDias-pRegs.filter(function(r){return r.estado;}).length;
+    return{p:p,presentes:presentes.length,ausentes:ausentes,justif:justif,totalTrab:totalTrab,promTrab:promTrab,sinReg:sinReg};
+  });
+
+  var totPres=rows.reduce(function(s,r){return s+r.presentes;},0);
+  var totTrab=rows.reduce(function(s,r){return s+r.totalTrab;},0);
+  var totAus=rows.reduce(function(s,r){return s+r.ausentes;},0);
+  var totJust=rows.reduce(function(s,r){return s+r.justif;},0);
+  var totProm=totPres?Math.round(totTrab/totPres*10)/10:0;
+  var diasLbl=nDias===1?'1 día':nDias+' días';
+
+  // Summary chips
+  h+='<div style="margin-bottom:8px;font-size:10px;color:var(--text3);font-weight:600">'+fmtF(d.desde)+' → '+fmtF(d.hasta)+' · '+diasLbl+'</div>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:14px">';
+  h+='<div style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 8px;text-align:center"><div style="font-size:20px;font-weight:800;color:#2f9e44">'+totPres+'</div><div style="font-size:9.5px;color:var(--text3)">Días presencia</div></div>';
+  h+='<div style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 8px;text-align:center"><div style="font-size:20px;font-weight:800;color:var(--accent)">'+totTrab+'</div><div style="font-size:9.5px;color:var(--text3)">Trabajadores total</div></div>';
+  h+='<div style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 8px;text-align:center"><div style="font-size:20px;font-weight:800;color:var(--blue)">'+totProm+'</div><div style="font-size:9.5px;color:var(--text3)">Prom. por día</div></div>';
+  h+='</div>';
+
+  h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:11.5px">';
+  h+='<thead><tr style="background:var(--accent);color:#fff">';
+  h+='<th style="padding:7px 8px;text-align:left;font-weight:700;white-space:nowrap">Contratista</th>';
+  h+='<th style="padding:7px 6px;text-align:center;font-weight:700;white-space:nowrap">✓ Días</th>';
+  h+='<th style="padding:7px 6px;text-align:center;font-weight:700;white-space:nowrap">👷 Total</th>';
+  h+='<th style="padding:7px 6px;text-align:center;font-weight:700;white-space:nowrap">≈ Prom.</th>';
+  h+='<th style="padding:7px 6px;text-align:center;font-weight:700;white-space:nowrap">✗ Aus.</th>';
+  h+='<th style="padding:7px 6px;text-align:center;font-weight:700;white-space:nowrap">📋 Just.</th>';
+  h+='<th style="padding:7px 6px;text-align:center;font-weight:700;white-space:nowrap">⬜ S/R</th>';
+  h+='</tr></thead><tbody>';
+  rows.forEach(function(r,i){
+    var bg=i%2===0?'var(--bg)':'var(--bg2)';
+    h+='<tr style="background:'+bg+'">';
+    h+='<td style="padding:7px 8px;font-weight:600"><div>'+esc(r.p.nombre)+'</div><div style="font-size:9.5px;color:var(--text3)">'+esc(r.p.oficio||'')+'</div></td>';
+    h+='<td style="padding:7px 6px;text-align:center;font-weight:700;color:#2f9e44">'+r.presentes+'</td>';
+    h+='<td style="padding:7px 6px;text-align:center;font-weight:800;color:var(--accent)">'+r.totalTrab+'</td>';
+    h+='<td style="padding:7px 6px;text-align:center;color:var(--text2)">'+r.promTrab+'</td>';
+    h+='<td style="padding:7px 6px;text-align:center;font-weight:700;color:#e03131">'+r.ausentes+'</td>';
+    h+='<td style="padding:7px 6px;text-align:center;color:var(--text2)">'+r.justif+'</td>';
+    h+='<td style="padding:7px 6px;text-align:center;color:var(--text3)">'+r.sinReg+'</td>';
+    h+='</tr>';
+  });
+  h+='<tr style="background:var(--accent-soft);font-weight:700;border-top:2px solid var(--accent)">';
+  h+='<td style="padding:7px 8px;color:var(--accent)">TOTAL</td>';
+  h+='<td style="padding:7px 6px;text-align:center;color:#2f9e44">'+totPres+'</td>';
+  h+='<td style="padding:7px 6px;text-align:center;color:var(--accent)">'+totTrab+'</td>';
+  h+='<td style="padding:7px 6px;text-align:center">'+totProm+'</td>';
+  h+='<td style="padding:7px 6px;text-align:center;color:#e03131">'+totAus+'</td>';
+  h+='<td style="padding:7px 6px;text-align:center">'+totJust+'</td>';
+  h+='<td style="padding:7px 6px;text-align:center">—</td>';
+  h+='</tr></tbody></table></div>';
+  h+='<div style="height:70px"></div>';
+  return h;
+}
+
+async function loadRepContratistas(){
+  if(!S.contRepDesde||!S.contRepHasta){alert('Selecciona las fechas del período.');return;}
+  setSS('syncing','Cargando...');
+  try{
+    var contIds=S.personal.filter(function(p){return p.tipo==='contratista'&&p.activo;}).map(function(p){return p.id;});
+    if(!contIds.length){setSS('ok','Sin contratistas');return;}
+    var regs=await sb('obra_asistencia?fecha=gte.'+S.contRepDesde+'&fecha=lte.'+S.contRepHasta+'&order=fecha');
+    var filtered=regs.filter(function(r){return contIds.includes(r.personal_id);});
+    S.contRepData={desde:S.contRepDesde,hasta:S.contRepHasta,registros:filtered};
+    setSS('ok','✓ '+filtered.length+' registros');
+    renderAsistContratistas();
+  }catch(e){setSS('err','Error al cargar');console.error(e);}
+}
+
 function renderEquipo(){
   var subnav = document.getElementById('c-equipo-subnav');
   if(subnav){
     subnav.style.cssText = subNavStyle();
     subnav.innerHTML =
-      subNavBtn('👷 Asistencia',  S.equipoVista==='asistencia',  "S.equipoVista='asistencia';renderEquipo()")+
-      subNavBtn('👥 Personal',    S.equipoVista==='personal',    "S.equipoVista='personal';renderEquipo()")+
-      subNavBtn('⚠️ Penalidades', S.equipoVista==='penalidades', "S.equipoVista='penalidades';renderEquipo()");
+      subNavBtn('👷 P. Propio',   S.equipoVista==='asistencia',   "S.equipoVista='asistencia';renderEquipo()")+
+      subNavBtn('🔨 Contratistas',S.equipoVista==='contratistas', "S.equipoVista='contratistas';renderEquipo()")+
+      subNavBtn('👥 Personal',    S.equipoVista==='personal',     "S.equipoVista='personal';renderEquipo()")+
+      subNavBtn('⚠️ Penalidades', S.equipoVista==='penalidades',  "S.equipoVista='penalidades';renderEquipo()");
   }
   var asist = document.getElementById('c-asist');
+  var cont  = document.getElementById('c-cont');
   var pers  = document.getElementById('c-pers');
   var pen   = document.getElementById('c-pen');
+  function hideAll(){ [asist,cont,pers,pen].forEach(function(e){if(e)e.style.display='none';}); }
   if(S.equipoVista==='personal'){
-    if(asist) asist.style.display='none';
-    if(pers)  pers.style.display='block';
-    if(pen)   pen.style.display='none';
+    hideAll(); if(pers) pers.style.display='block';
     renderPersonal();
   } else if(S.equipoVista==='penalidades'){
-    if(asist) asist.style.display='none';
-    if(pers)  pers.style.display='none';
-    if(pen)   pen.style.display='block';
+    hideAll(); if(pen) pen.style.display='block';
     renderPens();
+  } else if(S.equipoVista==='contratistas'){
+    hideAll(); if(cont) cont.style.display='block';
+    renderAsistContratistas();
   } else {
-    if(asist) asist.style.display='block';
-    if(pers)  pers.style.display='none';
-    if(pen)   pen.style.display='none';
+    hideAll(); if(asist) asist.style.display='block';
     renderAsist();
   }
   updateFAB();
