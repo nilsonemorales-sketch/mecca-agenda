@@ -625,7 +625,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_54';
+const APP_VERSION='20260602_55';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2757,9 +2757,14 @@ async function quickSetPct(actId,pct){
   if(!canEdit())return;
   var a=S.acts.find(function(x){return x.id===actId;});
   if(!a)return;
+  // Route 100% through the photo gate
+  if(pct>=100){
+    document.getElementById('pct-pop')?.remove();
+    marcarActCompletada(actId);
+    return;
+  }
   a.porcentaje=pct;
-  if(pct>=100){a.estado='completado';}
-  else if(pct>0&&a.estado==='pendiente'){a.estado='en-progreso';}
+  if(pct>0&&a.estado==='pendiente'){a.estado='en-progreso';}
   reRenderActs();
   try{
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
@@ -3187,6 +3192,23 @@ async function saveActIngeniero(ai){
     predecesoras:(document.getElementById('a-preds')||{value:''}).value.trim()||null,
   };
   const editIdIng=(document.getElementById('a-edit-id')||{value:''}).value.trim();
+  // Non-admin cannot complete without photo
+  if(a.estado==='completado'&&editIdIng&&!isAdmin()){
+    var existIngAct=S.acts.find(function(x){return x.id===editIdIng;});
+    if(!tieneFoto(existIngAct)){
+      var errFotoIng=document.getElementById('completado-sin-foto-err');
+      if(!errFotoIng){
+        errFotoIng=document.createElement('div');errFotoIng.id='completado-sin-foto-err';
+        errFotoIng.style.cssText='background:#ffe3e3;border:1.5px solid #e03131;border-radius:8px;padding:10px 12px;color:#c92a2a;font-size:12px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px';
+        errFotoIng.innerHTML='<span style="font-size:18px">📷</span><span>Se requiere foto para completar esta actividad. Solo el administrador puede completar sin foto.</span>';
+        var estSelIng=document.getElementById('a-est');
+        if(estSelIng) estSelIng.parentNode.insertBefore(errFotoIng,estSelIng.nextSibling);
+      }
+      var selIng=document.getElementById('a-est');
+      if(selIng){selIng.style.border='2px solid #e03131';setTimeout(function(){selIng.style.border='';},2000);}
+      return;
+    }
+  }
   closeModal(); setSS('syncing','Guardando...');
   try{
     if(!editIdIng){
@@ -5690,16 +5712,10 @@ async function accionActObra(id, accion){
     update={estado:'en-progreso'};
     a.estado='en-progreso';
   } else if(accion==='completar'){
-    update={estado:'completado',porcentaje:100};
-    a.estado='completado'; a.porcentaje=100;
-    // Remove from actsActivas after a moment
-    setTimeout(function(){
-      S.actsActivas=S.actsActivas.filter(function(x){return x.id!==id;});
-      // Also update S.acts
-      var ai=S.acts.findIndex(function(x){return x.id===id;});
-      if(ai>=0){S.acts[ai].estado='completado';S.acts[ai].porcentaje=100;}
-      renderEnObra(); renderActs(); renderHoy();
-    },500);
+    // Route through photo gate
+    var actFull=S.acts.find(function(x){return x.id===id;})||a;
+    marcarActCompletada(id);
+    return;
   } else if(accion==='retomar'){
     update={estado:'en-progreso'};
     a.estado='en-progreso';
