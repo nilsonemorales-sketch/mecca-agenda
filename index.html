@@ -623,7 +623,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260601_37';
+const APP_VERSION='20260601_38';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1834,6 +1834,12 @@ function updAsist(pid,field,val){
 if(!S.actFiltroRapido) S.actFiltroRapido = '';
 if(!S.actFiltroAvanzado) S.actFiltroAvanzado = {};
 
+function toggleEnObraPropio(){
+  var on = S.enObraFiltroTipo==='propio';
+  S.enObraFiltroTipo = on ? '' : 'propio';
+  S.enObraFiltroPersonal=''; S.enObraFiltroContratista=''; S.enObraContratista='';
+  renderEnObra();
+}
 function toggleFiltroPropio(){
   var on = S.actFiltroAvanzado.tipo==='propio';
   S.actFiltroAvanzado = {...S.actFiltroAvanzado, tipo: on ? '' : 'propio', personal: ''};
@@ -4994,13 +5000,9 @@ function buildEnObraFiltros(){
     h+='</div>';
   }
 
-  // Personal x la casa dropdown (always shown)
-  h+='<div style="margin-bottom:8px">';
-  h+='<div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Personal x la casa</div>';
-  h+=filtroDropdown('fo-pers', S.enObraFiltroPersonal, propioOpts,
-    propioOpts.length?'Todo el personal':'Sin trabajadores registrados',
-    "S.enObraFiltroPersonal=this.value;S.enObraFiltroTipo=this.value?'propio':'';renderEnObra()");
-  h+='</div>';
+  // Personal propio toggle chip
+  var propioOn=S.enObraFiltroTipo==='propio';
+  h+='<button onclick="toggleEnObraPropio()" style="width:100%;margin-bottom:8px;padding:8px 10px;border-radius:8px;border:1.5px solid '+(propioOn?'#1c7ed6':'#dee2e6')+';background:'+(propioOn?'#e7f5ff':'#f8f9fa')+';color:'+(propioOn?'#1c7ed6':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(propioOn?'✓ ':'')+'👷 Solo personal propio ('+propioOpts.length+' trabajadores)</button>';
 
   // Active filters + clear
   var hasFilters=S.enObraFiltroTipo||S.enObraFiltroContratista||S.enObraFiltroPersonal||S.enObraFiltroEstado;
@@ -5808,82 +5810,106 @@ function renderAptoReport(){
 function printAptoReport(apto){
   var acts=getAptoActs(apto);
   var hoy=new Date().toISOString().slice(0,10);
-  var ECOL={completado:'#2f9e44','en-progreso':'#1a56db',pendiente:'#868e96',pausada:'#e67700',retrasada:'#e03131',bloqueada:'#862e9c','no-iniciada':'#495057'};
-  var EBG={completado:'#d3f9d8','en-progreso':'#dbe4ff',pendiente:'#f1f3f5',pausada:'#fff3bf',retrasada:'#ffe3e3',bloqueada:'#f3d9fa','no-iniciada':'#f1f3f5'};
-  var PCOL={urgente:'#e03131',alta:'#e67700',normal:'#2f9e44'};
-  var PBG={urgente:'#ffe3e3',alta:'#fff3bf',normal:'#d3f9d8'};
   var completadas=acts.filter(function(a){return a.estado==='completado';}).length;
+  var enProgreso=acts.filter(function(a){return a.estado==='en-progreso';}).length;
   var pct=acts.length?Math.round(acts.reduce(function(s,a){return s+(a.porcentaje||0);},0)/acts.length):0;
   var retrasadasCnt=acts.filter(function(a){return a.fecha&&a.fecha<hoy&&a.estado!=='completado';}).length;
+  var pctColor=pct>=80?'#2f9e44':pct>=50?'#e67700':'#c92a2a';
 
   // Build groups
   var grupos=[];
   var contsU=[...new Set(acts.filter(function(a){return a.tipo_personal==='contratista'&&a.personal_nombre;}).map(function(a){return a.personal_nombre;}))].sort();
   contsU.forEach(function(c){
     var g=acts.filter(function(a){return a.tipo_personal==='contratista'&&a.personal_nombre===c;});
-    if(g.length) grupos.push({titulo:'Contratista: '+c,color:'#4b2d9e',bg:'#ede8ff',g:g});
+    if(g.length) grupos.push({titulo:c,icono:'🔨',color:'#4b2d9e',bg:'#f0ebff',g:g});
   });
   var sc=acts.filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;});
-  if(sc.length) grupos.push({titulo:'⚠️ Sin contratista asignado',color:'#c92a2a',bg:'#fff5f5',g:sc});
+  if(sc.length) grupos.push({titulo:'Sin asignar',icono:'⚠️',color:'#c92a2a',bg:'#fff5f5',g:sc});
   var pr=acts.filter(function(a){return a.tipo_personal==='propio';});
-  if(pr.length) grupos.push({titulo:'Personal x la casa',color:'#1864ab',bg:'#e7f5ff',g:pr});
+  if(pr.length) grupos.push({titulo:'Personal propio',icono:'👷',color:'#1864ab',bg:'#e8f4fd',g:pr});
   var ing=acts.filter(function(a){return a.tipo_personal==='ingeniero';});
-  if(ing.length) grupos.push({titulo:'Tareas administrativas',color:'#343a40',bg:'#f1f3f5',g:ing});
+  if(ing.length) grupos.push({titulo:'Administrativo',icono:'📋',color:'#495057',bg:'#f1f3f5',g:ing});
 
-  function pRow(a){
+  // Estado abbreviations & colors
+  function estInfo(a){
     var retrasada=a.fecha&&a.fecha<hoy&&a.estado!=='completado';
-    var est=retrasada?'retrasada':a.estado;
-    var ec=ECOL[est]||'#868e96'; var eb=EBG[est]||'#f1f3f5';
-    var pc=PCOL[a.prioridad]||'#868e96'; var pb=PBG[a.prioridad]||'#f1f3f5';
-    return '<tr>'
-      +'<td>'+(a.prioridad?'<span style="background:'+pb+';color:'+pc+';border:1px solid '+pc+'40;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700">'+a.prioridad.toUpperCase()+'</span>':'—')+'</td>'
-      +'<td style="font-weight:600;color:#212529">'+esc(a.descripcion)+(a.notas?'<div style="font-size:8.5px;color:#868e96;margin-top:0">'+esc(a.notas)+'</div>':'')+'</td>'
-      +'<td style="color:#1a56db;font-size:10.5px">'+esc(a.area||'—')+'</td>'
-      +'<td style="color:#495057;font-size:10.5px">'+esc(a.ingeniero_nombre||'—')+'</td>'
-      +'<td style="text-align:center;color:'+(retrasada?'#c92a2a':'#495057')+';font-weight:'+(retrasada?'700':'400')+'">'+(a.fecha?fmtF(a.fecha):'—')+'</td>'
-      +'<td style="text-align:center;font-weight:700;color:'+(a.porcentaje>=100?'#2f9e44':a.porcentaje>0?'#1a56db':'#868e96')+'">'+a.porcentaje+'%</td>'
-      +'<td><span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700">'+est+'</span></td>'
+    if(retrasada) return {lbl:'RETRASO',dot:'#c92a2a',bg:'#ffe3e3'};
+    var map={completado:{lbl:'✓ LISTO',dot:'#2f9e44',bg:'#d3f9d8'},'en-progreso':{lbl:'EN OBRA',dot:'#1a56db',bg:'#dbe4ff'},pendiente:{lbl:'PENDIENTE',dot:'#868e96',bg:'#f1f3f5'},pausada:{lbl:'PAUSADA',dot:'#e67700',bg:'#fff3bf'},bloqueada:{lbl:'BLOQUEADA',dot:'#862e9c',bg:'#f3d9fa'}};
+    return map[a.estado]||{lbl:a.estado,dot:'#868e96',bg:'#f1f3f5'};
+  }
+
+  function bar(p){
+    var c=p>=100?'#2f9e44':p>0?'#1a56db':'#dee2e6';
+    return '<div style="width:52px;height:7px;background:#e9ecef;border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:3px">'
+      +'<div style="width:'+Math.min(p,100)+'%;height:100%;background:'+c+'"></div></div>'
+      +'<span style="font-size:9px;font-weight:700;color:'+c+'">'+p+'%</span>';
+  }
+
+  function pRow(a,i){
+    var ei=estInfo(a);
+    var urg=a.prioridad==='urgente';
+    return '<tr style="background:'+(ei.lbl==='✓ LISTO'?'#f8fff8':urg?'#fff5f5':i%2===0?'#fff':'#f8f9fa')+'">'
+      +'<td style="text-align:center;font-size:9px;color:#868e96;width:18px">'+(i+1)+'</td>'
+      +'<td style="font-size:10.5px;font-weight:'+(ei.lbl==='✓ LISTO'?'400':'600')+';color:'+(ei.lbl==='✓ LISTO'?'#868e96':'#212529')+';text-decoration:'+(ei.lbl==='✓ LISTO'?'line-through':'none')+'">'+esc(a.descripcion)+(urg?'<span style="margin-left:4px;font-size:8px;color:#e03131;font-weight:800">● URGENTE</span>':'')+(a.notas?'<div style="font-size:8px;color:#adb5bd;font-weight:400;margin-top:1px">'+esc(a.notas)+'</div>':'')+'</td>'
+      +'<td style="font-size:9.5px;color:#495057;white-space:nowrap">'+esc(a.area||'—')+'</td>'
+      +'<td style="font-size:9px;color:#868e96;white-space:nowrap">'+esc((a.ingeniero_nombre||'—').split(' ').slice(-1)[0])+'</td>'
+      +'<td style="font-size:9px;text-align:center;color:'+(ei.lbl==='RETRASO'?'#c92a2a':'#495057')+';font-weight:'+(ei.lbl==='RETRASO'?'700':'400')+';white-space:nowrap">'+(a.fecha?fmtF(a.fecha):'—')+'</td>'
+      +'<td style="white-space:nowrap">'+bar(a.porcentaje||0)+'</td>'
+      +'<td style="text-align:center"><span style="background:'+ei.bg+';color:'+ei.dot+';border:1px solid '+ei.dot+'55;border-radius:3px;padding:1px 5px;font-size:8.5px;font-weight:800;white-space:nowrap">'+ei.lbl+'</span></td>'
       +'</tr>';
   }
 
-  var TH='<thead><tr style="background:#1e1b4b;color:#fff">'
-    +'<th style="width:50px">Prior.</th><th>Descripción</th>'
-    +'<th style="width:80px">Ubicación</th><th style="width:85px">Responsable</th>'
-    +'<th style="width:58px;text-align:center">Fecha</th>'
-    +'<th style="width:28px;text-align:center">%</th><th style="width:68px">Estado</th>'
-    +'</tr></thead>';
+  var TH='<tr style="background:#1e1b4b;color:#fff">'
+    +'<th style="width:18px;text-align:center">#</th><th>Descripción de trabajo</th>'
+    +'<th style="width:90px">Área</th><th style="width:70px">Resp.</th>'
+    +'<th style="width:54px;text-align:center">Fecha</th>'
+    +'<th style="width:80px">Avance</th><th style="width:72px;text-align:center">Estado</th>'
+    +'</tr>';
 
   var sections=grupos.map(function(g){
     var gDone=g.g.filter(function(a){return a.estado==='completado';}).length;
-    var gPct=Math.round(g.g.reduce(function(s,a){return s+(a.porcentaje||0);},0)/g.g.length);
-    return '<div style="margin-bottom:5px">'
-      +'<div style="background:'+g.bg+';padding:2px 8px;border-left:3px solid '+g.color+';display:flex;justify-content:space-between;align-items:center">'
-        +'<span style="font-size:10px;font-weight:800;color:'+g.color+'">'+esc(g.titulo)+'</span>'
-        +'<span style="font-size:9px;color:#495057">'+gDone+'/'+g.g.length+' hechas &nbsp;·&nbsp; <b>'+gPct+'%</b></span>'
+    var gPct=g.g.length?Math.round(g.g.reduce(function(s,a){return s+(a.porcentaje||0);},0)/g.g.length):0;
+    var gColor=gPct>=80?'#2f9e44':gPct>=40?'#e67700':'#c92a2a';
+    return '<div style="margin-bottom:8px;border:1px solid '+g.color+'44;border-radius:4px;overflow:hidden">'
+      +'<div style="background:'+g.bg+';padding:4px 10px;border-left:4px solid '+g.color+';display:flex;align-items:center;gap:10px">'
+        +'<span style="font-size:11px;font-weight:800;color:'+g.color+'">'+g.icono+' '+esc(g.titulo)+'</span>'
+        +'<span style="font-size:9px;color:#495057;margin-left:auto">'+gDone+' de '+g.g.length+' completadas</span>'
+        +'<div style="width:60px;height:8px;background:#fff;border-radius:4px;overflow:hidden;border:1px solid #dee2e6"><div style="width:'+gPct+'%;height:100%;background:'+gColor+'"></div></div>'
+        +'<span style="font-size:10px;font-weight:800;color:'+gColor+'">'+gPct+'%</span>'
       +'</div>'
-      +'<table style="margin-bottom:0">'+TH+'<tbody>'+g.g.map(pRow).join('')+'</tbody></table>'
+      +'<table><thead>'+TH+'</thead><tbody>'+g.g.map(pRow).join('')+'</tbody></table>'
       +'</div>';
   }).join('');
 
-  var win=window.open('','_blank','width=1000,height=700');
+  var win=window.open('','_blank','width=1100,height=800');
   win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
     +'<title>Supervisión '+esc(apto)+' — Mecca Residence</title>'
-    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Calibri,Arial,sans-serif;font-size:10px;color:#212529;padding:6px 10px}'
-    +'h1{font-size:12px;font-weight:800;color:#1e1b4b;display:inline}'
-    +'.infobar{font-size:9.5px;color:#495057;margin-bottom:5px;padding:3px 8px;background:#f1f3f5;border-left:3px solid #1e1b4b;display:flex;gap:14px;align-items:center;flex-wrap:wrap}'
-    +'.infobar b{color:#212529}'
-    +'table{width:100%;border-collapse:collapse;border:1px solid #dee2e6;border-top:none}'
-    +'thead th{padding:3px 6px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.2px;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15)}'
-    +'tbody tr:nth-child(even){background:#f8f9fa}'
-    +'tbody td{padding:2px 5px;border-right:1px solid #dee2e6;border-bottom:1px solid #dee2e6;vertical-align:top}'
-    +'@media print{body{padding:2px 4px}@page{size:A4 landscape;margin:4mm 5mm}.no-break{page-break-inside:avoid}}</style>'
+    +'<style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:Calibri,Arial,sans-serif;font-size:10.5px;color:#212529;padding:8px 12px;background:#fff}'
+    +'table{width:100%;border-collapse:collapse}'
+    +'thead th{padding:4px 7px;text-align:left;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;border-right:1px solid rgba(255,255,255,.2)}'
+    +'tbody td{padding:3px 7px;border-right:1px solid #e9ecef;border-bottom:1px solid #e9ecef;vertical-align:middle}'
+    +'.hdr-bar{display:flex;align-items:center;gap:0;margin-bottom:8px;border-radius:6px;overflow:hidden;border:1px solid #dee2e6}'
+    +'.hdr-main{background:#1e1b4b;color:#fff;padding:6px 14px;flex:1}'
+    +'.hdr-stat{padding:6px 14px;text-align:center;border-left:1px solid #dee2e6;min-width:70px}'
+    +'.hdr-stat .val{font-size:16px;font-weight:800;line-height:1}'
+    +'.hdr-stat .lbl{font-size:8px;color:#868e96;text-transform:uppercase;letter-spacing:.4px}'
+    +'.prog-wrap{background:#e9ecef;border-radius:4px;overflow:hidden;height:6px;width:100%;margin-top:4px}'
+    +'.prog-fill{height:100%;border-radius:4px}'
+    +'@media print{body{padding:3px 6px}@page{size:A4 landscape;margin:5mm 6mm}}</style>'
     +'</head><body>'
-    +'<div class="infobar"><span><h1>Supervisión '+esc(apto)+'</h1></span>'
-    +'<span>Total: <b>'+acts.length+'</b></span>'
-    +'<span>Completadas: <b style="color:#2f9e44">'+completadas+'</b></span>'
-    +(retrasadasCnt?'<span>Retrasadas: <b style="color:#c92a2a">'+retrasadasCnt+'</b></span>':'')
-    +'<span>Avance: <b style="color:'+(pct>=80?'#2f9e44':pct>=50?'#e67700':'#c92a2a')+'">'+pct+'%</b></span>'
-    +'<span style="margin-left:auto;color:#868e96">Mecca Residence &nbsp;·&nbsp; '+fmtF(hoy)+'</span>'
+    +'<div class="hdr-bar">'
+      +'<div class="hdr-main">'
+        +'<div style="font-size:13px;font-weight:800;letter-spacing:.3px">MECCA RESIDENCE 2026 &nbsp;—&nbsp; '+esc(apto)+'</div>'
+        +'<div style="font-size:9px;color:rgba(255,255,255,.6);margin-top:1px">BRIDEX SRL &nbsp;·&nbsp; Supervisión de actividades &nbsp;·&nbsp; '+fmtF(hoy)+'</div>'
+        +'<div class="prog-wrap" style="margin-top:5px"><div class="prog-fill" style="width:'+pct+'%;background:'+pctColor+'"></div></div>'
+      +'</div>'
+      +'<div class="hdr-stat"><div class="val" style="color:#1e1b4b">'+acts.length+'</div><div class="lbl">Total</div></div>'
+      +'<div class="hdr-stat"><div class="val" style="color:#2f9e44">'+completadas+'</div><div class="lbl">Listas</div></div>'
+      +'<div class="hdr-stat"><div class="val" style="color:#1a56db">'+enProgreso+'</div><div class="lbl">En obra</div></div>'
+      +(retrasadasCnt?'<div class="hdr-stat"><div class="val" style="color:#c92a2a">'+retrasadasCnt+'</div><div class="lbl">Retraso</div></div>':'')
+      +'<div class="hdr-stat" style="background:'+(pct>=80?'#d3f9d8':pct>=50?'#fff3bf':'#ffe3e3')+'"><div class="val" style="color:'+pctColor+'">'+pct+'%</div><div class="lbl">Avance</div></div>'
     +'</div>'
     +sections
     +'<script>window.onload=function(){window.print();}<\/script>'
