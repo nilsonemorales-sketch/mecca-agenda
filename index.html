@@ -625,7 +625,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260602_52';
+const APP_VERSION='20260602_53';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1568,7 +1568,7 @@ function showQuickActSheet(actId){
       <div style="margin-top:8px"><span style="background:${EBGC[a.estado]||'#f1f3f5'};color:${ECOLOR[a.estado]||'#868e96'};border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700">${a.estado}</span></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      ${a.estado!=='completado'?`<button onclick="marcarActCompletada('${a.id}');closeModal()" style="padding:14px;border-radius:14px;border:2px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Completar</button>`:'<div></div>'}
+      ${a.estado!=='completado'?`<button onclick="marcarActCompletada('${a.id}')" style="padding:14px;border-radius:14px;border:2px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Completar</button>`:'<div></div>'}
       <button onclick="cycleEstado('${a.id}');closeModal()" style="padding:14px;border-radius:14px;border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">▷ ${esc(nextEst)}</button>
     </div>
     ${canEdit()?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
@@ -2667,6 +2667,7 @@ async function completarSinFotoAdmin(actId){
 
 async function doMarcarCompletada(actId){
   var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
+  closeModal();
   a.estado='completado'; a.porcentaje=100;
   S.actsActivas=S.actsActivas?S.actsActivas.filter(function(x){return x.id!==actId}):[];
   reRenderActs(); checkSuccessors();
