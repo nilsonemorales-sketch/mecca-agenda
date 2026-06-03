@@ -641,7 +641,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260603_94';
+const APP_VERSION='20260603_95';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1152,7 +1152,7 @@ let S={
   personal:[], asist:[], acts:[], pens:[], semanas:[], plan:[],
   semanaActual:null, currentTab:'hoy', busqueda:'',
   histFiltroIng:'todos', histFecha:'', histFechaFin:'', histActs:[], histAsist:[], histPens:[],
-  tareas:[], tareasFiltro:'activas', actsActivas:[], enObraFiltro:'', enObraContratista:'', enObraFiltroTipo:'', enObraFiltroContratista:'', enObraFiltroPersonal:'', enObraFiltroEstado:'', enObraFiltroUrgente:false, enObraFiltroTexto:'', enObraFiltrosOpen:false,
+  tareas:[], tareasFiltro:'activas', actsActivas:[], enObraFiltro:'', enObraContratista:'', enObraFiltroTipo:'', enObraFiltroContratista:'', enObraFiltroPersonal:'', enObraFiltroEstado:'', enObraFiltroUrgente:false, enObraFiltroTexto:'', enObraFiltrosOpen:false, enObraAgrupacion:'',
   hoyFiltroEstado:'', hoyFiltroTipo:'', hoyAgrupacion:'', hoyPeriodoOpen:false,
   hoyPeriodoDesde:'', hoyPeriodoHasta:'', hoyPeriodoData:null,
   contVistaMode:'diario', contRepDesde:'', contRepHasta:'', contRepData:null,
@@ -5806,6 +5806,15 @@ function buildEnObraFiltros(){
   h+=(hasFilters?'⚡ '+activeFiltCount:'☰')+' Filtros</button>';
   h+='</div>';
 
+  // ── GROUPING CHIPS ────────────────────────────────────────────────
+  var agOpts=[{v:'',l:'Lista'},{v:'nivel',l:'Nivel'},{v:'contratista',l:'Contratista'},{v:'estado',l:'Estado'}];
+  h+='<div style="display:flex;gap:6px;margin-bottom:10px">';
+  agOpts.forEach(function(o){
+    var on=S.enObraAgrupacion===o.v;
+    h+='<button onclick="S.enObraAgrupacion=\''+o.v+'\';renderEnObra()" style="flex:1;padding:6px 4px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);border:1.5px solid '+(on?'var(--accent)':'#dee2e6')+';background:'+(on?'var(--accent)':'#fff')+';color:'+(on?'#fff':'#868e96')+'">'+o.l+'</button>';
+  });
+  h+='</div>';
+
   // Results count line
   var q=S.enObraFiltroTexto||'';
   if(hasFilters||q){
@@ -5930,10 +5939,10 @@ function renderEnObra(){
     ${acts.length===0
       ?`<div class="empty" style="padding:24px">
           <div style="font-size:28px;margin-bottom:8px">👷</div>
-          <div style="font-size:13px;font-weight:500;color:var(--text2);margin-bottom:4px">Sin actividades${S.enObraFiltroContratista||S.enObraFiltroTipo?' para este filtro':' activas hoy'}</div>
+          <div style="font-size:13px;font-weight:500;color:var(--text2);margin-bottom:4px">Sin actividades${S.enObraFiltroContratista||S.enObraFiltroTipo||S.enObraFiltroTexto?' para este filtro':' activas hoy'}</div>
           <div style="font-size:12px;color:var(--text3)">Toca + para agregar una actividad</div>
         </div>`
-      :acts.map(function(a){ return buildActCardObra(a); }).join('')}
+      :buildEnObraGrupos(acts)}
 
     <div style="height:80px"></div>`;
 
@@ -5942,6 +5951,67 @@ function renderEnObra(){
     var inp=document.getElementById('eo-search');
     if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
   }
+}
+
+function buildEnObraGrupos(acts){
+  var ag=S.enObraAgrupacion||'';
+  if(!ag) return acts.map(function(a){return buildActCardObra(a);}).join('');
+
+  // Build groups
+  var grupos=[];
+  if(ag==='nivel'){
+    var niveles=[...new Set(acts.map(function(a){
+      var m=(a.area||'').match(/^(N\d+)/);return m?m[1]:'Sin nivel';
+    }))].sort(function(a,b){
+      var na=parseInt(a.replace('N',''))||0, nb=parseInt(b.replace('N',''))||0;
+      return na-nb;
+    });
+    grupos=niveles.map(function(n){
+      return{key:n,label:'📍 '+n,items:acts.filter(function(a){
+        var m=(a.area||'').match(/^(N\d+)/);return (m?m[1]:'Sin nivel')===n;
+      }),color:'#1a56db',bg:'#e8f0fe'};
+    });
+  } else if(ag==='contratista'){
+    var conts=[...new Set(acts.map(function(a){
+      return a.tipo_personal==='contratista'?(a.personal_nombre||'Sin asignar'):'👷 Personal propio';
+    }))].sort();
+    grupos=conts.map(function(c){
+      return{key:c,label:c==='👷 Personal propio'?c:'🔨 '+c,items:acts.filter(function(a){
+        return (a.tipo_personal==='contratista'?(a.personal_nombre||'Sin asignar'):'👷 Personal propio')===c;
+      }),color:c==='👷 Personal propio'?'#1c7ed6':'#7048e8',bg:c==='👷 Personal propio'?'#e7f5ff':'#f3d9fa'};
+    });
+  } else if(ag==='estado'){
+    var eMap={pendiente:{l:'⏳ Pendiente',c:'#868e96',bg:'#f1f3f5'},'en-progreso':{l:'▶ En progreso',c:'#1a56db',bg:'#dbe4ff'},pausada:{l:'⏸ Pausada',c:'#e67700',bg:'#fff3bf'}};
+    var retrasadas=acts.filter(function(a){return isRetrasada(a)&&a.estado!=='completado';});
+    if(retrasadas.length) grupos.push({key:'retrasada',label:'⏰ Retrasadas',items:retrasadas,color:'#c92a2a',bg:'#fff5f5'});
+    ['en-progreso','pendiente','pausada'].forEach(function(k){
+      var items=acts.filter(function(a){return a.estado===k&&(!isRetrasada(a)||k==='pausada');});
+      if(items.length) grupos.push({key:k,label:eMap[k].l,items:items,color:eMap[k].c,bg:eMap[k].bg});
+    });
+  }
+
+  if(!grupos.length) return acts.map(function(a){return buildActCardObra(a);}).join('');
+
+  return grupos.map(function(g){
+    var urgG=g.items.filter(function(a){return a.prioridad==='urgente';}).length;
+    var done=g.items.filter(function(a){return a.estado==='completado';}).length;
+    var pct=g.items.length?Math.round(done/g.items.length*100):0;
+    var h='<div style="margin-bottom:14px">';
+    // Group header
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;background:'+g.bg+';border-left:3px solid '+g.color+';border-radius:8px 8px 0 0;padding:8px 12px">';
+    h+='<span style="font-size:12px;font-weight:700;color:'+g.color+'">'+esc(g.label)+'</span>';
+    h+='<div style="display:flex;gap:6px;align-items:center">';
+    if(urgG) h+='<span style="font-size:10px;font-weight:700;color:#e03131;background:#ffe3e3;border-radius:6px;padding:2px 6px">🔴 '+urgG+'</span>';
+    h+='<span style="font-size:11px;font-weight:700;color:'+g.color+';background:#fff;border-radius:6px;padding:2px 8px;border:1px solid '+g.color+'33">'+g.items.length+'</span>';
+    h+='</div></div>';
+    // Cards — remove individual card bottom-margin except last
+    h+=g.items.map(function(a,i){
+      var card=buildActCardObra(a);
+      return card.replace('border-radius:var(--r2)','border-radius:0').replace('margin-bottom:8px','margin-bottom:0').replace('border-top:','border-top-SKIP:');
+    }).join('');
+    h+='</div>';
+    return h;
+  }).join('');
 }
 
 // Global registry for act card actions
