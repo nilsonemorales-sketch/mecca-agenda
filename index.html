@@ -541,6 +541,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <div id="c-apto" style="display:none"></div>
       <div id="c-sem" style="display:none"></div>
       <div id="c-hist" style="display:none"></div>
+      <div id="c-urgentes-rep" style="display:none"></div>
     </div>
 
     <div class="view" id="view-fotos"><div id="c-fotos"></div></div>
@@ -639,7 +640,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260603_88';
+const APP_VERSION='20260603_89';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -6818,6 +6819,91 @@ async function otorgarBonifMensual(ingKey){
 }
 
 // ── RENDER REPORTES HUB (Dashboard + Semana + Historial) ──
+function renderReporteUrgentes(){
+  var el=document.getElementById('c-urgentes-rep');
+  if(!el) return;
+
+  if(!S.urgRepAgrup) S.urgRepAgrup='persona';
+
+  var urgentes=(S.acts||[]).filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
+  var total=urgentes.length;
+  var propios=urgentes.filter(function(a){return a.tipo_personal==='propio';});
+  var contratistas=urgentes.filter(function(a){return a.tipo_personal==='contratista';});
+  var admin=urgentes.filter(function(a){return a.tipo_personal==='ingeniero';});
+  var retrasadas=urgentes.filter(function(a){return isRetrasada(a);});
+
+  // Build groups
+  var grupos=[];
+  if(S.urgRepAgrup==='ubicacion'){
+    var ubics=[...new Set(urgentes.map(function(a){return a.area||'Sin ubicación';}))].sort();
+    grupos=ubics.map(function(u){
+      return{titulo:'📍 '+u, items:urgentes.filter(function(a){return(a.area||'Sin ubicación')===u;}), color:'#1a56db', bg:'#dbe4ff'};
+    });
+  } else {
+    if(contratistas.length) grupos.push({titulo:'🔨 Contratistas', items:contratistas, color:'#7048e8', bg:'#f3d9fa'});
+    if(propios.length)      grupos.push({titulo:'👷 Personal x la casa', items:propios, color:'#1c7ed6', bg:'#e7f5ff'});
+    if(admin.length)        grupos.push({titulo:'📋 Administrativas', items:admin, color:'#1a56db', bg:'#dbe4ff'});
+  }
+
+  var EC={'en-progreso':'#1a56db','pendiente':'#868e96','pausada':'#e67700','completado':'#2f9e44'};
+  var EL={'en-progreso':'▶ En curso','pendiente':'⏳ Pendiente','pausada':'⏸ Pausada','completado':'✓ Lista'};
+
+  function actRow(a){
+    var ec=isRetrasada(a)?'#c92a2a':(EC[a.estado]||'#868e96');
+    var el_=isRetrasada(a)?('⏰ Retrasada'):((EL[a.estado]||a.estado));
+    var dias=isRetrasada(a)?Math.round((new Date(today())-new Date(a.fecha))/(1000*60*60*24)):0;
+    return '<div style="padding:10px 12px;border-left:3px solid '+ec+';border-bottom:1px solid var(--border2);background:#fff">'+
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(a.descripcion)+'</div>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;font-size:11px;color:var(--text3)">'+
+            (a.area?'<span style="background:#e8f0fe;color:var(--accent);border-radius:5px;padding:1px 7px;font-weight:600">📍 '+esc(a.area)+'</span>':'')+
+            (a.personal_nombre?'<span>👷 '+esc(a.personal_nombre)+'</span>':'')+
+            (a.ingeniero_nombre?'<span>👤 '+esc(a.ingeniero_nombre)+'</span>':'')+
+            '<span>📅 '+a.fecha+'</span>'+
+          '</div>'+
+        '</div>'+
+        '<span style="flex-shrink:0;font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;background:'+(isRetrasada(a)?'#ffe3e3':'#f8f9fa')+';color:'+ec+';border:1px solid '+ec+'33">'+el_+(dias>0?' '+dias+'d':'')+'</span>'+
+      '</div>'+
+    '</div>';
+  }
+
+  var h='<div style="padding:12px 14px">';
+
+  // Header stats
+  h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px">';
+  h+=[ {v:total,l:'Urgentes',c:'#e03131'}, {v:retrasadas.length,l:'Retrasadas',c:retrasadas.length?'#c92a2a':'var(--text3)'}, {v:contratistas.length,l:'Contratistas',c:'#7048e8'}, {v:propios.length,l:'Propios',c:'#1c7ed6'} ]
+    .map(function(s){return'<div class="scard"><div class="v" style="color:'+s.c+';font-size:20px">'+s.v+'</div><div class="l">'+s.l+'</div></div>';}).join('');
+  h+='</div>';
+
+  // Grouping toggle
+  h+='<div style="display:flex;gap:6px;margin-bottom:14px">';
+  h+='<button onclick="S.urgRepAgrup=\'persona\';renderReporteUrgentes()" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);border:1.5px solid '+(S.urgRepAgrup==='persona'?'#e03131':'#dee2e6')+';background:'+(S.urgRepAgrup==='persona'?'#fff5f5':'#f8f9fa')+';color:'+(S.urgRepAgrup==='persona'?'#e03131':'#495057')+'">👤 Por persona</button>';
+  h+='<button onclick="S.urgRepAgrup=\'ubicacion\';renderReporteUrgentes()" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);border:1.5px solid '+(S.urgRepAgrup==='ubicacion'?'#1a56db':'#dee2e6')+';background:'+(S.urgRepAgrup==='ubicacion'?'#dbe4ff':'#f8f9fa')+';color:'+(S.urgRepAgrup==='ubicacion'?'#1a56db':'#495057')+'">📍 Por ubicación</button>';
+  h+='</div>';
+
+  if(total===0){
+    h+='<div class="empty" style="padding:40px 20px"><div style="font-size:32px;margin-bottom:10px">✅</div><div style="font-size:14px;font-weight:600;color:var(--text2)">Sin actividades urgentes activas</div></div>';
+  } else {
+    grupos.forEach(function(g){
+      if(!g.items.length) return;
+      var retG=g.items.filter(function(a){return isRetrasada(a);}).length;
+      h+='<div style="border:1.5px solid '+g.color+'44;border-radius:12px;overflow:hidden;margin-bottom:14px">';
+      h+='<div style="background:'+g.bg+';padding:10px 14px;display:flex;align-items:center;justify-content:space-between">';
+      h+='<div style="font-size:13px;font-weight:700;color:'+g.color+'">'+g.titulo+'</div>';
+      h+='<div style="display:flex;gap:8px;align-items:center">';
+      if(retG) h+='<span style="font-size:10px;font-weight:700;color:#c92a2a;background:#ffe3e3;border-radius:6px;padding:2px 7px">⏰ '+retG+' retrasada'+(retG!==1?'s':'')+'</span>';
+      h+='<span style="font-size:11px;font-weight:700;color:'+g.color+';background:#fff;border-radius:6px;padding:2px 8px;border:1px solid '+g.color+'44">'+g.items.length+' 🔴</span>';
+      h+='</div></div>';
+      g.items.forEach(function(a){h+=actRow(a);});
+      h+='</div>';
+    });
+  }
+
+  h+='<div style="height:80px"></div></div>';
+  el.innerHTML=h;
+}
+
 function renderReportesHub(){
   var subnav = document.getElementById('c-rep-subnav');
   if(subnav){
@@ -6827,6 +6913,7 @@ function renderReportesHub(){
       subNavBtn('📈 Proyección',  S.reportesVista==='proyeccion',  "S.reportesVista='proyeccion';renderReportesHub()")+
       subNavBtn('🏠 Por Apto',    S.reportesVista==='apto',        "S.reportesVista='apto';renderReportesHub()")+
       subNavBtn('📅 Semana',      S.reportesVista==='semana',      "S.reportesVista='semana';renderReportesHub()")+
+      subNavBtn('🔴 Urgentes',    S.reportesVista==='urgentes',    "S.reportesVista='urgentes';renderReportesHub()")+
       subNavBtn('📜 Historial',   S.reportesVista==='historial',   "S.reportesVista='historial';renderReportesHub()");
   }
   var rep  = document.getElementById('c-rep');
@@ -6834,8 +6921,9 @@ function renderReportesHub(){
   var apto = document.getElementById('c-apto');
   var sem  = document.getElementById('c-sem');
   var hist = document.getElementById('c-hist');
+  var urg  = document.getElementById('c-urgentes-rep');
   function hideAll(){
-    [rep,proy,apto,sem,hist].forEach(function(e){if(e)e.style.display='none';});
+    [rep,proy,apto,sem,hist,urg].forEach(function(e){if(e)e.style.display='none';});
   }
   if(S.reportesVista==='proyeccion'){
     hideAll(); if(proy) proy.style.display='block';
@@ -6846,6 +6934,9 @@ function renderReportesHub(){
   } else if(S.reportesVista==='semana'){
     hideAll(); if(sem) sem.style.display='block';
     renderSemana();
+  } else if(S.reportesVista==='urgentes'){
+    hideAll(); if(urg) urg.style.display='block';
+    renderReporteUrgentes();
   } else if(S.reportesVista==='historial'){
     hideAll(); if(hist) hist.style.display='block';
     renderHistorial();
