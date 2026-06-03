@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260603_87';
+const APP_VERSION='20260603_88';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1233,15 +1233,8 @@ async function sbWithTimeout(path, ms=10000){
 }
 
 async function uploadFoto(file, actId){
-  const ext=file.name.split('.').pop()||'jpg';
-  const path=`${actId}/${uid()}.${ext}`;
-  const r=await fetch(SB+'/storage/v1/object/obra-fotos/'+path,{
-    method:'POST',
-    headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':file.type,'x-upsert':'true'},
-    body:file,
-  });
-  if(!r.ok)throw new Error('Upload failed');
-  return STORAGE+path;
+  // Photo uploads disabled — storage conservation
+  throw new Error('Subida de fotos deshabilitada');
 }
 
 function setSS(t,m){
@@ -2643,9 +2636,6 @@ function actHTML(a, ai, tipo){
     ${fotos.length?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
       ${fotos.map(f=>`<img src="${f}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${a.fecha}')">`).join('')}
     </div>`:''}
-    ${a.foto_pendiente&&!fotos.length&&canEdit()?`<label class="act-foto-btn">
-      📷<input type="file" accept="image/*" multiple style="display:none" onchange="subirFoto(this,${ai})">
-    </label>`:''}
     ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2)">
       <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Completar</button>
       <button onclick="togglePrioridadAct('${a.id}')" title="${a.prioridad==='urgente'?'Quitar urgente':'Marcar urgente'}" style="padding:8px 12px;border-radius:var(--r);border:1.5px solid ${a.prioridad==='urgente'?'#e03131':'#dee2e6'};background:${a.prioridad==='urgente'?'#ffe3e3':'#fff'};font-size:13px;cursor:pointer">${a.prioridad==='urgente'?'🔴':'⚪'}</button>
@@ -2672,54 +2662,6 @@ function syncEstadoPct(sel){
   else if(sel.value==='pendiente'&&parseInt(pct.value)===100){pct.value=0;if(lbl)lbl.textContent='0%';}
 }
 
-function showFotoRequerida(actId){
-  var a=S.acts.find(function(x){return x.id===actId;});
-  if(!a) return;
-  var mc=document.getElementById('mcontent');
-  mc.innerHTML=
-    '<div class="mhandle"></div>'+
-    '<div style="text-align:center;padding:8px 0 4px">'+
-    '<div style="font-size:36px;margin-bottom:8px">📷</div>'+
-    '<h3 style="margin:0 0 6px">Foto requerida</h3>'+
-    '<div style="font-size:12px;color:var(--text3);margin-bottom:16px">Se necesita al menos una foto para completar esta actividad.</div>'+
-    '</div>'+
-    '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;font-weight:600;color:var(--text)">'+esc(a.descripcion)+(a.area?'<div style="font-size:11px;color:var(--accent);font-weight:400;margin-top:2px">'+esc(a.area)+'</div>':'')+'</div>'+
-    '<label style="display:block;width:100%;cursor:pointer">'+
-    '<div id="foto-req-btn" style="width:100%;padding:14px;border-radius:var(--r);border:2px dashed var(--accent);background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700;text-align:center;box-sizing:border-box">'+
-    '📷 Toca para subir foto</div>'+
-    '<input type="file" accept="image/*" multiple style="display:none" onchange="subirFotoYCompletar(this,\''+actId+'\')">'+
-    '</label>'+
-    '<div style="margin-top:10px;text-align:center">'+
-    (isAdmin()?'<button onclick="completarSinFotoAdmin(\''+actId+'\')" style="background:none;border:none;color:#e03131;font-size:11px;cursor:pointer;text-decoration:underline;font-family:var(--font)">⚠️ Completar sin foto (genera penalidad)</button>':
-    '<span style="font-size:11px;color:var(--text3)">Contacta al administrador para completar sin foto</span>')+
-    '</div>'+
-    '<div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button></div>';
-  openModal();
-}
-
-async function subirFotoYCompletar(input, actId){
-  var files=Array.from(input.files); if(!files.length) return;
-  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
-  var n=files.length;
-  var uploader=S.user&&S.user.nombre?'::'+S.user.nombre:'';
-  var btn=document.getElementById('foto-req-btn');
-  if(btn) btn.textContent='⏳ Subiendo...';
-  setSS('syncing','Subiendo '+n+' foto'+(n>1?'s':'')+'...');
-  try{
-    var nuevas=[];
-    for(var i=0;i<files.length;i++){
-      if(n>1&&btn) btn.textContent='⏳ Foto '+(i+1)+' de '+n+'...';
-      var url=await uploadFoto(files[i],actId);
-      nuevas.push(url+uploader);
-    }
-    var fotos=[...(a.fotos||'').split('||').filter(Boolean),...nuevas].join('||');
-    a.fotos=fotos; a.foto_pendiente=false;
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos,foto_pendiente:false})});
-    setSS('ok','✓ '+n+' foto'+(n>1?'s':'')+' subida'+(n>1?'s':''));
-    closeModal();
-    doMarcarCompletada(actId);
-  }catch(e){setSS('err','Error subiendo foto');if(btn) btn.textContent='📷 Toca para subir foto';}
-}
 
 // Resolve engineer from an activity record (uses ingeniero_id first, falls back to nombre)
 function resolveIngenieroDeAct(a){
@@ -2732,29 +2674,6 @@ function resolveIngenieroDeAct(a){
   return null;
 }
 
-async function generarPenalidadSinFoto(a){
-  // Penalize whoever is performing the action:
-  // - Engineer logged in → penalize them (they completed without uploading)
-  // - Admin acting → penalize the assigned engineer on the activity
-  var ing;
-  if(S.user && !isAdmin() && USERS[S.user.id]){
-    ing={id:S.user.id, user:USERS[S.user.id]};
-  } else {
-    ing=resolveIngenieroDeAct(a);
-  }
-  if(!ing||!ing.user){
-    console.warn('generarPenalidadSinFoto: no engineer resolved for act',a?.id,a?.ingeniero_id,a?.ingeniero_nombre);
-    return;
-  }
-  var pen={id:uid(),personal_id:resolvePersonalId(ing.id),personal_nombre:ing.user.nombre,
-    fecha:today(),tipo:'Actividad sin foto',
-    descripcion:'Completada sin foto: '+a.descripcion+(a.area?' — '+a.area:''),
-    monto:0,aplicada:true,ingeniero_id:S.user?.id||'sistema'};
-  S.pens.unshift(pen);
-  showToast('⚠️ Penalidad "sin foto" aplicada a '+ing.user.nombre,'warn');
-  if(S.currentTab==='equipo'&&S.equipoVista==='penalidades') renderPens();
-  await savePen(pen); // savePen shows real DB error on failure
-}
 
 // Log a user interaction (aplicada:false = log only, no points impact)
 async function logEvento(tipo, descripcion, ingId){
@@ -2804,10 +2723,7 @@ function reRenderActs(){
   if(S.currentTab==='reportes') renderReportesHub();
 }
 
-async function marcarActCompletada(id){
-  var a=S.acts.find(function(x){return x.id===id;});
-  if(!a) return;
-  if(!tieneFoto(a)) await generarPenalidadSinFoto(a);
+function marcarActCompletada(id){
   doMarcarCompletada(id);
 }
 
@@ -2978,71 +2894,7 @@ async function iniciarActividad(id){
 }
 
 // ── FOTO POR ACTIVIDAD DESDE OBRA ─────────────────────────────────
-function fotoActObra(actId){
-  if(!S.user){showLogin();return;}
-  var inp=document.getElementById('foto-obra-input');
-  if(!inp){
-    inp=document.createElement('input');
-    inp.type='file'; inp.id='foto-obra-input';
-    inp.accept='image/*'; inp.multiple=true;
-    inp.style.display='none';
-    document.body.appendChild(inp);
-  }
-  inp.onchange=function(){
-    var files=Array.from(inp.files);if(!files.length)return;
-    _guardarFotoAct(files,actId);
-    inp.value='';
-  };
-  inp.value=''; inp.click();
-}
 
-async function _guardarFotoAct(files,actId){
-  if(!Array.isArray(files)) files=[files];
-  var n=files.length;
-  setSS('syncing','Subiendo '+n+' foto'+(n>1?'s':'')+'...');
-  try{
-    var a=(S.actsActivas||[]).find(function(x){return x.id===actId;})
-       ||(S.acts||[]).find(function(x){return x.id===actId;});
-    var uploader=S.user&&S.user.nombre?'::'+S.user.nombre:'';
-    var nuevas=[];
-    for(var i=0;i<files.length;i++){
-      setSS('syncing','Subiendo foto '+(i+1)+' de '+n+'...');
-      var url=await uploadFoto(files[i],actId);
-      nuevas.push(url+uploader);
-    }
-    if(a){
-      var fotos=[...(a.fotos||'').split('||').filter(Boolean),...nuevas].join('||');
-      a.fotos=fotos;
-      await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos})});
-    }
-    setSS('ok',n+' foto'+(n>1?'s':'')+' guardada'+(n>1?'s':'')+' ✓');
-    showToast('&#10003; '+(n>1?n+' fotos guardadas':'Foto guardada'),'ok');
-    renderEnObra();
-  }catch(e){
-    setSS('err','Error subiendo foto');
-    showToast('&#10060; Error: '+(e.message||e),'err');
-  }
-}
-
-async function subirFoto(input, ai){
-  const files=Array.from(input.files);if(!files.length)return;
-  const a=S.acts[ai];
-  const n=files.length;
-  const uploader=S.user&&S.user.nombre?'::'+S.user.nombre:'';
-  setSS('syncing','Subiendo '+n+' foto'+(n>1?'s':'')+'...');
-  try{
-    const nuevas=[];
-    for(let i=0;i<files.length;i++){
-      if(n>1) setSS('syncing','Subiendo foto '+(i+1)+' de '+n+'...');
-      const url=await uploadFoto(files[i],a.id);
-      nuevas.push(url+uploader);
-    }
-    const fotos=[...(a.fotos||'').split('||').filter(Boolean),...nuevas].join('||');
-    a.fotos=fotos;a.foto_pendiente=false;
-    await sb('obra_actividades?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos})});
-    setSS('ok',n+' foto'+(n>1?'s':'')+' guardada'+(n>1?'s':'')+' ✓');reRenderActs();
-  }catch(e){setSS('err','Error subiendo foto');}
-}
 
 function verFoto(url){
   document.getElementById('fviewer-img').src=url;
@@ -3389,11 +3241,6 @@ async function saveActIngeniero(ai){
   // Force consistency: pct=100 → completado, completado → pct=100
   if(a.estado==='completado') a.porcentaje=100;
   if(a.porcentaje>=100) a.estado='completado';
-  // Auto-penalize if completing without photo
-  if(a.estado==='completado'&&editIdIng){
-    var existIngAct=S.acts.find(function(x){return x.id===editIdIng;});
-    if(existIngAct&&!tieneFoto(existIngAct)) await generarPenalidadSinFoto(Object.assign({},existIngAct,a));
-  }
   closeModal(); setSS('syncing','Guardando...');
   const _createdIngActs=[];
   try{
@@ -3503,7 +3350,7 @@ async function saveAct(ai){
     ingeniero_id:getFld('a-ing','')?Object.entries(USERS).find(([k,u])=>u.nombre===getFld('a-ing',''))?.[0]||S.user?.id||'':S.user?.id||'',
     ingeniero_nombre:getFld('a-ing','')||S.user?.nombre||'',
     fecha:S.fecha,
-    foto_pendiente:true,
+    foto_pendiente:false,
     predecesoras:getFld('a-preds','').trim()||null,
   };
   const editId = getFld('a-edit-id','').trim();
@@ -3535,11 +3382,6 @@ async function saveAct(ai){
       var realIdx=S.acts.findIndex(function(x){return x.id===editId;});
       if(realIdx>=0) Object.assign(S.acts[realIdx],a);
       await sb('obra_actividades?id=eq.'+editId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
-    }
-    // Auto-penalize if completed without foto
-    if(a.estado==='completado'&&editId){
-      var savedAct=S.acts.find(function(x){return x.id===editId;});
-      if(savedAct&&!tieneFoto(savedAct)) await generarPenalidadSinFoto(Object.assign({},savedAct,a));
     }
     setSS('ok','✓ '+hhmm()); reRenderActs();
     if(S.currentTab==='enobra') loadTareas();
@@ -3829,9 +3671,6 @@ function renderPens(){
     return{k:k,nombre:u.nombre,rol:u.rol,pts:pts,niv:niv,pensMes:pensMes.length};
   }).sort(function(a,b){return b.pts-a.pts;});
 
-  // ── Acts completed without photo ──
-  var actsSinFoto=S.acts.filter(function(a){return a.estado==='completado'&&!tieneFoto(a);});
-
   // ── Penalty list with filters ──
   var chips=FILTROS_PEN.map(function(f){
     var act=S.penFiltro===f.id;
@@ -3863,26 +3702,7 @@ function renderPens(){
   });
   h+='</div></div>';
 
-  // SECTION 2: Completed without photo
-  if(actsSinFoto.length){
-    h+='<div style="background:#fff3bf;border:1.5px solid #f08c00;border-radius:12px;padding:12px 14px;margin-bottom:16px">';
-    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-    h+='<div style="font-size:12px;font-weight:700;color:#7d4e00">📷 '+actsSinFoto.length+' actividad'+(actsSinFoto.length!==1?'es':'')+' completada'+(actsSinFoto.length!==1?'s':'')+' sin foto</div>';
-    h+='</div>';
-    actsSinFoto.slice(0,6).forEach(function(a){
-      h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #fde68a;gap:8px">';
-      h+='<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:#7d4e00;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.descripcion)+'</div>';
-      if(a.area) h+='<div style="font-size:10.5px;color:#856404">'+esc(a.area)+'</div>';
-      if(a.ingeniero_nombre) h+='<div style="font-size:10px;color:var(--text3)">'+esc(a.ingeniero_nombre)+'</div>';
-      h+='</div>';
-      h+='<button onclick="showFotoParaCompletada(\''+a.id+'\')" style="flex-shrink:0;padding:5px 10px;border-radius:var(--r);border:1.5px solid #d97706;background:transparent;color:#d97706;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">📷 Subir</button>';
-      h+='</div>';
-    });
-    if(actsSinFoto.length>6) h+='<div style="font-size:11px;color:#856404;margin-top:6px;text-align:center">... y '+(actsSinFoto.length-6)+' más</div>';
-    h+='</div>';
-  }
-
-  // SECTION 3: Penalty list
+  // SECTION 2: Penalty list
   h+='<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;-webkit-overflow-scrolling:touch;scrollbar-width:none">'+chips+'</div>';
   h+='<div style="font-size:11px;color:var(--text3);margin-bottom:10px">'+S.pens.length+' situación'+(S.pens.length!==1?'es':'')+' registrada'+(S.pens.length!==1?'s':'')+' en total</div>';
 
@@ -3928,40 +3748,6 @@ function renderPens(){
   el.innerHTML=h;
 }
 
-function showFotoParaCompletada(actId){
-  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
-  var mc=document.getElementById('mcontent');
-  mc.innerHTML='<div class="mhandle"></div>'+
-    '<h3>📷 Subir foto</h3>'+
-    '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;font-weight:600">'+esc(a.descripcion)+(a.area?'<div style="font-size:11px;color:var(--accent);font-weight:400;margin-top:2px">'+esc(a.area)+'</div>':'')+'</div>'+
-    '<label style="display:block;width:100%;cursor:pointer">'+
-    '<div style="width:100%;padding:14px;border-radius:var(--r);border:2px dashed var(--accent);background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700;text-align:center;box-sizing:border-box">📷 Toca para subir foto</div>'+
-    '<input type="file" accept="image/*" multiple style="display:none" onchange="subirFotoCompletada(this,\''+actId+'\')">'+
-    '</label>'+
-    '<div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button></div>';
-  openModal();
-}
-
-async function subirFotoCompletada(input, actId){
-  var files=Array.from(input.files); if(!files.length) return;
-  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
-  var n=files.length;
-  var uploader=S.user&&S.user.nombre?'::'+S.user.nombre:'';
-  setSS('syncing','Subiendo '+n+' foto'+(n>1?'s':'')+'...');
-  try{
-    var nuevas=[];
-    for(var i=0;i<files.length;i++){
-      if(n>1) setSS('syncing','Subiendo foto '+(i+1)+' de '+n+'...');
-      var url=await uploadFoto(files[i],actId);
-      nuevas.push(url+uploader);
-    }
-    var fotos=[...(a.fotos||'').split('||').filter(Boolean),...nuevas].join('||');
-    a.fotos=fotos; a.foto_pendiente=false;
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos,foto_pendiente:false})});
-    setSS('ok','✓ Foto subida');
-    closeModal(); renderPens(); reRenderActs();
-  }catch(e){setSS('err','Error subiendo foto');}
-}
 
 function showAddPenParaPersona(nombre){
   showAddPen();
@@ -5172,10 +4958,9 @@ function renderHistorial(){
     const myActs = histActs.filter(a=>a.ingeniero_id===uid_);
     const myAsist = histAsist.filter(a=>a.ingeniero_id===uid_);
     const myPens = histPens.filter(p=>p.personal_nombre===u.nombre);
-    const sinFoto = myActs.filter(a=>a.foto_pendiente&&!(a.fotos||'').split('||').filter(Boolean).length).length;
     const completadas = myActs.filter(a=>a.estado==='completado').length;
     const inactividad = myPens.filter(p=>p.tipo==='Inactividad en obra').length;
-    return {uid_, u, myActs, myAsist, myPens, sinFoto, completadas, inactividad};
+    return {uid_, u, myActs, myAsist, myPens, completadas, inactividad};
   }).filter(d=> S.histFiltroIng==='todos' || d.uid_===S.histFiltroIng);
 
   el.innerHTML = `
@@ -5194,7 +4979,7 @@ function renderHistorial(){
       <button onclick="S.histFecha='';S.histFechaFin='';S.histFiltroIng='todos';loadHistorial()" style="margin-top:8px;width:100%;padding:8px;border-radius:var(--r);border:1px solid var(--border2);background:transparent;color:var(--text3);font-family:var(--font);font-size:12px;cursor:pointer">↺ Limpiar filtros</button>
     </div>
 
-    ${ingData.map(({uid_, u, myActs, myAsist, myPens, sinFoto, completadas, inactividad})=>`
+    ${ingData.map(({uid_, u, myActs, myAsist, myPens, completadas, inactividad})=>`
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:14px;overflow:hidden">
 
       <!-- HEADER ING -->
@@ -5212,9 +4997,8 @@ function renderHistorial(){
         ${[
           {v:myActs.length, l:'Actividades', c:'var(--accent)'},
           {v:completadas, l:'Completadas', c:'var(--green)'},
-          {v:sinFoto, l:'Sin foto', c:sinFoto>0?'var(--amber)':'var(--text3)'},
           {v:inactividad, l:'Inactividad', c:inactividad>0?'var(--red)':'var(--text3)'},
-        ].map((s,i)=>`<div style="padding:10px 8px;text-align:center;${i<3?'border-right:1px solid var(--border)':''}">
+        ].map((s,i)=>`<div style="padding:10px 8px;text-align:center;${i<2?'border-right:1px solid var(--border)':''}">
           <div style="font-size:20px;font-weight:600;font-family:var(--mono);color:${s.c}">${s.v}</div>
           <div style="font-size:9px;color:var(--text3);margin-top:2px">${s.l}</div>
         </div>`).join('')}
@@ -5230,7 +5014,6 @@ function renderHistorial(){
         <div id="acts-${uid_}">
           ${myActs.map(a=>{
             const fotos=fotoUrls(a.fotos);
-            const sinF=a.foto_pendiente&&!fotos.length;
             return`<div style="padding:8px;background:var(--bg3);border:1px solid var(--border);border-left:3px solid ${a.tipo_personal==='contratista'?'var(--purple)':'var(--accent)'};border-radius:var(--r);margin-bottom:6px">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:4px">
                 <span style="font-size:12px;font-weight:500;flex:1">${esc(a.descripcion)}</span>
@@ -5238,11 +5021,9 @@ function renderHistorial(){
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--text3)">
                 <span>📅 ${a.fecha}</span>
-          
                 ${a.personal_nombre?`<span>👷 ${esc(a.personal_nombre)}</span>`:''}
                 ${a.porcentaje>0?`<span>⚡ ${a.porcentaje}%</span>`:''}
               </div>
-              ${sinF?`<div style="font-size:10px;color:var(--amber);margin-top:4px">📷 Sin foto</div>`:''}
               ${fotos.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">
                 ${fotos.map(f=>`<img src="${f}" style="width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--border2);cursor:pointer" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${a.fecha}','${esc(a.area||'')}')" loading="lazy">`).join('')}
                 <button onclick="descargarFotos(${JSON.stringify(fotos)}, '${a.fecha}', '${esc(a.area||'')}')" style="width:56px;height:56px;border-radius:6px;border:1px solid var(--accent);background:rgba(200,240,96,.08);color:var(--accent);font-size:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">↓<span style="font-size:8px">Bajar</span></button>
@@ -6093,7 +5874,6 @@ function buildActCardObra(a){
       '</div>'+
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'+
         '<span style="font-size:10px;background:'+eb+';color:'+ec+';padding:3px 9px;border-radius:8px;font-weight:700;border:1px solid '+ec+'44">'+el+'</span>'+
-        (canEdit()?'<button onclick="fotoActObra(\''+id+'\')" style="width:36px;height:36px;border-radius:50%;border:1.5px solid #dee2e6;background:#f8f9fa;cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;padding:0">&#128247;</button>':'')+
       '</div>'+
     '</div>'+
     (pct>0?'<div style="height:4px;background:#e9ecef;border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:'+Math.min(100,pct)+'%;background:'+ec+';border-radius:2px"></div></div>':'')+
