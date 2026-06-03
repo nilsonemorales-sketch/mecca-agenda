@@ -641,7 +641,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260603_93';
+const APP_VERSION='20260603_94';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1152,7 +1152,7 @@ let S={
   personal:[], asist:[], acts:[], pens:[], semanas:[], plan:[],
   semanaActual:null, currentTab:'hoy', busqueda:'',
   histFiltroIng:'todos', histFecha:'', histFechaFin:'', histActs:[], histAsist:[], histPens:[],
-  tareas:[], tareasFiltro:'activas', actsActivas:[], enObraFiltro:'', enObraContratista:'', enObraFiltroTipo:'', enObraFiltroContratista:'', enObraFiltroPersonal:'', enObraFiltroEstado:'', enObraFiltroUrgente:false,
+  tareas:[], tareasFiltro:'activas', actsActivas:[], enObraFiltro:'', enObraContratista:'', enObraFiltroTipo:'', enObraFiltroContratista:'', enObraFiltroPersonal:'', enObraFiltroEstado:'', enObraFiltroUrgente:false, enObraFiltroTexto:'', enObraFiltrosOpen:false,
   hoyFiltroEstado:'', hoyFiltroTipo:'', hoyAgrupacion:'', hoyPeriodoOpen:false,
   hoyPeriodoDesde:'', hoyPeriodoHasta:'', hoyPeriodoData:null,
   contVistaMode:'diario', contRepDesde:'', contRepHasta:'', contRepData:null,
@@ -5715,6 +5715,7 @@ async function loadTareas(){
 }
 
 function getFilteredActsActs(){
+  var q=(S.enObraFiltroTexto||'').toLowerCase().trim();
   var filtered=S.actsActivas.filter(function(a){
     if(S.enObraFiltroTipo && a.tipo_personal!==S.enObraFiltroTipo) return false;
     if(S.enObraFiltroContratista && a.personal_nombre!==S.enObraFiltroContratista) return false;
@@ -5722,6 +5723,10 @@ function getFilteredActsActs(){
     if(S.enObraFiltroEstado && a.estado!==S.enObraFiltroEstado) return false;
     if(S.enObraFiltroUbic && (a.area||'')!==S.enObraFiltroUbic) return false;
     if(S.enObraFiltroUrgente && a.prioridad!=='urgente') return false;
+    if(q){
+      var hay=(a.descripcion||'').toLowerCase()+(a.area||'').toLowerCase()+(a.personal_nombre||'').toLowerCase()+(a.ingeniero_nombre||'').toLowerCase();
+      if(hay.indexOf(q)<0) return false;
+    }
     return true;
   });
   return sortByPriority(filtered);
@@ -5777,75 +5782,97 @@ function getFilteredActsHTML(){
 
 function buildEnObraFiltros(){
   var contOpts=getContratistasOpts();
-  // Combine registered workers with workers found in activities
   var fromPersonal=S.personal.filter(function(p){return p.tipo==='propio'&&p.activo;}).map(function(p){return p.nombre;});
   var fromActs=[...new Set((S.actsActivas||[]).filter(function(a){return a.tipo_personal==='propio'&&a.personal_nombre;}).map(function(a){return a.personal_nombre;}))];
   var combinedNames=[...new Set([...fromPersonal,...fromActs])].sort();
   var propioOpts=combinedNames.map(function(n){return{val:n,label:n};});
   var totalActs=S.actsActivas.length;
-  var totalTareas=S.tareas.filter(function(t){return t.estado!=='completada';}).length;
 
-  var h='<div style="background:#fff;border:1.5px solid #dee2e6;border-radius:12px;padding:12px 14px;margin-bottom:14px">';
-  h+='<div style="font-size:11px;color:#868e96;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Filtros — En Obra</div>';
+  var hasFilters=S.enObraFiltroTipo||S.enObraFiltroContratista||S.enObraFiltroPersonal||S.enObraFiltroEstado||S.enObraFiltroUbic||S.enObraFiltroUrgente;
+  var activeFiltCount=[S.enObraFiltroTipo,S.enObraFiltroContratista,S.enObraFiltroPersonal,S.enObraFiltroEstado,S.enObraFiltroUbic].filter(Boolean).length+(S.enObraFiltroUrgente?1:0);
+  var filteredCount=getFilteredActsActs().length;
 
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+  var h='';
 
-  // Tipo
-  h+='<div>';
-  h+='<div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Tipo</div>';
-  h+=filtroDropdown('fo-tipo', S.enObraFiltroTipo,
-    [{val:'propio',label:'👷 X la casa'},{val:'contratista',label:'🔨 Contratistas'},{val:'ingeniero',label:'📋 Administrativas'}],
-    'Todos ('+totalActs+')',
-    "S.enObraFiltroTipo=this.value;S.enObraFiltroContratista='';S.enObraFiltroPersonal='';renderEnObra()");
+  // ── SEARCH BAR ────────────────────────────────────────────────────
+  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
+  h+='<div style="flex:1;display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid '+(S.enObraFiltroTexto?'var(--accent)':'#dee2e6')+';border-radius:10px;padding:8px 12px">';
+  h+='<span style="color:#868e96;font-size:15px">🔍</span>';
+  h+='<input id="eo-search" type="search" placeholder="Buscar actividad, área, persona..." value="'+esc(S.enObraFiltroTexto||'')+'" oninput="S.enObraFiltroTexto=this.value;renderEnObra()" style="flex:1;border:none;outline:none;font-size:13px;font-family:var(--font);background:transparent;color:var(--text)">';
+  if(S.enObraFiltroTexto) h+='<button onclick="S.enObraFiltroTexto=\'\';renderEnObra()" style="background:none;border:none;color:#868e96;font-size:16px;cursor:pointer;padding:0;line-height:1">×</button>';
+  h+='</div>';
+  // Filtros toggle button
+  h+='<button onclick="S.enObraFiltrosOpen=!S.enObraFiltrosOpen;renderEnObra()" style="flex-shrink:0;padding:8px 12px;border-radius:10px;border:1.5px solid '+(S.enObraFiltrosOpen||hasFilters?'var(--accent)':'#dee2e6')+';background:'+(S.enObraFiltrosOpen||hasFilters?'var(--accent)':'#fff')+';color:'+(S.enObraFiltrosOpen||hasFilters?'#fff':'#495057')+';font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">';
+  h+=(hasFilters?'⚡ '+activeFiltCount:'☰')+' Filtros</button>';
   h+='</div>';
 
-  // Estado
-  h+='<div>';
-  h+='<div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Estado</div>';
-  h+=filtroDropdown('fo-estado', S.enObraFiltroEstado,
-    [{val:'en-progreso',label:'🔄 En progreso'},{val:'pendiente',label:'⏳ Pendiente'},{val:'pausada',label:'⏸ Pausada'}],
-    'Todos los estados',
-    "S.enObraFiltroEstado=this.value;renderEnObra()");
-  h+='</div>';
-  h+='</div>';
+  // Results count line
+  var q=S.enObraFiltroTexto||'';
+  if(hasFilters||q){
+    h+='<div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:var(--mono)">'+filteredCount+' de '+totalActs+' actividades</div>';
+  }
 
-  // Contratista dropdown (full list)
-  if(contOpts.length){
-    h+='<div style="margin-bottom:8px">';
-    h+='<div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Contratista</div>';
-    h+=filtroDropdown('fo-cont', S.enObraFiltroContratista, contOpts,
-      'Todos los contratistas',
-      "S.enObraFiltroContratista=this.value;S.enObraContratista=this.value;S.enObraFiltroTipo=this.value?'contratista':'';renderEnObra()");
+  // ── COLLAPSIBLE FILTER PANEL ──────────────────────────────────────
+  if(S.enObraFiltrosOpen){
+    h+='<div style="background:#fff;border:1.5px solid #dee2e6;border-radius:12px;padding:12px 14px;margin-bottom:12px">';
+
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+    h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Tipo</div>';
+    h+=filtroDropdown('fo-tipo', S.enObraFiltroTipo,
+      [{val:'propio',label:'👷 X la casa'},{val:'contratista',label:'🔨 Contratistas'},{val:'ingeniero',label:'📋 Administrativas'}],
+      'Todos ('+totalActs+')',
+      "S.enObraFiltroTipo=this.value;S.enObraFiltroContratista='';S.enObraFiltroPersonal='';renderEnObra()");
+    h+='</div>';
+    h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Estado</div>';
+    h+=filtroDropdown('fo-estado', S.enObraFiltroEstado,
+      [{val:'en-progreso',label:'🔄 En progreso'},{val:'pendiente',label:'⏳ Pendiente'},{val:'pausada',label:'⏸ Pausada'}],
+      'Todos los estados',
+      "S.enObraFiltroEstado=this.value;renderEnObra()");
+    h+='</div></div>';
+
+    if(contOpts.length){
+      h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Contratista</div>';
+      h+=filtroDropdown('fo-cont', S.enObraFiltroContratista, contOpts,
+        'Todos los contratistas',
+        "S.enObraFiltroContratista=this.value;S.enObraContratista=this.value;S.enObraFiltroTipo=this.value?'contratista':'';renderEnObra()");
+      h+='</div>';
+    }
+
+    var obraUbics=UBICACIONES.reduce(function(acc,g){return acc.concat(g.opciones);},[]);
+    (S.actsActivas||[]).forEach(function(a){if(a.area&&!obraUbics.includes(a.area))obraUbics.push(a.area);});
+    var obraUbicOpts=obraUbics.map(function(u){return{val:u,label:u};});
+    h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Ubicación</div>';
+    h+=filtroDropdown('fo-ubic', S.enObraFiltroUbic||'', obraUbicOpts, 'Todas las ubicaciones',
+      "S.enObraFiltroUbic=this.value;renderEnObra()");
+    h+='</div>';
+
+    // Quick chips
+    var propioOn=S.enObraFiltroTipo==='propio';
+    var urgOn=S.enObraFiltroUrgente;
+    var urgCnt=(S.actsActivas||[]).filter(function(a){return a.prioridad==='urgente';}).length;
+    h+='<div style="display:flex;gap:6px;margin-bottom:8px">';
+    h+='<button onclick="toggleEnObraPropio()" style="flex:1;padding:7px 8px;border-radius:8px;border:1.5px solid '+(propioOn?'#1c7ed6':'#dee2e6')+';background:'+(propioOn?'#e7f5ff':'#f8f9fa')+';color:'+(propioOn?'#1c7ed6':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(propioOn?'✓ ':'')+'👷 Propio</button>';
+    h+='<button onclick="S.enObraFiltroUrgente=!S.enObraFiltroUrgente;renderEnObra()" style="flex:1;padding:7px 8px;border-radius:8px;border:1.5px solid '+(urgOn?'#e03131':'#dee2e6')+';background:'+(urgOn?'#fff5f5':'#f8f9fa')+';color:'+(urgOn?'#e03131':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(urgOn?'✓ ':'')+'🔴 Urgentes'+(urgCnt?' ('+urgCnt+')':'')+'</button>';
+    h+='</div>';
+
+    if(hasFilters){
+      h+='<button onclick="S.enObraFiltroTipo=\'\';S.enObraFiltroContratista=\'\';S.enObraFiltroPersonal=\'\';S.enObraFiltroEstado=\'\';S.enObraFiltroUbic=\'\';S.enObraFiltroUrgente=false;S.enObraContratista=\'\';renderEnObra()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid #e03131;background:#fff5f5;color:#e03131;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">× Limpiar filtros</button>';
+      if(S.enObraContratista) h+='<div style="margin-top:6px;font-size:11px;color:#1a56db;font-weight:600;text-align:center">Toca + para agregar actividad a '+esc(S.enObraContratista)+'</div>';
+    }
+
+    h+='</div>';
+  } else if(hasFilters){
+    // Show active filter chips inline when panel is closed
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">';
+    if(S.enObraFiltroTipo) h+='<span style="background:#e7f5ff;color:#1c7ed6;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">'+esc(S.enObraFiltroTipo==='propio'?'👷 Propio':S.enObraFiltroTipo==='contratista'?'🔨 Contratistas':'📋 Admin')+'</span>';
+    if(S.enObraFiltroContratista) h+='<span style="background:#f3d9fa;color:#7048e8;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">🔨 '+esc(S.enObraFiltroContratista)+'</span>';
+    if(S.enObraFiltroEstado) h+='<span style="background:#e8f0fe;color:var(--accent);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">'+esc(S.enObraFiltroEstado)+'</span>';
+    if(S.enObraFiltroUbic) h+='<span style="background:#e8f0fe;color:var(--accent);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">📍 '+esc(S.enObraFiltroUbic)+'</span>';
+    if(S.enObraFiltroUrgente) h+='<span style="background:#fff5f5;color:#e03131;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">🔴 Urgentes</span>';
+    h+='<button onclick="S.enObraFiltroTipo=\'\';S.enObraFiltroContratista=\'\';S.enObraFiltroPersonal=\'\';S.enObraFiltroEstado=\'\';S.enObraFiltroUbic=\'\';S.enObraFiltroUrgente=false;S.enObraContratista=\'\';renderEnObra()" style="background:none;border:none;color:#e03131;font-size:12px;font-weight:600;cursor:pointer;padding:3px 6px">× limpiar</button>';
     h+='</div>';
   }
 
-  // Toggle chips row: Personal propio | Urgentes
-  var propioOn=S.enObraFiltroTipo==='propio';
-  var urgOn=S.enObraFiltroUrgente;
-  var urgCnt=(S.actsActivas||[]).filter(function(a){return a.prioridad==='urgente';}).length;
-  h+='<div style="display:flex;gap:6px;margin-bottom:8px">';
-  h+='<button onclick="toggleEnObraPropio()" style="flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid '+(propioOn?'#1c7ed6':'#dee2e6')+';background:'+(propioOn?'#e7f5ff':'#f8f9fa')+';color:'+(propioOn?'#1c7ed6':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(propioOn?'✓ ':'')+'👷 Propio ('+propioOpts.length+')</button>';
-  h+='<button onclick="S.enObraFiltroUrgente=!S.enObraFiltroUrgente;renderEnObra()" style="flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid '+(urgOn?'#e03131':'#dee2e6')+';background:'+(urgOn?'#fff5f5':'#f8f9fa')+';color:'+(urgOn?'#e03131':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(urgOn?'✓ ':'')+'🔴 Urgentes'+(urgCnt?'  ('+urgCnt+')':'')+'</button>';
-  h+='</div>';
-
-  // Ubicación
-  var obraUbics=UBICACIONES.reduce(function(acc,g){return acc.concat(g.opciones);},[]);
-  (S.actsActivas||[]).forEach(function(a){if(a.area&&!obraUbics.includes(a.area))obraUbics.push(a.area);});
-  var obraUbicOpts=obraUbics.map(function(u){return{val:u,label:u};});
-  h+='<div style="margin-bottom:8px">';
-  h+='<div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Ubicación</div>';
-  h+=filtroDropdown('fo-ubic', S.enObraFiltroUbic||'', obraUbicOpts, 'Todas las ubicaciones',
-    "S.enObraFiltroUbic=this.value;renderEnObra()");
-  h+='</div>';
-
-  // Active filters + clear
-  var hasFilters=S.enObraFiltroTipo||S.enObraFiltroContratista||S.enObraFiltroPersonal||S.enObraFiltroEstado||S.enObraFiltroUbic||S.enObraFiltroUrgente;
-  if(hasFilters){
-    h+='<button onclick="S.enObraFiltroTipo=\'\';S.enObraFiltroContratista=\'\';S.enObraFiltroPersonal=\'\';S.enObraFiltroEstado=\'\';S.enObraFiltroUbic=\'\';S.enObraFiltroUrgente=false;S.enObraContratista=\'\';renderEnObra()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid #e03131;background:#fff5f5;color:#e03131;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">× Limpiar filtros</button>';
-    if(S.enObraContratista) h+='<div style="margin-top:6px;font-size:11px;color:#1a56db;font-weight:600;text-align:center">Toca + para agregar actividad a '+esc(S.enObraContratista)+'</div>';
-  }
-
-  h+='</div>';
   return h;
 }
 
@@ -5909,6 +5936,12 @@ function renderEnObra(){
       :acts.map(function(a){ return buildActCardObra(a); }).join('')}
 
     <div style="height:80px"></div>`;
+
+  // Restore focus to search input if user was typing
+  if(S.enObraFiltroTexto){
+    var inp=document.getElementById('eo-search');
+    if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
+  }
 }
 
 // Global registry for act card actions
