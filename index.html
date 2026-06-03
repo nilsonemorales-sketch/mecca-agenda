@@ -639,7 +639,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260603_86';
+const APP_VERSION='20260603_87';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1150,7 +1150,7 @@ let S={
   personal:[], asist:[], acts:[], pens:[], semanas:[], plan:[],
   semanaActual:null, currentTab:'hoy', busqueda:'',
   histFiltroIng:'todos', histFecha:'', histFechaFin:'', histActs:[], histAsist:[], histPens:[],
-  tareas:[], tareasFiltro:'activas', actsActivas:[], enObraFiltro:'', enObraContratista:'', enObraFiltroTipo:'', enObraFiltroContratista:'', enObraFiltroPersonal:'', enObraFiltroEstado:'',
+  tareas:[], tareasFiltro:'activas', actsActivas:[], enObraFiltro:'', enObraContratista:'', enObraFiltroTipo:'', enObraFiltroContratista:'', enObraFiltroPersonal:'', enObraFiltroEstado:'', enObraFiltroUrgente:false,
   hoyFiltroEstado:'', hoyFiltroTipo:'', hoyAgrupacion:'', hoyPeriodoOpen:false,
   hoyPeriodoDesde:'', hoyPeriodoHasta:'', hoyPeriodoData:null,
   contVistaMode:'diario', contRepDesde:'', contRepHasta:'', contRepData:null,
@@ -5820,6 +5820,7 @@ function getFilteredActsActs(){
     if(S.enObraFiltroPersonal && a.personal_nombre!==S.enObraFiltroPersonal) return false;
     if(S.enObraFiltroEstado && a.estado!==S.enObraFiltroEstado) return false;
     if(S.enObraFiltroUbic && (a.area||'')!==S.enObraFiltroUbic) return false;
+    if(S.enObraFiltroUrgente && a.prioridad!=='urgente') return false;
     return true;
   });
   return sortByPriority(filtered);
@@ -5917,9 +5918,14 @@ function buildEnObraFiltros(){
     h+='</div>';
   }
 
-  // Personal propio toggle chip
+  // Toggle chips row: Personal propio | Urgentes
   var propioOn=S.enObraFiltroTipo==='propio';
-  h+='<button onclick="toggleEnObraPropio()" style="width:100%;margin-bottom:8px;padding:8px 10px;border-radius:8px;border:1.5px solid '+(propioOn?'#1c7ed6':'#dee2e6')+';background:'+(propioOn?'#e7f5ff':'#f8f9fa')+';color:'+(propioOn?'#1c7ed6':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(propioOn?'✓ ':'')+'👷 Solo personal propio ('+propioOpts.length+' trabajadores)</button>';
+  var urgOn=S.enObraFiltroUrgente;
+  var urgCnt=(S.actsActivas||[]).filter(function(a){return a.prioridad==='urgente';}).length;
+  h+='<div style="display:flex;gap:6px;margin-bottom:8px">';
+  h+='<button onclick="toggleEnObraPropio()" style="flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid '+(propioOn?'#1c7ed6':'#dee2e6')+';background:'+(propioOn?'#e7f5ff':'#f8f9fa')+';color:'+(propioOn?'#1c7ed6':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(propioOn?'✓ ':'')+'👷 Propio ('+propioOpts.length+')</button>';
+  h+='<button onclick="S.enObraFiltroUrgente=!S.enObraFiltroUrgente;renderEnObra()" style="flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid '+(urgOn?'#e03131':'#dee2e6')+';background:'+(urgOn?'#fff5f5':'#f8f9fa')+';color:'+(urgOn?'#e03131':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(urgOn?'✓ ':'')+'🔴 Urgentes'+(urgCnt?'  ('+urgCnt+')':'')+'</button>';
+  h+='</div>';
 
   // Ubicación
   var obraUbics=UBICACIONES.reduce(function(acc,g){return acc.concat(g.opciones);},[]);
@@ -5932,9 +5938,9 @@ function buildEnObraFiltros(){
   h+='</div>';
 
   // Active filters + clear
-  var hasFilters=S.enObraFiltroTipo||S.enObraFiltroContratista||S.enObraFiltroPersonal||S.enObraFiltroEstado||S.enObraFiltroUbic;
+  var hasFilters=S.enObraFiltroTipo||S.enObraFiltroContratista||S.enObraFiltroPersonal||S.enObraFiltroEstado||S.enObraFiltroUbic||S.enObraFiltroUrgente;
   if(hasFilters){
-    h+='<button onclick="S.enObraFiltroTipo=\'\';S.enObraFiltroContratista=\'\';S.enObraFiltroPersonal=\'\';S.enObraFiltroEstado=\'\';S.enObraFiltroUbic=\'\';S.enObraContratista=\'\';renderEnObra()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid #e03131;background:#fff5f5;color:#e03131;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">× Limpiar filtros</button>';
+    h+='<button onclick="S.enObraFiltroTipo=\'\';S.enObraFiltroContratista=\'\';S.enObraFiltroPersonal=\'\';S.enObraFiltroEstado=\'\';S.enObraFiltroUbic=\'\';S.enObraFiltroUrgente=false;S.enObraContratista=\'\';renderEnObra()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid #e03131;background:#fff5f5;color:#e03131;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">× Limpiar filtros</button>';
     if(S.enObraContratista) h+='<div style="margin-top:6px;font-size:11px;color:#1a56db;font-weight:600;text-align:center">Toca + para agregar actividad a '+esc(S.enObraContratista)+'</div>';
   }
 
