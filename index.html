@@ -641,7 +641,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260603_92';
+const APP_VERSION='20260603_93';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -4200,6 +4200,7 @@ function exportarPDF(){
       '<div class="fw" style="margin-bottom:0"><label class="fl">Estado de actividad</label>'+
         '<select id="pdf-estado" style="'+SEL+'">'+
           '<option value="">Todos los estados</option>'+
+          '<option value="activas">Activas (sin completar)</option>'+
           '<option value="pendiente">Pendiente</option>'+
           '<option value="en-progreso">En progreso</option>'+
           '<option value="pausada">Pausada</option>'+
@@ -4392,7 +4393,8 @@ async function generarPDF(opts){
         if(fTipo&&a.tipo_personal!==fTipo) return false;
         if(fCont&&(a.personal_nombre||'')!==fCont) return false;
         if(fIng&&(a.ingeniero_nombre||'')!==fIng) return false;
-        if(fEst&&a.estado!==fEst) return false;
+        if(fEst==='activas'&&a.estado==='completado') return false;
+        else if(fEst&&fEst!=='activas'&&a.estado!==fEst) return false;
         if(fPrio&&(a.prioridad||'normal')!==fPrio) return false;
         if(fUbic&&(a.area||'')!==fUbic) return false;
         return true;
@@ -6955,7 +6957,8 @@ function renderRepPersonalizado(){
   // Apply filters
   var acts=(S.acts||[]).filter(function(a){
     if(F.tipo && a.tipo_personal!==F.tipo) return false;
-    if(F.estado && a.estado!==F.estado) return false;
+    if(F.estado==='activas' && a.estado==='completado') return false;
+    else if(F.estado && F.estado!=='activas' && a.estado!==F.estado) return false;
     if(F.prioridad && (a.prioridad||'normal')!==F.prioridad) return false;
     if(F.contratista && (a.personal_nombre||'')!==F.contratista) return false;
     if(F.responsable && (a.ingeniero_nombre||'')!==F.responsable) return false;
@@ -7077,6 +7080,7 @@ function renderRepPersonalizado(){
   h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:3px">Estado</div>';
   h+='<select style="'+SEL+'" onchange="S.repC.estado=this.value;renderRepPersonalizado()">';
   h+='<option value="" '+(F.estado===''?'selected':'')+'>Todos</option>';
+  h+='<option value="activas" '+(F.estado==='activas'?'selected':'')+'>Activas (sin completar)</option>';
   h+='<option value="pendiente" '+(F.estado==='pendiente'?'selected':'')+'>⏳ Pendiente</option>';
   h+='<option value="en-progreso" '+(F.estado==='en-progreso'?'selected':'')+'>▶ En progreso</option>';
   h+='<option value="pausada" '+(F.estado==='pausada'?'selected':'')+'>⏸ Pausada</option>';
