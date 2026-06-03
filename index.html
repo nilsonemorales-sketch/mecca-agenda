@@ -641,7 +641,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 
 <script>
-const APP_VERSION='20260603_91';
+const APP_VERSION='20260603_92';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -4166,18 +4166,21 @@ function exportarPDF(){
   var SEL='width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg2);color:var(--text);font-size:12px;font-family:var(--font);-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'7\' viewBox=\'0 0 10 7\'%3E%3Cpath d=\'M1 1l4 4 4-4\' stroke=\'%23868e96\' stroke-width=\'1.5\' fill=\'none\'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px';
   var contOpts=getContratistasOpts();
   var ingOpts=Object.values(USERS).map(function(u){return{val:u.nombre,label:u.nombre};});
+  var ubicOpts=UBICACIONES.reduce(function(acc,g){return acc.concat(g.opciones);},[]);
+  (S.acts||[]).forEach(function(a){if(a.area&&!ubicOpts.includes(a.area))ubicOpts.push(a.area);});
   var chkStyle='display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:12px;font-weight:500;user-select:none';
   document.getElementById('mcontent').innerHTML=
     '<div class="mhandle"></div>'+
     '<h3 style="margin-bottom:14px">Generar Reporte PDF</h3>'+
 
     '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:6px">ACCESOS RAPIDOS</div>'+
-    '<div style="display:flex;gap:6px;margin-bottom:16px">'+
-      '<button class="ibtn" onclick="pdfPreset(\'diario\')" style="flex:1;padding:8px 4px;font-size:11px;font-weight:600">Diario</button>'+
-      '<button class="ibtn" onclick="pdfPreset(\'semanal\')" style="flex:1;padding:8px 4px;font-size:11px;font-weight:600">Semanal</button>'+
-      '<button class="ibtn" onclick="pdfPreset(\'completo\')" style="flex:1;padding:8px 4px;font-size:11px;font-weight:600">Completo</button>'+
-      '<button class="ibtn" onclick="pdfPreset(\'contratistas\')" style="flex:1;padding:8px 4px;font-size:11px;font-weight:600">Contrat.</button>'+
-      '<button class="ibtn" onclick="pdfPreset(\'asistencia\')" style="flex:1;padding:8px 4px;font-size:11px;font-weight:600">Asistenc.</button>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">'+
+      '<button class="ibtn" onclick="pdfPreset(\'diario\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:600">Diario</button>'+
+      '<button class="ibtn" onclick="pdfPreset(\'semanal\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:600">Semanal</button>'+
+      '<button class="ibtn" onclick="pdfPreset(\'completo\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:600">Completo</button>'+
+      '<button class="ibtn" onclick="pdfPreset(\'contratistas\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:600">Contrat.</button>'+
+      '<button class="ibtn" onclick="pdfPreset(\'asistencia\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:600">Asistenc.</button>'+
+      '<button class="ibtn" onclick="pdfPreset(\'urgentes\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:700;border-color:#e03131;color:#e03131">Urgentes</button>'+
     '</div>'+
 
     '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:6px">PERIODO</div>'+
@@ -4203,7 +4206,7 @@ function exportarPDF(){
           '<option value="completado">Completado</option>'+
         '</select></div>'+
     '</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
       '<div class="fw" style="margin-bottom:0" id="pdf-cont-wrap"><label class="fl">Contratista especifico</label>'+
         '<select id="pdf-contratista" style="'+SEL+'">'+
           '<option value="">Todos los contratistas</option>'+
@@ -4215,6 +4218,19 @@ function exportarPDF(){
           ingOpts.map(function(o){return'<option value="'+esc(o.val)+'">'+esc(o.label)+'</option>';}).join('')+
         '</select></div>'+
     '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'+
+      '<div class="fw" style="margin-bottom:0"><label class="fl">Prioridad</label>'+
+        '<select id="pdf-prioridad" style="'+SEL+'" onchange="pdfUpdateFiltros()">'+
+          '<option value="">Todas</option>'+
+          '<option value="urgente">Solo urgentes</option>'+
+          '<option value="normal">Solo normales</option>'+
+        '</select></div>'+
+      '<div class="fw" style="margin-bottom:0"><label class="fl">Nivel / Area</label>'+
+        '<select id="pdf-ubicacion" style="'+SEL+'">'+
+          '<option value="">Todas las areas</option>'+
+          ubicOpts.map(function(u){return'<option value="'+esc(u)+'">'+esc(u)+'</option>';}).join('')+
+        '</select></div>'+
+    '</div>'+
 
     '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:8px">SECCIONES A INCLUIR</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px">'+
@@ -4223,10 +4239,11 @@ function exportarPDF(){
         {id:'pdf-s-asist',    label:'Asistencia del personal', def:true},
         {id:'pdf-s-propios',  label:'Personal x la casa', def:true},
         {id:'pdf-s-contrat',  label:'Actividades contratistas', def:true},
+        {id:'pdf-s-urgentes', label:'Reporte urgentes', def:false},
         {id:'pdf-s-retr',     label:'Actividades retrasadas', def:true},
         {id:'pdf-s-pens',     label:'Situaciones / Penalidades', def:true},
       ].map(function(s){
-        return'<label style="'+chkStyle+'"><input type="checkbox" id="'+s.id+'" '+(s.def?'checked':'')+' style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">'+s.label+'</label>';
+        return'<label style="'+chkStyle+(s.id==='pdf-s-urgentes'?';border-color:#ffc9c9':'')+'"><input type="checkbox" id="'+s.id+'" '+(s.def?'checked':'')+' style="width:15px;height:15px;accent-color:'+(s.id==='pdf-s-urgentes'?'#e03131':'var(--accent)')+';flex-shrink:0">'+s.label+'</label>';
       }).join('')+
     '</div>'+
 
@@ -4246,7 +4263,6 @@ function pdfUpdateFiltros(){
   var isPropio=tp.value==='propio';
   wrap.style.opacity=isPropio?'0.35':'1';
   wrap.style.pointerEvents=isPropio?'none':'auto';
-  // Auto-toggle section checkboxes based on tipo
   if(tp.value==='propio'){
     var cEl=document.getElementById('pdf-s-contrat');
     if(cEl) cEl.checked=false;
@@ -4256,12 +4272,16 @@ function pdfUpdateFiltros(){
     var aEl=document.getElementById('pdf-s-asist');
     if(aEl) aEl.checked=false;
   }
+  // Auto-check urgentes section when prioridad=urgente is selected
+  var prEl=document.getElementById('pdf-prioridad');
+  var urgEl=document.getElementById('pdf-s-urgentes');
+  if(prEl&&urgEl&&prEl.value==='urgente') urgEl.checked=true;
 }
 
 function pdfPreset(tipo){
   var fi=document.getElementById('pdf-fi');
   var ff=document.getElementById('pdf-ff');
-  if(tipo==='semanal'){
+  if(tipo==='semanal'||tipo==='urgentes'){
     var d=new Date(S.fecha+'T12:00:00');
     var day=d.getDay()||7;
     var mon=new Date(d);mon.setDate(d.getDate()-day+1);
@@ -4272,11 +4292,12 @@ function pdfPreset(tipo){
     if(ff)ff.value=S.fecha;
   }
   var presets={
-    diario:      {resumen:true,  asist:true,  propios:true,  contrat:true,  retr:true,  pens:false},
-    semanal:     {resumen:true,  asist:false, propios:false, contrat:true,  retr:true,  pens:false},
-    completo:    {resumen:true,  asist:true,  propios:true,  contrat:true,  retr:true,  pens:true},
-    contratistas:{resumen:false, asist:false, propios:false, contrat:true,  retr:true,  pens:false},
-    asistencia:  {resumen:true,  asist:true,  propios:false, contrat:false, retr:false, pens:false},
+    diario:      {resumen:true,  asist:true,  propios:true,  contrat:true,  urgentes:false, retr:true,  pens:false},
+    semanal:     {resumen:true,  asist:false, propios:false, contrat:true,  urgentes:false, retr:true,  pens:false},
+    completo:    {resumen:true,  asist:true,  propios:true,  contrat:true,  urgentes:false, retr:true,  pens:true},
+    contratistas:{resumen:false, asist:false, propios:false, contrat:true,  urgentes:false, retr:true,  pens:false},
+    asistencia:  {resumen:true,  asist:true,  propios:false, contrat:false, urgentes:false, retr:false, pens:false},
+    urgentes:    {resumen:false, asist:false, propios:false, contrat:false, urgentes:true,  retr:false, pens:false},
   };
   var s=presets[tipo];
   if(s){
@@ -4285,8 +4306,8 @@ function pdfPreset(tipo){
       if(el)el.checked=s[k];
     });
   }
-  // Reset filters
-  ['pdf-tipo-pers','pdf-estado','pdf-contratista','pdf-ingeniero'].forEach(function(id){
+  // Reset all filters
+  ['pdf-tipo-pers','pdf-estado','pdf-contratista','pdf-ingeniero','pdf-prioridad','pdf-ubicacion'].forEach(function(id){
     var el=document.getElementById(id);
     if(el)el.value='';
   });
@@ -4296,6 +4317,9 @@ function pdfPreset(tipo){
   } else if(tipo==='asistencia'){
     var tp2=document.getElementById('pdf-tipo-pers');
     if(tp2)tp2.value='propio';
+  } else if(tipo==='urgentes'){
+    var tp3=document.getElementById('pdf-prioridad');
+    if(tp3)tp3.value='urgente';
   }
   pdfUpdateFiltros();
 }
@@ -4308,11 +4332,14 @@ function pdfGenerar(){
     filtroIngeniero:    document.getElementById('pdf-ingeniero')?.value||'',
     filtroTipoPersonal: document.getElementById('pdf-tipo-pers')?.value||'',
     filtroEstado:       document.getElementById('pdf-estado')?.value||'',
+    filtroPrioridad:    document.getElementById('pdf-prioridad')?.value||'',
+    filtroUbicacion:    document.getElementById('pdf-ubicacion')?.value||'',
     secciones:{
       resumen:     !!document.getElementById('pdf-s-resumen')?.checked,
       asistencia:  !!document.getElementById('pdf-s-asist')?.checked,
       propios:     !!document.getElementById('pdf-s-propios')?.checked,
       contratistas:!!document.getElementById('pdf-s-contrat')?.checked,
+      urgentes:    !!document.getElementById('pdf-s-urgentes')?.checked,
       retrasadas:  !!document.getElementById('pdf-s-retr')?.checked,
       penalidades: !!document.getElementById('pdf-s-pens')?.checked,
     }
@@ -4323,16 +4350,18 @@ function pdfGenerar(){
 async function generarPDF(opts){
   // Accept either a legacy string (old callers) or the new opts object
   if(typeof opts==='string'){
-    opts={fi:S.fecha,ff:S.fecha,filtroContratista:'',filtroIngeniero:'',filtroTipoPersonal:'',filtroEstado:'',
-      secciones:{resumen:true,asistencia:true,propios:true,contratistas:true,retrasadas:true,penalidades:true}};
+    opts={fi:S.fecha,ff:S.fecha,filtroContratista:'',filtroIngeniero:'',filtroTipoPersonal:'',filtroEstado:'',filtroPrioridad:'',filtroUbicacion:'',
+      secciones:{resumen:true,asistencia:true,propios:true,contratistas:true,urgentes:false,retrasadas:true,penalidades:true}};
   }
   var fi=opts.fi||S.fecha;
   var ff=opts.ff||S.fecha;
-  var secs=opts.secciones||{resumen:true,asistencia:true,propios:true,contratistas:true,retrasadas:true,penalidades:true};
+  var secs=opts.secciones||{resumen:true,asistencia:true,propios:true,contratistas:true,urgentes:false,retrasadas:true,penalidades:true};
   var fCont=opts.filtroContratista||'';
   var fIng=opts.filtroIngeniero||'';
   var fTipo=opts.filtroTipoPersonal||'';
   var fEst=opts.filtroEstado||'';
+  var fPrio=opts.filtroPrioridad||'';
+  var fUbic=opts.filtroUbicacion||'';
 
   closeModal();
   setSS('syncing','Generando PDF...');
@@ -4364,6 +4393,8 @@ async function generarPDF(opts){
         if(fCont&&(a.personal_nombre||'')!==fCont) return false;
         if(fIng&&(a.ingeniero_nombre||'')!==fIng) return false;
         if(fEst&&a.estado!==fEst) return false;
+        if(fPrio&&(a.prioridad||'normal')!==fPrio) return false;
+        if(fUbic&&(a.area||'')!==fUbic) return false;
         return true;
       });
     }
@@ -4418,6 +4449,8 @@ async function generarPDF(opts){
     if(fCont) _tparts.push('CONTRATISTA: '+fCont.toUpperCase());
     if(fIng)  _tparts.push('RESPONSABLE: '+fIng.toUpperCase());
     if(fEst)  _tparts.push('ESTADO: '+fEst.toUpperCase());
+    if(fPrio==='urgente') _tparts.push('SOLO URGENTES');
+    if(fUbic) _tparts.push('AREA: '+fUbic.toUpperCase());
     const titulo=_tparts[0];
     const subtitulo=_tparts.slice(1).join(' | ');
     const periodo=fi===ff?fmtF(fi):fmtF(fi)+' al '+fmtF(ff);
@@ -4713,6 +4746,87 @@ async function generarPDF(opts){
       }
     }
 
+    // ── URGENTES ─────────────────────────────────────────────────
+    if(secs.urgentes){
+      var actUrg=acts.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
+      if(actUrg.length){
+        secBanner('ACTIVIDADES URGENTES  ('+actUrg.length+') — pendientes de atención inmediata',RED);
+        // Group by tipo first, then by ubicacion within each tipo
+        var urgGrupos=[];
+        var tiposUrg=['propio','contratista','ingeniero'];
+        var tiposLbl={propio:'Personal x la casa',contratista:'Contratistas',ingeniero:'Administrativas'};
+        tiposUrg.forEach(function(t){
+          var tItems=actUrg.filter(function(a){return a.tipo_personal===t;});
+          if(!tItems.length)return;
+          urgGrupos.push({titulo:tiposLbl[t],items:tItems});
+        });
+        urgGrupos.forEach(function(g){
+          // Mini sub-header for each tipo group
+          chk(10);
+          fc([255,240,240]);doc.rect(M,y,RW,8,'F');
+          fc(RED);doc.rect(M,y,3,8,'F');
+          tc(RED);doc.setFontSize(8);doc.setFont('helvetica','bold');
+          doc.text(safe(g.titulo).toUpperCase()+'  ('+g.items.length+')',M+7,y+5.5);
+          y+=10;
+          // Compact urgentes table: Fecha | Descripcion | Area | Asignado | Estado | Dias retr.
+          chk(7);
+          fc(LGRAY2);doc.rect(M,y,RW,6,'F');
+          tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','bold');
+          doc.text('FECHA',    M+2,  y+4);
+          doc.text('DESCRIPCION', M+18, y+4);
+          doc.text('AREA',     M+82, y+4);
+          doc.text('ASIGNADO', M+118,y+4);
+          doc.text('ESTADO',   M+148,y+4);
+          doc.text('DIAS',     M+172,y+4);
+          y+=6;_rowIdx=0;
+          g.items.forEach(function(a){
+            var ec2=ESTADO_C[a.estado]||MUT;
+            var el2=ESTADO_L[a.estado]||safe(a.estado).toUpperCase();
+            var diasR=fechaVenc(a)&&new Date(fechaVenc(a))<new Date(fi)?Math.round((new Date(fi)-new Date(fechaVenc(a)))/(1000*60*60*24)):0;
+            doc.setFontSize(7);doc.setFont('helvetica','bold');
+            var udLines=doc.splitTextToSize(safe(a.descripcion),62).slice(0,2);
+            var uRowH=udLines.length>1?10:7;
+            chk(uRowH+1);
+            _rowIdx++;
+            if(_rowIdx%2===0){fc([255,246,246]);doc.rect(M,y,RW,uRowH,'F');}
+            // Red urgency bar
+            fc(RED);doc.rect(M,y,2,uRowH,'F');
+            var uy=y+4.5;
+            tc(RED);doc.setFontSize(6);doc.setFont('helvetica','bold');
+            doc.text(safe(a.fecha||''),M+4,uy);
+            tc(TXT);doc.setFontSize(7);doc.setFont('helvetica','bold');
+            doc.text(udLines[0]||'',M+18,uy);
+            if(udLines[1]){tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text(udLines[1],M+18,y+8);}
+            tc(ACC);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+            doc.text(safe(a.area||'—').slice(0,20),M+82,uy);
+            tc(TXT);
+            doc.text(safe(a.personal_nombre||a.ingeniero_nombre||'—').slice(0,18),M+118,uy);
+            // Estado badge
+            doc.setFontSize(6);doc.setFont('helvetica','bold');
+            var ew=doc.getTextWidth(el2)+4;if(ew<14)ew=14;
+            fc(ec2);doc.roundedRect(M+148,y+1.5,ew,4,0.7,0.7,'F');
+            tc(WHT);doc.text(el2,M+149.5,uy);
+            // Days delayed
+            if(diasR>0){tc(RED);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text(diasR+'d',M+175,uy);}
+            dc([240,200,200]);doc.setLineWidth(0.15);doc.line(M,y+uRowH,W-M,y+uRowH);
+            y+=uRowH+0.5;
+          });
+          y+=2;
+        });
+        if(!actUrg.length){
+          chk(8);tc(MUT);doc.setFontSize(8);doc.setFont('helvetica','italic');
+          doc.text('Sin actividades urgentes pendientes en este período.',M+4,y);y+=10;
+        }
+        hrLine();
+      } else {
+        // Still show the section banner with "sin urgentes"
+        secBanner('ACTIVIDADES URGENTES  — sin pendientes en este período',RED);
+        chk(8);tc(MUT);doc.setFontSize(8);doc.setFont('helvetica','italic');
+        doc.text('No hay actividades urgentes pendientes para este período.',M+4,y);y+=10;
+        hrLine();
+      }
+    }
+
     // ── ACTIVIDADES RETRASADAS ────────────────────────────────────
     if(secs.retrasadas&&retrs.length){
       secBanner('RETRASADAS  ('+retrs.length+') — pendientes de dias anteriores',RED);
@@ -4859,6 +4973,8 @@ async function generarPDF(opts){
     else if(fIng) _fname+='_'+fIng.replace(/\s+/g,'_').replace(/\./g,'').slice(0,20);
     else if(fTipo==='contratista') _fname+='_Contratistas';
     else if(fTipo==='propio') _fname+='_Personal';
+    if(fPrio==='urgente') _fname+='_Urgentes';
+    if(fUbic) _fname+='_'+fUbic.replace(/\s+/g,'_').replace(/[^\w_]/g,'').slice(0,15);
     _fname+='_'+fi+(fi!==ff?'_al_'+ff:'')+'.pdf';
     doc.save(_fname);
     setSS('ok','PDF generado correctamente');
