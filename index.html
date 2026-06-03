@@ -639,9 +639,10 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
   <button class="foto-viewer-close" onclick="closeFoto()">×</button>
   <img id="fviewer-img" src="">
 </div>
+<input type="file" id="foto-file-input" accept="image/*" capture="environment" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260603_96';
+const APP_VERSION='20260603_97';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1234,9 +1235,131 @@ async function sbWithTimeout(path, ms=10000){
   }
 }
 
+// ── DRIVE PHOTO UPLOAD ──────────────────────────────────
+// Compress image to max 1200px wide before upload
+function compressImagen(file){
+  return new Promise(function(resolve){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var MAX=1200;
+        var w=img.width,h=img.height;
+        if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+        var canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',0.82));
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function uploadFoto(file, actId){
-  // Photo uploads disabled — storage conservation
-  throw new Error('Subida de fotos deshabilitada');
+  var url=localStorage.getItem('mecca_drive_url')||'';
+  if(!url){
+    throw new Error('DRIVE_NOT_CONFIGURED');
+  }
+  var act=(S.acts||[]).find(function(a){return a.id===actId;})||
+          (S.actsActivas||[]).find(function(a){return a.id===actId;})||{};
+  var folder=act.area||'Sin ubicacion';
+  var ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  var fileName='foto_'+ts+'.jpg';
+  var dataUrl=await compressImagen(file);
+  var resp=await fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({image:dataUrl,fileName:fileName,folder:folder,actId:actId})
+  });
+  var json=await resp.json();
+  if(!json.success) throw new Error(json.error||'Error subiendo foto');
+  return json.thumbUrl||json.url;
+}
+
+function abrirFotoUpload(actId){
+  if(!localStorage.getItem('mecca_drive_url')){
+    driveConfigModal();
+    return;
+  }
+  var inp=document.getElementById('foto-file-input');
+  if(!inp) return;
+  inp.dataset.actId=actId;
+  inp.value='';
+  inp.click();
+}
+
+async function handleFotoFile(inp){
+  var actId=inp.dataset.actId;
+  if(!actId||!inp.files||!inp.files[0]) return;
+  var file=inp.files[0];
+  setSS('syncing','Subiendo foto...');
+  try{
+    var url=await uploadFoto(file,actId);
+    // Append to existing fotos field
+    var act=(S.acts||[]).find(function(a){return a.id===actId;})||
+             (S.actsActivas||[]).find(function(a){return a.id===actId;});
+    if(!act) throw new Error('Actividad no encontrada');
+    var userName=S.user?S.user.nombre:'';
+    var entry=url+(userName?'::'+userName:'');
+    act.fotos=act.fotos?(act.fotos+'||'+entry):entry;
+    // Update same object in both arrays
+    [S.acts,S.actsActivas].forEach(function(arr){
+      if(!arr) return;
+      var i=arr.findIndex(function(a){return a.id===actId;});
+      if(i>=0) arr[i].fotos=act.fotos;
+    });
+    renderActs(); renderEnObra();
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:act.fotos})});
+    setSS('ok','📸 Foto guardada en Drive');
+  }catch(e){
+    if(e.message==='DRIVE_NOT_CONFIGURED'){
+      driveConfigModal();
+    } else {
+      setSS('err','Error subiendo foto');
+      alert('Error: '+e.message);
+    }
+  }
+}
+
+function driveConfigModal(){
+  var cur=localStorage.getItem('mecca_drive_url')||'';
+  document.getElementById('mcontent').innerHTML=
+    '<div class="mhandle"></div>'+
+    '<h3 style="margin-bottom:6px">📸 Configurar Google Drive</h3>'+
+    '<p style="font-size:12px;color:var(--text3);margin-bottom:14px">Pega aquí la URL del Web App de Apps Script que configuraste en Google Drive.</p>'+
+    '<div class="fw"><label class="fl">URL del Web App</label>'+
+    '<input type="url" id="drive-url-inp" value="'+esc(cur)+'" placeholder="https://script.google.com/macros/s/..." style="font-size:13px"></div>'+
+    '<div id="drive-test-res" style="font-size:12px;margin:8px 0;min-height:18px"></div>'+
+    '<div class="mactions">'+
+      '<button class="btn" onclick="closeModal()">Cancelar</button>'+
+      '<button class="btn" onclick="driveTestUrl()" style="background:#f8f9fa">Probar</button>'+
+      '<button class="btn primary" onclick="driveGuardarUrl()">Guardar</button>'+
+    '</div>';
+  openModal();
+}
+
+async function driveTestUrl(){
+  var url=(document.getElementById('drive-url-inp')||{}).value||'';
+  var res=document.getElementById('drive-test-res');
+  if(!url){if(res)res.textContent='Ingresa una URL primero.';return;}
+  if(res)res.innerHTML='<span style="color:#868e96">Probando...</span>';
+  try{
+    var r=await fetch(url+'?test=1',{method:'GET'});
+    var j=await r.json();
+    if(res) res.innerHTML=j.status==='ok'?'<span style="color:#2f9e44">✓ Conexión exitosa — '+esc(j.app||'')+'</span>':'<span style="color:#e03131">Respuesta inesperada</span>';
+  }catch(e){
+    if(res) res.innerHTML='<span style="color:#e03131">Error: '+esc(e.message)+'</span>';
+  }
+}
+
+function driveGuardarUrl(){
+  var url=(document.getElementById('drive-url-inp')||{}).value||'';
+  if(url) localStorage.setItem('mecca_drive_url',url);
+  else localStorage.removeItem('mecca_drive_url');
+  closeModal();
+  setSS('ok','Drive configurado');
 }
 
 function setSS(t,m){
@@ -2641,6 +2764,7 @@ function actHTML(a, ai, tipo){
     ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2)">
       <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Completar</button>
       <button onclick="togglePrioridadAct('${a.id}')" title="${a.prioridad==='urgente'?'Quitar urgente':'Marcar urgente'}" style="padding:8px 12px;border-radius:var(--r);border:1.5px solid ${a.prioridad==='urgente'?'#e03131':'#dee2e6'};background:${a.prioridad==='urgente'?'#ffe3e3':'#fff'};font-size:13px;cursor:pointer">${a.prioridad==='urgente'?'🔴':'⚪'}</button>
+      <button onclick="abrirFotoUpload('${a.id}')" style="padding:8px 12px;border-radius:var(--r);border:1.5px solid #dee2e6;background:#fff;color:#868e96;font-size:13px;cursor:pointer">📸</button>
       ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="flex:1;padding:8px;border-radius:var(--r);border:1.5px solid var(--accent);background:#e8f0fe;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">▶ Iniciar</button>`:''}
     </div>`:''}
   </div>`;
@@ -5550,7 +5674,13 @@ function renderFotos(){
     return acc+visible.length;
   },0);
 
+  var driveConfigured=!!localStorage.getItem('mecca_drive_url');
   el.innerHTML=`
+    <!-- DRIVE CONFIG BANNER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;background:${driveConfigured?'#d3f9d8':'#fff3cd'};border:1px solid ${driveConfigured?'#2f9e44':'#ffc107'};border-radius:10px;padding:8px 12px;margin-bottom:12px">
+      <span style="font-size:12px;font-weight:600;color:${driveConfigured?'#2f9e44':'#856404'}">${driveConfigured?'📸 Google Drive configurado':'⚠️ Google Drive no configurado'}</span>
+      <button onclick="driveConfigModal()" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid ${driveConfigured?'#2f9e44':'#ffc107'};background:#fff;color:${driveConfigured?'#2f9e44':'#856404'};cursor:pointer">${driveConfigured?'Cambiar URL':'Configurar'}</button>
+    </div>
     <!-- FILTROS -->
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:12px">
       <div style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:8px">FILTRAR FOTOS · ${totalFotos} foto${totalFotos!==1?'s':''}</div>
@@ -6097,7 +6227,8 @@ function buildActCardObra(a){
     '</div>'+
     (pct>0?'<div style="height:4px;background:#e9ecef;border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:'+Math.min(100,pct)+'%;background:'+ec+';border-radius:2px"></div></div>':'')+
     (a.notas?'<div style="font-size:11px;color:var(--text3);margin-bottom:6px;padding:5px 8px;background:#f8f9fa;border-radius:6px">'+esc(a.notas)+'</div>':'')+
-    btns+
+    (tieneFoto(a)?'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">'+fotoUrls(a.fotos).map(function(f){return'<img src="'+f+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid #dee2e6" onclick="verFotoInfo(\''+f+'\',\''+esc(a.descripcion)+'\',\''+a.fecha+'\',\''+esc(a.area||'')+'\')" loading="lazy">';}).join('')+'</div>':'')+
+    (canEdit()&&a.estado!=='completado'?'<button onclick="abrirFotoUpload(\''+id+'\')" style="margin-top:6px;padding:5px 10px;border-radius:6px;border:1.5px solid #dee2e6;background:#fff;color:#868e96;font-size:11px;cursor:pointer;font-family:var(--font)">📸 Foto</button>':'')+
   '</div>';
 }
 
