@@ -1243,13 +1243,14 @@ function compressImagen(file){
     reader.onload=function(e){
       var img=new Image();
       img.onload=function(){
-        var MAX=1200;
+        var MAX=800;
         var w=img.width,h=img.height;
-        if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+        if(w>h){if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}}
+        else{if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}}
         var canvas=document.createElement('canvas');
         canvas.width=w;canvas.height=h;
         canvas.getContext('2d').drawImage(img,0,0,w,h);
-        resolve(canvas.toDataURL('image/jpeg',0.82));
+        resolve(canvas.toDataURL('image/jpeg',0.70));
       };
       img.src=e.target.result;
     };
@@ -1279,10 +1280,13 @@ async function uploadFoto(file, actId){
 }
 
 function abrirFotoUpload(actId){
-  if(!localStorage.getItem('mecca_drive_url')){
+  var driveUrl=localStorage.getItem('mecca_drive_url');
+  if(!driveUrl){
     driveConfigModal();
     return;
   }
+  // Pre-warm Apps Script while file picker is open
+  fetch(driveUrl+'?warm=1',{method:'GET'}).catch(function(){});
   var inp=document.getElementById('foto-file-input');
   if(!inp) return;
   inp.dataset.actId=actId;
@@ -1294,26 +1298,39 @@ async function handleFotoFile(inp){
   var actId=inp.dataset.actId;
   if(!actId||!inp.files||!inp.files[0]) return;
   var file=inp.files[0];
-  setSS('syncing','Subiendo foto...');
-  try{
-    var url=await uploadFoto(file,actId);
-    // Append to existing fotos field
-    var act=(S.acts||[]).find(function(a){return a.id===actId;})||
-             (S.actsActivas||[]).find(function(a){return a.id===actId;});
-    if(!act) throw new Error('Actividad no encontrada');
-    var userName=S.user?S.user.nombre:'';
-    var entry=url+(userName?'::'+userName:'');
-    act.fotos=act.fotos?(act.fotos+'||'+entry):entry;
-    // Update same object in both arrays
+  var act=(S.acts||[]).find(function(a){return a.id===actId;})||
+           (S.actsActivas||[]).find(function(a){return a.id===actId;});
+  if(!act) return;
+  var userName=S.user?S.user.nombre:'';
+  // Optimistic UI: show local preview immediately
+  var localUrl=URL.createObjectURL(file);
+  var tempEntry=localUrl+(userName?'::'+userName:'');
+  var prevFotos=act.fotos||'';
+  act.fotos=prevFotos?(prevFotos+'||'+tempEntry):tempEntry;
+  function syncArrays(fotos){
     [S.acts,S.actsActivas].forEach(function(arr){
       if(!arr) return;
       var i=arr.findIndex(function(a){return a.id===actId;});
-      if(i>=0) arr[i].fotos=act.fotos;
+      if(i>=0) arr[i].fotos=fotos;
     });
+  }
+  syncArrays(act.fotos);
+  renderActs(); renderEnObra();
+  setSS('syncing','Subiendo...');
+  try{
+    var driveUrl=await uploadFoto(file,actId);
+    var entry=driveUrl+(userName?'::'+userName:'');
+    act.fotos=act.fotos.replace(tempEntry,entry);
+    URL.revokeObjectURL(localUrl);
+    syncArrays(act.fotos);
     renderActs(); renderEnObra();
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:act.fotos})});
-    setSS('ok','📸 Foto guardada en Drive');
+    setSS('ok','📸 Guardada');
   }catch(e){
+    act.fotos=prevFotos;
+    URL.revokeObjectURL(localUrl);
+    syncArrays(prevFotos);
+    renderActs(); renderEnObra();
     if(e.message==='DRIVE_NOT_CONFIGURED'){
       driveConfigModal();
     } else {
