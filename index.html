@@ -250,7 +250,7 @@ select{-webkit-appearance:none;appearance:none;background-image:url("data:image/
 /* ── FOTO VIEWER ── */
 .foto-viewer{position:fixed;inset:0;background:rgba(15,10,40,.97);z-index:400;display:flex;align-items:center;justify-content:center}
 .foto-viewer img{max-width:100%;max-height:100%;object-fit:contain}
-.foto-viewer-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.1);border:none;color:white;font-size:24px;cursor:pointer;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.foto-viewer-close{position:absolute;top:calc(env(safe-area-inset-top, 0px) + 56px);right:16px;background:rgba(255,255,255,.15);border:none;color:white;font-size:26px;cursor:pointer;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:10}
 
 .empty{text-align:center;padding:48px 20px;color:var(--text3);font-size:14px;line-height:1.8}
 .spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
@@ -5868,7 +5868,7 @@ function verFotoInfo(url, desc, fecha, area, ing, uploader, actId){
   if(!info){
     info=document.createElement('div');
     info.id='fviewer-info';
-    info.style.cssText='position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.9));padding:16px;color:white';
+    info.style.cssText='position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.9));padding:16px;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 16px);color:white';
     viewer.appendChild(info);
   }
   const areaHtml     = area     ? '<span>📍 '+esc(area)+'</span>' : '';
