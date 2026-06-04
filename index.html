@@ -2455,9 +2455,9 @@ function sortByPriority(acts){
 function applyActFilters(acts){
   let filtered = acts;
   // Hide completed unless showing all
-  if(!S.actMostrarTodas && !S.actFiltroRapido) filtered = filtered.filter(a=>a.estado!=='completado');
-  // Quick estado filter
-  if(S.actFiltroRapido) filtered = filtered.filter(a=>a.estado===S.actFiltroRapido);
+  if(S.actFiltroRapido==='activas') filtered = filtered.filter(a=>a.estado!=='completado');
+  else if(S.actFiltroRapido) filtered = filtered.filter(a=>a.estado===S.actFiltroRapido);
+  else if(!S.actMostrarTodas) filtered = filtered.filter(a=>a.estado!=='completado');
   // Advanced filters
   const av = S.actFiltroAvanzado;
   if(av.contratista && av.contratista!=='__sin_asignar__') filtered = filtered.filter(a=>a.personal_nombre===av.contratista&&a.tipo_personal==='contratista');
@@ -2535,14 +2535,13 @@ function buildActsFiltros(){
   // Estado
   h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Estado</div>';
   h+=filtroDropdown('af-estado',S.actFiltroRapido,
-    [{val:'en-progreso',label:'🔄 En progreso'},{val:'pendiente',label:'⏳ Pendiente'},{val:'completado',label:'✅ Completado'}],
-    'Todos',
+    [{val:'activas',label:'🟢 Activas'},{val:'en-progreso',label:'🔄 En progreso'},{val:'pendiente',label:'⏳ Pendiente'},{val:'completado',label:'✅ Completado'}],
+    'Todas',
     "S.actFiltroRapido=this.value;debounceRender()");
   h+='</div>';
 
-  // Ubicación — usa lista predefinida completa + áreas personalizadas
-  var allUbics=UBICACIONES.reduce(function(acc,g){return acc.concat(g.opciones);},[]);
-  (S.acts||[]).forEach(function(a){if(a.area&&!allUbics.includes(a.area))allUbics.push(a.area);});
+  // Ubicación — solo áreas con actividades reales
+  var allUbics=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort();
   var ubicOpts=allUbics.map(function(u){return{val:u,label:u};});
   h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Ubicación</div>';
   h+=filtroDropdown('af-ubicacion',av.ubicacion||'',ubicOpts,'Todas',
@@ -4385,8 +4384,7 @@ function exportarPDF(){
   var SEL='width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg2);color:var(--text);font-size:12px;font-family:var(--font);-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'7\' viewBox=\'0 0 10 7\'%3E%3Cpath d=\'M1 1l4 4 4-4\' stroke=\'%23868e96\' stroke-width=\'1.5\' fill=\'none\'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px';
   var contOpts=getContratistasOpts();
   var ingOpts=Object.values(USERS).map(function(u){return{val:u.nombre,label:u.nombre};});
-  var ubicOpts=UBICACIONES.reduce(function(acc,g){return acc.concat(g.opciones);},[]);
-  (S.acts||[]).forEach(function(a){if(a.area&&!ubicOpts.includes(a.area))ubicOpts.push(a.area);});
+  var ubicOpts=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort();
   var chkStyle='display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:12px;font-weight:500;user-select:none';
   document.getElementById('mcontent').innerHTML=
     '<div class="mhandle"></div>'+
@@ -6095,8 +6093,7 @@ function buildEnObraFiltros(){
       h+='</div>';
     }
 
-    var obraUbics=UBICACIONES.reduce(function(acc,g){return acc.concat(g.opciones);},[]);
-    (S.actsActivas||[]).forEach(function(a){if(a.area&&!obraUbics.includes(a.area))obraUbics.push(a.area);});
+    var obraUbics=[...new Set((S.actsActivas||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort();
     var obraUbicOpts=obraUbics.map(function(u){return{val:u,label:u};});
     h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Ubicación</div>';
     h+=filtroDropdown('fo-ubic', S.enObraFiltroUbic||'', obraUbicOpts, 'Todas las ubicaciones',
@@ -7303,8 +7300,7 @@ function renderRepPersonalizado(){
   // Build filter options
   var contOpts=getContratistasOpts();
   var ingOpts=Object.values(USERS).map(function(u){return{val:u.nombre,label:u.nombre};});
-  var ubicOpts=UBICACIONES.reduce(function(acc,g){return acc.concat(g.opciones);},[]);
-  (S.acts||[]).forEach(function(a){if(a.area&&!ubicOpts.includes(a.area))ubicOpts.push(a.area);});
+  var ubicOpts=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort();
 
   // Apply filters
   var acts=(S.acts||[]).filter(function(a){
