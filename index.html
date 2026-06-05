@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_121';
+const APP_VERSION='20260605_122';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8586,7 +8586,9 @@ function _gSelSt(extra){
 function renderPlan(){
   var el=document.getElementById('c-plan');if(!el) return;
   var sinF=(S.acts||[]).filter(function(a){return !a.fecha_fin||(!a.fecha_inicio&&!a.fecha);}).length;
-  var areaList=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort();
+  var areaList=[...new Set((S.acts||[]).filter(function(a){return a.area&&(!_g.tipoF||a.tipo_personal===_g.tipoF);}).map(function(a){return a.area;}))].sort();
+  // Remove selected areas that no longer exist for this tipo
+  _g.areaFs=_g.areaFs.filter(function(a){return areaList.indexOf(a)>=0;});
   var aSelCnt=_g.areaFs.length;
   var areaBtn='<div style="position:relative;flex-shrink:0">'+
     '<span role="button" onclick="ganttToggleAreaMenu()" style="display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 10px;font-size:12px;border:1.5px solid var(--border2);border-radius:8px;background:'+(aSelCnt?'var(--accent-soft)':'#fff')+';color:'+(aSelCnt?'var(--accent)':'var(--text2)')+';cursor:pointer;user-select:none;white-space:nowrap;font-family:var(--font)">'+
@@ -8643,6 +8645,7 @@ function renderPlan(){
         (_g.tipoF&&wList.length?'<select onchange="ganttFilterWorker(this.value)" style="'+_gSelSt('flex-shrink:0;max-width:140px')+'"><option value="">— Todos —</option>'+wOpts+'</select>':'')+
         areaBtn+
         (sinF?'<span style="font-size:10px;color:#92400E;padding:3px 7px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap">⚠️ '+sinF+'</span>':'')+
+        '<button onclick="ganttHelp()" title="Ayuda" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)">?</button>'+
         '<div style="margin-left:auto;display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+zbHtml+'</div>'+
       '</div>'+
     '</div>'+
@@ -9023,6 +9026,39 @@ function ganttUndo(){
       .then(function(){a.predecesoras=h.oldPreds||null;showToast('Enlace deshecho ↩');_gRender();})
       .catch(function(err){showToast('Error: '+err.message,'err');});
   }
+}
+
+function ganttHelp(){
+  var html='<div onclick="this.parentElement.remove()" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px">'+
+  '<div onclick="event.stopPropagation()" style="background:#fff;border-radius:18px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">'+
+    '<div style="background:linear-gradient(135deg,#7c3aed,#0891b2);padding:20px 24px;border-radius:18px 18px 0 0;color:#fff">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center">'+
+        '<h2 style="margin:0;font-size:18px;font-weight:800">📅 Planificación Gantt</h2>'+
+        '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:16px">✕</button>'+
+      '</div>'+
+      '<p style="margin:6px 0 0;opacity:.85;font-size:13px">Guía de funciones disponibles</p>'+
+    '</div>'+
+    '<div style="padding:20px 24px;display:flex;flex-direction:column;gap:14px">'+
+      _gHelpRow('🖱️ Mover barra','Arrastra la barra de una actividad izquierda/derecha para cambiar las fechas de inicio y fin.')+
+      _gHelpRow('↔️ Cambiar duración','Arrastra el borde derecho de la barra para extender o acortar la actividad.')+
+      _gHelpRow('🔗 Enlazar actividades','Presiona <b>Enlazar</b>, elige el tipo <b>FS</b> (Fin→Inicio) o <b>SS</b> (Inicio→Inicio), haz click en la PREDECESORA y luego en la SUCESORA.<br><b>FS</b> = la sucesora empieza cuando termina la anterior.<br><b>SS</b> = la sucesora puede iniciar cuando inicia la anterior, sin esperar que termine.')+
+      _gHelpRow('✕ Quitar un enlace','Haz click en cualquier barra → en el panel lateral aparece la lista de predecesoras, cada una con un botón <b>✕</b> rojo para eliminar ese enlace.')+
+      _gHelpRow('🎯 Ruta crítica','Activa <b>Ruta crítica</b> para resaltar en amarillo las actividades que, si se retrasan, retrasan todo el proyecto (CPM).')+
+      _gHelpRow('⠿ Reordenar filas','Arrastra el ícono <b>⠿</b> en el sidebar arriba o abajo para cambiar el orden visual de las actividades dentro del mismo área.')+
+      _gHelpRow('👷 Filtro por tipo','Los pills <b>Todos / Personal / Contrat. / Ings.</b> filtran las actividades según el tipo de personal asignado.')+
+      _gHelpRow('📍 Filtro por área','El botón <b>Todas las áreas ▾</b> abre un menú con checkboxes — podés seleccionar una o varias áreas al mismo tiempo.')+
+      _gHelpRow('↩ Deshacer','El botón <b>↩</b> (o <b>Ctrl+Z</b>) revierte el último cambio: arrastre de barra o enlace creado/eliminado. Guarda hasta 30 operaciones.')+
+      _gHelpRow('📅 Zoom','Los botones <b>Día / Sem / Mes</b> cambian la escala horizontal del Gantt.')+
+    '</div>'+
+  '</div>'+
+  '</div>';
+  var d=document.createElement('div');d.innerHTML=html;document.body.appendChild(d.firstElementChild);
+}
+function _gHelpRow(title,desc){
+  return '<div style="border-radius:10px;background:#f8f6ff;padding:12px 14px">'+
+    '<div style="font-size:13px;font-weight:700;color:#1a1035;margin-bottom:4px">'+title+'</div>'+
+    '<div style="font-size:12px;color:#3d3461;line-height:1.55">'+desc+'</div>'+
+  '</div>';
 }
 
 function ganttUnlink(succId,predId){
