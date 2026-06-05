@@ -658,7 +658,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_111';
+const APP_VERSION='20260605_112';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8568,55 +8568,55 @@ function _gWorkerList(){
   return [...new Set(acts.filter(function(a){return a.personal_nombre;}).map(function(a){return a.personal_nombre;}))].sort();
 }
 
-function _gZBtnSt(z){
-  var a=_g.zoom===z;
-  return 'padding:0 10px;min-height:30px;font-size:11px;border-radius:7px;border:none;cursor:pointer;font-family:var(--font);font-weight:'+(a?'700':'500')+';background:'+(a?'var(--accent)':'transparent')+';color:'+(a?'#fff':'var(--text2)')+';transition:all .15s';
-}
-
-function _gTipoBtn(tipo,label){
-  var a=_g.tipoF===tipo;
-  var clr=tipo&&GTYPES[tipo]?GTYPES[tipo].clr:'var(--accent)';
-  return '<button onclick="ganttFilterTipo(\''+tipo+'\')" style="padding:2px 10px;min-height:28px;font-size:11px;border-radius:7px;border:none;cursor:pointer;font-family:var(--font);font-weight:'+(a?'700':'400')+';background:'+(a?clr:'transparent')+';color:'+(a?'#fff':'var(--text2)')+';white-space:nowrap;transition:all .15s">'+label+'</button>';
+// Inline style helper — avoids global CSS interference on form elements
+function _gSelSt(extra){
+  return 'height:32px;font-size:12px;border:1.5px solid var(--border2);border-radius:8px;padding:0 8px;background:#fff;cursor:pointer;font-family:var(--font);'+(extra||'');
 }
 
 function renderPlan(){
   var el=document.getElementById('c-plan');if(!el) return;
-  var sinFechas=(S.acts||[]).filter(function(a){return !a.fecha_fin||(!a.fecha_inicio&&!a.fecha);}).length;
-  var areaOpts=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort().map(function(a){return '<option value="'+esc(a)+'">'+esc(a)+'</option>';}).join('');
-  var workerList=_gWorkerList();
-  var workerOpts=workerList.map(function(w){return '<option value="'+esc(w)+'">'+esc(w)+'</option>';}).join('');
+  var sinF=(S.acts||[]).filter(function(a){return !a.fecha_fin||(!a.fecha_inicio&&!a.fecha);}).length;
+  var aOpts=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort().map(function(a){return '<option value="'+esc(a)+'"'+(a===_g.areaF?' selected':'')+'>'+esc(a)+'</option>';}).join('');
+  var wList=_gWorkerList();
+  var wOpts=wList.map(function(w){return '<option value="'+esc(w)+'"'+(w===_g.workerF?' selected':'')+'>'+esc(w)+'</option>';}).join('');
+
+  // Build tipo pills inline (no helper function, avoids hoisting issues)
+  var TPILLS=[['','Todos'],['propio','👷 Personal'],['contratista','🔨 Contrat.'],['ingeniero','👤 Ings.']];
+  var tpHtml=TPILLS.map(function(t){
+    var act=_g.tipoF===t[0];
+    var bg=act?(t[0]&&GTYPES[t[0]]?GTYPES[t[0]].clr:'var(--accent)'):'transparent';
+    return '<button onclick="ganttFilterTipo(\''+t[0]+'\')" style="padding:4px 10px;font-size:11px;line-height:1;border-radius:7px;border:none;cursor:pointer;font-family:var(--font);font-weight:'+(act?700:400)+';background:'+bg+';color:'+(act?'#fff':'var(--text2)')+';white-space:nowrap">'+t[1]+'</button>';
+  }).join('');
+
+  // Zoom buttons inline
+  var ZBTN=[['day','Día'],['week','Sem'],['month','Mes']];
+  var zbHtml=ZBTN.map(function(z){
+    var act=_g.zoom===z[0];
+    return '<button onclick="ganttZoom(\''+z[0]+'\')" style="padding:4px 12px;font-size:11px;line-height:1;border-radius:7px;border:none;cursor:pointer;font-family:var(--font);font-weight:'+(act?700:500)+';background:'+(act?'var(--accent)':'transparent')+';color:'+(act?'#fff':'var(--text2)')+'">'+z[1]+'</button>';
+  }).join('');
+
   el.innerHTML=
     '<div style="display:flex;flex-direction:column;height:calc(100vh - 100px);overflow:hidden">'+
-    // Toolbar
     '<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2)">'+
-      '<div style="display:flex;gap:6px;padding:8px 12px;align-items:center;flex-wrap:wrap">'+
-        '<button class="ibtn primary" onclick="showAddAct()" style="padding:0 14px;min-height:36px">+ Nueva</button>'+
-        '<div style="width:1px;height:22px;background:var(--border2);margin:0 2px;flex-shrink:0"></div>'+
-        '<button class="ibtn" id="gantt-link-btn" onclick="ganttToggleLink()" style="padding:0 12px;min-height:36px" title="Modo enlace">🔗 Enlazar</button>'+
-        '<button class="ibtn" id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 12px;min-height:36px" title="Resaltar ruta crítica (CPM)">🎯 Ruta crítica</button>'+
-        '<div style="margin-left:auto;display:flex;gap:3px;background:var(--bg3);border-radius:9px;padding:2px">'+
-          '<button id="gz-day"   onclick="ganttZoom(\'day\')"   style="'+_gZBtnSt('day')+'">Día</button>'+
-          '<button id="gz-week"  onclick="ganttZoom(\'week\')"  style="'+_gZBtnSt('week')+'">Semana</button>'+
-          '<button id="gz-month" onclick="ganttZoom(\'month\')" style="'+_gZBtnSt('month')+'">Mes</button>'+
-        '</div>'+
+      // Row 1: actions + zoom
+      '<div style="display:flex;gap:6px;padding:8px 12px;align-items:center">'+
+        '<button style="padding:0 14px;height:36px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer" onclick="showAddAct()">+ Nueva</button>'+
+        '<div style="width:1px;height:22px;background:var(--border2);flex-shrink:0"></div>'+
+        '<button id="gantt-link-btn" onclick="ganttToggleLink()" style="padding:0 12px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.link?'var(--green)':'var(--bg3)')+';color:'+(_g.link?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer">🔗 Enlazar</button>'+
+        '<button id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 12px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.crit?'#F59E0B':'var(--bg3)')+';color:'+(_g.crit?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer">🎯 Ruta crítica</button>'+
+        '<div style="margin-left:auto;display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px">'+zbHtml+'</div>'+
       '</div>'+
+      // Row 2: tipo + worker + area + warning
       '<div style="display:flex;gap:6px;padding:0 12px 8px;align-items:center;flex-wrap:wrap">'+
-        '<div style="display:flex;gap:2px;background:#fff;border:1.5px solid var(--border2);border-radius:9px;padding:2px">'+
-          _gTipoBtn('','Todos')+
-          _gTipoBtn('propio','👷 Personal')+
-          _gTipoBtn('contratista','🔨 Contratistas')+
-          _gTipoBtn('ingeniero','👤 Ingenieros')+
-        '</div>'+
-        '<select id="gantt-worker-sel" class="sel" onchange="ganttFilterWorker(this.value)" style="min-height:32px;font-size:12px;padding:0 8px;display:'+(_g.tipoF&&workerList.length?'block':'none')+'">'+
-          '<option value="">— Todos —</option>'+workerOpts+
+        '<div style="display:inline-flex;gap:2px;background:#fff;border:1.5px solid var(--border2);border-radius:9px;padding:3px;flex-shrink:0">'+tpHtml+'</div>'+
+        (_g.tipoF&&wList.length?'<select onchange="ganttFilterWorker(this.value)" style="'+_gSelSt('max-width:160px')+'"><option value="">— Todos —</option>'+wOpts+'</select>':'')+
+        '<select onchange="ganttFilterArea(this.value)" style="'+_gSelSt('max-width:180px')+'">'+
+          '<option value="">Todas las áreas</option>'+aOpts+
         '</select>'+
-        '<select id="gantt-area-sel" class="sel" onchange="ganttFilterArea(this.value)" style="min-height:32px;font-size:12px;padding:0 8px">'+
-          '<option value="">Todas las áreas</option>'+areaOpts+
-        '</select>'+
-        (sinFechas?'<span style="font-size:10px;color:var(--text3);margin-left:auto;padding:3px 8px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0">⚠️ '+sinFechas+' sin fechas</span>':'')+
+        (sinF?'<span style="font-size:10px;color:#92400E;margin-left:auto;padding:3px 8px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap">⚠️ '+sinF+' sin planificar</span>':'')+
       '</div>'+
     '</div>'+
-    // Chart
+    // Chart area
     '<div style="display:flex;flex:1;overflow:hidden;position:relative">'+
       '<div id="gantt-lft" style="width:'+GSIDE+'px;flex-shrink:0;border-right:2px solid var(--border);overflow:hidden;display:flex;flex-direction:column;background:#fff;z-index:2">'+
         '<div style="height:'+GTOP+'px;border-bottom:1.5px solid var(--border);background:var(--bg2);flex-shrink:0;display:flex;align-items:center;padding:0 12px;font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:.08em">ACTIVIDAD / RESPONSABLE</div>'+
@@ -8968,17 +8968,13 @@ function ganttLinkClick(actId){
 
 function ganttToggleLink(){
   _g.link=!_g.link;_g.lSrc=null;
-  var btn=document.getElementById('gantt-link-btn');
-  if(btn){btn.style.background=_g.link?'var(--green)':'';btn.style.color=_g.link?'#fff':'';}
   if(_g.link) showToast('Modo enlace — click en PREDECESORA, luego en SUCESORA');
-  _gRender();
+  renderPlan();
 }
 
 function ganttToggleCrit(){
   _g.crit=!_g.crit;
-  var btn=document.getElementById('gantt-crit-btn');
-  if(btn){btn.style.background=_g.crit?'#F59E0B':'';btn.style.color=_g.crit?'#fff':'';}
-  _gRender();
+  renderPlan();
 }
 
 function ganttZoom(z){_g.zoom=z;renderPlan();}
