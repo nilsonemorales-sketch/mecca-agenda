@@ -642,7 +642,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260603_97';
+const APP_VERSION='20260605_109';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -2354,49 +2354,121 @@ function getNivelesUnicos(){
 // Sort so retrasadas → urgentes → en-progreso → resto; within each group by fecha asc
 // ── PREDECESORAS ──────────────────────────────────────
 function buildPredSection(currentId, currentPreds){
-  // currentPreds: array of IDs already selected
-  var candidates=S.acts.filter(function(a){return a.id!==currentId;});
-  if(!candidates.length) return '';
-  var selSet=new Set(currentPreds||[]);
-  var selCount=selSet.size;
+  window._predCurrentId=currentId||'';
+  var selSet=new Set((currentPreds||[]).filter(Boolean));
+
+  function chipHtml(id){
+    var act=(S.acts||[]).find(function(a){return a.id===id;});
+    if(!act) return '';
+    var short=act.descripcion.length>38?act.descripcion.slice(0,38)+'…':act.descripcion;
+    return '<span style="display:inline-flex;align-items:center;gap:4px;background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:20px;padding:3px 10px 3px 12px;font-size:11px;font-weight:600">'+
+      esc(short)+
+      '<button type="button" onclick="removePred(\''+id+'\')" style="background:none;border:none;color:var(--accent);opacity:.7;cursor:pointer;padding:0;font-size:16px;line-height:1;margin-left:2px">×</button>'+
+      '</span>';
+  }
+
+  var initialChips=[...selSet].map(chipHtml).join('');
+  var count=selSet.size;
+
   var html='<div class="fw" style="margin-top:4px">';
-  html+='<details style="background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--r);overflow:hidden">';
-  html+='<summary style="padding:10px 14px;cursor:pointer;font-size:13px;font-weight:700;color:var(--text);user-select:none;list-style:none;display:flex;align-items:center;gap:8px">';
-  html+='🔗 Predecesoras'+(selCount?' <span style="background:var(--accent);color:#fff;border-radius:20px;padding:1px 8px;font-size:11px">'+selCount+'</span>':'<span style="font-size:11px;color:var(--text3);font-weight:400"> — sin dependencias</span>');
-  html+='</summary>';
-  html+='<div style="padding:10px 14px;border-top:1px solid var(--border)">';
-  html+='<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Selecciona las actividades que deben completarse ANTES de esta:</div>';
-  html+='<input type="text" id="pred-search" placeholder="🔍 Buscar..." style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:var(--font);margin-bottom:8px;background:var(--bg2);color:var(--text)" oninput="filterPredList()">';
-  html+='<div id="pred-list" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">';
-  candidates.forEach(function(c){
-    var checked=selSet.has(c.id);
-    var lbl=esc((c.area?'['+c.area+'] ':'')+c.descripcion);
-    html+='<label style="display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;background:'+(checked?'var(--bg4)':'var(--bg2)')+';border:1px solid '+(checked?'var(--accent)':'var(--border)')+'" data-desc="'+lbl.toLowerCase()+'">';
-    html+='<input type="checkbox" name="pred-cb" value="'+c.id+'" '+(checked?'checked':'')+' style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0" onchange="updatePredsField()">';
-    html+='<span style="font-size:11.5px;color:var(--text);line-height:1.35"><b>'+esc(c.descripcion)+'</b>'+(c.area?'<br><span style="color:var(--accent);font-size:10.5px">📍 '+esc(c.area)+'</span>':'')+'</span>';
-    html+='</label>';
-  });
-  html+='</div>';
-  html+='</div>';
-  html+='</details>';
-  html+='<input type="hidden" id="a-preds" value="'+(selCount?JSON.stringify([...selSet]):'')+'"/>';
+  html+='<div style="background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--r)">';
+  html+='<div style="padding:10px 14px;display:flex;align-items:center;gap:8px">'+
+    '<span style="font-size:13px;font-weight:700;color:var(--text)">🔗 Predecesoras</span>'+
+    '<span id="pred-count" style="background:var(--accent);color:#fff;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700;'+(count?'':'display:none')+'">'+count+'</span>'+
+  '</div>';
+  html+='<div style="padding:0 14px 10px">';
+  html+='<div id="pred-chips" style="display:flex;flex-wrap:wrap;gap:4px;'+(count?'margin-bottom:8px':'')+'">'+(initialChips||'')+'</div>';
+  html+='<input type="text" id="pred-search" placeholder="🔍 Buscar actividad…" autocomplete="off" '+
+    'style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:var(--font);background:#fff;color:var(--text);box-sizing:border-box" '+
+    'oninput="renderPredResults(this.value)">';
+  html+='<div id="pred-list" style="max-height:220px;overflow-y:auto;margin-top:5px">'+
+    '<div style="font-size:11px;color:var(--text3);padding:4px 0">Escribe para buscar actividades…</div>'+
+  '</div>';
+  html+='</div></div>';
+  html+='<input type="hidden" id="a-preds" value="'+(count?JSON.stringify([...selSet]):'')+'"/>';
   html+='</div>';
   return html;
 }
-function filterPredList(){
-  var q=(document.getElementById('pred-search').value||'').toLowerCase();
-  document.querySelectorAll('#pred-list label').forEach(function(el){
-    el.style.display=(!q||el.dataset.desc.includes(q))?'':'none';
-  });
-}
-function updatePredsField(){
-  var ids=[...document.querySelectorAll('input[name="pred-cb"]:checked')].map(function(cb){return cb.value;});
+
+function renderPredResults(q){
+  var container=document.getElementById('pred-list');
+  if(!container) return;
+  q=(q||'').trim().toLowerCase();
+  if(!q){
+    container.innerHTML='<div style="font-size:11px;color:var(--text3);padding:4px 0">Escribe para buscar actividades…</div>';
+    return;
+  }
   var f=document.getElementById('a-preds');
-  if(f) f.value=ids.length?JSON.stringify(ids):'';
-  // Update label count
-  var sum=document.querySelector('details summary');
-  if(sum) sum.querySelector('span').textContent=ids.length?' '+ids.length:'';
+  var selected=new Set(f&&f.value?JSON.parse(f.value).filter(Boolean):[]);
+  var curId=window._predCurrentId||'';
+
+  var candidates=(S.acts||[]).filter(function(a){
+    if(a.id===curId||selected.has(a.id)||a.estado==='completado') return false;
+    return ((a.descripcion||'')+(a.area||'')+(a.personal_nombre||'')).toLowerCase().includes(q);
+  }).slice(0,40);
+
+  if(!candidates.length){
+    container.innerHTML='<div style="font-size:11px;color:var(--text3);padding:4px 0">Sin resultados para "'+esc(q)+'"</div>';
+    return;
+  }
+  var byArea={};
+  candidates.forEach(function(a){
+    var k=a.area||'Sin ubicación';
+    if(!byArea[k]) byArea[k]=[];
+    byArea[k].push(a);
+  });
+  var html='';
+  Object.keys(byArea).sort().forEach(function(area){
+    html+='<div style="font-size:10px;font-weight:700;color:var(--accent);padding:5px 0 2px;letter-spacing:.4px">📍 '+esc(area)+'</div>';
+    byArea[area].forEach(function(c){
+      html+='<div onclick="addPred(\''+c.id+'\')" style="padding:7px 8px;border-radius:7px;background:#fff;border:1px solid var(--border);cursor:pointer;margin-bottom:3px;active-background:var(--bg3)">';
+      html+='<div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(c.descripcion)+'</div>';
+      if(c.personal_nombre||c.estado) html+='<div style="font-size:10px;color:var(--text3);margin-top:1px">'+(c.personal_nombre?'👷 '+esc(c.personal_nombre)+' ':'')+(c.estado?'· '+c.estado:'')+'</div>';
+      html+='</div>';
+    });
+  });
+  container.innerHTML=html;
 }
+
+function addPred(id){
+  var f=document.getElementById('a-preds');
+  if(!f) return;
+  var ids=f.value?JSON.parse(f.value).filter(Boolean):[];
+  if(!ids.includes(id)) ids.push(id);
+  f.value=ids.length?JSON.stringify(ids):'';
+  _syncPredUI(ids);
+  var inp=document.getElementById('pred-search');
+  if(inp){inp.value='';inp.focus();}
+  renderPredResults('');
+}
+
+function removePred(id){
+  var f=document.getElementById('a-preds');
+  if(!f) return;
+  var ids=(f.value?JSON.parse(f.value):[]).filter(function(x){return x!==id;});
+  f.value=ids.length?JSON.stringify(ids):'';
+  _syncPredUI(ids);
+}
+
+function _syncPredUI(ids){
+  var chips=ids.map(function(id){
+    var act=(S.acts||[]).find(function(a){return a.id===id;});
+    if(!act) return '';
+    var short=act.descripcion.length>38?act.descripcion.slice(0,38)+'…':act.descripcion;
+    return '<span style="display:inline-flex;align-items:center;gap:4px;background:#e8f0fe;color:var(--accent);border:1px solid rgba(26,86,219,.25);border-radius:20px;padding:3px 10px 3px 12px;font-size:11px;font-weight:600">'+
+      esc(short)+
+      '<button type="button" onclick="removePred(\''+id+'\')" style="background:none;border:none;color:var(--accent);opacity:.7;cursor:pointer;padding:0;font-size:16px;line-height:1;margin-left:2px">×</button>'+
+      '</span>';
+  }).filter(Boolean).join('');
+  var el=document.getElementById('pred-chips');
+  if(el){el.innerHTML=chips;el.style.marginBottom=chips?'8px':'0';}
+  var cnt=document.getElementById('pred-count');
+  if(cnt){cnt.textContent=ids.length;cnt.style.display=ids.length?'':'none';}
+}
+
+// legacy no-op (kept for safety)
+function filterPredList(){}
+function updatePredsField(){}
 function getPreds(a){
   if(!a||!a.predecesoras) return [];
   try{ return JSON.parse(a.predecesoras)||[]; }catch(e){ return []; }
