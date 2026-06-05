@@ -9068,7 +9068,7 @@ async function deleteOrden(id){
 // ══════════════════════════════════════════════════════════════════════
 // MÓDULO DE PLANIFICACIÓN — GANTT INTERACTIVO v2
 // ══════════════════════════════════════════════════════════════════════
-var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaFs:[],areaMenu:false,tipoF:'',workerF:'',drag:null,bounds:null,ppd:0,rowY:{},rowOrder:{},linkTipo:'FS',linkLag:0,linkMode:'manual',rowDrag:null,history:[],mode:'gantt',groupMode:'area',collAreas:{}};
+var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaFs:[],areaMenu:false,tipoF:'',workerFs:[],workerMenu:false,drag:null,bounds:null,ppd:0,rowY:{},rowOrder:{},linkTipo:'FS',linkLag:0,linkMode:'manual',rowDrag:null,history:[],mode:'gantt',groupMode:'area',collAreas:{}};
 var GROW=52,GGRP=32,GTOP=56,GSIDE=256;
 var GPPD={day:36,week:20,month:7};
 var GTYPES={
@@ -9153,6 +9153,8 @@ function renderPlan(){
   // Clean up any portal elements from previous render
   var _ov=document.getElementById('gantt-area-overlay');if(_ov)_ov.remove();
   var _am=document.getElementById('gantt-area-menu');if(_am)_am.remove();
+  var _wov=document.getElementById('gantt-worker-overlay');if(_wov)_wov.remove();
+  var _wm=document.getElementById('gantt-worker-menu');if(_wm)_wm.remove();
   // Responsive sidebar
   GSIDE=window.innerWidth>=900?256:190;
   var el=document.getElementById('c-plan');if(!el) return;
@@ -9166,7 +9168,12 @@ function renderPlan(){
       (aSelCnt?'📍 '+aSelCnt+' área'+(aSelCnt>1?'s':''):'📍 Áreas')+' ▾'+
     '</span>';
   var wList=_gWorkerList();
-  var wOpts=wList.map(function(w){return '<option value="'+esc(w)+'"'+(w===_g.workerF?' selected':'')+'>'+esc(w)+'</option>';}).join('');
+  _g.workerFs=_g.workerFs.filter(function(w){return wList.indexOf(w)>=0;});
+  var wSelCnt=_g.workerFs.length;
+  var workerBtn=(_g.tipoF&&wList.length)?
+    '<span id="gantt-worker-btn" role="button" onclick="event.stopPropagation();ganttToggleWorkerMenu()" style="display:inline-flex;align-items:center;gap:5px;height:36px;padding:0 12px;font-size:12px;border:1.5px solid var(--border2);border-radius:9px;background:'+(wSelCnt?'#F5F3FF':'var(--bg3)')+';color:'+(wSelCnt?'#7C3AED':'var(--text2)')+';cursor:pointer;user-select:none;white-space:nowrap;font-family:var(--font);flex-shrink:0">'+
+      (wSelCnt?'🔨 '+wSelCnt+' contratista'+(wSelCnt>1?'s':''):'🔨 Contratista')+' ▾'+
+    '</span>':'';
 
   // Build tipo pills inline — use <span> to bypass global button{min-height:44px} rule
   var TPILLS=[['','Todos'],['propio','👷 Personal'],['contratista','🔨 Contrat.'],['ingeniero','👤 Ings.']];
@@ -9220,7 +9227,7 @@ function renderPlan(){
           '<button id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.crit?'#F59E0B':'var(--bg3)')+';color:'+(_g.crit?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🎯</button>'+
           '<span style="font-size:10px;font-weight:700;color:#7C3AED;background:#EDE9FE;border:1px solid #C4B5FD;border-radius:6px;padding:3px 8px;flex-shrink:0;white-space:nowrap">👁 Solo lectura</span>'
         )+
-        (_g.tipoF&&wList.length?'<select onchange="ganttFilterWorker(this.value)" style="'+_gSelSt('flex-shrink:0;max-width:140px')+'"><option value="">— Todos —</option>'+wOpts+'</select>':'')+
+        workerBtn+
         areaBtn+
         (sinF&&gEdit?'<span style="font-size:10px;color:#92400E;padding:3px 7px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap">⚠️ '+sinF+'</span>':'')+
         (gEdit?
@@ -9252,6 +9259,7 @@ function renderPlan(){
     '<div id="gantt-panel" style="position:fixed;right:-360px;top:0;bottom:0;width:340px;background:#fff;box-shadow:-4px 0 30px rgba(0,0,0,.2);z-index:400;transition:right .25s ease;overflow-y:auto;padding:0"></div>';
   if(_g.mode!=='table') _gRender();
   if(_g.areaMenu) _gOpenAreaMenu(areaList,aSelCnt);
+  if(_g.workerMenu) _gOpenWorkerMenu(wList,wSelCnt);
 }
 
 function _gOpenAreaMenu(areaList,aSelCnt){
@@ -9282,6 +9290,34 @@ function _gOpenAreaMenu(areaList,aSelCnt){
   }
 }
 
+function _gOpenWorkerMenu(wList,wSelCnt){
+  var ov=document.createElement('div');
+  ov.id='gantt-worker-overlay';
+  ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:9998;';
+  ov.addEventListener('click',function(){_g.workerMenu=false;renderPlan();});
+  document.body.appendChild(ov);
+  var items='<div onclick="ganttClearWorkers()" style="display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:14px;font-weight:'+(wSelCnt===0?700:400)+';cursor:pointer;border-radius:9px;background:'+(wSelCnt===0?'#F5F3FF':'transparent')+';color:'+(wSelCnt===0?'#7C3AED':'var(--text2)')+'">'+
+    '<span style="width:20px;height:20px;border-radius:5px;border:1.5px solid '+(wSelCnt===0?'#7C3AED':'var(--border2)')+';background:'+(wSelCnt===0?'#7C3AED':'transparent')+';display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#fff;flex-shrink:0">'+(wSelCnt===0?'✓':'')+'</span>Todos</div>';
+  wList.forEach(function(w){
+    var chk=_g.workerFs.indexOf(w)>=0;
+    items+='<div onclick="ganttToggleWorker(\''+esc(w).replace(/'/g,"\\'")+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:14px;cursor:pointer;border-radius:9px;background:'+(chk?'#F5F3FF':'transparent')+';color:'+(chk?'#7C3AED':'var(--text)')+'">'+
+      '<span style="width:20px;height:20px;border-radius:5px;border:1.5px solid '+(chk?'#7C3AED':'var(--border2)')+';background:'+(chk?'#7C3AED':'transparent')+';display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#fff;flex-shrink:0">'+(chk?'✓':'')+'</span>'+
+      esc(w)+'</div>';
+  });
+  var mn=document.createElement('div');
+  mn.id='gantt-worker-menu';
+  mn.style.cssText='position:fixed;z-index:9999;background:#fff;border:1.5px solid var(--border2);border-radius:14px;padding:6px 5px;min-width:220px;max-height:60vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.2);';
+  mn.innerHTML=items;
+  mn.addEventListener('click',function(e){e.stopPropagation();});
+  document.body.appendChild(mn);
+  var btn=document.getElementById('gantt-worker-btn');
+  if(btn){
+    var r=btn.getBoundingClientRect();
+    mn.style.top=(r.bottom+6)+'px';
+    mn.style.left=Math.min(r.left,window.innerWidth-240)+'px';
+  }
+}
+
 function ganttToggleMode(){_g.mode=_g.mode==='table'?'gantt':'table';renderPlan();}
 function ganttToggleChain(){_g.groupMode=_g.groupMode==='chain'?'area':'chain';renderPlan();}
 function ganttToggleCollapse(area){_g.collAreas[area]=!_g.collAreas[area];_gRender();}
@@ -9290,7 +9326,7 @@ function _gRenderTableHTML(){
   var acts=(S.acts||[]).filter(function(a){
     if(_g.areaFs.length&&_g.areaFs.indexOf(a.area)<0) return false;
     if(_g.tipoF&&a.tipo_personal!==_g.tipoF) return false;
-    if(_g.workerF&&a.personal_nombre!==_g.workerF) return false;
+    if(_g.workerFs.length&&_g.workerFs.indexOf(a.personal_nombre)<0) return false;
     return true;
   });
   acts.sort(function(a,b){return (a.area||'').localeCompare(b.area||'')||(a.fecha_inicio||a.fecha||'').localeCompare(b.fecha_inicio||b.fecha||'');});
@@ -9399,7 +9435,7 @@ function _gGetRows(){
     if(!a.fecha_fin||(!a.fecha_inicio&&!a.fecha)) return false;
     if(_g.areaFs.length&&_g.areaFs.indexOf(a.area)<0) return false;
     if(_g.tipoF&&a.tipo_personal!==_g.tipoF) return false;
-    if(_g.workerF&&a.personal_nombre!==_g.workerF) return false;
+    if(_g.workerFs.length&&_g.workerFs.indexOf(a.personal_nombre)<0) return false;
     return true;
   });
   // Chain mode: topological sort, no area headers, links stay short
@@ -10326,8 +10362,15 @@ function ganttToggleArea(a){
   renderPlan();
 }
 function ganttFilterArea(v){_g.areaFs=v?[v]:[];_gRender();}
-function ganttFilterTipo(v){_g.tipoF=v;_g.workerF='';renderPlan();}
-function ganttFilterWorker(v){_g.workerF=v;_gRender();}
+function ganttFilterTipo(v){_g.tipoF=v;_g.workerFs=[];_g.workerMenu=false;renderPlan();}
+function ganttFilterWorker(v){_g.workerFs=v?[v]:[];_gRender();}
+function ganttToggleWorkerMenu(){_g.workerMenu=!_g.workerMenu;renderPlan();}
+function ganttToggleWorker(w){
+  var i=_g.workerFs.indexOf(w);
+  if(i>=0) _g.workerFs.splice(i,1); else _g.workerFs.push(w);
+  renderPlan();
+}
+function ganttClearWorkers(){_g.workerFs=[];_g.workerMenu=false;var o=document.getElementById('gantt-worker-overlay');if(o)o.remove();var m=document.getElementById('gantt-worker-menu');if(m)m.remove();renderPlan();}
 
 function ganttRowGrip(e,actId){
   if(!_gCanEdit()) return;
