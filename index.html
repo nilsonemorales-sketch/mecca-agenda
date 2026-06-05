@@ -664,7 +664,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_137';
+const APP_VERSION='20260605_138';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1896,6 +1896,16 @@ function renderHoy(){
   const marcados=S.asist.filter(a=>a.estado).length;
   const sinMarcar=propios.length-marcados;
   const hoy=S.fecha;
+  if(S._hoyPersonalOpen===undefined) S._hoyPersonalOpen=true;
+  var totalHrsHoy=propios.reduce(function(sum,p){
+    var a=S.asist.find(function(x){return x.personal_id===p.id;})||{};
+    if(!a.hora_entrada||!a.hora_salida) return sum;
+    return sum+(calcHorasEfectivas(a.hora_entrada,a.hora_salida,hoy,a.horas_extra).efectivas||0);
+  },0);
+  var totalExtraHoy=propios.reduce(function(sum,p){
+    var a=S.asist.find(function(x){return x.personal_id===p.id;})||{};
+    return sum+(parseFloat(a.horas_extra)||0);
+  },0);
 
   // Activities active today: started on or before today AND (no end date OR end date >= today)
   // Retrasadas (end date already passed) are shown separately above
@@ -1988,6 +1998,44 @@ function renderHoy(){
         <div class="l" style="color:${retrasadas.length>0?'#e03131':''}">Retrasadas</div>
       </div>
     </div>
+
+    <!-- Personal x la Casa — Rendimiento hoy -->
+    ${propios.length?`
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-hdr" style="cursor:pointer" onclick="S._hoyPersonalOpen=!S._hoyPersonalOpen;renderHoy()">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="card-title">👷 Personal x la Casa</span>
+          <span style="font-size:11px;color:var(--text3)">${pres}/${propios.length} presentes${totalHrsHoy>0?' · '+fmtHoras(totalHrsHoy+(totalExtraHoy>0?totalExtraHoy:0)):''}</span>
+        </div>
+        <span style="font-size:14px;color:var(--text3)">${S._hoyPersonalOpen?'▲':'▼'}</span>
+      </div>
+      ${S._hoyPersonalOpen?`
+      <div style="padding:0 12px">
+        ${propios.map(p=>{
+          const a=S.asist.find(x=>x.personal_id===p.id)||{};
+          const hrs=a.hora_entrada&&a.hora_salida?calcHorasEfectivas(a.hora_entrada,a.hora_salida,hoy,a.horas_extra):{efectivas:0,extra:parseFloat(a.horas_extra)||0};
+          const clrMap={presente:'#2f9e44',tarde:'#e67700','medio día':'#1c7ed6',ausente:'#e03131',justificado:'#868e96'};
+          const lblMap={presente:'Presente',tarde:'Tarde','medio día':'Medio día',ausente:'Ausente',justificado:'Justificado'};
+          const clr=clrMap[a.estado]||'#adb5bd';
+          const lbl=lblMap[a.estado]||'Sin registrar';
+          return `<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;cursor:pointer" onclick="goTab('equipo');S.equipoVista='asistencia';renderEquipo()">
+            <div style="width:9px;height:9px;border-radius:50%;background:${clr};flex-shrink:0"></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--text)">${esc(p.nombre)}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:1px">${a.hora_entrada&&a.hora_salida?a.hora_entrada+' → '+a.hora_salida:lbl}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              ${hrs.efectivas>0?`<div style="font-size:13px;font-weight:700;color:#2f9e44">${fmtHoras(hrs.efectivas)}</div>`:`<div style="font-size:12px;color:${clr};font-weight:600">${lbl}</div>`}
+              ${hrs.extra>0?`<div style="font-size:10px;color:#1c7ed6;font-weight:600">+${hrs.extra}h extra</div>`:''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;color:var(--text3)">${totalHrsHoy>0?'Total: '+fmtHoras(totalHrsHoy)+(totalExtraHoy>0?' + '+totalExtraHoy+'h extra':''):'Registra entradas y salidas en Asistencia'}</span>
+        <button onclick="event.stopPropagation();goTab('equipo');S.equipoVista='asistencia';renderEquipo()" style="padding:5px 12px;border-radius:var(--r);border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Asistencia →</button>
+      </div>`:''}
+    </div>`:''}
 
     <!-- RETRASADAS — always visible if any -->
     ${retrasadas.length>0?`
