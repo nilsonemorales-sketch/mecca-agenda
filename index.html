@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_133';
+const APP_VERSION='20260605_134';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1060,11 +1060,10 @@ function getActContext(){
 
   if(tab==='actividades'){
     var av=S.actFiltroAvanzado||{};
-    if(av.contratista){
-      ctx.tipo='contratista';
-      ctx.personal_nombre=av.contratista;
-    }
-    if(av.responsable) ctx.ingeniero_nombre=av.responsable;
+    var _ctrs=(av.contratistas||[]).filter(function(c){return c!=='__sin_asignar__';});
+    if(_ctrs.length===1){ctx.tipo='contratista';ctx.personal_nombre=_ctrs[0];}
+    var _rsps=av.responsables||[];
+    if(_rsps.length===1) ctx.ingeniero_nombre=_rsps[0];
     if(av.nivel) ctx.area_hint=av.nivel;
   }
 
@@ -1174,7 +1173,7 @@ let S={
   semanaActual:null, currentTab:'hoy', busqueda:'',
   histFiltroIng:'todos', histFecha:'', histFechaFin:'', histActs:[], histAsist:[], histPens:[],
   tareas:[], tareasFiltro:'activas', actsActivas:[], enObraFiltro:'', enObraContratista:'', enObraFiltroTipo:'', enObraFiltroContratista:'', enObraFiltroPersonal:'', enObraFiltroEstado:'', enObraFiltroUrgente:false, enObraFiltroTexto:'', enObraFiltrosOpen:false, enObraAgrupacion:'',
-  hoyFiltroEstado:'', hoyFiltroTipo:'', hoyAgrupacion:'', hoyPeriodoOpen:false,
+  hoyFiltroEstados:[], hoyFiltroTipos:[], hoyAgrupacion:'', hoyPeriodoOpen:false,
   hoyPeriodoDesde:'', hoyPeriodoHasta:'', hoyPeriodoData:null,
   contVistaMode:'diario', contRepDesde:'', contRepHasta:'', contRepData:null,
   bonifMes:'',
@@ -1919,9 +1918,10 @@ function renderHoy(){
   const isDesktop=window.innerWidth>600;
 
   // Apply Hoy filters
+  var _hFE=S.hoyFiltroEstados||[]; var _hFT=S.hoyFiltroTipos||[];
   var actsVista=sortByPriority(actsActivasHoy);
-  if(S.hoyFiltroEstado) actsVista=actsVista.filter(a=>a.estado===S.hoyFiltroEstado);
-  if(S.hoyFiltroTipo)   actsVista=actsVista.filter(a=>a.tipo_personal===S.hoyFiltroTipo);
+  if(_hFE.length) actsVista=actsVista.filter(a=>_hFE.indexOf(a.estado)>=0);
+  if(_hFT.length) actsVista=actsVista.filter(a=>_hFT.indexOf(a.tipo_personal)>=0);
 
   function actRow(a){
     var retrasada=isRetrasada(a);
@@ -2017,15 +2017,15 @@ function renderHoy(){
         </div>
       </div>
 
-      <!-- Filters row 1: estado + tipo -->
+      <!-- Filters row 1: estado + tipo (multi-select) -->
       <div style="padding:8px 12px 4px;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none">
-        ${fchip('Todas',!S.hoyFiltroEstado&&!S.hoyFiltroTipo,"S.hoyFiltroEstado='';S.hoyFiltroTipo='';renderHoy()")}
-        ${fchip('🔄 En progreso',S.hoyFiltroEstado==='en-progreso',"S.hoyFiltroEstado=S.hoyFiltroEstado==='en-progreso'?'':'en-progreso';renderHoy()")}
-        ${fchip('⏳ Pendiente',S.hoyFiltroEstado==='pendiente',"S.hoyFiltroEstado=S.hoyFiltroEstado==='pendiente'?'':'pendiente';renderHoy()")}
-        ${fchip('⏸ Pausada',S.hoyFiltroEstado==='pausada',"S.hoyFiltroEstado=S.hoyFiltroEstado==='pausada'?'':'pausada';renderHoy()")}
+        ${fchip('Todas',!_hFE.length&&!_hFT.length,"_hoyToggleEstado('');_hoyToggleTipo('')")}
+        ${fchip('🔄 En progreso',_hFE.indexOf('en-progreso')>=0,"_hoyToggleEstado('en-progreso')")}
+        ${fchip('⏳ Pendiente',_hFE.indexOf('pendiente')>=0,"_hoyToggleEstado('pendiente')")}
+        ${fchip('⏸ Pausada',_hFE.indexOf('pausada')>=0,"_hoyToggleEstado('pausada')")}
         <div style="width:1px;background:var(--border);flex-shrink:0;margin:2px 2px"></div>
-        ${fchip('👷 Propio',S.hoyFiltroTipo==='propio',"S.hoyFiltroTipo=S.hoyFiltroTipo==='propio'?'':'propio';renderHoy()")}
-        ${fchip('🔨 Contratista',S.hoyFiltroTipo==='contratista',"S.hoyFiltroTipo=S.hoyFiltroTipo==='contratista'?'':'contratista';renderHoy()")}
+        ${fchip('👷 Propio',_hFT.indexOf('propio')>=0,"_hoyToggleTipo('propio')")}
+        ${fchip('🔨 Contratista',_hFT.indexOf('contratista')>=0,"_hoyToggleTipo('contratista')")}
       </div>
       <!-- Filters row 2: agrupación -->
       <div style="padding:4px 12px 8px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none">
@@ -2037,7 +2037,7 @@ function renderHoy(){
 
       <div style="padding:0 12px">
         ${(()=>{
-          if(actsVista.length===0) return`<div class="empty" style="padding:16px">${S.hoyFiltroEstado||S.hoyFiltroTipo?'Sin resultados con ese filtro':'Sin actividades para este día'}</div>`;
+          if(actsVista.length===0) return`<div class="empty" style="padding:16px">${_hFE.length||_hFT.length?'Sin resultados con ese filtro':'Sin actividades para este día'}</div>`;
           if(!S.hoyAgrupacion) return actsVista.map(actRow).join('');
           // Build groups
           var grupos=[];
@@ -2333,8 +2333,11 @@ function updAsist(pid,field,val){
 
 // ── RENDER ACTIVIDADES ────────────────────────────────
 // Quick filter state
-if(!S.actFiltroRapido) S.actFiltroRapido = '';
+if(!S.actFiltroRapidos) S.actFiltroRapidos = [];
 if(!S.actFiltroAvanzado) S.actFiltroAvanzado = {};
+if(!S.actFiltroAvanzado.ubicaciones) S.actFiltroAvanzado.ubicaciones=[];
+if(!S.actFiltroAvanzado.contratistas) S.actFiltroAvanzado.contratistas=[];
+if(!S.actFiltroAvanzado.responsables) S.actFiltroAvanzado.responsables=[];
 
 function toggleEnObraPropio(){
   var on = S.enObraFiltroTipo==='propio';
@@ -2547,16 +2550,18 @@ function sortByPriority(acts){
 
 function applyActFilters(acts){
   let filtered = acts;
-  // Hide completed unless showing all
-  if(S.actFiltroRapido==='activas') filtered = filtered.filter(a=>a.estado!=='completado');
-  else if(S.actFiltroRapido) filtered = filtered.filter(a=>a.estado===S.actFiltroRapido);
+  const rs = S.actFiltroRapidos||[];
+  if(rs.indexOf('activas')>=0) filtered = filtered.filter(a=>a.estado!=='completado');
+  else if(rs.length) filtered = filtered.filter(a=>rs.indexOf(a.estado)>=0);
   else if(!S.actMostrarTodas) filtered = filtered.filter(a=>a.estado!=='completado');
-  // Advanced filters
-  const av = S.actFiltroAvanzado;
-  if(av.contratista && av.contratista!=='__sin_asignar__') filtered = filtered.filter(a=>a.personal_nombre===av.contratista&&a.tipo_personal==='contratista');
+  const av = S.actFiltroAvanzado||{};
+  const ubicaciones = av.ubicaciones||[];
+  const contratistas = (av.contratistas||[]).filter(c=>c!=='__sin_asignar__');
+  const responsables = av.responsables||[];
+  if(contratistas.length) filtered = filtered.filter(a=>contratistas.indexOf(a.personal_nombre)>=0&&a.tipo_personal==='contratista');
   if(av.prioridad) filtered = filtered.filter(a=>a.prioridad===av.prioridad);
-  if(av.ubicacion) filtered = filtered.filter(a=>(a.area||'')===av.ubicacion);
-  if(av.responsable) filtered = filtered.filter(a=>a.ingeniero_nombre===av.responsable);
+  if(ubicaciones.length) filtered = filtered.filter(a=>ubicaciones.indexOf(a.area||'')>=0);
+  if(responsables.length) filtered = filtered.filter(a=>responsables.indexOf(a.ingeniero_nombre||'')>=0);
   if(av.tipo) filtered = filtered.filter(a=>a.tipo_personal===av.tipo);
   if(av.sinContratista) filtered = filtered.filter(a=>a.tipo_personal==='contratista'&&!a.personal_nombre);
   return sortByPriority(filtered);
@@ -2612,72 +2617,126 @@ const FILTROS_ACT=[
   {id:'critico',label:'Estado'},
 ];
 
+function _actToggleRapido(val){
+  if(!val){S.actFiltroRapidos=[];renderActs();return;}
+  var arr=(S.actFiltroRapidos||[]).slice();
+  var idx=arr.indexOf(val);if(idx>=0)arr.splice(idx,1);else arr.push(val);
+  S.actFiltroRapidos=arr;renderActs();
+}
+function _actToggleUbicacion(val){
+  if(!val){S.actFiltroAvanzado={...S.actFiltroAvanzado,ubicaciones:[]};renderActs();return;}
+  var arr=(S.actFiltroAvanzado.ubicaciones||[]).slice();
+  var idx=arr.indexOf(val);if(idx>=0)arr.splice(idx,1);else arr.push(val);
+  S.actFiltroAvanzado={...S.actFiltroAvanzado,ubicaciones:arr};renderActs();
+}
+function _actToggleContratista(val){
+  if(!val){S.actFiltroAvanzado={...S.actFiltroAvanzado,contratistas:[],sinContratista:false,tipo:''};renderActs();return;}
+  var arr=(S.actFiltroAvanzado.contratistas||[]).slice();
+  var idx=arr.indexOf(val);if(idx>=0)arr.splice(idx,1);else arr.push(val);
+  var hasSA=arr.indexOf('__sin_asignar__')>=0;
+  S.actFiltroAvanzado={...S.actFiltroAvanzado,contratistas:arr,sinContratista:hasSA,tipo:arr.length?'contratista':''};renderActs();
+}
+function _actToggleResponsable(val){
+  if(!val){S.actFiltroAvanzado={...S.actFiltroAvanzado,responsables:[]};renderActs();return;}
+  var arr=(S.actFiltroAvanzado.responsables||[]).slice();
+  var idx=arr.indexOf(val);if(idx>=0)arr.splice(idx,1);else arr.push(val);
+  S.actFiltroAvanzado={...S.actFiltroAvanzado,responsables:arr};renderActs();
+}
+function _actLimpiarFiltros(){S.actFiltroRapidos=[];S.actFiltroAvanzado={};renderActs();}
+function _hoyToggleEstado(val){
+  if(!val){S.hoyFiltroEstados=[];renderHoy();return;}
+  var arr=(S.hoyFiltroEstados||[]).slice();
+  var idx=arr.indexOf(val);if(idx>=0)arr.splice(idx,1);else arr.push(val);
+  S.hoyFiltroEstados=arr;renderHoy();
+}
+function _hoyToggleTipo(val){
+  if(!val){S.hoyFiltroTipos=[];renderHoy();return;}
+  var arr=(S.hoyFiltroTipos||[]).slice();
+  var idx=arr.indexOf(val);if(idx>=0)arr.splice(idx,1);else arr.push(val);
+  S.hoyFiltroTipos=arr;renderHoy();
+}
+
 function buildActsFiltros(){
+  var av=S.actFiltroAvanzado||{};
+  var rapidos=S.actFiltroRapidos||[];
+  var ubicaciones=av.ubicaciones||[];
+  var contratistas=av.contratistas||[];
+  var responsables=av.responsables||[];
+  var allUbics=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort();
   var contOpts=getContratistasOpts();
   var ingOpts=getIngOpts();
-  var av=S.actFiltroAvanzado||{};
+
+  function chip(label,active,onclick){
+    return '<span role="button" onclick="'+onclick+'" style="flex-shrink:0;display:inline-flex;align-items:center;padding:6px 13px;border-radius:20px;font-size:12px;font-weight:'+(active?700:600)+';cursor:pointer;font-family:var(--font);border:1.5px solid '+(active?'var(--accent)':'var(--border2)')+';background:'+(active?'var(--accent)':'var(--bg2)')+';color:'+(active?'#fff':'var(--text2)')+';transition:all .12s;white-space:nowrap;user-select:none;min-height:36px">'+(active?'✓ ':'')+label+'</span>';
+  }
+  function secRow(lbl,cnt){
+    return '<div style="font-size:10px;color:#868e96;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin:10px 0 5px">'+lbl+(cnt?'<span style="background:var(--accent);color:#fff;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:700;margin-left:6px">'+cnt+'</span>':'')+'</div>';
+  }
+  function row(html){
+    return '<div style="display:flex;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px">'+html+'</div>';
+  }
 
   var h='<div style="background:#fff;border:1.5px solid #dee2e6;border-radius:12px;padding:12px 14px;margin-bottom:12px">';
-  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
-    '<div style="font-size:11px;color:#868e96;font-weight:700;text-transform:uppercase;letter-spacing:.6px">Filtros</div>'+
-    '<button onclick="S.actMostrarTodas=!S.actMostrarTodas;loadActsAll();renderActs()" style="padding:5px 12px;border-radius:20px;border:1.5px solid '+(S.actMostrarTodas?'#2f9e44':'#dee2e6')+';background:'+(S.actMostrarTodas?'#d3f9d8':'#fff')+';color:'+(S.actMostrarTodas?'#2f9e44':'#495057')+';font-size:11px;font-weight:600;cursor:pointer">'+(S.actMostrarTodas?'✓ Mostrando todas':'Ver todas (incl. completadas)')+'</button>'+
-    '</div>';
-
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'+
+    '<div style="font-size:11px;color:#868e96;font-weight:700;text-transform:uppercase;letter-spacing:.6px">Filtros (selección múltiple)</div>'+
+    '<button onclick="S.actMostrarTodas=!S.actMostrarTodas;loadActsAll().then(()=>renderActs())" style="padding:5px 12px;border-radius:20px;border:1.5px solid '+(S.actMostrarTodas?'#2f9e44':'#dee2e6')+';background:'+(S.actMostrarTodas?'#d3f9d8':'#fff')+';color:'+(S.actMostrarTodas?'#2f9e44':'#495057')+';font-size:11px;font-weight:600;cursor:pointer">'+(S.actMostrarTodas?'✓ Todas':'Ver completadas')+'</button>'+
+  '</div>';
 
   // Estado
-  h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Estado</div>';
-  h+=filtroDropdown('af-estado',S.actFiltroRapido,
-    [{val:'activas',label:'🟢 Activas'},{val:'en-progreso',label:'🔄 En progreso'},{val:'pendiente',label:'⏳ Pendiente'},{val:'completado',label:'✅ Completado'}],
-    'Todas',
-    "S.actFiltroRapido=this.value;debounceRender()");
-  h+='</div>';
+  h+=secRow('Estado',rapidos.length);
+  h+=row(
+    chip('Todas',!rapidos.length,"_actToggleRapido('')")+
+    chip('🟢 Activas',rapidos.indexOf('activas')>=0,"_actToggleRapido('activas')")+
+    chip('🔄 En progreso',rapidos.indexOf('en-progreso')>=0,"_actToggleRapido('en-progreso')")+
+    chip('⏳ Pendiente',rapidos.indexOf('pendiente')>=0,"_actToggleRapido('pendiente')")+
+    chip('✅ Completado',rapidos.indexOf('completado')>=0,"_actToggleRapido('completado')")
+  );
 
-  // Ubicación — solo áreas con actividades reales
-  var allUbics=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort();
-  var ubicOpts=allUbics.map(function(u){return{val:u,label:u};});
-  h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Ubicación</div>';
-  h+=filtroDropdown('af-ubicacion',av.ubicacion||'',ubicOpts,'Todas',
-    "S.actFiltroAvanzado={...S.actFiltroAvanzado,ubicacion:this.value};renderActs()");
-  h+='</div>';
-  h+='</div>';
-
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+  // Ubicación
+  if(allUbics.length){
+    h+=secRow('Ubicación / Área',ubicaciones.length);
+    h+=row(
+      chip('Todas',!ubicaciones.length,"_actToggleUbicacion('')")+
+      allUbics.map(function(u){return chip(u,ubicaciones.indexOf(u)>=0,"_actToggleUbicacion('"+esc(u)+"')");}).join('')
+    );
+  }
 
   // Contratista
-  h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Contratista</div>';
-  var contOptsConSinAsignar=[{val:'__sin_asignar__',label:'⚠️ Sin asignar'}].concat(contOpts);
-  h+=filtroDropdown('af-cont',av.contratista||'',contOptsConSinAsignar,'Todos',
-    "S.actFiltroAvanzado={...S.actFiltroAvanzado,contratista:this.value,sinContratista:this.value==='__sin_asignar__',tipo:this.value?'contratista':''};renderActs()");
-  h+='</div>';
+  if(contOpts.length){
+    h+=secRow('Contratista',contratistas.length);
+    h+=row(
+      chip('Todos',!contratistas.length,"_actToggleContratista('')")+
+      chip('⚠️ Sin asignar',contratistas.indexOf('__sin_asignar__')>=0,"_actToggleContratista('__sin_asignar__')")+
+      contOpts.map(function(o){return chip(o.label,contratistas.indexOf(o.val)>=0,"_actToggleContratista('"+esc(o.val)+"')");}).join('')
+    );
+  }
 
   // Responsable
-  h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Responsable</div>';
-  h+=filtroDropdown('af-ing',av.responsable||'',ingOpts,'Todos',
-    "S.actFiltroAvanzado={...S.actFiltroAvanzado,responsable:this.value};renderActs()");
-  h+='</div>';
-  h+='</div>';
+  if(ingOpts.length){
+    h+=secRow('Responsable',responsables.length);
+    h+=row(
+      chip('Todos',!responsables.length,"_actToggleResponsable('')")+
+      ingOpts.map(function(o){return chip(o.label,responsables.indexOf(o.val)>=0,"_actToggleResponsable('"+esc(o.val)+"')");}).join('')
+    );
+  }
 
-  // Toggle chips: Personal propio | Administrativas | Urgentes
-  var propioOn = av.tipo==='propio';
-  var adminOn  = av.tipo==='ingeniero';
-  var urgOn    = av.prioridad==='urgente';
-  h+='<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">';
-  h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,tipo:S.actFiltroAvanzado.tipo===\'propio\'?\'\':\'propio\'};renderActs()" style="flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid '+(propioOn?'#1c7ed6':'#dee2e6')+';background:'+(propioOn?'#e7f5ff':'#f8f9fa')+';color:'+(propioOn?'#1c7ed6':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);text-align:center">'+(propioOn?'✓ ':'')+'👷 Propio</button>';
-  h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,tipo:S.actFiltroAvanzado.tipo===\'ingeniero\'?\'\':\'ingeniero\'};renderActs()" style="flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid '+(adminOn?'#1a56db':'#dee2e6')+';background:'+(adminOn?'#e8f0fe':'#f8f9fa')+';color:'+(adminOn?'#1a56db':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);text-align:center">'+(adminOn?'✓ ':'')+'📋 Administrativas</button>';
-  h+='<button onclick="toggleFiltroUrgente()" style="flex:1;padding:8px 10px;border-radius:8px;border:1.5px solid '+(urgOn?'#e03131':'#dee2e6')+';background:'+(urgOn?'#fff5f5':'#f8f9fa')+';color:'+(urgOn?'#e03131':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);text-align:center">'+(urgOn?'✓ ':'')+'🔴 Urgentes</button>';
+  // Type + priority toggles
+  var propioOn=av.tipo==='propio', adminOn=av.tipo==='ingeniero', urgOn=av.prioridad==='urgente';
+  h+='<div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">';
+  h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,tipo:S.actFiltroAvanzado.tipo===\'propio\'?\'\':\'propio\'};renderActs()" style="flex:1;min-height:40px;padding:8px 10px;border-radius:8px;border:1.5px solid '+(propioOn?'#1c7ed6':'#dee2e6')+';background:'+(propioOn?'#e7f5ff':'#f8f9fa')+';color:'+(propioOn?'#1c7ed6':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);text-align:center">'+(propioOn?'✓ ':'')+'👷 Propio</button>';
+  h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,tipo:S.actFiltroAvanzado.tipo===\'ingeniero\'?\'\':\'ingeniero\'};renderActs()" style="flex:1;min-height:40px;padding:8px 10px;border-radius:8px;border:1.5px solid '+(adminOn?'#1a56db':'#dee2e6')+';background:'+(adminOn?'#e8f0fe':'#f8f9fa')+';color:'+(adminOn?'#1a56db':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);text-align:center">'+(adminOn?'✓ ':'')+'📋 Administrativas</button>';
+  h+='<button onclick="toggleFiltroUrgente()" style="flex:1;min-height:40px;padding:8px 10px;border-radius:8px;border:1.5px solid '+(urgOn?'#e03131':'#dee2e6')+';background:'+(urgOn?'#fff5f5':'#f8f9fa')+';color:'+(urgOn?'#e03131':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);text-align:center">'+(urgOn?'✓ ':'')+'🔴 Urgentes</button>';
   h+='</div>';
 
   var scCnt=(S.acts||[]).filter(function(a){return a.tipo_personal==='contratista'&&!a.personal_nombre;}).length;
   if(scCnt){
-    h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,sinContratista:!S.actFiltroAvanzado.sinContratista};renderActs()" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid '+(av.sinContratista?'#e03131':'#f08c00')+';background:'+(av.sinContratista?'#fff5f5':'#fff3bf')+';color:'+(av.sinContratista?'#e03131':'#856404')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);margin-bottom:6px">⚠️ '+(av.sinContratista?'Mostrando':'Ver')+' '+scCnt+' actividad'+(scCnt!==1?'es':'')+' sin contratista asignado</button>';
+    h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,sinContratista:!S.actFiltroAvanzado.sinContratista};renderActs()" style="width:100%;min-height:40px;padding:8px;border-radius:8px;border:1.5px solid '+(av.sinContratista?'#e03131':'#f08c00')+';background:'+(av.sinContratista?'#fff5f5':'#fff3bf')+';color:'+(av.sinContratista?'#e03131':'#856404')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:8px;display:block">⚠️ '+(av.sinContratista?'Mostrando':'Ver')+' '+scCnt+' actividad'+(scCnt!==1?'es':'')+' sin contratista</button>';
   }
 
-  var hasFilters=S.actFiltroRapido||(av.ubicacion||av.contratista||av.responsable||av.tipo||av.sinContratista||av.prioridad);
+  var hasFilters=rapidos.length||ubicaciones.length||contratistas.length||responsables.length||av.tipo||av.sinContratista||av.prioridad;
   if(hasFilters){
-    h+='<button onclick="S.actFiltroRapido=\'\';S.actFiltroAvanzado={};renderActs()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid #e03131;background:#fff5f5;color:#e03131;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">× Limpiar filtros</button>';
+    h+='<button onclick="_actLimpiarFiltros()" style="width:100%;min-height:40px;padding:7px;border-radius:8px;border:1.5px solid #e03131;background:#fff5f5;color:#e03131;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);margin-top:6px">× Limpiar todos los filtros</button>';
   }
-
   h+='</div>';
   return h;
 }
@@ -2715,7 +2774,7 @@ function renderActs(){
       </div>
     </div>
     ${buildActsFiltros()}
-    <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">${filtered.length} actividad${filtered.length!==1?'es':''} ${Object.values(S.actFiltroAvanzado||{}).some(v=>v)||S.actFiltroRapido?'filtradas':'total'}</div>
+    <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">${filtered.length} actividad${filtered.length!==1?'es':''} ${(S.actFiltroRapidos||[]).length||Object.values(S.actFiltroAvanzado||{}).some(v=>Array.isArray(v)?v.length>0:!!v)?'filtradas':'total'}</div>
 
     ${groups.length===0
       ?`<div class="empty">Sin actividades para los filtros seleccionados</div>`
