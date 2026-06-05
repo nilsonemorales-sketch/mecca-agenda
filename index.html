@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_114';
+const APP_VERSION='20260605_115';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8603,22 +8603,19 @@ function renderPlan(){
   el.innerHTML=
     '<div style="display:flex;flex-direction:column;height:calc(100vh - 100px);overflow:hidden">'+
     '<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2)">'+
-      // Row 1: actions + zoom
-      '<div style="display:flex;gap:6px;padding:8px 12px;align-items:center">'+
-        '<button style="padding:0 14px;height:36px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer" onclick="showAddAct()">+ Nueva</button>'+
+      // Single toolbar row
+      '<div style="display:flex;gap:6px;padding:8px 12px;align-items:center;overflow-x:auto">'+
+        '<div style="display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+tpHtml+'</div>'+
         '<div style="width:1px;height:22px;background:var(--border2);flex-shrink:0"></div>'+
-        '<button id="gantt-link-btn" onclick="ganttToggleLink()" style="padding:0 12px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.link?'var(--green)':'var(--bg3)')+';color:'+(_g.link?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer">🔗 Enlazar</button>'+
-        '<button id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 12px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.crit?'#F59E0B':'var(--bg3)')+';color:'+(_g.crit?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer">🎯 Ruta crítica</button>'+
-        '<div style="margin-left:auto;display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px">'+zbHtml+'</div>'+
-      '</div>'+
-      // Row 2: tipo + worker + area + warning
-      '<div style="display:flex;gap:6px;padding:0 12px 8px;align-items:center;flex-wrap:wrap">'+
-        '<div style="display:flex;gap:2px;background:#f3f0ff;border:1.5px solid #ccc0ff;border-radius:9px;padding:3px;flex-shrink:0">'+tpHtml+'</div>'+
-        (_g.tipoF&&wList.length?'<select onchange="ganttFilterWorker(this.value)" style="'+_gSelSt('max-width:160px')+'"><option value="">— Todos —</option>'+wOpts+'</select>':'')+
-        '<select onchange="ganttFilterArea(this.value)" style="'+_gSelSt('max-width:180px')+'">'+
+        '<button style="padding:0 12px;height:36px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0" onclick="showAddAct()">+ Nueva</button>'+
+        '<button id="gantt-link-btn" onclick="ganttToggleLink()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.link?'var(--green)':'var(--bg3)')+';color:'+(_g.link?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🔗</button>'+
+        '<button id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.crit?'#F59E0B':'var(--bg3)')+';color:'+(_g.crit?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🎯</button>'+
+        (_g.tipoF&&wList.length?'<select onchange="ganttFilterWorker(this.value)" style="'+_gSelSt('flex-shrink:0;max-width:140px')+'"><option value="">— Todos —</option>'+wOpts+'</select>':'')+
+        '<select onchange="ganttFilterArea(this.value)" style="'+_gSelSt('flex-shrink:0;max-width:160px')+'">'+
           '<option value="">Todas las áreas</option>'+aOpts+
         '</select>'+
-        (sinF?'<span style="font-size:10px;color:#92400E;margin-left:auto;padding:3px 8px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap">⚠️ '+sinF+' sin planificar</span>':'')+
+        (sinF?'<span style="font-size:10px;color:#92400E;padding:3px 7px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap">⚠️ '+sinF+'</span>':'')+
+        '<div style="margin-left:auto;display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+zbHtml+'</div>'+
       '</div>'+
     '</div>'+
     // Chart area
