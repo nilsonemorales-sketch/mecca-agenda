@@ -3142,7 +3142,7 @@ function actHTML(a, ai, tipo){
     ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);flex-wrap:wrap">
       <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:7px 6px;border-radius:8px;border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Completar</button>
       <button onclick="togglePrioridadAct('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid ${urgente?'#e03131':'var(--border2)'};background:${urgente?'#ffe3e3':'var(--bg)'};font-size:12px;cursor:pointer">${urgente?'🔴':'⚪'}</button>
-      ${isAdmin()?`<button onclick="abrirFotoUpload('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg);color:var(--text3);font-size:12px;cursor:pointer">📸</button>`:''}
+      ${canEdit()?`<button onclick="abrirFotoUpload('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg);color:var(--text3);font-size:12px;cursor:pointer">📸</button>`:''}
       ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="flex:1;padding:7px 6px;border-radius:8px;border:1.5px solid var(--accent);background:#e8f0fe;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">▶ Iniciar</button>`:''}
       ${!a.hora_inicio?`<button onclick="stampHora('${a.id}','hora_inicio')" style="padding:7px 10px;border-radius:8px;border:1.5px solid #1a56db;background:#e8f0fe;color:#1a56db;font-size:12px;font-weight:700;cursor:pointer" title="Registrar hora de inicio">▶ Inicio</button>`:`<button onclick="stampHora('${a.id}','hora_fin')" style="padding:7px 10px;border-radius:8px;border:1.5px solid #e67700;background:#fff3bf;color:#e67700;font-size:12px;font-weight:700;cursor:pointer" title="Registrar hora de fin">⏹ Fin</button>`}
     </div>`:''}
@@ -6810,21 +6810,21 @@ function buildActCardObra(a){
         btn('verde',   'k_iniciar_'+k,   '▶ Iniciar',    "accionActObra(window._OA['"+k+"'],'iniciar')")+
         btn('',        'k_urgente_'+k,   a.prioridad==='urgente'?'↓ Normal':'🔴 Urgente', "accionActObra(window._OA['"+k+"'],'urgente')")+
         btn('',        'k_edit_'+k,      '✏️ Editar',    "goObraEdit('"+k+"')")+
-        (isAdmin()?'<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>':'')+
+        (canEdit()?'<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>':'')+
         '</div>';
     } else if(a.estado==='en-progreso'){
       btns = '<div class="tarea-acciones">'+
         btn('amarillo','k_pausa_'+k,     '⏸ Interrumpir', "pausarDesdeObra('"+k+"')")+
         btn('verde',   'k_comp_'+k,      '✓ Completar',   "accionActObra(window._OA['"+k+"'],'completar')")+
         btn('',        'k_edit2_'+k,     '✏️ Editar',     "goObraEdit('"+k+"')")+
-        (isAdmin()?'<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>':'')+
+        (canEdit()?'<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>':'')+
         '</div>';
     } else if(a.estado==='pausada'){
       btns = '<div class="tarea-acciones">'+
         btn('accent',  'k_ret_'+k,       '↺ Retomar',    "accionActObra(window._OA['"+k+"'],'retomar')")+
         btn('verde',   'k_comp2_'+k,     '✓ Completar',  "accionActObra(window._OA['"+k+"'],'completar')")+
         btn('',        'k_edit3_'+k,     '✏️ Editar',    "goObraEdit('"+k+"')")+
-        (isAdmin()?'<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>':'')+
+        (canEdit()?'<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>':'')+
         '</div>';
     }
   }
