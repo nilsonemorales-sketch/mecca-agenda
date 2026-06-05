@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_117';
+const APP_VERSION='20260605_118';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8509,8 +8509,8 @@ async function deleteOrden(id){
 // MÓDULO DE PLANIFICACIÓN — GANTT INTERACTIVO v2
 // ══════════════════════════════════════════════════════════════════════
 var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaF:'',tipoF:'',workerF:'',drag:null,bounds:null,ppd:0,rowY:{}};
-var GROW=36,GGRP=26,GTOP=52,GSIDE=232;
-var GPPD={day:24,week:12,month:4};
+var GROW=52,GGRP=32,GTOP=56,GSIDE=256;
+var GPPD={day:36,week:20,month:7};
 var GTYPES={
   propio:     {clr:'#2563EB',bg:'#EFF6FF',tx:'#1E3A8A',icon:'👷',lbl:'Personal propio'},
   contratista:{clr:'#7C3AED',bg:'#F5F3FF',tx:'#3B0764',icon:'🔨',lbl:'Contratista'},
@@ -8605,7 +8605,6 @@ function renderPlan(){
     '<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2)">'+
       // Single toolbar row
       '<div style="display:flex;gap:6px;padding:8px 12px;align-items:center;overflow-x:auto">'+
-        '<span style="font-size:9px;color:var(--text3);flex-shrink:0">'+APP_VERSION+'</span>'+
         '<div style="display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+tpHtml+'</div>'+
         '<div style="width:1px;height:22px;background:var(--border2);flex-shrink:0"></div>'+
         '<button style="padding:0 12px;height:36px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0" onclick="showAddAct()">+ Nueva</button>'+
@@ -8687,22 +8686,22 @@ function _gRender(){
   var nh='';
   rows.forEach(function(r){
     if(r.t==='g'){
-      nh+='<div style="height:'+GGRP+'px;display:flex;align-items:center;padding:0 10px;background:var(--bg2);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--accent);overflow:hidden;white-space:nowrap">'+
-        '<span style="overflow:hidden;text-overflow:ellipsis">📍 '+esc(r.area)+'</span><span style="opacity:.4;margin-left:4px;flex-shrink:0;font-weight:400">('+r.n+')</span></div>';
+      nh+='<div style="height:'+GGRP+'px;display:flex;align-items:center;padding:0 12px;background:var(--bg2);border-bottom:1px solid var(--border);border-top:1px solid var(--border);font-size:11px;font-weight:800;color:var(--accent);overflow:hidden;white-space:nowrap">'+
+        '<span style="overflow:hidden;text-overflow:ellipsis">📍 '+esc(r.area)+'</span><span style="opacity:.4;margin-left:5px;flex-shrink:0;font-weight:400;font-size:10px">('+r.n+')</span></div>';
     } else {
       var a=r.a,isCrit=crit.has(a.id)&&_g.crit,isSel=_g.sel===a.id;
       var tc=_gTipoColor(a);
       var worker=a.personal_nombre||(a.tipo_personal==='ingeniero'?a.ingeniero_nombre:'');
       var estDot={completado:'#059669',pendiente:'#D1D5DB','en-progreso':'#7C3AED',bloqueado:'#EF4444'};
       nh+='<div onclick="ganttSelectAct(\''+a.id+'\')" style="height:'+GROW+'px;display:flex;align-items:center;cursor:pointer;border-bottom:1px solid var(--bg3);background:'+(isSel?'var(--accent-soft)':'transparent')+';transition:background .1s" onmouseenter="this.style.background=\'var(--bg3)\'" onmouseleave="this.style.background=\''+(isSel?'var(--accent-soft)':'transparent')+'\'">'+
-        '<div style="width:4px;height:'+GROW+'px;background:'+tc.clr+';flex-shrink:0"></div>'+
-        '<div style="flex:1;padding:0 8px 0 7px;overflow:hidden;min-width:0">'+
-          '<div style="font-size:11px;font-weight:'+(isSel||isCrit?'600':'500')+';color:'+(isCrit&&_g.crit?'#92400E':isSel?'var(--accent)':'var(--text1)')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.25">'+
-            (isCrit?'⭐ ':'')+esc((a.descripcion||'Act #'+a.id).slice(0,30))+
+        '<div style="width:5px;height:'+GROW+'px;background:'+tc.clr+';flex-shrink:0"></div>'+
+        '<div style="flex:1;padding:0 8px 0 8px;overflow:hidden;min-width:0">'+
+          '<div style="font-size:12px;font-weight:'+(isSel||isCrit?'700':'500')+';color:'+(isCrit&&_g.crit?'#92400E':isSel?'var(--accent)':'var(--text)')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3">'+
+            (isCrit?'⭐ ':'')+esc((a.descripcion||'Act #'+a.id).slice(0,32))+
           '</div>'+
-          '<div style="font-size:9.5px;color:'+tc.clr+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;opacity:.8">'+esc(tc.icon+(worker?' '+worker:tc.lbl?' '+tc.lbl:''))+'</div>'+
+          '<div style="font-size:10.5px;color:'+tc.clr+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;font-weight:500">'+esc(tc.icon+(worker?' '+worker:tc.lbl?' '+tc.lbl:''))+'</div>'+
         '</div>'+
-        '<div style="width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-right:9px;background:'+(estDot[a.estado]||'#D1D5DB')+'"></div>'+
+        '<div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-right:10px;background:'+(estDot[a.estado]||'#D1D5DB')+'"></div>'+
       '</div>';
     }
   });
@@ -8788,7 +8787,7 @@ function _gRender(){
     var a=r.a,isCrit=crit.has(a.id)&&_g.crit,isSel=_g.sel===a.id,isLSrc=_g.lSrc===a.id;
     var fi=a.fecha_inicio||a.fecha,ff=a.fecha_fin;if(!fi||!ff) return;
     var bx=_gX(fi,b.min,ppd),bw=Math.max(_gX(ff,b.min,ppd)-bx,4);
-    var cy=rowY[a.id],bh=20,by=cy-10;
+    var cy=rowY[a.id],bh=32,by=cy-16;
     var c=_gBarColor(a,isCrit),tc=_gTipoColor(a);
     var tip=esc((a.descripcion||'#'+a.id)+' | '+fi+' → '+ff+(a.personal_nombre?' | '+a.personal_nombre:'')+(a.porcentaje?' | '+a.porcentaje+'%':''));
 
@@ -8797,12 +8796,12 @@ function _gRender(){
 
     svg+='<g id="gantt-bar-'+a.id+'" transform="translate(0,0)">';
     // Drop shadow
-    svg+='<rect x="'+(bx+1)+'" y="'+(by+2)+'" width="'+bw+'" height="'+bh+'" rx="4" fill="rgba(0,0,0,.06)"/>';
+    svg+='<rect x="'+(bx+1)+'" y="'+(by+3)+'" width="'+bw+'" height="'+bh+'" rx="7" fill="rgba(0,0,0,.08)"/>';
     // Body
-    svg+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="4" fill="'+c.bg+'" stroke="'+c.br+'" stroke-width="1.5" style="cursor:'+((_g.link)?'crosshair':'grab')+'" onpointerdown="ganttBarDown(event,\''+a.id+'\',\'move\')" onclick="ganttBarClick(event,\''+a.id+'\')" ><title>'+tip+'</title></rect>';
+    svg+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="7" fill="'+c.bg+'" stroke="'+c.br+'" stroke-width="1.5" style="cursor:'+((_g.link)?'crosshair':'grab')+'" onpointerdown="ganttBarDown(event,\''+a.id+'\',\'move\')" onclick="ganttBarClick(event,\''+a.id+'\')" ><title>'+tip+'</title></rect>';
     // Left tipo stripe
-    svg+='<rect x="'+bx+'" y="'+by+'" width="4" height="'+bh+'" rx="4" fill="'+tc.clr+'" pointer-events="none"/>';
-    svg+='<rect x="'+(bx+2)+'" y="'+by+'" width="2" height="'+bh+'" fill="'+tc.clr+'" pointer-events="none"/>';
+    svg+='<rect x="'+bx+'" y="'+by+'" width="6" height="'+bh+'" rx="7" fill="'+tc.clr+'" pointer-events="none"/>';
+    svg+='<rect x="'+(bx+3)+'" y="'+by+'" width="3" height="'+bh+'" fill="'+tc.clr+'" pointer-events="none"/>';
     // Completado hatch
     if(a.estado==='completado'){
       svg+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="4" fill="rgba(5,150,105,.08)" pointer-events="none"/>';
@@ -8814,17 +8813,17 @@ function _gRender(){
       svg+='<rect x="'+(bx+3)+'" y="'+(by+bh-5)+'" width="'+pw2+'" height="3" rx="1.5" fill="'+c.br+'" opacity=".6" pointer-events="none"/>';
     }
     // Labels
-    if(bw>36){
-      var maxCh=Math.max(1,Math.floor((bw-14)/6.2));
+    if(bw>44){
+      var maxCh=Math.max(1,Math.floor((bw-18)/6.5));
       var lbl=esc((a.descripcion||'#'+a.id).slice(0,maxCh));
-      svg+='<text x="'+(bx+10)+'" y="'+(cy-(a.personal_nombre?3:0))+'" dominant-baseline="middle" font-size="9" font-weight="600" fill="'+c.tx+'" pointer-events="none" style="font-family:var(--font)">'+lbl+'</text>';
-      if(a.personal_nombre&&bw>60){
+      svg+='<text x="'+(bx+12)+'" y="'+(cy-(a.personal_nombre?5:0))+'" dominant-baseline="middle" font-size="11.5" font-weight="600" fill="'+c.tx+'" pointer-events="none" style="font-family:var(--font)">'+lbl+'</text>';
+      if(a.personal_nombre&&bw>70){
         var wn=esc(a.personal_nombre.split(' ')[0].slice(0,maxCh));
-        svg+='<text x="'+(bx+10)+'" y="'+(cy+7)+'" dominant-baseline="middle" font-size="8" fill="'+c.tx+'" opacity=".6" pointer-events="none" style="font-family:var(--font)">'+wn+'</text>';
+        svg+='<text x="'+(bx+12)+'" y="'+(cy+9)+'" dominant-baseline="middle" font-size="10" fill="'+c.tx+'" opacity=".7" pointer-events="none" style="font-family:var(--font)">'+wn+'</text>';
       }
     }
     // Resize handle
-    svg+='<rect x="'+(bx+bw-6)+'" y="'+(by+4)+'" width="4" height="'+(bh-8)+'" rx="2" fill="'+c.br+'" opacity=".4" style="cursor:ew-resize" onpointerdown="ganttBarDown(event,\''+a.id+'\',\'resize\')" onclick="event.stopPropagation()"/>';
+    svg+='<rect x="'+(bx+bw-7)+'" y="'+(by+5)+'" width="5" height="'+(bh-10)+'" rx="2.5" fill="'+c.br+'" opacity=".4" style="cursor:ew-resize" onpointerdown="ganttBarDown(event,\''+a.id+'\',\'resize\')" onclick="event.stopPropagation()"/>';
     svg+='</g>';
   });
   svg+='</g>';
