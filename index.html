@@ -9229,7 +9229,7 @@ function renderPlan(){
         )+
         workerBtn+
         areaBtn+
-        (sinF&&gEdit?'<span style="font-size:10px;color:#92400E;padding:3px 7px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap">⚠️ '+sinF+'</span>':'')+
+        (sinF&&gEdit?'<button onclick="_gOpenBandeja()" style="font-size:10px;color:#92400E;padding:3px 7px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap;cursor:pointer;font-family:var(--font)">⚠️ '+sinF+' sin fechas</button>':'')+
         (gEdit?
           '<button onclick="ganttAutoSchedule()" title="Ajustar fechas a dependencias" style="'+btnSt+';white-space:nowrap">⚡ Reprog.</button>'+
           '<button onclick="ganttPrint()" title="Imprimir Gantt" style="'+iconBtnSt+'">🖨️</button>'+
@@ -9876,13 +9876,16 @@ function _gCloseLinkSearch(){
   var p=document.getElementById('gantt-link-search-panel');if(p)p.remove();
 }
 
-// ── Bandeja: activities with no links (not yet integrated into plan) ────
+// ── Bandeja: activities with no links OR no dates ────
 function _gActsNoLinks(){
   var all=S.acts||[];
   var hasSuc={};
   all.forEach(function(a){_gPredsTyped(a).forEach(function(pt){hasSuc[pt.id]=true;});});
   return all.filter(function(a){
-    return a.estado!=='completado'&&_gPredsTyped(a).length===0&&!hasSuc[a.id];
+    if(a.estado==='completado') return false;
+    var noLinks=_gPredsTyped(a).length===0&&!hasSuc[a.id];
+    var noDates=!a.fecha_fin||(!a.fecha_inicio&&!a.fecha);
+    return noLinks||noDates;
   });
 }
 
@@ -9968,9 +9971,9 @@ async function _gBandejaDate(inp){
           var row=document.getElementById('gbnd-row-'+actId);
           if(row){row.style.opacity='0.3';row.style.transition='opacity .4s';}
           setTimeout(function(){
-            var listEl=document.getElementById('gantt-bandeja-list');if(listEl) listEl.innerHTML=_gBandejaItems();
             _gRender();
-            if(!_gActsNoLinks().length) _gCloseBandeja();
+            if(!_gActsNoLinks().length){_gCloseBandeja();}
+            else{var listEl=document.getElementById('gantt-bandeja-list');if(listEl)listEl.innerHTML=_gBandejaItems();}
           },500);
         },600);
       }
