@@ -5861,7 +5861,7 @@ function renderCambios(){
             '<div style="font-size:13px;font-weight:500;color:var(--text)">'+esc(c.entidad_nombre||'—')+'</div>'+
             '<div style="font-size:11.5px;color:var(--text2);margin-top:1px">'+esc(c.detalle||c.accion)+'</div>'+
             '<div style="display:flex;gap:5px;margin-top:3px;align-items:center">'+
-              '<span style="font-size:10px;font-weight:700;color:'+uC+';background:'+uC+'18;border-radius:5px;padding:1px 6px">'+esc(uN.split(' ')[0])+'</span>'+
+              '<span style="font-size:10px;font-weight:700;color:'+uC+';background:'+uC+'18;border-radius:5px;padding:1px 6px">'+esc(shortName(uN))+'</span>'+
               '<span style="font-size:10px;color:var(--text3)">'+(c.hora||c.created_at&&c.created_at.slice(11,16)||'')+'</span>'+
             '</div>'+
           '</div>'+
