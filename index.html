@@ -812,6 +812,10 @@ function fmt12h(t){
   h=h%12||12;
   return h+':'+(m<10?'0':'')+m+' '+ampm;
 }
+function nowHHMM(){
+  var n=new Date();
+  return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');
+}
 
 // Generate WhatsApp-ready daily attendance report
 function generarReporteAsistenciaWA(){
@@ -3215,13 +3219,15 @@ async function doMarcarCompletada(actId){
   var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
   closeModal();
   a.estado='completado'; a.porcentaje=100;
+  a.hora_fin=nowHHMM();
+  if(!a.hora_inicio) a.hora_inicio=a.hora_fin;
   S.actsActivas=S.actsActivas?S.actsActivas.filter(function(x){return x.id!==actId}):[];
   reRenderActs(); checkSuccessors();
   setSS('syncing','...');
   logEvento('Actividad completada', 'Completó: '+a.descripcion+(a.area?' — '+a.area:''));
   logCambio('completado','actividad',actId,a.descripcion,'Estado → completado (100%)');
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100,hora_inicio:a.hora_inicio,hora_fin:a.hora_fin})});
     setSS('ok','✓ Completada');
   }catch(e){setSS('err','Error');}
 }
@@ -3311,12 +3317,16 @@ async function cycleEstado(actId){
   var cur=CICLO_ESTADOS.indexOf(a.estado);
   a.estado=CICLO_ESTADOS[(cur+1)%CICLO_ESTADOS.length];
   if(a.estado==='completado')a.porcentaje=100;
+  var patch={estado:a.estado,porcentaje:a.porcentaje};
+  // Auto-stamp times on state transitions
+  if(a.estado==='en-progreso'&&!a.hora_inicio){a.hora_inicio=nowHHMM();patch.hora_inicio=a.hora_inicio;}
+  if((a.estado==='pausada'||a.estado==='completado')){a.hora_fin=nowHHMM();patch.hora_fin=a.hora_fin;}
   reRenderActs();
   checkSuccessors();
   setSS('syncing','...');
   try{
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
-      body:JSON.stringify({estado:a.estado,porcentaje:a.porcentaje})});
+      body:JSON.stringify(patch)});
     setSS('ok','✓ '+a.estado);
   }catch(e){setSS('err','Error');}
 }
@@ -3332,11 +3342,15 @@ async function quickSetPct(actId,pct){
     return;
   }
   a.porcentaje=pct;
-  if(pct>0&&a.estado==='pendiente'){a.estado='en-progreso';}
+  var _pctPatch={porcentaje:pct,estado:a.estado};
+  if(pct>0&&a.estado==='pendiente'){
+    a.estado='en-progreso';_pctPatch.estado='en-progreso';
+    if(!a.hora_inicio){a.hora_inicio=nowHHMM();_pctPatch.hora_inicio=a.hora_inicio;}
+  }
   reRenderActs();
   try{
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
-      body:JSON.stringify({porcentaje:pct,estado:a.estado})});
+      body:JSON.stringify(_pctPatch)});
     setSS('ok','✓ '+pct+'%');
   }catch(e){}
 }
@@ -3408,13 +3422,14 @@ async function iniciarActividad(id){
   var a=S.acts.find(function(x){return x.id===id;});
   if(!a) return;
   a.estado='en-progreso';
+  if(!a.hora_inicio) a.hora_inicio=nowHHMM();
   var ai=S.actsActivas?S.actsActivas.findIndex(function(x){return x.id===id;}):- 1;
   if(ai<0&&S.actsActivas) S.actsActivas.unshift(a);
   reRenderActs();
   setSS('syncing','...');
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'en-progreso'})});
-    setSS('ok','✓ Iniciada');
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'en-progreso',hora_inicio:a.hora_inicio})});
+    setSS('ok','✓ Iniciada '+fmt12h(a.hora_inicio));
     loadTareas();
   }catch(e){setSS('err','Error');}
 }
@@ -3833,6 +3848,9 @@ async function saveActIngeniero(ai){
   // Force consistency: pct=100 → completado, completado → pct=100
   if(a.estado==='completado') a.porcentaje=100;
   if(a.porcentaje>=100) a.estado='completado';
+  // Auto-stamp times when saving with an active state and no manual times set
+  if((a.estado==='en-progreso'||a.estado==='completado')&&!a.hora_inicio){a.hora_inicio=nowHHMM();}
+  if(a.estado==='completado'&&!a.hora_fin){a.hora_fin=nowHHMM();}
   closeModal(); setSS('syncing','Guardando...');
   const _createdIngActs=[];
   try{
@@ -3960,6 +3978,9 @@ async function saveAct(ai){
   if(a.estado==='completado') a.porcentaje=100;
   // If pct reaches 100, force estado=completado
   if(a.porcentaje>=100) a.estado='completado';
+  // Auto-stamp times when saving with an active state and no manual times set
+  if((a.estado==='en-progreso'||a.estado==='completado')&&!a.hora_inicio){a.hora_inicio=nowHHMM();}
+  if(a.estado==='completado'&&!a.hora_fin){a.hora_fin=nowHHMM();}
   closeModal();setSS('syncing','Guardando...');
   const _createdActs=[];
   try{
