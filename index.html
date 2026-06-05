@@ -817,6 +817,18 @@ function nowHHMM(){
   var n=new Date();
   return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');
 }
+function getRegistro(a){
+  if(!a||!a.registro_tiempo) return [];
+  if(Array.isArray(a.registro_tiempo)) return a.registro_tiempo;
+  try{return JSON.parse(a.registro_tiempo)||[];}catch(e){return [];}
+}
+function _appendRegistro(a, actId, entry){
+  var reg=getRegistro(a);
+  reg.push(Object.assign({fecha:today(),hora:nowHHMM(),usuario:shortName(S.user?.nombre||'')},entry));
+  a.registro_tiempo=reg;
+  sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
+    body:JSON.stringify({registro_tiempo:reg})}).catch(function(){});
+}
 
 // Generate WhatsApp-ready daily attendance report
 function generarReporteAsistenciaWA(){
@@ -3171,6 +3183,26 @@ function actHTML(a, ai, tipo){
       out+='</div>';
       return out;
     })()}
+    ${(function(){
+      var reg=getRegistro(a);
+      if(!reg.length) return '';
+      var ICONS={inicio:'▶',pausa:'⏸',retoma:'↺',fin:'⏹'};
+      var COLORS={inicio:'#1a56db',pausa:'#e67700',retoma:'#2f9e44',fin:'#868e96'};
+      var out='<div style="margin-top:5px;border-top:1px solid var(--border);padding-top:5px">';
+      out+='<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">📋 Registro</div>';
+      reg.forEach(function(r){
+        var ic=ICONS[r.tipo]||'•'; var cl=COLORS[r.tipo]||'var(--text3)';
+        out+='<div style="display:flex;gap:5px;align-items:center;font-size:11px;line-height:1.7">';
+        out+='<span style="color:'+cl+';font-weight:700;width:12px;text-align:center">'+ic+'</span>';
+        out+='<span style="color:var(--text3);font-family:var(--mono)">'+fmt12h(r.hora)+'</span>';
+        if(r.fecha) out+='<span style="color:var(--text3);opacity:.55">'+r.fecha.slice(5)+'</span>';
+        if(r.motivo) out+='<span style="color:var(--text2)">'+esc(r.motivo)+'</span>';
+        if(r.usuario) out+='<span style="color:var(--text3);opacity:.6;margin-left:2px">'+esc(r.usuario)+'</span>';
+        out+='</div>';
+      });
+      out+='</div>';
+      return out;
+    })()}
     ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);flex-wrap:wrap">
       <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:7px 6px;border-radius:8px;border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Completar</button>
       <button onclick="togglePrioridadAct('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid ${urgente?'#e03131':'var(--border2)'};background:${urgente?'#ffe3e3':'var(--bg)'};font-size:12px;cursor:pointer">${urgente?'🔴':'⚪'}</button>
@@ -3264,7 +3296,7 @@ async function doMarcarCompletada(actId){
     // Estado/porcentaje first — critical operation
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
     setSS('ok','✓ Completada');
-    // Time stamps best-effort
+    _appendRegistro(a,actId,{tipo:'fin'});
     sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
       body:JSON.stringify({hora_inicio:a.hora_inicio,hora_fin:a.hora_fin})}).catch(function(){});
   }catch(e){
@@ -3375,7 +3407,9 @@ async function cycleEstado(actId){
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
       body:JSON.stringify({estado:a.estado,porcentaje:a.porcentaje})});
     setSS('ok','✓ '+a.estado);
-    // Time stamps best-effort
+    if(a.estado==='en-progreso') _appendRegistro(a,actId,{tipo:'inicio'});
+    else if(a.estado==='pausada') _appendRegistro(a,actId,{tipo:'pausa'});
+    else if(a.estado==='completado') _appendRegistro(a,actId,{tipo:'fin'});
     if(Object.keys(horaPatch).length)
       sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(horaPatch)}).catch(function(){});
   }catch(e){
@@ -3487,8 +3521,8 @@ async function iniciarActividad(id){
     // Estado change is critical — send alone so hora_inicio column missing can't block it
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'en-progreso'})});
     setSS('ok','✓ Iniciada');
+    _appendRegistro(a,id,{tipo:'inicio'});
     loadTareas();
-    // Stamp hora_inicio separately — best-effort, won't affect estado if it fails
     sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({hora_inicio:a.hora_inicio})}).catch(function(){});
   }catch(e){
     // Roll back optimistic update so UI matches DB
@@ -6973,6 +7007,7 @@ async function accionActObra(id, accion){
   } else if(accion==='retomar'){
     update={estado:'en-progreso'};
     a.estado='en-progreso';
+    // retoma is logged after successful save below
   } else if(accion==='urgente'){
     var nuevaPrio=a.prioridad==='urgente'?'normal':'urgente';
     update={prioridad:nuevaPrio};
@@ -6988,9 +7023,11 @@ async function accionActObra(id, accion){
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(update)});
     setSS('ok','✓');
     if(accion==='completar'){renderActs();renderHoy();}
-    // Stamp hora_inicio best-effort if set
-    if((accion==='iniciar')&&a.hora_inicio)
-      sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({hora_inicio:a.hora_inicio})}).catch(function(){});
+    if(accion==='iniciar'){
+      _appendRegistro(a,id,{tipo:'inicio'});
+      if(a.hora_inicio) sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({hora_inicio:a.hora_inicio})}).catch(function(){});
+    }
+    if(accion==='retomar') _appendRegistro(a,id,{tipo:'retoma'});
   }catch(e){
     console.error('accionActObra error ('+accion+'):',e.message||e);
     var msg=String(e.message||e);
@@ -7030,19 +7067,28 @@ function mostrarPausaObra(id, desc){
     var motivo=document.getElementById('pausa-motivo').value;
     closeModal();
     var a=S.actsActivas.find(function(x){return x.id===id;});
-    if(a){a.estado='pausada';a.notas=(a.notas?a.notas+' | ':'')+motivo+' ('+hhmm()+')';}
+    if(a){a.estado='pausada';}
     renderEnObra();
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',
-      body:JSON.stringify({estado:'pausada',notas:(a?a.notas:'')})});
-    setSS('ok','✓ Pausada');
+    try{
+      await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',
+        body:JSON.stringify({estado:'pausada'})});
+      setSS('ok','✓ Pausada');
+      if(a) _appendRegistro(a,id,{tipo:'pausa',motivo:motivo});
+      sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',
+        body:JSON.stringify({hora_fin:nowHHMM()})}).catch(function(){});
+    }catch(e){if(a)a.estado='en-progreso';renderEnObra();setSS('err','Error');showToast('No se pudo pausar','err',5000);}
   };
   document.getElementById('btn-pausar-nueva').onclick=function(){
     var motivo=document.getElementById('pausa-motivo').value;
     closeModal();
     var a=S.actsActivas.find(function(x){return x.id===id;});
-    if(a){a.estado='pausada';a.notas=(a.notas?a.notas+' | ':'')+motivo+' ('+hhmm()+')';}
+    if(a){a.estado='pausada';}
     sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',
-      body:JSON.stringify({estado:'pausada',notas:(a?a.notas:'')})}).catch(function(){});
+      body:JSON.stringify({estado:'pausada'})})
+      .then(function(){if(a) _appendRegistro(a,id,{tipo:'pausa',motivo:motivo});})
+      .catch(function(){});
+    sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',
+      body:JSON.stringify({hora_fin:nowHHMM()})}).catch(function(){});
     renderEnObra();
     showAddActSmart();
   };
