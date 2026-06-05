@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_132';
+const APP_VERSION='20260605_133';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -9191,8 +9191,8 @@ function ganttSelectAct(actId){
 }
 
 function ganttLinkClick(actId){
-  if(!_g.lSrc){_g.lSrc=actId;_gRender();showToast('Ahora click en la SUCESORA  (tipo: '+_g.linkTipo+')');return;}
-  if(_g.lSrc===actId){_g.lSrc=null;_gRender();return;}
+  if(!_g.lSrc){_g.lSrc=actId;_gRender();_gOpenLinkSearch();return;}
+  if(_g.lSrc===actId){_g.lSrc=null;_gRender();_gCloseLinkSearch();return;}
   var succ=(S.acts||[]).find(function(x){return x.id===actId;});
   if(!succ){_g.lSrc=null;return;}
   var preds=_gPredsTyped(succ);
@@ -9207,7 +9207,102 @@ function ganttLinkClick(actId){
     .catch(function(err){_g.history.pop();showToast('Error: '+err.message,'err');});
 }
 
-function ganttSetLinkTipo(t){_g.linkTipo=t;renderPlan();}
+function _gOpenLinkSearch(){
+  _gCloseLinkSearch();
+  var src=(S.acts||[]).find(function(a){return a.id===_g.lSrc;});
+  if(!src) return;
+  var ov=document.createElement('div');
+  ov.id='gantt-link-search-overlay';
+  ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:9990;background:rgba(0,0,0,.35)';
+  ov.addEventListener('click',function(e){if(e.target===ov){_g.lSrc=null;_gRender();_gCloseLinkSearch();}});
+  document.body.appendChild(ov);
+  var panel=document.createElement('div');
+  panel.id='gantt-link-search-panel';
+  panel.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9991;background:#fff;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.28);width:min(500px,95vw);max-height:76vh;display:flex;flex-direction:column;overflow:hidden;font-family:var(--font)';
+  var tipoHtml=['FS','SS','FF'].map(function(t){var a=_g.linkTipo===t;return '<span onclick="ganttSetLinkTipo(\''+t+'\');_gLinkSearchFilter(document.getElementById(\'gantt-lsearch-inp\').value)" style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:'+(a?700:400)+';background:'+(a?'#059669':'transparent')+';color:'+(a?'#fff':'var(--text2)')+';border-radius:6px;cursor:pointer;user-select:none;transition:all .1s">'+t+'</span>';}).join('');
+  panel.innerHTML=
+    '<div style="padding:16px 18px 12px;border-bottom:1.5px solid var(--border);flex-shrink:0">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'+
+        '<span style="font-size:20px;flex-shrink:0">🔗</span>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:14px;font-weight:700;color:var(--text)">Seleccionar actividad sucesora</div>'+
+          '<div style="font-size:11.5px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Desde: <b style="color:var(--text2)">'+esc(src.descripcion||src.nombre||'Act #'+src.id)+'</b></div>'+
+        '</div>'+
+        '<button onclick="_g.lSrc=null;_gRender();_gCloseLinkSearch()" style="width:30px;height:30px;border:none;background:var(--bg3);border-radius:8px;cursor:pointer;font-size:17px;line-height:1;color:var(--text2);flex-shrink:0">✕</button>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'+
+        '<span style="font-size:11.5px;color:var(--text3);flex-shrink:0;font-weight:600">Tipo:</span>'+
+        '<div style="display:flex;gap:2px;background:var(--bg3);border-radius:8px;padding:2px" id="gantt-ls-tipo">'+tipoHtml+'</div>'+
+        '<span style="font-size:11px;color:var(--text3);flex-shrink:0">desfase:</span>'+
+        '<input type="number" min="0" max="999" value="'+(_g.linkLag||0)+'" onchange="ganttSetLinkLag(this.value)" style="width:46px;height:28px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;text-align:center;padding:0 4px;font-family:var(--font);background:#fff;color:var(--text)">'+
+        '<span style="font-size:11px;color:var(--text3)">días</span>'+
+      '</div>'+
+      '<input id="gantt-lsearch-inp" type="text" placeholder="Buscar por nombre, área o responsable..." oninput="_gLinkSearchFilter(this.value)" style="width:100%;height:40px;border:2px solid var(--accent);border-radius:10px;padding:0 14px;font-size:13px;font-family:var(--font);box-sizing:border-box;outline:none;background:#fff;color:var(--text)">'+
+    '</div>'+
+    '<div id="gantt-lsearch-list" style="flex:1;overflow-y:auto;padding:6px 8px">'+_gLinkSearchItems('',src.id)+'</div>';
+  document.body.appendChild(panel);
+  requestAnimationFrame(function(){var inp=document.getElementById('gantt-lsearch-inp');if(inp)inp.focus();});
+}
+
+function _gCloseLinkSearch(){
+  var ov=document.getElementById('gantt-link-search-overlay');if(ov)ov.remove();
+  var p=document.getElementById('gantt-link-search-panel');if(p)p.remove();
+}
+
+function _gLinkSearchFilter(q){
+  var listEl=document.getElementById('gantt-lsearch-list');
+  if(listEl) listEl.innerHTML=_gLinkSearchItems(q,_g.lSrc);
+}
+
+function _gLinkSearchItems(q,srcId){
+  var acts=(S.acts||[]).filter(function(a){
+    if(a.id===srcId) return false;
+    if(!q) return true;
+    var ql=q.toLowerCase();
+    return (a.descripcion||'').toLowerCase().indexOf(ql)>=0||
+           (a.nombre||'').toLowerCase().indexOf(ql)>=0||
+           (a.area||'').toLowerCase().indexOf(ql)>=0||
+           (a.personal_nombre||'').toLowerCase().indexOf(ql)>=0;
+  });
+  if(!acts.length) return '<div style="text-align:center;padding:32px;color:var(--text3);font-size:13px">Sin resultados</div>';
+  var amap={};acts.forEach(function(a){var k=a.area||'Sin área';if(!amap[k])amap[k]=[];amap[k].push(a);});
+  var areas=Object.keys(amap).sort();
+  var s='';
+  areas.forEach(function(area){
+    s+='<div style="font-size:10px;font-weight:700;color:var(--text3);padding:8px 8px 3px;letter-spacing:.06em;text-transform:uppercase">'+esc(area)+'</div>';
+    amap[area].forEach(function(a){
+      var tc=_gTipoColor(a);
+      var estDot={completado:'#059669',pendiente:'#D1D5DB','en-progreso':'#7C3AED',bloqueado:'#EF4444'};
+      var fi=a.fecha_inicio||a.fecha||'',ff=a.fecha_fin||'';
+      var dates=fi?'<span style="font-size:10px;color:var(--text3)">'+fi.slice(5)+(ff?' → '+ff.slice(5):'')+'</span>':'<span style="font-size:10px;color:#F59E0B">sin fecha</span>';
+      s+='<div onclick="ganttLinkFromSearch(\''+a.id+'\')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer" onmouseover="this.style.background=\'var(--accent-soft)\'" onmouseout="this.style.background=\'transparent\'">'+
+        '<span style="width:10px;height:10px;border-radius:50%;background:'+tc.clr+';flex-shrink:0"></span>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">'+esc(a.descripcion||a.nombre||'Act #'+a.id)+'</div>'+
+          '<div style="font-size:11px;color:var(--text2);margin-top:1px;display:flex;align-items:center;gap:6px">'+esc(tc.icon+(a.personal_nombre?' '+a.personal_nombre:''))+dates+'</div>'+
+        '</div>'+
+        '<div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:'+(estDot[a.estado]||'#D1D5DB')+'"></div>'+
+      '</div>';
+    });
+  });
+  return s;
+}
+
+function ganttLinkFromSearch(targetId){
+  _gCloseLinkSearch();
+  ganttLinkClick(targetId);
+}
+
+function ganttSetLinkTipo(t){
+  _g.linkTipo=t;
+  // Refresh tipo pills inside the search panel without re-rendering the full Gantt
+  var tipoEl=document.getElementById('gantt-ls-tipo');
+  if(tipoEl){
+    tipoEl.innerHTML=['FS','SS','FF'].map(function(tp){var a=t===tp;return '<span onclick="ganttSetLinkTipo(\''+tp+'\');_gLinkSearchFilter(document.getElementById(\'gantt-lsearch-inp\').value)" style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:'+(a?700:400)+';background:'+(a?'#059669':'transparent')+';color:'+(a?'#fff':'var(--text2)')+';border-radius:6px;cursor:pointer;user-select:none">'+tp+'</span>';}).join('');
+  } else {
+    renderPlan();
+  }
+}
 function ganttSetLinkLag(v){_g.linkLag=Math.max(0,Math.min(999,parseInt(v)||0));}
 
 async function ganttAutoSchedule(){
@@ -9485,7 +9580,8 @@ function ganttUnlink(succId,predId){
 
 function ganttToggleLink(){
   _g.link=!_g.link;_g.lSrc=null;
-  if(_g.link) showToast('Modo enlace — click en PREDECESORA, luego en SUCESORA');
+  _gCloseLinkSearch();
+  if(_g.link) showToast('Modo enlace — click en PREDECESORA, luego en SUCESORA o usa el buscador');
   renderPlan();
 }
 
