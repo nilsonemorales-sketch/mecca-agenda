@@ -364,6 +364,10 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 /* ── GANTT ── */
 #gantt-panel{scrollbar-width:thin}
 #gantt-scroll{scrollbar-width:thin}
+/* Override global button/select rules inside plan toolbar */
+#c-plan select{min-height:unset!important;display:inline-block!important;height:32px!important;line-height:32px!important}
+.gantt-pill{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:unset!important;padding:5px 10px!important;font-size:11px!important;border-radius:7px!important;border:none!important;cursor:pointer!important;white-space:nowrap!important}
+.gantt-act-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:36px!important;border-radius:9px!important;border:1.5px solid var(--border2)!important;cursor:pointer!important;font-size:12px!important;font-family:var(--font)!important}
 </style>
 
 </head>
@@ -658,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_112';
+const APP_VERSION='20260605_113';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8585,14 +8589,14 @@ function renderPlan(){
   var tpHtml=TPILLS.map(function(t){
     var act=_g.tipoF===t[0];
     var bg=act?(t[0]&&GTYPES[t[0]]?GTYPES[t[0]].clr:'var(--accent)'):'transparent';
-    return '<button onclick="ganttFilterTipo(\''+t[0]+'\')" style="padding:4px 10px;font-size:11px;line-height:1;border-radius:7px;border:none;cursor:pointer;font-family:var(--font);font-weight:'+(act?700:400)+';background:'+bg+';color:'+(act?'#fff':'var(--text2)')+';white-space:nowrap">'+t[1]+'</button>';
+    return '<button class="gantt-pill" onclick="ganttFilterTipo(\''+t[0]+'\')" style="font-weight:'+(act?700:400)+';background:'+bg+';color:'+(act?'#fff':'var(--text2)')+'">'+t[1]+'</button>';
   }).join('');
 
   // Zoom buttons inline
   var ZBTN=[['day','Día'],['week','Sem'],['month','Mes']];
   var zbHtml=ZBTN.map(function(z){
     var act=_g.zoom===z[0];
-    return '<button onclick="ganttZoom(\''+z[0]+'\')" style="padding:4px 12px;font-size:11px;line-height:1;border-radius:7px;border:none;cursor:pointer;font-family:var(--font);font-weight:'+(act?700:500)+';background:'+(act?'var(--accent)':'transparent')+';color:'+(act?'#fff':'var(--text2)')+'">'+z[1]+'</button>';
+    return '<button class="gantt-pill" onclick="ganttZoom(\''+z[0]+'\')" style="font-weight:'+(act?700:500)+';background:'+(act?'var(--accent)':'transparent')+';color:'+(act?'#fff':'var(--text2)')+'">'+z[1]+'</button>';
   }).join('');
 
   el.innerHTML=
