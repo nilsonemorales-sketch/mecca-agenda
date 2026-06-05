@@ -4779,7 +4779,8 @@ function showEditPersonal(pid){
 }
 
 async function savePersonal(){
-  const nombre=document.getElementById('np-n').value.trim();if(!nombre)return;
+  const nombre=document.getElementById('np-n').value.trim();
+  if(!nombre){showToast('Escribe el nombre del contratista','warn',3000);return;}
   const tipoEl=document.getElementById('np-tipo');
   const tipo=tipoEl?tipoEl.value:'propio';
   const p={
@@ -4797,8 +4798,17 @@ async function savePersonal(){
   try{
     await sb('obra_personal',{method:'POST',prefer:'return=minimal',body:JSON.stringify(p)});
     setSS('ok','✓ '+nombre+' guardado');
+    logCambio('creado','personal',p.id,nombre,'Nuevo '+(tipo==='contratista'?'contratista':'trabajador')+' registrado');
   }catch(e){
-    setSS('err','Error guardando: '+e.message.slice(0,40));
+    S.personal=S.personal.filter(function(x){return x.id!==p.id;});
+    renderPersonal();
+    setSS('err','Error guardando');
+    var msg=e.message||'';
+    if(msg.includes('does not exist')||msg.includes('PGRST')){
+      showToast('Tabla obra_personal no existe aún — ejecuta el SQL de configuración','err',8000);
+    } else {
+      showToast('No se pudo guardar "'+nombre+'" — '+msg.slice(0,60),'err',7000);
+    }
     console.error('savePersonal error:',e);
   }
 }
