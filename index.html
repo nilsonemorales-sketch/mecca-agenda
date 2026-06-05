@@ -664,7 +664,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_138';
+const APP_VERSION='20260605_139';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -804,6 +804,14 @@ function fmtHoras(h){
   const mins=Math.round((h-hrs)*60);
   return hrs>0&&mins>0?`${hrs}h ${mins}m`:hrs>0?`${hrs}h`:`${mins}m`;
 }
+function fmt12h(t){
+  if(!t) return '';
+  var parts=t.split(':');
+  var h=parseInt(parts[0],10),m=parseInt(parts[1],10)||0;
+  var ampm=h>=12?'PM':'AM';
+  h=h%12||12;
+  return h+':'+(m<10?'0':'')+m+' '+ampm;
+}
 
 // Generate WhatsApp-ready daily attendance report
 function generarReporteAsistenciaWA(){
@@ -830,8 +838,8 @@ function generarReporteAsistenciaWA(){
     var hrs=calcHorasEfectivas(a.hora_entrada,a.hora_salida,fecha,a.horas_extra);
     texto+='  '+p.nombre;
     if(a.estado==='tarde') texto+=' (tarde)';
-    if(a.hora_entrada) texto+=' | Entrada: '+a.hora_entrada;
-    if(a.hora_salida) texto+=' | Salida: '+a.hora_salida;
+    if(a.hora_entrada) texto+=' | Entrada: '+fmt12h(a.hora_entrada);
+    if(a.hora_salida) texto+=' | Salida: '+fmt12h(a.hora_salida);
     if(hrs.efectivas>0) texto+=' | '+fmtHoras(hrs.efectivas)+' efectivas';
     if(hrs.extra>0) texto+=' | +'+hrs.extra+'h extra';
     texto+=nl;
@@ -2000,7 +2008,6 @@ function renderHoy(){
     </div>
 
     <!-- Personal x la Casa — Rendimiento hoy -->
-    ${propios.length?`
     <div class="card" style="margin-bottom:10px">
       <div class="card-hdr" style="cursor:pointer" onclick="S._hoyPersonalOpen=!S._hoyPersonalOpen;renderHoy()">
         <div style="display:flex;align-items:center;gap:8px">
@@ -2009,33 +2016,36 @@ function renderHoy(){
         </div>
         <span style="font-size:14px;color:var(--text3)">${S._hoyPersonalOpen?'▲':'▼'}</span>
       </div>
-      ${S._hoyPersonalOpen?`
-      <div style="padding:0 12px">
-        ${propios.map(p=>{
-          const a=S.asist.find(x=>x.personal_id===p.id)||{};
-          const hrs=a.hora_entrada&&a.hora_salida?calcHorasEfectivas(a.hora_entrada,a.hora_salida,hoy,a.horas_extra):{efectivas:0,extra:parseFloat(a.horas_extra)||0};
-          const clrMap={presente:'#2f9e44',tarde:'#e67700','medio día':'#1c7ed6',ausente:'#e03131',justificado:'#868e96'};
-          const lblMap={presente:'Presente',tarde:'Tarde','medio día':'Medio día',ausente:'Ausente',justificado:'Justificado'};
-          const clr=clrMap[a.estado]||'#adb5bd';
-          const lbl=lblMap[a.estado]||'Sin registrar';
-          return `<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;cursor:pointer" onclick="goTab('equipo');S.equipoVista='asistencia';renderEquipo()">
-            <div style="width:9px;height:9px;border-radius:50%;background:${clr};flex-shrink:0"></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;color:var(--text)">${esc(p.nombre)}</div>
-              <div style="font-size:11px;color:var(--text3);margin-top:1px">${a.hora_entrada&&a.hora_salida?a.hora_entrada+' → '+a.hora_salida:lbl}</div>
-            </div>
-            <div style="text-align:right;flex-shrink:0">
-              ${hrs.efectivas>0?`<div style="font-size:13px;font-weight:700;color:#2f9e44">${fmtHoras(hrs.efectivas)}</div>`:`<div style="font-size:12px;color:${clr};font-weight:600">${lbl}</div>`}
-              ${hrs.extra>0?`<div style="font-size:10px;color:#1c7ed6;font-weight:600">+${hrs.extra}h extra</div>`:''}
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-      <div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:11px;color:var(--text3)">${totalHrsHoy>0?'Total: '+fmtHoras(totalHrsHoy)+(totalExtraHoy>0?' + '+totalExtraHoy+'h extra':''):'Registra entradas y salidas en Asistencia'}</span>
-        <button onclick="event.stopPropagation();goTab('equipo');S.equipoVista='asistencia';renderEquipo()" style="padding:5px 12px;border-radius:var(--r);border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Asistencia →</button>
-      </div>`:''}
-    </div>`:''}
+      ${(()=>{
+        if(!S._hoyPersonalOpen) return '';
+        if(!propios.length) return '<div style="padding:12px;font-size:12px;color:var(--text3);text-align:center">Sin personal propio registrado — agrega en la pestaña Personal</div>';
+        var rows=propios.map(function(p){
+          var a=S.asist.find(function(x){return x.personal_id===p.id;})||{};
+          var hrs=a.hora_entrada&&a.hora_salida?calcHorasEfectivas(a.hora_entrada,a.hora_salida,hoy,a.horas_extra):{efectivas:0,extra:parseFloat(a.horas_extra)||0};
+          var clrMap={presente:'#2f9e44',tarde:'#e67700','medio día':'#1c7ed6',ausente:'#e03131',justificado:'#868e96'};
+          var lblMap={presente:'Presente',tarde:'Tarde','medio día':'Medio día',ausente:'Ausente',justificado:'Justificado'};
+          var clr=clrMap[a.estado]||'#adb5bd';
+          var lbl=lblMap[a.estado]||'Sin registrar';
+          var timeStr=a.hora_entrada&&a.hora_salida?fmt12h(a.hora_entrada)+' → '+fmt12h(a.hora_salida):'';
+          return '<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;cursor:pointer" onclick="goTab(\'equipo\');S.equipoVista=\'asistencia\';renderEquipo()">'+
+            '<div style="width:9px;height:9px;border-radius:50%;background:'+clr+';flex-shrink:0"></div>'+
+            '<div style="flex:1;min-width:0">'+
+              '<div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(p.nombre)+'</div>'+
+              '<div style="font-size:11px;color:var(--text3);margin-top:1px">'+(timeStr||lbl)+'</div>'+
+            '</div>'+
+            '<div style="text-align:right;flex-shrink:0">'+
+              (hrs.efectivas>0?'<div style="font-size:13px;font-weight:700;color:#2f9e44">'+fmtHoras(hrs.efectivas)+'</div>':'<div style="font-size:12px;color:'+clr+';font-weight:600">'+lbl+'</div>')+
+              (hrs.extra>0?'<div style="font-size:10px;color:#1c7ed6;font-weight:600">+'+hrs.extra+'h extra</div>':'')+
+            '</div>'+
+          '</div>';
+        }).join('');
+        var footer='<div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'+
+          '<span style="font-size:11px;color:var(--text3)">'+(totalHrsHoy>0?'Total: '+fmtHoras(totalHrsHoy)+(totalExtraHoy>0?' + '+totalExtraHoy+'h extra':''):'Registra entradas y salidas en Asistencia')+'</span>'+
+          '<button onclick="event.stopPropagation();goTab(\'equipo\');S.equipoVista=\'asistencia\';renderEquipo()" style="padding:5px 12px;border-radius:var(--r);border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Asistencia →</button>'+
+        '</div>';
+        return '<div style="padding:0 12px">'+rows+'</div>'+footer;
+      })()}
+    </div>
 
     <!-- RETRASADAS — always visible if any -->
     ${retrasadas.length>0?`
@@ -2291,22 +2301,24 @@ function renderAsist(){
             <div class="fw">
               <label class="fl" style="display:flex;justify-content:space-between">
                 <span>Entrada</span>
-                ${a.hora_entrada&&a.hora_entrada!=='07:30'?'<span style="color:var(--amber);font-size:9px">⚠ fuera de horario</span>':'<span style="color:var(--green);font-size:9px">✓ 07:30</span>'}
+                ${a.hora_entrada&&a.hora_entrada!=='07:30'?'<span style="color:var(--amber);font-size:9px">⚠ fuera de horario</span>':'<span style="color:var(--green);font-size:9px">✓ 7:30 AM</span>'}
               </label>
               <input type="time" value="${a.hora_entrada||'07:30'}" onchange="updAsist('${p.id}','hora_entrada',this.value)">
+              <span style="font-size:10px;color:var(--text3);margin-top:2px;display:block">${fmt12h(a.hora_entrada||'07:30')}</span>
             </div>
             <div class="fw">
               <label class="fl" style="display:flex;justify-content:space-between">
                 <span>Salida</span>
-                ${a.hora_salida&&a.hora_salida!==(esSabado(S.fecha)?'12:00':'17:00')?'<span style="color:var(--amber);font-size:9px">⚠ fuera de horario</span>':'<span style="color:var(--green);font-size:9px">✓ '+(esSabado(S.fecha)?'12:00':'17:00')+'</span>'}
+                ${a.hora_salida&&a.hora_salida!==(esSabado(S.fecha)?'12:00':'17:00')?'<span style="color:var(--amber);font-size:9px">⚠ fuera de horario</span>':'<span style="color:var(--green);font-size:9px">✓ '+(esSabado(S.fecha)?'12:00 PM':'5:00 PM')+'</span>'}
               </label>
               <input type="time" value="${a.hora_salida||(esSabado(S.fecha)?'12:00':'17:00')}" onchange="updAsist('${p.id}','hora_salida',this.value)">
+              <span style="font-size:10px;color:var(--text3);margin-top:2px;display:block">${fmt12h(a.hora_salida||(esSabado(S.fecha)?'12:00':'17:00'))}</span>
             </div>
             <div class="fw"><label class="fl">H. Extra</label><input type="number" min="0" max="12" step="0.5" value="${a.horas_extra||0}" onchange="updAsist('${p.id}','horas_extra',this.value)"></div>
           </div>
           ${buildHrsHTML(a.hora_entrada,a.hora_salida,S.fecha,a.horas_extra)}
           <div class="fw" style="margin-top:4px"><label class="fl">Observaciones</label><input type="text" value="${esc(a.notas||'')}" placeholder="Notas..." onchange="updAsist('${p.id}','notas',this.value)"></div>`:''}
-          `:`<div style="font-size:12px;color:var(--text3);padding:4px 0">${a.estado?[a.hora_entrada,a.hora_salida?'→ '+a.hora_salida:'',a.horas_extra>0?'+'+a.horas_extra+'h extra':''].filter(Boolean).join(' ')||a.estado:'Sin registrar'}</div>`}
+          `:`<div style="font-size:12px;color:var(--text3);padding:4px 0">${a.estado?[a.hora_entrada?fmt12h(a.hora_entrada):'',a.hora_salida?'→ '+fmt12h(a.hora_salida):'',a.horas_extra>0?'+'+a.horas_extra+'h extra':''].filter(Boolean).join(' ')||a.estado:'Sin registrar'}</div>`}
         </div>
       </div>`;}).join('')}`;
 }
