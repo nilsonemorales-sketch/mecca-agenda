@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_122';
+const APP_VERSION='20260605_123';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8552,9 +8552,13 @@ function _gCPM(){
   var ES={},EF={},vis=new Set();
   function fwd(id){
     if(vis.has(id)||!map[id]) return;vis.add(id);
-    var es=0;
-    _gPredsTyped(map[id]).forEach(function(pt){fwd(pt.id);var v=pt.tipo==='SS'?(ES[pt.id]||0):(EF[pt.id]||0);if(v>es)es=v;});
-    ES[id]=es;EF[id]=es+dur(map[id]);
+    var d=dur(map[id]),es=0;
+    _gPredsTyped(map[id]).forEach(function(pt){
+      fwd(pt.id);
+      var v=pt.tipo==='SS'?(ES[pt.id]||0):pt.tipo==='FF'?Math.max(0,(EF[pt.id]||0)-d):(EF[pt.id]||0);
+      if(v>es)es=v;
+    });
+    ES[id]=es;EF[id]=es+d;
   }
   acts.forEach(function(a){fwd(a.id);});
   var proj=0;acts.forEach(function(a){if((EF[a.id]||0)>proj)proj=EF[a.id];});
@@ -8591,7 +8595,7 @@ function renderPlan(){
   _g.areaFs=_g.areaFs.filter(function(a){return areaList.indexOf(a)>=0;});
   var aSelCnt=_g.areaFs.length;
   var areaBtn='<div style="position:relative;flex-shrink:0">'+
-    '<span role="button" onclick="ganttToggleAreaMenu()" style="display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 10px;font-size:12px;border:1.5px solid var(--border2);border-radius:8px;background:'+(aSelCnt?'var(--accent-soft)':'#fff')+';color:'+(aSelCnt?'var(--accent)':'var(--text2)')+';cursor:pointer;user-select:none;white-space:nowrap;font-family:var(--font)">'+
+    '<span role="button" onclick="event.stopPropagation();ganttToggleAreaMenu()" style="display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 10px;font-size:12px;border:1.5px solid var(--border2);border-radius:8px;background:'+(aSelCnt?'var(--accent-soft)':'#fff')+';color:'+(aSelCnt?'var(--accent)':'var(--text2)')+';cursor:pointer;user-select:none;white-space:nowrap;font-family:var(--font)">'+
       (aSelCnt?'📍 '+aSelCnt+' área'+(aSelCnt>1?'s':''):'Todas las áreas')+' ▾'+
     '</span>'+
     (_g.areaMenu?
@@ -8638,7 +8642,7 @@ function renderPlan(){
         '<button style="padding:0 12px;height:36px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0" onclick="showAddAct()">+ Nueva</button>'+
         '<button id="gantt-link-btn" onclick="ganttToggleLink()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.link?'#059669':'var(--bg3)')+';color:'+(_g.link?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🔗 Enlazar</button>'+
         (_g.link?'<div style="display:flex;gap:2px;background:var(--bg3);border-radius:8px;padding:2px;flex-shrink:0">'+
-          ['FS','SS'].map(function(t){var a=_g.linkTipo===t;return '<span onclick="ganttSetLinkTipo(\''+t+'\')" style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:'+(a?700:400)+';background:'+(a?'#059669':'transparent')+';color:'+(a?'#fff':'var(--text2)')+';border-radius:6px;cursor:pointer;user-select:none;line-height:1.5">'+t+'</span>';}).join('')+
+          ['FS','SS','FF'].map(function(t){var a=_g.linkTipo===t;return '<span onclick="ganttSetLinkTipo(\''+t+'\')" style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:'+(a?700:400)+';background:'+(a?'#059669':'transparent')+';color:'+(a?'#fff':'var(--text2)')+';border-radius:6px;cursor:pointer;user-select:none;line-height:1.5">'+t+'</span>';}).join('')+
         '</div>':'')+
         '<button id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.crit?'#F59E0B':'var(--bg3)')+';color:'+(_g.crit?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🎯</button>'+
         '<button onclick="ganttUndo()" title="Deshacer (Ctrl+Z)" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.history.length?'var(--bg3)':'var(--bg2)')+';color:'+(_g.history.length?'var(--text2)':'var(--text3)')+';font-family:var(--font);font-size:14px;cursor:pointer;flex-shrink:0;opacity:'+(_g.history.length?1:.4)+'" '+ (!_g.history.length?'disabled':'')+'>↩</button>'+
@@ -8802,13 +8806,15 @@ function _gRender(){
   rows.forEach(function(r){
     if(r.t!=='a') return;
     _gPredsTyped(r.a).forEach(function(pt){
-      var pid=pt.id,isSS=pt.tipo==='SS';
+      var pid=pt.id,tipo=pt.tipo||'FS';
       var pred=amap[pid];if(!pred) return;
-      var x1=isSS?_gX(pred.fecha_inicio||pred.fecha,b.min,ppd):_gX(pred.fecha_fin||pred.fecha,b.min,ppd);
-      var y1=rowY[pid],x2=_gX(r.a.fecha_inicio||r.a.fecha,b.min,ppd),y2=rowY[r.a.id];
+      var x1=tipo==='SS'?_gX(pred.fecha_inicio||pred.fecha,b.min,ppd):_gX(pred.fecha_fin||pred.fecha,b.min,ppd);
+      var y1=rowY[pid];
+      var x2=tipo==='FF'?_gX(r.a.fecha_fin,b.min,ppd):_gX(r.a.fecha_inicio||r.a.fecha,b.min,ppd);
+      var y2=rowY[r.a.id];
       if(y1===undefined||y2===undefined) return;
       var ic=crit.has(r.a.id)&&crit.has(pid)&&_g.crit;
-      var clr=ic?'#F59E0B':(isSS?'#0891B2':'#94A3B8'),sw=ic?2:1.5,opa=ic?1:(isSS?.7:.5);
+      var clr=ic?'#F59E0B':tipo==='SS'?'#0891B2':tipo==='FF'?'#7C3AED':'#94A3B8',sw=ic?2:1.5,opa=ic?1:tipo==='FS'?.5:.7;
       var pd;
       if(x2>x1+5){var mx2=(x1+x2)/2;pd='M'+x1+','+y1+' C'+mx2+','+y1+' '+mx2+','+y2+' '+x2+','+y2;}
       else{var ex=x1+16,ex2=x2-16,my=(y1+y2)/2;pd='M'+x1+','+y1+' L'+ex+','+y1+' L'+ex+','+my+' L'+ex2+','+my+' L'+ex2+','+y2+' L'+x2+','+y2;}
@@ -9041,7 +9047,7 @@ function ganttHelp(){
     '<div style="padding:20px 24px;display:flex;flex-direction:column;gap:14px">'+
       _gHelpRow('🖱️ Mover barra','Arrastra la barra de una actividad izquierda/derecha para cambiar las fechas de inicio y fin.')+
       _gHelpRow('↔️ Cambiar duración','Arrastra el borde derecho de la barra para extender o acortar la actividad.')+
-      _gHelpRow('🔗 Enlazar actividades','Presiona <b>Enlazar</b>, elige el tipo <b>FS</b> (Fin→Inicio) o <b>SS</b> (Inicio→Inicio), haz click en la PREDECESORA y luego en la SUCESORA.<br><b>FS</b> = la sucesora empieza cuando termina la anterior.<br><b>SS</b> = la sucesora puede iniciar cuando inicia la anterior, sin esperar que termine.')+
+      _gHelpRow('🔗 Enlazar actividades','Presiona <b>Enlazar</b>, elige el tipo y haz click en la PREDECESORA y luego en la SUCESORA.<br><b>FS</b> (Fin→Inicio) = la sucesora empieza cuando termina la anterior.<br><b>SS</b> (Inicio→Inicio) = la sucesora puede iniciar cuando inicia la anterior, sin esperar que termine.<br><b>FF</b> (Fin→Fin) = la sucesora debe terminar cuando termine la anterior — útil para tareas en paralelo con fecha de cierre común.')+
       _gHelpRow('✕ Quitar un enlace','Haz click en cualquier barra → en el panel lateral aparece la lista de predecesoras, cada una con un botón <b>✕</b> rojo para eliminar ese enlace.')+
       _gHelpRow('🎯 Ruta crítica','Activa <b>Ruta crítica</b> para resaltar en amarillo las actividades que, si se retrasan, retrasan todo el proyecto (CPM).')+
       _gHelpRow('⠿ Reordenar filas','Arrastra el ícono <b>⠿</b> en el sidebar arriba o abajo para cambiar el orden visual de las actividades dentro del mismo área.')+
