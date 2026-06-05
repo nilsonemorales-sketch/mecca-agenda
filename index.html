@@ -99,6 +99,8 @@ body{padding-left:var(--sl);padding-right:var(--sr)}
 .body{flex:1;overflow:hidden;background:var(--bg)}
 .view{display:none;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px;padding-bottom:calc(24px + var(--sb))}
 .view.active{display:block}
+/* Plan view owns its own scroll — toolbar must stay pinned */
+#view-plan{overflow:hidden!important;padding:0!important;height:100%}
 
 /* ── DATE NAV ── */
 .date-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px 16px;box-shadow:var(--shadow-xs)}
@@ -573,7 +575,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     </div>
 
     <!-- PLAN: Gantt interactivo -->
-    <div class="view" id="view-plan"><div id="c-plan"></div></div>
+    <div class="view" id="view-plan"><div id="c-plan" style="height:100%"></div></div>
   </div>
 
   <!-- BOTTOM NAV (mobile) -->
@@ -9200,7 +9202,7 @@ function renderPlan(){
   var iconBtnSt='padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)';
 
   el.innerHTML=
-    '<div style="display:flex;flex-direction:column;height:calc(100vh - 100px);overflow:hidden">'+
+    '<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+
     '<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2);position:relative;z-index:10">'+
       '<div style="display:flex;gap:6px;padding:8px 10px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch">'+
         '<div style="display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+tpHtml+'</div>'+
