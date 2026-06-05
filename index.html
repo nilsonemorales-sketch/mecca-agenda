@@ -664,7 +664,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_139';
+const APP_VERSION='20260605_140';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -1857,6 +1857,26 @@ function showQuickActSheet(actId){
       ${a.estado!=='completado'?`<button onclick="marcarActCompletada('${a.id}')" style="padding:14px;border-radius:14px;border:2px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Completar</button>`:'<div></div>'}
       <button onclick="cycleEstado('${a.id}');closeModal()" style="padding:14px;border-radius:14px;border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">▷ ${esc(nextEst)}</button>
     </div>
+    ${(function(){
+      var ti=a.hora_inicio?fmt12h(a.hora_inicio):'';
+      var tf=a.hora_fin?fmt12h(a.hora_fin):'';
+      if(!ti&&!tf&&!a.verificado) return '';
+      var durStr='';
+      if(a.hora_inicio&&a.hora_fin){
+        var p1=a.hora_inicio.split(':'),p2=a.hora_fin.split(':');
+        var mins=(parseInt(p2[0])*60+parseInt(p2[1]))-(parseInt(p1[0])*60+parseInt(p1[1]));
+        if(mins>0){var hh=Math.floor(mins/60),mm=mins%60;durStr=' · '+hh+'h'+(mm?' '+mm+'m':'');}
+      }
+      var out='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+      if(ti||tf) out+='<span style="font-size:12px;background:#ede9fe;color:var(--accent);border-radius:8px;padding:4px 10px;font-weight:700">⏱ '+(ti||'–')+' → '+(tf||'–')+(durStr)+'</span>';
+      if(a.verificado) out+='<span style="font-size:12px;background:#ecfdf5;color:#059669;border-radius:8px;padding:4px 10px;font-weight:700">✅ '+esc(a.verificado_por||'verificado')+'</span>';
+      out+='</div>';
+      return out;
+    })()}
+    ${canEdit()&&a.estado!=='completado'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      ${!a.hora_inicio?`<button onclick="stampHora('${a.id}','hora_inicio')" style="padding:12px;border-radius:14px;border:2px solid #1a56db;background:#dbe4ff;color:#1a56db;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">▶ Inicio</button>`:`<button onclick="stampHora('${a.id}','hora_fin')" style="padding:12px;border-radius:14px;border:2px solid #e67700;background:#fff3bf;color:#e67700;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">⏹ Fin</button>`}
+      ${(canEdit()||S.user?.rol==='ing')&&!a.verificado&&a.estado!=='pendiente'?`<button onclick="verificarAct('${a.id}');closeModal()" style="padding:12px;border-radius:14px;border:2px solid #059669;background:#ecfdf5;color:#059669;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">✅ Verificar</button>`:'<div></div>'}
+    </div>`:''}
     ${canEdit()?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}');closeModal()" style="padding:12px;border-radius:14px;border:2px solid #1a56db;background:#dbe4ff;color:#1a56db;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">▶ Iniciar</button>`:'<div></div>'}
       <button onclick="closeModal();setTimeout(()=>editAct('${a.id}'),100)" style="padding:12px;border-radius:14px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">✏️ Editar</button>
@@ -3075,12 +3095,30 @@ function actHTML(a, ai, tipo){
     ${a.porcentaje>0?`<div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin:4px 0"><div style="height:100%;width:${Math.min(100,a.porcentaje)}%;background:${vencida?'#e03131':'var(--accent)'};border-radius:2px"></div></div>`:''}
     ${a.notas?`<div style="font-size:11px;color:var(--text2);padding:3px 7px;background:var(--bg3);border-radius:5px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.notas)}</div>`:''}
     ${fotos.length?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:5px">${fotos.map(f=>`<img src="${f}" style="width:44px;height:44px;object-fit:cover;border-radius:5px;cursor:pointer;border:1px solid var(--border2)" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${a.fecha}','','','','${a.id}')">`).join('')}</div>`:''}
-    ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2)">
+    ${(function(){
+      var ti=a.hora_inicio?fmt12h(a.hora_inicio):'';
+      var tf=a.hora_fin?fmt12h(a.hora_fin):'';
+      if(!ti&&!tf&&!a.verificado) return '';
+      var durStr='';
+      if(a.hora_inicio&&a.hora_fin){
+        var p1=a.hora_inicio.split(':'),p2=a.hora_fin.split(':');
+        var mins=(parseInt(p2[0])*60+parseInt(p2[1]))-(parseInt(p1[0])*60+parseInt(p1[1]));
+        if(mins>0){var hh=Math.floor(mins/60),mm=mins%60;durStr=' · '+hh+'h'+(mm?' '+mm+'m':'');}
+      }
+      var out='<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">';
+      if(ti||tf) out+='<span style="font-size:11px;background:#ede9fe;color:var(--accent);border-radius:5px;padding:2px 7px;font-weight:600">⏱ '+(ti||'–')+' → '+(tf||'–')+(durStr)+'</span>';
+      if(a.verificado) out+='<span style="font-size:11px;background:#ecfdf5;color:#059669;border-radius:5px;padding:2px 7px;font-weight:600">✅ '+esc(a.verificado_por||'verificado')+'</span>';
+      out+='</div>';
+      return out;
+    })()}
+    ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);flex-wrap:wrap">
       <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:7px 6px;border-radius:8px;border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Completar</button>
       <button onclick="togglePrioridadAct('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid ${urgente?'#e03131':'var(--border2)'};background:${urgente?'#ffe3e3':'var(--bg)'};font-size:12px;cursor:pointer">${urgente?'🔴':'⚪'}</button>
       ${isAdmin()?`<button onclick="abrirFotoUpload('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg);color:var(--text3);font-size:12px;cursor:pointer">📸</button>`:''}
       ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="flex:1;padding:7px 6px;border-radius:8px;border:1.5px solid var(--accent);background:#e8f0fe;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">▶ Iniciar</button>`:''}
+      ${!a.hora_inicio?`<button onclick="stampHora('${a.id}','hora_inicio')" style="padding:7px 10px;border-radius:8px;border:1.5px solid #1a56db;background:#e8f0fe;color:#1a56db;font-size:12px;font-weight:700;cursor:pointer" title="Registrar hora de inicio">▶ Inicio</button>`:`<button onclick="stampHora('${a.id}','hora_fin')" style="padding:7px 10px;border-radius:8px;border:1.5px solid #e67700;background:#fff3bf;color:#e67700;font-size:12px;font-weight:700;cursor:pointer" title="Registrar hora de fin">⏹ Fin</button>`}
     </div>`:''}
+    ${(canEdit()||S.user?.rol==='ing')&&!a.verificado&&a.estado!=='pendiente'?`<div style="margin-top:4px"><button onclick="verificarAct('${a.id}')" style="width:100%;padding:6px;border-radius:8px;border:1.5px solid #059669;background:#ecfdf5;color:#059669;font-size:11px;font-weight:600;cursor:pointer">✅ Verificar trabajo</button></div>`:''}
   </div>`;
 }
 
@@ -3357,6 +3395,36 @@ async function iniciarActividad(id){
   }catch(e){setSS('err','Error');}
 }
 
+// ── HORA STAMPS & VERIFICACIÓN ───────────────────────────────────
+async function stampHora(actId, field){
+  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
+  var now=new Date();
+  var t=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  a[field]=t;
+  reRenderActs();
+  setSS('syncing','...');
+  var patch={};patch[field]=t;
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(patch)});
+    setSS('ok','✓ '+fmt12h(t));
+    logCambio('registrado','actividad',actId,a.descripcion,(field==='hora_inicio'?'Inicio: ':'Fin: ')+fmt12h(t));
+  }catch(e){setSS('err','Error');}
+}
+
+async function verificarAct(actId){
+  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
+  var ing=S.user?.nombre||'';
+  a.verificado=true; a.verificado_por=ing;
+  reRenderActs();
+  setSS('syncing','...');
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({verificado:true,verificado_por:ing})});
+    setSS('ok','✓ Verificado');
+    logCambio('verificado','actividad',actId,a.descripcion,'Verificado por '+ing);
+    showToast('✅ Verificado por '+ing,'ok');
+  }catch(e){setSS('err','Error');}
+}
+
 // ── FOTO POR ACTIVIDAD DESDE OBRA ─────────────────────────────────
 
 
@@ -3485,6 +3553,12 @@ function showAddActPropio(ai, ctx){
       <span style="font-size:11px;color:var(--text3)">Duración: </span>
       <span style="font-family:var(--mono);color:var(--accent);font-weight:600" id="dur-propio-lbl">${calcDurLbl(a.fecha_inicio,a.fecha_fin)}</span>
     </div>
+    <div class="fgrid">
+      <div class="fw"><label class="fl">⏱ Hora inicio</label>
+        <input type="time" id="a-hi" value="${a.hora_inicio||''}"></div>
+      <div class="fw"><label class="fl">⏱ Hora fin</label>
+        <input type="time" id="a-hf" value="${a.hora_fin||''}"></div>
+    </div>
     ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -3560,6 +3634,12 @@ function showAddActContratista(ai, preContratista, ctx){
         <span style="font-size:11px;color:var(--text3)">Duración estimada: </span>
         <span style="font-family:var(--mono);color:var(--accent);font-weight:600" id="duracion-lbl">${calcDurLbl(a.fecha_inicio,a.fecha_fin)}</span>
       </div>
+    </div>
+    <div class="fgrid">
+      <div class="fw"><label class="fl">⏱ Hora inicio</label>
+        <input type="time" id="a-hi" value="${a.hora_inicio||''}"></div>
+      <div class="fw"><label class="fl">⏱ Hora fin</label>
+        <input type="time" id="a-hf" value="${a.hora_fin||''}"></div>
     </div>
 
     <div class="fgrid">
@@ -3659,6 +3739,12 @@ function showAddActIngeniero(ai){
         <span style="font-size:11px;color:var(--text3)">Duración: </span>
         <span style="font-family:var(--mono);color:#1a56db;font-weight:600" id="duracion-lbl">${calcDurLbl(a.fecha_inicio,a.fecha_fin)}</span>
       </div></div>
+    <div class="fgrid">
+      <div class="fw"><label class="fl">⏱ Hora inicio</label>
+        <input type="time" id="a-hi" value="${a.hora_inicio||''}"></div>
+      <div class="fw"><label class="fl">⏱ Hora fin</label>
+        <input type="time" id="a-hf" value="${a.hora_fin||''}"></div>
+    </div>
 
     <div class="fw"><label class="fl">Notas</label>
       <textarea id="a-n" class="ta" placeholder="Observaciones, acuerdos, pendientes...">${esc(a.notas)}</textarea></div>
@@ -3698,6 +3784,8 @@ async function saveActIngeniero(ai){
     notas:document.getElementById('a-n').value.trim(),
     fecha_inicio:(document.getElementById('a-fi')||{value:''}).value,
     fecha_fin:(document.getElementById('a-ff')||{value:''}).value,
+    hora_inicio:(document.getElementById('a-hi')||{value:''}).value.trim()||null,
+    hora_fin:(document.getElementById('a-hf')||{value:''}).value.trim()||null,
     fecha:S.fecha, foto_pendiente:false,
     predecesoras:(document.getElementById('a-preds')||{value:''}).value.trim()||null,
   };
@@ -3817,6 +3905,8 @@ async function saveAct(ai){
     notas:getFld('a-n','').trim(),
     fecha_inicio:getFld('a-fi',''),
     fecha_fin:getFld('a-ff',''),
+    hora_inicio:getFld('a-hi','').trim()||null,
+    hora_fin:getFld('a-hf','').trim()||null,
     ingeniero_id:getFld('a-ing','')?Object.entries(USERS).find(([k,u])=>u.nombre===getFld('a-ing',''))?.[0]||S.user?.id||'':S.user?.id||'',
     ingeniero_nombre:getFld('a-ing','')||S.user?.nombre||'',
     fecha:S.fecha,
