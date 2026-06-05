@@ -9559,13 +9559,19 @@ function _gRender(){
   '</defs>';
   svg+='<rect width="'+svgW+'" height="'+svgH+'" fill="var(--bg)"/>';
 
-  // Weekend shading
+  // Weekend shading: Sunday = no work (darker); Saturday = half day (lighter)
   if(ppd>=8){
     var sd=new Date(b.min.getTime());
     while(sd<b.max){
-      if(sd.getDay()===0||sd.getDay()===6){
+      var dow=sd.getDay();
+      if(dow===0||dow===6){
         var sx=_gX(sd.toISOString().slice(0,10),b.min,ppd);
-        svg+='<rect x="'+sx+'" y="'+GTOP+'" width="'+ppd+'" height="'+(svgH-GTOP)+'" fill="#F1F5F9" opacity=".8"/>';
+        // Sunday: solid grey (no work); Saturday: light stripe (half day)
+        svg+='<rect x="'+sx+'" y="'+GTOP+'" width="'+ppd+'" height="'+(svgH-GTOP)+'" fill="'+(dow===0?'#E2E8F0':'#F1F5F9')+'" opacity="'+(dow===0?.9:.6)+'"/>';
+        if(dow===6){
+          // Saturday: diagonal hatch to indicate half-day
+          svg+='<line x1="'+sx+'" y1="'+GTOP+'" x2="'+(sx+ppd)+'" y2="'+(svgH)+'" stroke="#CBD5E1" stroke-width="0.5" opacity=".5"/>';
+        }
       }
       sd.setDate(sd.getDate()+1);
     }
@@ -10068,14 +10074,30 @@ async function ganttAutoSchedule(){
   var acts=(S.acts||[]).filter(function(a){return (a.fecha_inicio||a.fecha)&&a.fecha_fin;});
   if(!acts.length){showToast('Sin actividades planificadas');return;}
 
-  function addDays(ds,n){
-    var d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+Math.round(n));return d.toISOString().slice(0,10);
+  // Add n work-days to a date (Sundays skipped; Saturdays count as work day)
+  function addWorkDays(ds, n){
+    var d=new Date(ds+'T12:00:00');
+    while(d.getDay()===0) d.setDate(d.getDate()+1); // normalize: never land on Sunday
+    if(!n) return d.toISOString().slice(0,10);
+    var step=n>0?1:-1, abs=Math.round(Math.abs(n));
+    for(var i=0;i<abs;i++){
+      d.setDate(d.getDate()+step);
+      while(d.getDay()===0) d.setDate(d.getDate()+step);
+    }
+    return d.toISOString().slice(0,10);
   }
-  function dur(a){return Math.max(1,Math.round((new Date(a.fecha_fin+'T12:00:00')-new Date((a.fecha_inicio||a.fecha)+'T12:00:00'))/86400000));}
+  // Work-day duration: 0 = same-day activity; Sundays excluded from count
+  function dur(a){
+    var s=a.fecha_inicio||a.fecha, e=a.fecha_fin;
+    if(!s||!e||s===e) return 0;
+    var sd=new Date(s+'T12:00:00'), ed=new Date(e+'T12:00:00');
+    if(+sd>=+ed) return 0;
+    var count=0, cur=new Date(sd);
+    while(+cur<+ed){cur.setDate(cur.getDate()+1);if(cur.getDay()!==0) count++;}
+    return count;
+  }
 
   var map={};acts.forEach(function(a){map[a.id]=a;});
-
-  // Build adjacency list (pred → list of {id, tipo, lag})
   var adj={};acts.forEach(function(a){adj[a.id]=[];});
   var inDeg={};acts.forEach(function(a){inDeg[a.id]=0;});
   acts.forEach(function(a){
@@ -10088,15 +10110,14 @@ async function ganttAutoSchedule(){
 
   // Kahn topological sort
   var queue=acts.filter(function(a){return !inDeg[a.id];}).map(function(a){return a.id;});
-  var order=[];
-  var deg=Object.assign({},inDeg);
+  var order=[], deg=Object.assign({},inDeg);
   while(queue.length){
     var cur=queue.shift();order.push(cur);
     (adj[cur]||[]).forEach(function(e){if(!--deg[e.id]) queue.push(e.id);});
   }
   if(order.length<acts.length){showToast('Hay un ciclo en las dependencias — no se puede reprogramar','err');return;}
 
-  // Forward pass: compute minimum start date for each activity
+  // Forward pass: propagate earliest start respecting work-calendar
   var fi={},ff={};
   acts.forEach(function(a){fi[a.id]=a.fecha_inicio||a.fecha;ff[a.id]=a.fecha_fin;});
 
@@ -10104,26 +10125,25 @@ async function ganttAutoSchedule(){
   order.forEach(function(id){
     var a=map[id];if(!a) return;
     var d=dur(a);
-    var minStart=fi[id]; // keep original date as floor
+    var minStart=addWorkDays(fi[id],0); // normalize original (skip Sunday if it lands there)
     _gPredsTyped(a).forEach(function(pt){
       if(!map[pt.id]) return;
-      var lag=pt.lag||0,req;
-      if(pt.tipo==='SS')      req=addDays(fi[pt.id],lag);
-      else if(pt.tipo==='FF') req=addDays(addDays(ff[pt.id],lag),-d);
-      else                    req=addDays(ff[pt.id],lag); // FS
+      var lag=pt.lag||0, req;
+      if(pt.tipo==='SS')      req=addWorkDays(fi[pt.id],lag);
+      else if(pt.tipo==='FF') req=addWorkDays(ff[pt.id],lag-d);
+      else                    req=addWorkDays(ff[pt.id],lag); // FS default
       if(req>minStart) minStart=req;
     });
-    if(minStart!==fi[id]){
-      fi[id]=minStart;
-      ff[id]=addDays(minStart,d);
-      patches.push({id:id,fi:fi[id],ff:ff[id],useFecha:!!(a.fecha&&!a.fecha_inicio)});
+    var newEnd=addWorkDays(minStart,d);
+    fi[id]=minStart; ff[id]=newEnd; // always update maps so downstream is correct
+    var origFi=a.fecha_inicio||a.fecha;
+    if(minStart!==origFi||newEnd!==a.fecha_fin){
+      patches.push({id:id,fi:minStart,ff:newEnd,useFecha:!!(a.fecha&&!a.fecha_inicio)});
     }
   });
 
   if(!patches.length){showToast('Las fechas ya respetan todas las dependencias ✓');return;}
-
-  var msg='Se ajustarán '+patches.length+' actividad'+(patches.length>1?'es':'')+' para respetar sus dependencias.\n¿Continuar?';
-  if(!confirm(msg)) return;
+  if(!confirm('Se ajustarán '+patches.length+' actividad'+(patches.length>1?'es':'')+' — ¿Continuar?')) return;
 
   setSS('syncing','Reprogramando...');
   for(var i=0;i<patches.length;i++){
