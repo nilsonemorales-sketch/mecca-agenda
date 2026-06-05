@@ -2662,8 +2662,20 @@ function getActGroups(){
     ];
   }
   if(f==='nivel'){
-    const niveles=['N7','N6','N5','N4','N3','N2','N1','General'];
-    return niveles.map(n=>({titulo:'📍 '+n,items:acts.filter(a=>(a.area||'').startsWith(n))})).filter(g=>g.items.length);
+    const nivelPrefixes=['N7','N6','N5','N4','N3','N2','N1'];
+    var _result=[];var _consumed=new Set();
+    nivelPrefixes.forEach(function(n){
+      var items=acts.filter(function(a){return (a.area||'').startsWith(n);});
+      if(items.length){_result.push({titulo:'📍 '+n,items:items});items.forEach(function(a){_consumed.add(a.id);});}
+    });
+    var _rem=acts.filter(function(a){return !_consumed.has(a.id);});
+    [...new Set(_rem.filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort().forEach(function(ar){
+      var items=_rem.filter(function(a){return a.area===ar;});
+      if(items.length) _result.push({titulo:'📍 '+ar,items:items});
+    });
+    var _sin=_rem.filter(function(a){return !a.area;});
+    if(_sin.length) _result.push({titulo:'📍 Sin ubicación',items:_sin});
+    return _result;
   }
   if(f==='apto'){
     // group by full area value
@@ -2904,8 +2916,20 @@ function getActGroupsFromActs(acts){
     ].filter(g=>g.items.length);
   }
   if(f==='nivel'){
-    const niveles=['N7','N6','N5','N4','N3','N2','N1','General'];
-    return niveles.map(n=>({titulo:'📍 '+n,items:acts.filter(a=>(a.area||'').startsWith(n))})).filter(g=>g.items.length);
+    const nivelPrefixes2=['N7','N6','N5','N4','N3','N2','N1'];
+    var _result2=[];var _consumed2=new Set();
+    nivelPrefixes2.forEach(function(n){
+      var items=acts.filter(function(a){return (a.area||'').startsWith(n);});
+      if(items.length){_result2.push({titulo:'📍 '+n,items:items});items.forEach(function(a){_consumed2.add(a.id);});}
+    });
+    var _rem2=acts.filter(function(a){return !_consumed2.has(a.id);});
+    [...new Set(_rem2.filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort().forEach(function(ar){
+      var items=_rem2.filter(function(a){return a.area===ar;});
+      if(items.length) _result2.push({titulo:'📍 '+ar,items:items});
+    });
+    var _sin2=_rem2.filter(function(a){return !a.area;});
+    if(_sin2.length) _result2.push({titulo:'📍 Sin ubicación',items:_sin2});
+    return _result2;
   }
   if(f==='apto'){
     const areas=[...new Set(acts.map(a=>a.area||'Sin ubicación'))].sort();
