@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_126';
+const APP_VERSION='20260605_127';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8647,6 +8647,7 @@ function renderPlan(){
         (_g.tipoF&&wList.length?'<select onchange="ganttFilterWorker(this.value)" style="'+_gSelSt('flex-shrink:0;max-width:140px')+'"><option value="">— Todos —</option>'+wOpts+'</select>':'')+
         areaBtn+
         (sinF?'<span style="font-size:10px;color:#92400E;padding:3px 7px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap">⚠️ '+sinF+'</span>':'')+
+        '<button onclick="ganttPrint()" title="Imprimir Gantt" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)">🖨️</button>'+
         '<button onclick="ganttHelp()" title="Ayuda" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)">?</button>'+
         '<div style="margin-left:auto;display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+zbHtml+'</div>'+
       '</div>'+
@@ -9098,6 +9099,129 @@ function _gHelpRow(title,desc){
   '</div>';
 }
 
+function ganttPrint(){
+  var rows=_gGetRows();
+  if(!rows.length){showToast('Sin datos para imprimir');return;}
+  var b=_gBounds(rows);
+  var ppd=7,PSIDE=224,PTOP=62,PAXH=22,PGROW=34,PGGRP=22;
+  var totalDays=Math.ceil((b.max-b.min)/86400000);
+  var chartW=Math.max(totalDays*ppd,300);
+  var svgW=PSIDE+chartW;
+  var crit=_g.crit?_gCPM():new Set();
+  function px(ds){return PSIDE+Math.round((new Date(ds+'T12:00:00')-b.min)/86400000)*ppd;}
+  // First pass: compute row Y positions
+  var ry=PTOP+PAXH,rowY={},amap={};
+  rows.forEach(function(r){if(r.t==='g'){ry+=PGGRP;}else{rowY[r.a.id]=ry+PGROW/2;amap[r.a.id]=r.a;ry+=PGROW;}});
+  var legendY=ry+14,svgH=legendY+36;
+  var s='';
+  // Background + purple header
+  s+='<rect width="'+svgW+'" height="'+svgH+'" fill="#fff"/>';
+  s+='<rect width="'+svgW+'" height="'+PTOP+'" fill="#4c1d95"/>';
+  var obra=(S.user&&(S.user.obra||S.user.nombre))||'Mecca Agenda';
+  s+='<text x="14" y="26" font-size="15" font-weight="800" fill="#fff">PLANIFICACION GANTT</text>';
+  s+='<text x="14" y="46" font-size="10" fill="#c4b5fd">'+esc(obra)+'</text>';
+  s+='<text x="'+(svgW-12)+'" y="26" font-size="10" fill="#e9d5ff" text-anchor="end">Impreso: '+new Date().toLocaleDateString('es',{day:'2-digit',month:'2-digit',year:'numeric'})+'</text>';
+  var ft=(_g.tipoF?'Tipo: '+_g.tipoF:'')+(_g.areaFs.length?(_g.tipoF?' | ':'')+'Areas: '+_g.areaFs.join(', '):'');
+  if(ft)s+='<text x="'+(svgW-12)+'" y="44" font-size="9" fill="#c4b5fd" text-anchor="end">'+esc(ft)+'</text>';
+  // Column headers row
+  s+='<rect x="0" y="'+PTOP+'" width="'+PSIDE+'" height="'+PAXH+'" fill="#f1f5f9"/>';
+  s+='<rect x="'+PSIDE+'" y="'+PTOP+'" width="'+chartW+'" height="'+PAXH+'" fill="#f8fafc"/>';
+  s+='<text x="8" y="'+(PTOP+15)+'" font-size="8.5" font-weight="700" fill="#64748b">ACTIVIDAD / RESPONSABLE</text>';
+  // Month gridlines + labels
+  var MES=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+  var gd=new Date(b.min.getTime());gd.setDate(1);
+  while(gd<=b.max){
+    var gx=PSIDE+Math.round((gd-b.min)/86400000)*ppd;
+    if(gx>PSIDE){
+      s+='<line x1="'+gx+'" y1="'+PTOP+'" x2="'+gx+'" y2="'+svgH+'" stroke="#e2e8f0" stroke-width="0.7"/>';
+      s+='<text x="'+(gx+3)+'" y="'+(PTOP+PAXH-5)+'" font-size="8" font-weight="700" fill="#475569">'+MES[gd.getMonth()]+' '+gd.getFullYear()+'</text>';
+    }
+    gd.setMonth(gd.getMonth()+1);
+  }
+  s+='<line x1="0" y1="'+(PTOP+PAXH)+'" x2="'+svgW+'" y2="'+(PTOP+PAXH)+'" stroke="#cbd5e1" stroke-width="1"/>';
+  s+='<line x1="'+PSIDE+'" y1="'+PTOP+'" x2="'+PSIDE+'" y2="'+svgH+'" stroke="#cbd5e1" stroke-width="1.5"/>';
+  // Today dashed line
+  var tdx=px(new Date().toISOString().slice(0,10));
+  if(tdx>PSIDE&&tdx<svgW){
+    s+='<line x1="'+tdx+'" y1="'+PTOP+'" x2="'+tdx+'" y2="'+svgH+'" stroke="#EF4444" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>';
+    s+='<text x="'+(tdx+2)+'" y="'+(PTOP+PAXH-5)+'" font-size="8" fill="#EF4444" font-weight="700">HOY</text>';
+  }
+  // Rows (second pass)
+  var cy=PTOP+PAXH,si=0;
+  rows.forEach(function(r){
+    if(r.t==='g'){
+      s+='<rect x="0" y="'+cy+'" width="'+svgW+'" height="'+PGGRP+'" fill="#ede9fe" opacity="0.6"/>';
+      s+='<rect x="0" y="'+cy+'" width="3" height="'+PGGRP+'" fill="#7c3aed"/>';
+      s+='<text x="8" y="'+(cy+PGGRP/2+4)+'" font-size="10" font-weight="800" fill="#5b21b6">'+esc(r.area)+' ('+r.n+')</text>';
+      s+='<line x1="0" y1="'+(cy+PGGRP)+'" x2="'+svgW+'" y2="'+(cy+PGGRP)+'" stroke="#ddd6fe" stroke-width="1"/>';
+      cy+=PGGRP;
+    } else {
+      var a=r.a,tc=_gTipoColor(a),ic=crit.has(a.id)&&_g.crit;
+      s+='<rect x="0" y="'+cy+'" width="'+svgW+'" height="'+PGROW+'" fill="'+(si%2===0?'#fff':'#f8fafc')+'"/>';
+      s+='<rect x="0" y="'+cy+'" width="3" height="'+PGROW+'" fill="'+tc.clr+'"/>';
+      var nm=a.descripcion||'Act #'+a.id;if(nm.length>30)nm=nm.slice(0,29)+'…';
+      s+='<text x="8" y="'+(cy+PGROW/2-2)+'" font-size="10" font-weight="'+(ic?700:500)+'" fill="'+(ic?'#92400e':'#1e293b')+'">'+esc(nm)+'</text>';
+      var wk=a.personal_nombre||a.ingeniero_nombre||'';
+      if(wk){if(wk.length>28)wk=wk.slice(0,27)+'…';s+='<text x="8" y="'+(cy+PGROW/2+10)+'" font-size="8" fill="'+tc.clr+'">'+esc(tc.icon+' '+wk)+'</text>';}
+      s+='<line x1="0" y1="'+(cy+PGROW)+'" x2="'+svgW+'" y2="'+(cy+PGROW)+'" stroke="#f0f0f0" stroke-width="0.5"/>';
+      var fi=a.fecha_inicio||a.fecha,ff=a.fecha_fin;
+      if(fi&&ff){
+        var bx=px(fi),bw=Math.max(px(ff)-bx,5);
+        var by=cy+5,bh=PGROW-10;
+        var bf=ic?'#FEF3C7':(tc.bg||tc.clr+'22'),bs=ic?'#F59E0B':tc.clr;
+        s+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="3" fill="'+bf+'" stroke="'+bs+'" stroke-width="1.2"/>';
+        if((a.porcentaje||0)>0){var pw=Math.round(bw*(a.porcentaje||0)/100);if(pw>0)s+='<rect x="'+bx+'" y="'+by+'" width="'+pw+'" height="'+bh+'" rx="3" fill="'+bs+'" opacity="0.4"/>';}
+        if(bw>58)s+='<text x="'+(bx+4)+'" y="'+(by+bh/2+3.5)+'" font-size="7.5" fill="'+bs+'" font-weight="600">'+fi.slice(5)+' - '+ff.slice(5)+'</text>';
+      }
+      cy+=PGROW;si++;
+    }
+  });
+  // Dependency arrows
+  rows.forEach(function(r){
+    if(r.t!=='a') return;
+    _gPredsTyped(r.a).forEach(function(pt){
+      var pred=amap[pt.id];if(!pred) return;
+      var tipo=pt.tipo||'FS';
+      var x1=tipo==='SS'?px(pred.fecha_inicio||pred.fecha):px(pred.fecha_fin||pred.fecha);
+      var y1=rowY[pt.id];
+      var x2=tipo==='FF'?px(r.a.fecha_fin):px(r.a.fecha_inicio||r.a.fecha);
+      var y2=rowY[r.a.id];
+      if(!y1||!y2) return;
+      var ac=tipo==='SS'?'#0891B2':tipo==='FF'?'#7C3AED':'#94A3B8';
+      var pd;
+      if(x2>x1+5){var mx=(x1+x2)/2;pd='M'+x1+','+y1+' C'+mx+','+y1+' '+mx+','+y2+' '+x2+','+y2;}
+      else{var ex=x1+10,ex2=x2-10,my2=(y1+y2)/2;pd='M'+x1+','+y1+' L'+ex+','+y1+' L'+ex+','+my2+' L'+ex2+','+my2+' L'+ex2+','+y2+' L'+x2+','+y2;}
+      s+='<path d="'+pd+'" stroke="'+ac+'" stroke-width="1.2" fill="none" opacity="0.65" marker-end="url(#parr)"/>';
+    });
+  });
+  // Legend bar
+  s+='<line x1="0" y1="'+legendY+'" x2="'+svgW+'" y2="'+legendY+'" stroke="#e2e8f0" stroke-width="1"/>';
+  var lx=10,ly=legendY+17;
+  [{clr:'#2563EB',lb:'Personal propio'},{clr:'#7C3AED',lb:'Contratista'},{clr:'#0891B2',lb:'Ingeniero'}].forEach(function(t){
+    s+='<rect x="'+lx+'" y="'+(ly-9)+'" width="12" height="12" rx="2" fill="'+t.clr+'"/>';
+    s+='<text x="'+(lx+15)+'" y="'+(ly+2)+'" font-size="9" fill="#475569">'+t.lb+'</text>';
+    lx+=108;
+  });
+  if(_g.crit){s+='<rect x="'+lx+'" y="'+(ly-9)+'" width="12" height="12" rx="2" fill="#F59E0B"/>';s+='<text x="'+(lx+15)+'" y="'+(ly+2)+'" font-size="9" fill="#475569">Ruta critica</text>';lx+=108;}
+  lx+=8;
+  [{clr:'#94A3B8',lb:'FS'},{clr:'#0891B2',lb:'SS'},{clr:'#7C3AED',lb:'FF'}].forEach(function(t){
+    s+='<line x1="'+lx+'" y1="'+(ly-3)+'" x2="'+(lx+16)+'" y2="'+(ly-3)+'" stroke="'+t.clr+'" stroke-width="2"/>';
+    s+='<path d="M'+(lx+16)+','+(ly-5)+' L'+(lx+21)+','+(ly-3)+' L'+(lx+16)+','+(ly-1)+' Z" fill="'+t.clr+'"/>';
+    s+='<text x="'+(lx+24)+'" y="'+(ly+2)+'" font-size="9" fill="#64748b">'+t.lb+'</text>';
+    lx+=46;
+  });
+  var svgFull='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="max-width:100%;height:auto;display:block" font-family="Arial,system-ui,sans-serif">'+
+    '<defs><marker id="parr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,1 L5,3 L0,5 Z" fill="#94A3B8"/></marker></defs>'+
+    s+'</svg>';
+  var W=window.open('','_blank');
+  if(!W){showToast('Bloqueado — permite ventanas emergentes en el navegador','err');return;}
+  W.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Gantt - '+esc(obra)+'</title>'+
+    '<style>*{box-sizing:border-box}body{margin:0;padding:10px;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+    '@media print{body{margin:0;padding:0}@page{size:A4 landscape;margin:8mm}}</style>'+
+    '</head><body>'+svgFull+'<script>setTimeout(function(){window.print();},400);<\/script></body></html>');
+  W.document.close();
+}
+
 function ganttUnlink(succId,predId){
   var succ=(S.acts||[]).find(function(x){return x.id===succId;});if(!succ) return;
   var oldPreds=succ.predecesoras;
@@ -9134,9 +9258,14 @@ function ganttFilterWorker(v){_g.workerF=v;_gRender();}
 
 function ganttRowGrip(e,actId){
   e.preventDefault();e.stopPropagation();
-  var rows=_gGetRows().filter(function(r){return r.t==='a';});
-  var idx=rows.findIndex(function(r){return r.a.id===actId;});
-  _g.rowDrag={id:actId,startIdx:idx,currentIdx:idx,y0:e.clientY,area:(rows[idx]&&rows[idx].a.area)||null};
+  var allRows=_gGetRows().filter(function(r){return r.t==='a';});
+  var fullRow=allRows.find(function(r){return r.a.id===actId;});
+  if(!fullRow) return;
+  var area=fullRow.a.area||null;
+  // startIdx must be within same-area rows, not all rows
+  var areaRows=allRows.filter(function(r){return r.a.area===area;});
+  var idx=areaRows.findIndex(function(r){return r.a.id===actId;});
+  _g.rowDrag={id:actId,startIdx:idx,currentIdx:idx,y0:e.clientY,area:area};
   var wrap=document.getElementById('gantt-nwrap');
   if(wrap){try{wrap.setPointerCapture(e.pointerId);}catch(ex){}}
   var el=document.getElementById('grow-'+actId);
