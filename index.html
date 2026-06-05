@@ -1203,6 +1203,7 @@ let S={
   repAptoSel:'',
   compras:[], comprasEstadoFiltro:'',
   kbf:{tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false,sinContratista:false},
+  driveUrl:'',
 };
 
 function today(){return new Date().toISOString().slice(0,10);}
@@ -1294,7 +1295,7 @@ function compressImagen(file){
 }
 
 async function uploadFoto(file, actId){
-  var url=localStorage.getItem('mecca_drive_url')||'';
+  var url=localStorage.getItem('mecca_drive_url')||S.driveUrl||'';
   if(!url){
     throw new Error('DRIVE_NOT_CONFIGURED');
   }
@@ -1315,9 +1316,10 @@ async function uploadFoto(file, actId){
 }
 
 function abrirFotoUpload(actId){
-  var driveUrl=localStorage.getItem('mecca_drive_url');
+  var driveUrl=localStorage.getItem('mecca_drive_url')||S.driveUrl;
   if(!driveUrl){
-    driveConfigModal();
+    if(isAdmin()) driveConfigModal();
+    else showToast('El administrador debe configurar Google Drive primero','warn',6000);
     return;
   }
   // Pre-warm Apps Script while file picker is open
@@ -1376,7 +1378,7 @@ async function handleFotoFile(inp){
 }
 
 function driveConfigModal(){
-  var cur=localStorage.getItem('mecca_drive_url')||'';
+  var cur=localStorage.getItem('mecca_drive_url')||S.driveUrl||'';
   document.getElementById('mcontent').innerHTML=
     '<div class="mhandle"></div>'+
     '<h3 style="margin-bottom:6px">📸 Configurar Google Drive</h3>'+
@@ -1410,6 +1412,10 @@ function driveGuardarUrl(){
   var url=(document.getElementById('drive-url-inp')||{}).value||'';
   if(url) localStorage.setItem('mecca_drive_url',url);
   else localStorage.removeItem('mecca_drive_url');
+  S.driveUrl=url;
+  // Share with all users via Supabase (requires obra_config table)
+  sb('obra_config',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+    body:JSON.stringify({key:'drive_url',value:url})}).catch(function(){});
   closeModal();
   setSS('ok','Drive configurado');
 }
@@ -1556,8 +1562,19 @@ async function loadAll(){
 
 // sbWithTimeout included in sb() above
 
+async function loadDriveUrl(){
+  try{
+    var rows=await sb('obra_config?key=eq.drive_url&limit=1');
+    if(rows&&rows.length&&rows[0].value){
+      S.driveUrl=rows[0].value;
+      localStorage.setItem('mecca_drive_url',rows[0].value);
+    }
+  }catch(e){}
+}
+
 async function loadSecundario(){
   // Each call independent — failure of one doesn't break others
+  loadDriveUrl().catch(function(){});
   try{
     const semanas=await sb('obra_semanas?order=fecha_inicio.desc&limit=5');
     S.semanas=semanas;
@@ -6280,7 +6297,7 @@ function renderFotos(){
     return acc+visible.length;
   },0);
 
-  var driveConfigured=!!localStorage.getItem('mecca_drive_url');
+  var driveConfigured=!!(localStorage.getItem('mecca_drive_url')||S.driveUrl);
   el.innerHTML=`
     <!-- DRIVE CONFIG BANNER -->
     <div style="display:flex;align-items:center;justify-content:space-between;background:${driveConfigured?'#d3f9d8':'#fff3cd'};border:1px solid ${driveConfigured?'#2f9e44':'#ffc107'};border-radius:10px;padding:8px 12px;margin-bottom:12px">
