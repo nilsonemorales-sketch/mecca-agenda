@@ -361,6 +361,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 .bnav-btn .blbl{font-size:10px;font-weight:500;line-height:1}
 .bnav-btn.active .blbl{font-weight:800}
 @media(max-width:600px){.tabs{display:none}}
+@media(max-width:600px){#bn-plan{display:none!important}}
 /* ── GANTT ── */
 #gantt-panel{scrollbar-width:thin}
 #gantt-scroll{scrollbar-width:thin}
@@ -662,7 +663,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_134';
+const APP_VERSION='20260605_135';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8638,6 +8639,8 @@ function _gCPM(){
   return crit;
 }
 
+function _gCanEdit(){return !!isAdmin();}
+
 function _gWorkerList(){
   var acts=(S.acts||[]);
   if(_g.tipoF) acts=acts.filter(function(a){return a.tipo_personal===_g.tipoF;});
@@ -8684,34 +8687,54 @@ function renderPlan(){
     return '<button class="gantt-pill" onclick="ganttZoom(\''+z[0]+'\')" style="font-weight:'+(act?700:500)+';background:'+(act?'var(--accent)':'transparent')+';color:'+(act?'#fff':'var(--text2)')+'">'+z[1]+'</button>';
   }).join('');
   var chainMode=_g.groupMode==='chain';
+  var gEdit=_gCanEdit();
+  // Activities without dates — shown in bandeja for admin
+  var sinPlan=(S.acts||[]).filter(function(a){
+    return a.estado!=='completado'&&(!a.fecha_fin||(!a.fecha_inicio&&!a.fecha));
+  });
+  var bCnt=sinPlan.length;
+
+  var btnSt='padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0';
+  var iconBtnSt='padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)';
 
   el.innerHTML=
     '<div style="display:flex;flex-direction:column;height:calc(100vh - 100px);overflow:hidden">'+
     '<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2);position:relative;z-index:10">'+
-      // Single toolbar row
       '<div style="display:flex;gap:6px;padding:8px 10px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch">'+
         '<div style="display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+tpHtml+'</div>'+
         '<div style="width:1px;height:22px;background:var(--border2);flex-shrink:0"></div>'+
-        '<button style="padding:0 12px;height:36px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0" onclick="showAddAct()">+ Nueva</button>'+
-        '<button id="gantt-link-btn" onclick="ganttToggleLink()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.link?'#059669':'var(--bg3)')+';color:'+(_g.link?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🔗 Enlazar</button>'+
-        (_g.link?'<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">'+
-          '<div style="display:flex;gap:2px;background:var(--bg3);border-radius:8px;padding:2px">'+
-          ['FS','SS','FF'].map(function(t){var a=_g.linkTipo===t;return '<span onclick="ganttSetLinkTipo(\''+t+'\')" style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:'+(a?700:400)+';background:'+(a?'#059669':'transparent')+';color:'+(a?'#fff':'var(--text2)')+';border-radius:6px;cursor:pointer;user-select:none;line-height:1.5">'+t+'</span>';}).join('')+
-          '</div>'+
-          '<span style="font-size:11px;color:var(--text3);flex-shrink:0">+</span>'+
-          '<input type="number" min="0" max="999" value="'+(_g.linkLag||0)+'" onchange="ganttSetLinkLag(this.value)" style="width:44px;height:32px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;text-align:center;padding:0 4px;font-family:var(--font);background:#fff;color:var(--text)" title="Desfase en días">'+
-          '<span style="font-size:11px;color:var(--text3);flex-shrink:0">d</span>'+
-        '</div>':'')+
-        '<button id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.crit?'#F59E0B':'var(--bg3)')+';color:'+(_g.crit?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🎯</button>'+
-        '<button onclick="ganttUndo()" title="Deshacer (Ctrl+Z)" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.history.length?'var(--bg3)':'var(--bg2)')+';color:'+(_g.history.length?'var(--text2)':'var(--text3)')+';font-family:var(--font);font-size:14px;cursor:pointer;flex-shrink:0;opacity:'+(_g.history.length?1:.4)+'" '+ (!_g.history.length?'disabled':'')+'>↩</button>'+
+        // Edit-only buttons
+        (gEdit?
+          '<button style="padding:0 12px;height:36px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0" onclick="showAddAct()">+ Nueva</button>'+
+          '<button id="gantt-link-btn" onclick="ganttToggleLink()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.link?'#059669':'var(--bg3)')+';color:'+(_g.link?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🔗 Enlazar</button>'+
+          (_g.link?'<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">'+
+            '<div style="display:flex;gap:2px;background:var(--bg3);border-radius:8px;padding:2px">'+
+            ['FS','SS','FF'].map(function(t){var a=_g.linkTipo===t;return '<span onclick="ganttSetLinkTipo(\''+t+'\')" style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:'+(a?700:400)+';background:'+(a?'#059669':'transparent')+';color:'+(a?'#fff':'var(--text2)')+';border-radius:6px;cursor:pointer;user-select:none;line-height:1.5">'+t+'</span>';}).join('')+
+            '</div>'+
+            '<span style="font-size:11px;color:var(--text3);flex-shrink:0">+</span>'+
+            '<input type="number" min="0" max="999" value="'+(_g.linkLag||0)+'" onchange="ganttSetLinkLag(this.value)" style="width:44px;height:32px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;text-align:center;padding:0 4px;font-family:var(--font);background:#fff;color:var(--text)" title="Desfase en días">'+
+            '<span style="font-size:11px;color:var(--text3);flex-shrink:0">d</span>'+
+          '</div>':'')+
+          '<button id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.crit?'#F59E0B':'var(--bg3)')+';color:'+(_g.crit?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🎯</button>'+
+          '<button onclick="ganttUndo()" title="Deshacer (Ctrl+Z)" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.history.length?'var(--bg3)':'var(--bg2)')+';color:'+(_g.history.length?'var(--text2)':'var(--text3)')+';font-family:var(--font);font-size:14px;cursor:pointer;flex-shrink:0;opacity:'+(_g.history.length?1:.4)+'" '+(!_g.history.length?'disabled':'')+'>↩</button>'
+        :
+          '<button id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.crit?'#F59E0B':'var(--bg3)')+';color:'+(_g.crit?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🎯</button>'+
+          '<span style="font-size:10px;font-weight:700;color:#7C3AED;background:#EDE9FE;border:1px solid #C4B5FD;border-radius:6px;padding:3px 8px;flex-shrink:0;white-space:nowrap">👁 Solo lectura</span>'
+        )+
         (_g.tipoF&&wList.length?'<select onchange="ganttFilterWorker(this.value)" style="'+_gSelSt('flex-shrink:0;max-width:140px')+'"><option value="">— Todos —</option>'+wOpts+'</select>':'')+
         areaBtn+
-        (sinF?'<span style="font-size:10px;color:#92400E;padding:3px 7px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap">⚠️ '+sinF+'</span>':'')+
-        '<button onclick="ganttAutoSchedule()" title="Ajustar fechas para que respeten las dependencias" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0;white-space:nowrap">⚡ Reprog.</button>'+
-        '<button onclick="ganttPrint()" title="Imprimir Gantt" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)">🖨️</button>'+
-        '<button onclick="ganttHelp()" title="Ayuda" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)">?</button>'+
-        '<button onclick="ganttToggleChain()" title="'+(chainMode?'Vista por áreas':'Ordenar por cadena de dependencias')+'" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(chainMode?'#7C3AED':'var(--bg3)')+';color:'+(chainMode?'#fff':'var(--text2)')+';font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)">⛓️</button>'+
-        '<button onclick="ganttToggleMode()" title="'+(_g.mode==='table'?'Ver Gantt':'Rellenar fechas en tabla')+'" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.mode==='table'?'var(--accent)':'var(--bg3)')+';color:'+(_g.mode==='table'?'#fff':'var(--text2)')+';font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)">'+(_g.mode==='table'?'📊':'📋')+'</button>'+
+        (sinF&&gEdit?'<span style="font-size:10px;color:#92400E;padding:3px 7px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap">⚠️ '+sinF+'</span>':'')+
+        (gEdit?
+          '<button onclick="ganttAutoSchedule()" title="Ajustar fechas a dependencias" style="'+btnSt+';white-space:nowrap">⚡ Reprog.</button>'+
+          '<button onclick="ganttPrint()" title="Imprimir Gantt" style="'+iconBtnSt+'">🖨️</button>'+
+          '<button onclick="ganttHelp()" title="Ayuda" style="'+iconBtnSt+'">?</button>'+
+          '<button onclick="ganttToggleChain()" title="'+(chainMode?'Vista por áreas':'Ordenar por cadenas')+'" style="'+iconBtnSt.replace('var(--bg3)',chainMode?'#7C3AED':'var(--bg3)').replace('var(--text2)',chainMode?'#fff':'var(--text2)')+'">⛓️</button>'+
+          '<button onclick="ganttToggleMode()" title="'+(_g.mode==='table'?'Ver Gantt':'Rellenar fechas')+'" style="'+iconBtnSt.replace('var(--bg3)',_g.mode==='table'?'var(--accent)':'var(--bg3)').replace('var(--text2)',_g.mode==='table'?'#fff':'var(--text2)')+'">'+(_g.mode==='table'?'📊':'📋')+'</button>'+
+          (bCnt?'<button onclick="_gOpenBandeja()" title="Actividades sin fechas — integrar al plan" style="padding:0 12px;height:36px;border-radius:9px;border:1.5px solid #7C3AED;background:#EDE9FE;color:#5B21B6;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">📬 '+bCnt+' pendientes</button>':'')
+        :
+          '<button onclick="ganttPrint()" title="Imprimir Gantt" style="'+iconBtnSt+'">🖨️</button>'+
+          '<button onclick="ganttToggleChain()" title="'+(chainMode?'Vista por áreas':'Ordenar por cadenas')+'" style="'+iconBtnSt.replace('var(--bg3)',chainMode?'#7C3AED':'var(--bg3)').replace('var(--text2)',chainMode?'#fff':'var(--text2)')+'">⛓️</button>'
+        )+
         '<div style="margin-left:auto;display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+zbHtml+'</div>'+
       '</div>'+
     '</div>'+
@@ -8981,7 +9004,7 @@ function _gRender(){
         esc(tc.icon+(worker?' '+worker:tc.lbl?' '+tc.lbl:''));
       nh+='<div id="grow-'+a.id+'" onclick="ganttSelectAct(\''+a.id+'\')" style="height:'+GROW+'px;display:flex;align-items:center;cursor:pointer;border-bottom:1px solid var(--bg3);background:'+(isSel?'var(--accent-soft)':'transparent')+';transition:background .1s;box-sizing:border-box" onmouseenter="this.style.background=\'var(--bg3)\'" onmouseleave="this.style.background=\''+(isSel?'var(--accent-soft)':'transparent')+'\'">'+
         '<div style="width:5px;height:'+GROW+'px;background:'+tc.clr+';flex-shrink:0"></div>'+
-        '<div onpointerdown="ganttRowGrip(event,\''+a.id+'\')" style="width:18px;height:'+GROW+'px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:grab;color:#ccc;font-size:13px;user-select:none;touch-action:none" title="Arrastrar para reordenar">⠿</div>'+
+        (_gCanEdit()?'<div onpointerdown="ganttRowGrip(event,\''+a.id+'\')" style="width:18px;height:'+GROW+'px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:grab;color:#ccc;font-size:13px;user-select:none;touch-action:none" title="Arrastrar para reordenar">⠿</div>':'<div style="width:18px;flex-shrink:0"></div>')+
         '<div style="flex:1;padding:0 6px 0 2px;overflow:hidden;min-width:0">'+
           '<div style="font-size:12px;font-weight:'+(isSel||isCrit?'700':'500')+';color:'+(isCrit&&_g.crit?'#92400E':isSel?'var(--accent)':'var(--text)')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3">'+
             (isCrit?'⭐ ':'')+esc((a.descripcion||'Act #'+a.id).slice(0,32))+
@@ -9090,7 +9113,9 @@ function _gRender(){
     // Drop shadow
     svg+='<rect x="'+(bx+1)+'" y="'+(by+3)+'" width="'+bw+'" height="'+bh+'" rx="7" fill="rgba(0,0,0,.08)"/>';
     // Body
-    svg+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="7" fill="'+c.bg+'" stroke="'+c.br+'" stroke-width="1.5" style="cursor:'+((_g.link)?'crosshair':'grab')+'" onpointerdown="ganttBarDown(event,\''+a.id+'\',\'move\')" onclick="ganttBarClick(event,\''+a.id+'\')" ><title>'+tip+'</title></rect>';
+    var _barCur=_gCanEdit()?(_g.link?'crosshair':'grab'):'pointer';
+    var _barPd=_gCanEdit()?' onpointerdown="ganttBarDown(event,\''+a.id+'\',\'move\')"':'';
+    svg+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="7" fill="'+c.bg+'" stroke="'+c.br+'" stroke-width="1.5" style="cursor:'+_barCur+'"'+_barPd+' onclick="ganttBarClick(event,\''+a.id+'\')" ><title>'+tip+'</title></rect>';
     // Left tipo stripe
     svg+='<rect x="'+bx+'" y="'+by+'" width="6" height="'+bh+'" rx="7" fill="'+tc.clr+'" pointer-events="none"/>';
     svg+='<rect x="'+(bx+3)+'" y="'+by+'" width="3" height="'+bh+'" fill="'+tc.clr+'" pointer-events="none"/>';
@@ -9114,8 +9139,8 @@ function _gRender(){
         svg+='<text x="'+(bx+12)+'" y="'+(cy+9)+'" dominant-baseline="middle" font-size="10" fill="'+c.tx+'" opacity=".7" pointer-events="none" style="font-family:var(--font)">'+wn+'</text>';
       }
     }
-    // Resize handle
-    svg+='<rect x="'+(bx+bw-7)+'" y="'+(by+5)+'" width="5" height="'+(bh-10)+'" rx="2.5" fill="'+c.br+'" opacity=".4" style="cursor:ew-resize" onpointerdown="ganttBarDown(event,\''+a.id+'\',\'resize\')" onclick="event.stopPropagation()"/>';
+    // Resize handle (admin only)
+    if(_gCanEdit()) svg+='<rect x="'+(bx+bw-7)+'" y="'+(by+5)+'" width="5" height="'+(bh-10)+'" rx="2.5" fill="'+c.br+'" opacity=".4" style="cursor:ew-resize" onpointerdown="ganttBarDown(event,\''+a.id+'\',\'resize\')" onclick="event.stopPropagation()"/>';
     svg+='</g>';
   });
   svg+='</g>';
@@ -9306,6 +9331,129 @@ function _gOpenLinkSearch(){
 function _gCloseLinkSearch(){
   var ov=document.getElementById('gantt-link-search-overlay');if(ov)ov.remove();
   var p=document.getElementById('gantt-link-search-panel');if(p)p.remove();
+}
+
+// ── Bandeja: integrate unscheduled activities into the plan ──────────────
+function _gOpenBandeja(){
+  var ov=document.getElementById('gantt-bandeja-overlay');if(ov)ov.remove();
+  var pn=document.getElementById('gantt-bandeja-panel');if(pn)pn.remove();
+  var ov2=document.createElement('div');
+  ov2.id='gantt-bandeja-overlay';
+  ov2.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:9990;background:rgba(0,0,0,.35)';
+  ov2.addEventListener('click',function(e){if(e.target===ov2) _gCloseBandeja();});
+  document.body.appendChild(ov2);
+  var panel=document.createElement('div');
+  panel.id='gantt-bandeja-panel';
+  panel.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9991;background:#fff;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.28);width:min(560px,97vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;font-family:var(--font)';
+  panel.innerHTML=
+    '<div style="padding:16px 18px 12px;border-bottom:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:12px">'+
+      '<span style="font-size:22px">📬</span>'+
+      '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">Actividades pendientes de planificar</div>'+
+        '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">Asigna fechas de inicio y fin para integrarlas al diagrama Gantt</div></div>'+
+      '<button onclick="_gCloseBandeja()" style="width:30px;height:30px;border:none;background:var(--bg3);border-radius:8px;cursor:pointer;font-size:17px;line-height:1;color:var(--text2);flex-shrink:0">✕</button>'+
+    '</div>'+
+    '<div id="gantt-bandeja-list" style="flex:1;overflow-y:auto;padding:8px 10px">'+_gBandejaItems()+'</div>';
+  document.body.appendChild(panel);
+}
+
+function _gCloseBandeja(){
+  var ov=document.getElementById('gantt-bandeja-overlay');if(ov)ov.remove();
+  var p=document.getElementById('gantt-bandeja-panel');if(p)p.remove();
+}
+
+function _gBandejaItems(){
+  var acts=(S.acts||[]).filter(function(a){
+    return a.estado!=='completado'&&(!a.fecha_fin||(!a.fecha_inicio&&!a.fecha));
+  });
+  if(!acts.length) return '<div style="text-align:center;padding:32px;color:#059669;font-size:14px;font-weight:600">✅ Todas las actividades tienen fechas asignadas</div>';
+  var amap={};acts.forEach(function(a){var k=a.area||'Sin área';if(!amap[k])amap[k]=[];amap[k].push(a);});
+  var areas=Object.keys(amap).sort();
+  var inpSt='height:30px;font-size:12px;border:1.5px solid var(--border2);border-radius:6px;padding:0 5px;font-family:var(--font);background:#fff;color:var(--text);width:112px;box-sizing:border-box';
+  var s='';
+  areas.forEach(function(area){
+    s+='<div style="font-size:10px;font-weight:700;color:var(--text3);padding:8px 6px 3px;letter-spacing:.06em;text-transform:uppercase">📍 '+esc(area)+'</div>';
+    amap[area].forEach(function(a){
+      var tc=_gTipoColor(a);
+      var fi=a.fecha_inicio||a.fecha||'';
+      var ff=a.fecha_fin||'';
+      var dias='';
+      if(fi&&ff){var dd=Math.round((new Date(ff+'T12:00:00')-new Date(fi+'T12:00:00'))/86400000);dias=dd>=0?String(dd)+' días':'';}
+      s+='<div id="gbnd-row-'+a.id+'" style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid var(--border);flex-wrap:wrap">'+
+        '<span style="width:10px;height:10px;border-radius:50%;background:'+tc.clr+';flex-shrink:0"></span>'+
+        '<div style="flex:1;min-width:140px">'+
+          '<div style="font-size:13px;font-weight:500;color:var(--text)">'+esc(a.descripcion||a.nombre||'Act #'+a.id)+'</div>'+
+          '<div style="font-size:11px;color:var(--text2);margin-top:1px">'+esc(tc.icon+(a.personal_nombre?' '+a.personal_nombre:''))+'</div>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">'+
+          '<input type="date" value="'+fi+'" data-aid="'+a.id+'" data-field="fecha_inicio" onchange="_gBandejaDate(this)" placeholder="Inicio" style="'+inpSt+'">'+
+          '<span style="font-size:11px;color:var(--text3)">→</span>'+
+          '<input type="date" value="'+ff+'" data-aid="'+a.id+'" data-field="fecha_fin" onchange="_gBandejaDate(this)" placeholder="Fin" style="'+inpSt+'">'+
+          '<span id="gbnd-dias-'+a.id+'" style="font-size:11px;color:var(--text3);min-width:40px">'+dias+'</span>'+
+          '<button onclick="_gBandejaAutoAssign(\''+a.id+'\')" title="Asignar después de la última actividad planificada" style="padding:0 8px;height:28px;border-radius:6px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;flex-shrink:0;font-family:var(--font);white-space:nowrap">📅 Auto</button>'+
+        '</div>'+
+      '</div>';
+    });
+  });
+  return s;
+}
+
+async function _gBandejaDate(inp){
+  var actId=inp.dataset.aid,field=inp.dataset.field,value=inp.value;
+  if(!value) return;
+  var act=(S.acts||[]).find(function(a){return a.id===actId;});if(!act) return;
+  var saveField=field;
+  if(field==='fecha_inicio'&&!act.fecha_inicio&&act.fecha) saveField='fecha';
+  var body={};body[saveField]=value;
+  if(saveField==='fecha') body.fecha_inicio=value;
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
+    Object.assign(act,body);
+    var fi=act.fecha_inicio||act.fecha||'',ff=act.fecha_fin||'';
+    if(fi&&ff){
+      var dd=Math.round((new Date(ff+'T12:00:00')-new Date(fi+'T12:00:00'))/86400000);
+      var dc=document.getElementById('gbnd-dias-'+actId);if(dc) dc.textContent=dd>=0?dd+' días':'';
+      // If both dates set → remove row from bandeja after short delay
+      if(act.fecha_fin&&(act.fecha_inicio||act.fecha)){
+        setTimeout(function(){
+          var row=document.getElementById('gbnd-row-'+actId);
+          if(row){row.style.opacity='0.3';row.style.transition='opacity .4s';}
+          setTimeout(function(){
+            var listEl=document.getElementById('gantt-bandeja-list');if(listEl) listEl.innerHTML=_gBandejaItems();
+            _gRender();
+            // Update bandeja button count
+            var btn=document.getElementById('gantt-bandeja-btn');
+            if(btn){var remaining=(S.acts||[]).filter(function(a){return a.estado!=='completado'&&(!a.fecha_fin||(!a.fecha_inicio&&!a.fecha));}).length;if(!remaining)_gCloseBandeja();}
+          },500);
+        },600);
+      }
+    }
+    showToast('Fecha guardada ✓');
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+
+function _gBandejaAutoAssign(actId){
+  var act=(S.acts||[]).find(function(a){return a.id===actId;});if(!act) return;
+  // Find latest end date among planned activities
+  var planned=(S.acts||[]).filter(function(a){return a.fecha_fin&&(a.fecha_inicio||a.fecha)&&a.id!==actId;});
+  var latest=planned.reduce(function(mx,a){return a.fecha_fin>mx?a.fecha_fin:mx;},'');
+  if(!latest){var d=new Date();latest=d.toISOString().slice(0,10);}
+  var fi=latest; // start day after latest
+  var d2=new Date(fi+'T12:00:00');d2.setDate(d2.getDate()+1);fi=d2.toISOString().slice(0,10);
+  var d3=new Date(fi+'T12:00:00');d3.setDate(d3.getDate()+6);var ff=d3.toISOString().slice(0,10);
+  // Fill inputs
+  var row=document.getElementById('gbnd-row-'+actId);
+  if(row){
+    var inputs=row.querySelectorAll('input[type="date"]');
+    inputs.forEach(function(inp){
+      if(inp.dataset.field==='fecha_inicio'||inp.dataset.field==='fecha') inp.value=fi;
+      if(inp.dataset.field==='fecha_fin') inp.value=ff;
+    });
+  }
+  // Trigger save
+  var inpFi=row&&row.querySelector('[data-field="fecha_inicio"],[data-field="fecha"]');
+  var inpFf=row&&row.querySelector('[data-field="fecha_fin"]');
+  if(inpFi){inpFi.value=fi;_gBandejaDate(inpFi);}
+  if(inpFf){inpFf.value=ff;_gBandejaDate(inpFf);}
 }
 
 function _gLinkSearchFilter(q){
@@ -9662,6 +9810,7 @@ function ganttFilterTipo(v){_g.tipoF=v;_g.workerF='';renderPlan();}
 function ganttFilterWorker(v){_g.workerF=v;_gRender();}
 
 function ganttRowGrip(e,actId){
+  if(!_gCanEdit()) return;
   e.preventDefault();e.stopPropagation();
   var allRows=_gGetRows().filter(function(r){return r.t==='a';});
   var fullRow=allRows.find(function(r){return r.a.id===actId;});
