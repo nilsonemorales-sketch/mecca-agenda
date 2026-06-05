@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_119';
+const APP_VERSION='20260605_120';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8508,7 +8508,7 @@ async function deleteOrden(id){
 // ══════════════════════════════════════════════════════════════════════
 // MÓDULO DE PLANIFICACIÓN — GANTT INTERACTIVO v2
 // ══════════════════════════════════════════════════════════════════════
-var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaF:'',tipoF:'',workerF:'',drag:null,bounds:null,ppd:0,rowY:{},rowOrder:{},linkTipo:'FS',rowDrag:null};
+var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaFs:[],areaMenu:false,tipoF:'',workerF:'',drag:null,bounds:null,ppd:0,rowY:{},rowOrder:{},linkTipo:'FS',rowDrag:null};
 var GROW=52,GGRP=32,GTOP=56,GSIDE=256;
 var GPPD={day:36,week:20,month:7};
 var GTYPES={
@@ -8585,7 +8585,27 @@ function _gSelSt(extra){
 function renderPlan(){
   var el=document.getElementById('c-plan');if(!el) return;
   var sinF=(S.acts||[]).filter(function(a){return !a.fecha_fin||(!a.fecha_inicio&&!a.fecha);}).length;
-  var aOpts=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort().map(function(a){return '<option value="'+esc(a)+'"'+(a===_g.areaF?' selected':'')+'>'+esc(a)+'</option>';}).join('');
+  var areaList=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort();
+  var aSelCnt=_g.areaFs.length;
+  var areaBtn='<div style="position:relative;flex-shrink:0">'+
+    '<span role="button" onclick="ganttToggleAreaMenu()" style="display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 10px;font-size:12px;border:1.5px solid var(--border2);border-radius:8px;background:'+(aSelCnt?'var(--accent-soft)':'#fff')+';color:'+(aSelCnt?'var(--accent)':'var(--text2)')+';cursor:pointer;user-select:none;white-space:nowrap;font-family:var(--font)">'+
+      (aSelCnt?'📍 '+aSelCnt+' área'+(aSelCnt>1?'s':''):'Todas las áreas')+' ▾'+
+    '</span>'+
+    (_g.areaMenu?
+      '<div onclick="event.stopPropagation()" style="position:absolute;top:38px;left:0;z-index:200;background:#fff;border:1.5px solid var(--border2);border-radius:12px;padding:6px 4px;min-width:220px;max-height:300px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.14)">'+
+        '<div onclick="ganttClearAreas()" style="display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:12px;font-weight:'+(aSelCnt===0?700:400)+';cursor:pointer;border-radius:8px;background:'+(aSelCnt===0?'var(--accent-soft)':'transparent')+';color:'+(aSelCnt===0?'var(--accent)':'var(--text2)')+'">'+
+          '<span style="width:16px;height:16px;border-radius:4px;border:1.5px solid '+(aSelCnt===0?'var(--accent)':'var(--border2)')+';background:'+(aSelCnt===0?'var(--accent)':'transparent')+';display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:#fff">'+(aSelCnt===0?'✓':'')+'</span>Todas las áreas'+
+        '</div>'+
+        areaList.map(function(a){
+          var chk=_g.areaFs.indexOf(a)>=0;
+          return '<div onclick="ganttToggleArea(\''+esc(a)+'\')" style="display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:12px;cursor:pointer;border-radius:8px;background:'+(chk?'var(--accent-soft)':'transparent')+';color:'+(chk?'var(--accent)':'var(--text)')+'">'+
+            '<span style="width:16px;height:16px;border-radius:4px;border:1.5px solid '+(chk?'var(--accent)':'var(--border2)')+';background:'+(chk?'var(--accent)':'transparent')+';display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:#fff">'+(chk?'✓':'')+'</span>'+
+            esc(a)+
+          '</div>';
+        }).join('')+
+      '</div>'
+    :'')+
+  '</div>';
   var wList=_gWorkerList();
   var wOpts=wList.map(function(w){return '<option value="'+esc(w)+'"'+(w===_g.workerF?' selected':'')+'>'+esc(w)+'</option>';}).join('');
 
@@ -8606,7 +8626,7 @@ function renderPlan(){
   }).join('');
 
   el.innerHTML=
-    '<div style="display:flex;flex-direction:column;height:calc(100vh - 100px);overflow:hidden">'+
+    '<div style="display:flex;flex-direction:column;height:calc(100vh - 100px);overflow:hidden" onclick="if(_g.areaMenu){_g.areaMenu=false;renderPlan();}">'+
     '<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2)">'+
       // Single toolbar row
       '<div style="display:flex;gap:6px;padding:8px 12px;align-items:center;overflow-x:auto">'+
@@ -8619,9 +8639,7 @@ function renderPlan(){
         '</div>':'')+
         '<button id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.crit?'#F59E0B':'var(--bg3)')+';color:'+(_g.crit?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🎯</button>'+
         (_g.tipoF&&wList.length?'<select onchange="ganttFilterWorker(this.value)" style="'+_gSelSt('flex-shrink:0;max-width:140px')+'"><option value="">— Todos —</option>'+wOpts+'</select>':'')+
-        '<select onchange="ganttFilterArea(this.value)" style="'+_gSelSt('flex-shrink:0;max-width:160px')+'">'+
-          '<option value="">Todas las áreas</option>'+aOpts+
-        '</select>'+
+        areaBtn+
         (sinF?'<span style="font-size:10px;color:#92400E;padding:3px 7px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;flex-shrink:0;white-space:nowrap">⚠️ '+sinF+'</span>':'')+
         '<div style="margin-left:auto;display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+zbHtml+'</div>'+
       '</div>'+
@@ -8644,7 +8662,7 @@ function renderPlan(){
 function _gGetRows(){
   var acts=(S.acts||[]).filter(function(a){
     if(!a.fecha_fin||(!a.fecha_inicio&&!a.fecha)) return false;
-    if(_g.areaF&&a.area!==_g.areaF) return false;
+    if(_g.areaFs.length&&_g.areaFs.indexOf(a.area)<0) return false;
     if(_g.tipoF&&a.tipo_personal!==_g.tipoF) return false;
     if(_g.workerF&&a.personal_nombre!==_g.workerF) return false;
     return true;
@@ -8996,7 +9014,14 @@ function ganttToggleCrit(){
 }
 
 function ganttZoom(z){_g.zoom=z;renderPlan();}
-function ganttFilterArea(v){_g.areaF=v;_gRender();}
+function ganttToggleAreaMenu(){_g.areaMenu=!_g.areaMenu;renderPlan();}
+function ganttClearAreas(){_g.areaFs=[];_g.areaMenu=false;_gRender();}
+function ganttToggleArea(a){
+  var i=_g.areaFs.indexOf(a);
+  if(i>=0) _g.areaFs.splice(i,1); else _g.areaFs.push(a);
+  renderPlan();
+}
+function ganttFilterArea(v){_g.areaFs=v?[v]:[];_gRender();}
 function ganttFilterTipo(v){_g.tipoF=v;_g.workerF='';renderPlan();}
 function ganttFilterWorker(v){_g.workerF=v;_gRender();}
 
