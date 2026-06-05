@@ -3408,7 +3408,14 @@ async function stampHora(actId, field){
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(patch)});
     setSS('ok','✓ '+fmt12h(t));
     logCambio('registrado','actividad',actId,a.descripcion,(field==='hora_inicio'?'Inicio: ':'Fin: ')+fmt12h(t));
-  }catch(e){setSS('err','Error');}
+  }catch(e){
+    // Undo optimistic update on failure
+    a[field]=null;reRenderActs();setSS('err','Error');
+    var msg=e&&e.message||'';
+    if(msg.includes('hora_inicio')||msg.includes('hora_fin')||msg.includes('verificado')){
+      alert('Faltan columnas en la base de datos.\n\nEjecuta esto en el SQL Editor de Supabase:\n\nALTER TABLE obra_actividades\nADD COLUMN IF NOT EXISTS hora_inicio time,\nADD COLUMN IF NOT EXISTS hora_fin time,\nADD COLUMN IF NOT EXISTS verificado boolean DEFAULT false,\nADD COLUMN IF NOT EXISTS verificado_por text;');
+    }
+  }
 }
 
 async function verificarAct(actId){
@@ -3422,7 +3429,13 @@ async function verificarAct(actId){
     setSS('ok','✓ Verificado');
     logCambio('verificado','actividad',actId,a.descripcion,'Verificado por '+ing);
     showToast('✅ Verificado por '+ing,'ok');
-  }catch(e){setSS('err','Error');}
+  }catch(e){
+    a.verificado=false;a.verificado_por='';reRenderActs();setSS('err','Error');
+    var msg=e&&e.message||'';
+    if(msg.includes('verificado')||msg.includes('hora_')){
+      alert('Faltan columnas en la base de datos.\n\nEjecuta esto en el SQL Editor de Supabase:\n\nALTER TABLE obra_actividades\nADD COLUMN IF NOT EXISTS hora_inicio time,\nADD COLUMN IF NOT EXISTS hora_fin time,\nADD COLUMN IF NOT EXISTS verificado boolean DEFAULT false,\nADD COLUMN IF NOT EXISTS verificado_por text;');
+    }
+  }
 }
 
 // ── FOTO POR ACTIVIDAD DESDE OBRA ─────────────────────────────────
@@ -3784,11 +3797,14 @@ async function saveActIngeniero(ai){
     notas:document.getElementById('a-n').value.trim(),
     fecha_inicio:(document.getElementById('a-fi')||{value:''}).value,
     fecha_fin:(document.getElementById('a-ff')||{value:''}).value,
-    hora_inicio:(document.getElementById('a-hi')||{value:''}).value.trim()||null,
-    hora_fin:(document.getElementById('a-hf')||{value:''}).value.trim()||null,
     fecha:S.fecha, foto_pendiente:false,
     predecesoras:(document.getElementById('a-preds')||{value:''}).value.trim()||null,
   };
+  // Only include time fields when they have a value (requires DB migration — safe to omit when null)
+  var _hiI=(document.getElementById('a-hi')||{value:''}).value.trim();
+  var _hfI=(document.getElementById('a-hf')||{value:''}).value.trim();
+  if(_hiI) a.hora_inicio=_hiI;
+  if(_hfI) a.hora_fin=_hfI;
   const editIdIng=(document.getElementById('a-edit-id')||{value:''}).value.trim();
   // Force consistency: pct=100 → completado, completado → pct=100
   if(a.estado==='completado') a.porcentaje=100;
@@ -3905,14 +3921,16 @@ async function saveAct(ai){
     notas:getFld('a-n','').trim(),
     fecha_inicio:getFld('a-fi',''),
     fecha_fin:getFld('a-ff',''),
-    hora_inicio:getFld('a-hi','').trim()||null,
-    hora_fin:getFld('a-hf','').trim()||null,
     ingeniero_id:getFld('a-ing','')?Object.entries(USERS).find(([k,u])=>u.nombre===getFld('a-ing',''))?.[0]||S.user?.id||'':S.user?.id||'',
     ingeniero_nombre:getFld('a-ing','')||S.user?.nombre||'',
     fecha:S.fecha,
     foto_pendiente:false,
     predecesoras:getFld('a-preds','').trim()||null,
   };
+  // Only include time fields when they have a value (requires DB migration — safe to omit when null)
+  var _hi=getFld('a-hi','').trim(),_hf=getFld('a-hf','').trim();
+  if(_hi) a.hora_inicio=_hi;
+  if(_hf) a.hora_fin=_hf;
   const editId = getFld('a-edit-id','').trim();
   // If setting to completado, force pct=100
   if(a.estado==='completado') a.porcentaje=100;
