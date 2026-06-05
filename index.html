@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_113';
+const APP_VERSION='20260605_114';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8584,12 +8584,13 @@ function renderPlan(){
   var wList=_gWorkerList();
   var wOpts=wList.map(function(w){return '<option value="'+esc(w)+'"'+(w===_g.workerF?' selected':'')+'>'+esc(w)+'</option>';}).join('');
 
-  // Build tipo pills inline (no helper function, avoids hoisting issues)
+  // Build tipo pills inline — use <span> to bypass global button{min-height:44px} rule
   var TPILLS=[['','Todos'],['propio','👷 Personal'],['contratista','🔨 Contrat.'],['ingeniero','👤 Ings.']];
   var tpHtml=TPILLS.map(function(t){
     var act=_g.tipoF===t[0];
-    var bg=act?(t[0]&&GTYPES[t[0]]?GTYPES[t[0]].clr:'var(--accent)'):'transparent';
-    return '<button class="gantt-pill" onclick="ganttFilterTipo(\''+t[0]+'\')" style="font-weight:'+(act?700:400)+';background:'+bg+';color:'+(act?'#fff':'var(--text2)')+'">'+t[1]+'</button>';
+    var bg=act?(t[0]&&GTYPES[t[0]]?GTYPES[t[0]].clr:'#7c3aed'):'transparent';
+    var clr=act?'#fff':'#3d3461';
+    return '<span role="button" tabindex="0" onclick="ganttFilterTipo(\''+t[0]+'\')" style="display:inline-block;padding:4px 10px;font-size:11px;font-weight:'+(act?700:400)+';background:'+bg+';color:'+clr+';border-radius:7px;cursor:pointer;white-space:nowrap;line-height:1.5;user-select:none">'+t[1]+'</span>';
   }).join('');
 
   // Zoom buttons inline
@@ -8612,7 +8613,7 @@ function renderPlan(){
       '</div>'+
       // Row 2: tipo + worker + area + warning
       '<div style="display:flex;gap:6px;padding:0 12px 8px;align-items:center;flex-wrap:wrap">'+
-        '<div style="display:inline-flex;gap:2px;background:#fff;border:1.5px solid var(--border2);border-radius:9px;padding:3px;flex-shrink:0">'+tpHtml+'</div>'+
+        '<div style="display:flex;gap:2px;background:#f3f0ff;border:1.5px solid #ccc0ff;border-radius:9px;padding:3px;flex-shrink:0">'+tpHtml+'</div>'+
         (_g.tipoF&&wList.length?'<select onchange="ganttFilterWorker(this.value)" style="'+_gSelSt('max-width:160px')+'"><option value="">— Todos —</option>'+wOpts+'</select>':'')+
         '<select onchange="ganttFilterArea(this.value)" style="'+_gSelSt('max-width:180px')+'">'+
           '<option value="">Todas las áreas</option>'+aOpts+
