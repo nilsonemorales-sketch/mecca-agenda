@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_130';
+const APP_VERSION='20260605_131';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8511,7 +8511,7 @@ async function deleteOrden(id){
 // ══════════════════════════════════════════════════════════════════════
 // MÓDULO DE PLANIFICACIÓN — GANTT INTERACTIVO v2
 // ══════════════════════════════════════════════════════════════════════
-var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaFs:[],areaMenu:false,tipoF:'',workerF:'',drag:null,bounds:null,ppd:0,rowY:{},rowOrder:{},linkTipo:'FS',linkLag:0,rowDrag:null,history:[]};
+var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaFs:[],areaMenu:false,tipoF:'',workerF:'',drag:null,bounds:null,ppd:0,rowY:{},rowOrder:{},linkTipo:'FS',linkLag:0,rowDrag:null,history:[],mode:'gantt'};
 var GROW=52,GGRP=32,GTOP=56,GSIDE=256;
 var GPPD={day:36,week:20,month:7};
 var GTYPES={
@@ -8650,22 +8650,24 @@ function renderPlan(){
         '<button onclick="ganttAutoSchedule()" title="Ajustar fechas para que respeten las dependencias" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0;white-space:nowrap">⚡ Reprog.</button>'+
         '<button onclick="ganttPrint()" title="Imprimir Gantt" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)">🖨️</button>'+
         '<button onclick="ganttHelp()" title="Ayuda" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)">?</button>'+
+        '<button onclick="ganttToggleMode()" title="'+(_g.mode==='table'?'Ver Gantt':'Rellenar fechas en tabla')+'" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.mode==='table'?'var(--accent)':'var(--bg3)')+';color:'+(_g.mode==='table'?'#fff':'var(--text2)')+';font-size:15px;cursor:pointer;flex-shrink:0;font-family:var(--font)">'+(_g.mode==='table'?'📊':'📋')+'</button>'+
         '<div style="margin-left:auto;display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+zbHtml+'</div>'+
       '</div>'+
     '</div>'+
-    // Chart area
-    '<div style="display:flex;flex:1;overflow:hidden;position:relative">'+
-      '<div id="gantt-lft" style="width:'+GSIDE+'px;flex-shrink:0;border-right:2px solid var(--border);overflow:hidden;display:flex;flex-direction:column;background:#fff;z-index:2">'+
-        '<div style="height:'+GTOP+'px;border-bottom:1.5px solid var(--border);background:var(--bg2);flex-shrink:0;display:flex;align-items:center;padding:0 12px;font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:.08em">ACTIVIDAD / RESPONSABLE</div>'+
-        '<div id="gantt-nwrap" style="overflow:hidden;flex:1"><div id="gantt-names"></div></div>'+
-      '</div>'+
-      '<div id="gantt-scroll" style="flex:1;overflow:auto" onscroll="ganttSyncScroll(this)">'+
-        '<svg id="gantt-svg" style="display:block;user-select:none" onpointermove="ganttPtrMove(event)" onpointerup="ganttPtrUp(event)" onpointercancel="ganttPtrUp(event)"></svg>'+
-      '</div>'+
-    '</div>'+
+    // Chart area — Gantt or Table mode
+    (_g.mode==='table'?_gRenderTableHTML():
+      '<div style="display:flex;flex:1;overflow:hidden;position:relative">'+
+        '<div id="gantt-lft" style="width:'+GSIDE+'px;flex-shrink:0;border-right:2px solid var(--border);overflow:hidden;display:flex;flex-direction:column;background:#fff;z-index:2">'+
+          '<div style="height:'+GTOP+'px;border-bottom:1.5px solid var(--border);background:var(--bg2);flex-shrink:0;display:flex;align-items:center;padding:0 12px;font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:.08em">ACTIVIDAD / RESPONSABLE</div>'+
+          '<div id="gantt-nwrap" style="overflow:hidden;flex:1"><div id="gantt-names"></div></div>'+
+        '</div>'+
+        '<div id="gantt-scroll" style="flex:1;overflow:auto" onscroll="ganttSyncScroll(this)">'+
+          '<svg id="gantt-svg" style="display:block;user-select:none" onpointermove="ganttPtrMove(event)" onpointerup="ganttPtrUp(event)" onpointercancel="ganttPtrUp(event)"></svg>'+
+        '</div>'+
+      '</div>')+
     '</div>'+
     '<div id="gantt-panel" style="position:fixed;right:-360px;top:0;bottom:0;width:340px;background:#fff;box-shadow:-4px 0 30px rgba(0,0,0,.2);z-index:400;transition:right .25s ease;overflow-y:auto;padding:0"></div>';
-  _gRender();
+  if(_g.mode!=='table') _gRender();
   if(_g.areaMenu) _gOpenAreaMenu(areaList,aSelCnt);
 }
 
@@ -8695,6 +8697,116 @@ function _gOpenAreaMenu(areaList,aSelCnt){
     mn.style.top=(r.bottom+6)+'px';
     mn.style.left=Math.min(r.left,window.innerWidth-270)+'px';
   }
+}
+
+function ganttToggleMode(){_g.mode=_g.mode==='table'?'gantt':'table';renderPlan();}
+
+function _gRenderTableHTML(){
+  var acts=(S.acts||[]).filter(function(a){
+    if(_g.areaFs.length&&_g.areaFs.indexOf(a.area)<0) return false;
+    if(_g.tipoF&&a.tipo_personal!==_g.tipoF) return false;
+    if(_g.workerF&&a.personal_nombre!==_g.workerF) return false;
+    return true;
+  });
+  acts.sort(function(a,b){return (a.area||'').localeCompare(b.area||'')||(a.fecha_inicio||a.fecha||'').localeCompare(b.fecha_inicio||b.fecha||'');});
+  var amap={};
+  acts.forEach(function(a){var k=a.area||'Sin área';if(!amap[k])amap[k]=[];amap[k].push(a);});
+  var areas=Object.keys(amap).sort();
+  var thSt='padding:9px 12px;font-size:11px;font-weight:700;color:var(--text3);text-align:left;border-bottom:2px solid var(--border);white-space:nowrap;position:sticky;top:0;background:var(--bg2);z-index:2;letter-spacing:.05em;text-transform:uppercase';
+  var tdSt='padding:6px 8px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);vertical-align:middle';
+  var inpSt='height:30px;font-size:12px;border:1.5px solid var(--border2);border-radius:6px;padding:0 5px;font-family:var(--font);background:#fff;color:var(--text);width:118px;box-sizing:border-box';
+  var html='<div style="flex:1;overflow:auto;background:#fff">'+
+    '<table style="width:100%;border-collapse:collapse;min-width:680px">'+
+    '<thead><tr>'+
+    '<th style="'+thSt+';padding-left:16px">Actividad</th>'+
+    '<th style="'+thSt+'">Responsable</th>'+
+    '<th style="'+thSt+'">Inicio</th>'+
+    '<th style="'+thSt+'">Fin</th>'+
+    '<th style="'+thSt+';text-align:center;min-width:44px">Días</th>'+
+    '<th style="'+thSt+';min-width:80px">Avance</th>'+
+    '<th style="'+thSt+'">Estado</th>'+
+    '</tr></thead><tbody>';
+  areas.forEach(function(area){
+    html+='<tr><td colspan="7" style="background:var(--bg3);padding:7px 16px;font-size:12px;font-weight:700;color:var(--text2);letter-spacing:.04em;border-top:2px solid var(--border2);border-bottom:1px solid var(--border)">'+esc(area)+'</td></tr>';
+    amap[area].forEach(function(a){
+      var fi=a.fecha_inicio||a.fecha||'';
+      var ff=a.fecha_fin||'';
+      var dias='';
+      if(fi&&ff){var dd=Math.round((new Date(ff+'T12:00:00')-new Date(fi+'T12:00:00'))/86400000);dias=dd>=0?String(dd):'';}
+      var pct=a.porcentaje!=null?a.porcentaje:0;
+      var tc=_gTipoColor(a);
+      var rowBg=a.estado==='completado'?'#F0FDF4':a.estado==='en_progreso'?'#FFFBEB':'#fff';
+      html+='<tr id="gtrow-'+a.id+'" style="background:'+rowBg+'">';
+      html+='<td style="'+tdSt+';padding-left:16px;min-width:180px">'+
+        '<div style="display:flex;align-items:center;gap:7px">'+
+          '<span style="width:10px;height:10px;border-radius:50%;background:'+tc.clr+';flex-shrink:0"></span>'+
+          '<span style="font-weight:500">'+esc(a.nombre||a.descripcion||'')+'</span>'+
+        '</div></td>';
+      html+='<td style="'+tdSt+';color:var(--text2);font-size:12px;white-space:nowrap">'+esc(a.personal_nombre||'—')+'</td>';
+      html+='<td style="'+tdSt+'"><input type="date" value="'+fi+'" data-aid="'+a.id+'" data-field="fecha_inicio" onchange="ganttTableDate(this)" style="'+inpSt+'"></td>';
+      html+='<td style="'+tdSt+'"><input type="date" value="'+ff+'" data-aid="'+a.id+'" data-field="fecha_fin" onchange="ganttTableDate(this)" style="'+inpSt+'"></td>';
+      html+='<td style="'+tdSt+';text-align:center;font-weight:600;color:var(--text2);font-size:13px" id="gtd-dias-'+a.id+'">'+dias+'</td>';
+      html+='<td style="'+tdSt+'">'+
+        '<div style="display:flex;align-items:center;gap:5px">'+
+          '<input type="number" min="0" max="100" value="'+pct+'" data-aid="'+a.id+'" onchange="ganttTablePct(this)" style="width:50px;height:28px;font-size:12px;border:1.5px solid var(--border2);border-radius:6px;padding:0 6px;font-family:var(--font);background:#fff;text-align:center;color:var(--text)">'+
+          '<span style="font-size:12px;color:var(--text3)">%</span>'+
+        '</div></td>';
+      html+='<td style="'+tdSt+'">'+
+        '<select data-aid="'+a.id+'" onchange="ganttTableEstado(this)" style="height:30px;font-size:12px;border:1.5px solid var(--border2);border-radius:6px;padding:0 8px;background:#fff;font-family:var(--font);cursor:pointer;color:var(--text)">'+
+          '<option value="pendiente"'+(a.estado==='pendiente'?' selected':'')+'>Pendiente</option>'+
+          '<option value="en_progreso"'+(a.estado==='en_progreso'?' selected':'')+'>En progreso</option>'+
+          '<option value="completado"'+(a.estado==='completado'?' selected':'')+'>Completado</option>'+
+        '</select></td>';
+      html+='</tr>';
+    });
+  });
+  if(!acts.length) html+='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3);font-size:14px">Sin actividades que mostrar</td></tr>';
+  html+='</tbody></table></div>';
+  return html;
+}
+
+async function ganttTableDate(inp){
+  var actId=inp.dataset.aid,field=inp.dataset.field,value=inp.value;
+  if(!value) return;
+  var act=(S.acts||[]).find(function(a){return a.id===actId;});if(!act) return;
+  var saveField=field;
+  if(field==='fecha_inicio'&&!act.fecha_inicio&&act.fecha) saveField='fecha';
+  var body={};body[saveField]=value;
+  if(saveField==='fecha') body.fecha_inicio=value;
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
+    Object.assign(act,body);
+    var fi=act.fecha_inicio||act.fecha||'',ff=act.fecha_fin||'';
+    if(fi&&ff){
+      var dd=Math.round((new Date(ff+'T12:00:00')-new Date(fi+'T12:00:00'))/86400000);
+      var diasEl=document.getElementById('gtd-dias-'+actId);
+      if(diasEl) diasEl.textContent=dd>=0?String(dd):'';
+    }
+    showToast('Fecha guardada ✓');
+  }catch(e){showToast('Error al guardar: '+e.message,'err');}
+}
+
+async function ganttTablePct(inp){
+  var actId=inp.dataset.aid,val=Math.min(100,Math.max(0,parseInt(inp.value)||0));
+  inp.value=val;
+  var act=(S.acts||[]).find(function(a){return a.id===actId;});if(!act) return;
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:val})});
+    act.porcentaje=val;
+    showToast('Avance guardado ✓');
+  }catch(e){showToast('Error al guardar: '+e.message,'err');}
+}
+
+async function ganttTableEstado(sel){
+  var actId=sel.dataset.aid,estado=sel.value;
+  var act=(S.acts||[]).find(function(a){return a.id===actId;});if(!act) return;
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:estado})});
+    act.estado=estado;
+    var rowEl=document.getElementById('gtrow-'+actId);
+    if(rowEl) rowEl.style.background=estado==='completado'?'#F0FDF4':estado==='en_progreso'?'#FFFBEB':'#fff';
+    showToast('Estado guardado ✓');
+  }catch(e){showToast('Error al guardar: '+e.message,'err');}
 }
 
 function _gGetRows(){
