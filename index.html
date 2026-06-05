@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_125';
+const APP_VERSION='20260605_126';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8511,7 +8511,7 @@ async function deleteOrden(id){
 // ══════════════════════════════════════════════════════════════════════
 // MÓDULO DE PLANIFICACIÓN — GANTT INTERACTIVO v2
 // ══════════════════════════════════════════════════════════════════════
-var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaFs:[],areaMenu:false,tipoF:'',workerF:'',drag:null,bounds:null,ppd:0,rowY:{},rowOrder:{},linkTipo:'FS',rowDrag:null,history:[]};
+var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaFs:[],areaMenu:false,tipoF:'',workerF:'',drag:null,bounds:null,ppd:0,rowY:{},rowOrder:{},linkTipo:'FS',linkLag:0,rowDrag:null,history:[]};
 var GROW=52,GGRP=32,GTOP=56,GSIDE=256;
 var GPPD={day:36,week:20,month:7};
 var GTYPES={
@@ -8557,7 +8557,8 @@ function _gCPM(){
     var d=dur(map[id]),es=0;
     _gPredsTyped(map[id]).forEach(function(pt){
       fwd(pt.id);
-      var v=pt.tipo==='SS'?(ES[pt.id]||0):pt.tipo==='FF'?Math.max(0,(EF[pt.id]||0)-d):(EF[pt.id]||0);
+      var lag=pt.lag||0;
+      var v=pt.tipo==='SS'?(ES[pt.id]||0)+lag:pt.tipo==='FF'?Math.max(0,(EF[pt.id]||0)+lag-d):(EF[pt.id]||0)+lag;
       if(v>es)es=v;
     });
     ES[id]=es;EF[id]=es+d;
@@ -8633,8 +8634,13 @@ function renderPlan(){
         '<div style="width:1px;height:22px;background:var(--border2);flex-shrink:0"></div>'+
         '<button style="padding:0 12px;height:36px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0" onclick="showAddAct()">+ Nueva</button>'+
         '<button id="gantt-link-btn" onclick="ganttToggleLink()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.link?'#059669':'var(--bg3)')+';color:'+(_g.link?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🔗 Enlazar</button>'+
-        (_g.link?'<div style="display:flex;gap:2px;background:var(--bg3);border-radius:8px;padding:2px;flex-shrink:0">'+
+        (_g.link?'<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">'+
+          '<div style="display:flex;gap:2px;background:var(--bg3);border-radius:8px;padding:2px">'+
           ['FS','SS','FF'].map(function(t){var a=_g.linkTipo===t;return '<span onclick="ganttSetLinkTipo(\''+t+'\')" style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:'+(a?700:400)+';background:'+(a?'#059669':'transparent')+';color:'+(a?'#fff':'var(--text2)')+';border-radius:6px;cursor:pointer;user-select:none;line-height:1.5">'+t+'</span>';}).join('')+
+          '</div>'+
+          '<span style="font-size:11px;color:var(--text3);flex-shrink:0">+</span>'+
+          '<input type="number" min="0" max="999" value="'+(_g.linkLag||0)+'" onchange="ganttSetLinkLag(this.value)" style="width:44px;height:32px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;text-align:center;padding:0 4px;font-family:var(--font);background:#fff;color:var(--text)" title="Desfase en días">'+
+          '<span style="font-size:11px;color:var(--text3);flex-shrink:0">d</span>'+
         '</div>':'')+
         '<button id="gantt-crit-btn" onclick="ganttToggleCrit()" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.crit?'#F59E0B':'var(--bg3)')+';color:'+(_g.crit?'#fff':'var(--text2)')+';font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0">🎯</button>'+
         '<button onclick="ganttUndo()" title="Deshacer (Ctrl+Z)" style="padding:0 10px;height:36px;border-radius:9px;border:1.5px solid var(--border2);background:'+(_g.history.length?'var(--bg3)':'var(--bg2)')+';color:'+(_g.history.length?'var(--text2)':'var(--text3)')+';font-family:var(--font);font-size:14px;cursor:pointer;flex-shrink:0;opacity:'+(_g.history.length?1:.4)+'" '+ (!_g.history.length?'disabled':'')+'>↩</button>'+
@@ -8840,6 +8846,8 @@ function _gRender(){
       if(x2>x1+5){var mx2=(x1+x2)/2;pd='M'+x1+','+y1+' C'+mx2+','+y1+' '+mx2+','+y2+' '+x2+','+y2;}
       else{var ex=x1+16,ex2=x2-16,my=(y1+y2)/2;pd='M'+x1+','+y1+' L'+ex+','+y1+' L'+ex+','+my+' L'+ex2+','+my+' L'+ex2+','+y2+' L'+x2+','+y2;}
       svg+='<path d="'+pd+'" stroke="'+clr+'" stroke-width="'+sw+'" fill="none" opacity="'+opa+'" marker-end="url(#'+(ic?'garrc':'garr')+')"/>';
+      var lag=pt.lag||0;
+      if(lag>0){var mx=(x1+x2)/2,my2=(y1+y2)/2;svg+='<rect x="'+(mx-14)+'" y="'+(my2-9)+'" width="28" height="16" rx="4" fill="'+clr+'" opacity=".85"/><text x="'+mx+'" y="'+(my2+4)+'" text-anchor="middle" font-size="9" font-family="system-ui,sans-serif" font-weight="700" fill="#fff">+'+lag+'d</text>';}
     });
   });
   svg+='</g>';
@@ -9027,17 +9035,19 @@ function ganttLinkClick(actId){
   var succ=(S.acts||[]).find(function(x){return x.id===actId;});
   if(!succ){_g.lSrc=null;return;}
   var preds=_gPredsTyped(succ);
-  if(!preds.some(function(p){return p.id===_g.lSrc;})) preds.push({id:_g.lSrc,tipo:_g.linkTipo});
+  var lag=_g.linkLag||0;
+  if(!preds.some(function(p){return p.id===_g.lSrc;})) preds.push({id:_g.lSrc,tipo:_g.linkTipo,lag:lag});
   var lSrc=_g.lSrc;_g.lSrc=null;
   var oldPreds=succ.predecesoras;
   _g.history.push({type:'link',actId:actId,oldPreds:oldPreds});
   if(_g.history.length>30) _g.history.shift();
   sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({predecesoras:JSON.stringify(preds)})})
-    .then(function(){succ.predecesoras=JSON.stringify(preds);showToast('Dependencia '+_g.linkTipo+' creada ✓');_gRender();})
+    .then(function(){succ.predecesoras=JSON.stringify(preds);showToast('Dependencia '+_g.linkTipo+(lag?'+'+lag+'d':'')+' creada ✓');_gRender();})
     .catch(function(err){_g.history.pop();showToast('Error: '+err.message,'err');});
 }
 
 function ganttSetLinkTipo(t){_g.linkTipo=t;renderPlan();}
+function ganttSetLinkLag(v){_g.linkLag=Math.max(0,Math.min(999,parseInt(v)||0));}
 
 function ganttUndo(){
   if(!_g.history.length){showToast('Nada que deshacer');return;}
@@ -9068,7 +9078,7 @@ function ganttHelp(){
     '<div style="padding:20px 24px;display:flex;flex-direction:column;gap:14px">'+
       _gHelpRow('🖱️ Mover barra','Arrastra la barra de una actividad izquierda/derecha para cambiar las fechas de inicio y fin.')+
       _gHelpRow('↔️ Cambiar duración','Arrastra el borde derecho de la barra para extender o acortar la actividad.')+
-      _gHelpRow('🔗 Enlazar actividades','Presiona <b>Enlazar</b>, elige el tipo y haz click en la PREDECESORA y luego en la SUCESORA.<br><b>FS</b> (Fin→Inicio) = la sucesora empieza cuando termina la anterior.<br><b>SS</b> (Inicio→Inicio) = la sucesora puede iniciar cuando inicia la anterior, sin esperar que termine.<br><b>FF</b> (Fin→Fin) = la sucesora debe terminar cuando termine la anterior — útil para tareas en paralelo con fecha de cierre común.')+
+      _gHelpRow('🔗 Enlazar actividades','Presiona <b>Enlazar</b>, elige el tipo, ajusta el desfase en días y haz click en la PREDECESORA y luego en la SUCESORA.<br><b>FS</b> (Fin→Inicio) = la sucesora empieza cuando termina la anterior.<br><b>SS</b> (Inicio→Inicio) = ambas pueden ir en paralelo, la sucesora inicia junto con la anterior.<br><b>FF</b> (Fin→Fin) = la sucesora debe terminar cuando termine la anterior.<br><b>Desfase (+Nd)</b> = días adicionales de espera. Ej: SS+1 = la sucesora inicia 1 día después de iniciada la anterior.')+
       _gHelpRow('✕ Quitar un enlace','Haz click en cualquier barra → en el panel lateral aparece la lista de predecesoras, cada una con un botón <b>✕</b> rojo para eliminar ese enlace.')+
       _gHelpRow('🎯 Ruta crítica','Activa <b>Ruta crítica</b> para resaltar en amarillo las actividades que, si se retrasan, retrasan todo el proyecto (CPM).')+
       _gHelpRow('⠿ Reordenar filas','Arrastra el ícono <b>⠿</b> en el sidebar arriba o abajo para cambiar el orden visual de las actividades dentro del mismo área.')+
@@ -9175,7 +9185,7 @@ function _ganttOpenPanel(a){
     var p=(S.acts||[]).find(function(x){return x.id===pid;});
     var pc=p?_gTipoColor(p):{clr:'#9CA3AF'};
     return '<div style="font-size:11px;color:var(--text2);padding:5px 8px;background:var(--bg3);border-radius:7px;margin-bottom:4px;display:flex;align-items:center;gap:6px;border-left:3px solid '+pc.clr+'">'+
-      '<span style="font-size:9px;font-weight:700;background:'+pc.clr+'22;color:'+pc.clr+';border-radius:4px;padding:1px 5px;flex-shrink:0">'+pt.tipo+'</span>'+
+      '<span style="font-size:9px;font-weight:700;background:'+pc.clr+'22;color:'+pc.clr+';border-radius:4px;padding:1px 5px;flex-shrink:0">'+pt.tipo+(pt.lag?'+'+pt.lag+'d':'')+'</span>'+
       '<span style="flex:1;overflow:hidden;text-overflow:ellipsis">'+esc(p?((p.descripcion||'#'+pid).slice(0,30)):'Act #'+pid)+'</span>'+
       '<button onclick="ganttUnlink(\''+a.id+'\',\''+pid+'\')" style="background:none;border:none;color:#DC2626;cursor:pointer;font-size:16px;padding:0 2px;line-height:1;flex-shrink:0" title="Eliminar enlace">✕</button>'+
     '</div>';
