@@ -3250,6 +3250,8 @@ async function logEvento(tipo, descripcion, ingId){
 async function doMarcarCompletada(actId){
   var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
   closeModal();
+  var prevEstado=a.estado; var prevPct=a.porcentaje;
+  var prevHoraI=a.hora_inicio; var prevHoraF=a.hora_fin;
   a.estado='completado'; a.porcentaje=100;
   a.hora_fin=nowHHMM();
   if(!a.hora_inicio) a.hora_inicio=a.hora_fin;
@@ -3259,9 +3261,19 @@ async function doMarcarCompletada(actId){
   logEvento('Actividad completada', 'Completó: '+a.descripcion+(a.area?' — '+a.area:''));
   logCambio('completado','actividad',actId,a.descripcion,'Estado → completado (100%)');
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100,hora_inicio:a.hora_inicio,hora_fin:a.hora_fin})});
+    // Estado/porcentaje first — critical operation
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
     setSS('ok','✓ Completada');
-  }catch(e){setSS('err','Error');}
+    // Time stamps best-effort
+    sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
+      body:JSON.stringify({hora_inicio:a.hora_inicio,hora_fin:a.hora_fin})}).catch(function(){});
+  }catch(e){
+    a.estado=prevEstado; a.porcentaje=prevPct; a.hora_inicio=prevHoraI; a.hora_fin=prevHoraF;
+    if(S.actsActivas) S.actsActivas.unshift(a);
+    reRenderActs();
+    setSS('err','Error al completar');
+    showToast('No se pudo completar la actividad — revisa tu conexión','err',6000);
+  }
 }
 
 // ── TOAST NOTIFICATIONS ──────────────────────────────────
@@ -3346,21 +3358,32 @@ async function cycleEstado(actId){
   if(!canEdit()){requireEdit(()=>cycleEstado(actId));return;}
   var a=S.acts.find(function(x){return x.id===actId;});
   if(!a)return;
+  var prevEstado=a.estado; var prevPct=a.porcentaje;
+  var prevHoraI=a.hora_inicio; var prevHoraF=a.hora_fin;
   var cur=CICLO_ESTADOS.indexOf(a.estado);
   a.estado=CICLO_ESTADOS[(cur+1)%CICLO_ESTADOS.length];
   if(a.estado==='completado')a.porcentaje=100;
-  var patch={estado:a.estado,porcentaje:a.porcentaje};
-  // Auto-stamp times on state transitions
-  if(a.estado==='en-progreso'&&!a.hora_inicio){a.hora_inicio=nowHHMM();patch.hora_inicio=a.hora_inicio;}
-  if((a.estado==='pausada'||a.estado==='completado')){a.hora_fin=nowHHMM();patch.hora_fin=a.hora_fin;}
+  // Auto-stamp times on state transitions (kept in memory for UI)
+  var horaPatch={};
+  if(a.estado==='en-progreso'&&!a.hora_inicio){a.hora_inicio=nowHHMM();horaPatch.hora_inicio=a.hora_inicio;}
+  if(a.estado==='pausada'||a.estado==='completado'){a.hora_fin=nowHHMM();horaPatch.hora_fin=a.hora_fin;}
   reRenderActs();
   checkSuccessors();
   setSS('syncing','...');
   try{
+    // Estado/porcentaje first — no time fields so column-missing can't block it
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
-      body:JSON.stringify(patch)});
+      body:JSON.stringify({estado:a.estado,porcentaje:a.porcentaje})});
     setSS('ok','✓ '+a.estado);
-  }catch(e){setSS('err','Error');}
+    // Time stamps best-effort
+    if(Object.keys(horaPatch).length)
+      sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(horaPatch)}).catch(function(){});
+  }catch(e){
+    a.estado=prevEstado; a.porcentaje=prevPct; a.hora_inicio=prevHoraI; a.hora_fin=prevHoraF;
+    reRenderActs();
+    setSS('err','Error al cambiar estado');
+    showToast('No se pudo cambiar el estado — revisa tu conexión','err',6000);
+  }
 }
 
 async function quickSetPct(actId,pct){
@@ -3453,6 +3476,7 @@ async function togglePrioridadAct(id){
 async function iniciarActividad(id){
   var a=S.acts.find(function(x){return x.id===id;});
   if(!a) return;
+  var prevEstado=a.estado;
   a.estado='en-progreso';
   if(!a.hora_inicio) a.hora_inicio=nowHHMM();
   var ai=S.actsActivas?S.actsActivas.findIndex(function(x){return x.id===id;}):- 1;
@@ -3460,10 +3484,20 @@ async function iniciarActividad(id){
   reRenderActs();
   setSS('syncing','...');
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'en-progreso',hora_inicio:a.hora_inicio})});
-    setSS('ok','✓ Iniciada '+fmt12h(a.hora_inicio));
+    // Estado change is critical — send alone so hora_inicio column missing can't block it
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'en-progreso'})});
+    setSS('ok','✓ Iniciada');
     loadTareas();
-  }catch(e){setSS('err','Error');}
+    // Stamp hora_inicio separately — best-effort, won't affect estado if it fails
+    sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({hora_inicio:a.hora_inicio})}).catch(function(){});
+  }catch(e){
+    // Roll back optimistic update so UI matches DB
+    a.estado=prevEstado; a.hora_inicio=null;
+    if(ai<0&&S.actsActivas) S.actsActivas.shift();
+    reRenderActs();
+    setSS('err','Error al iniciar');
+    showToast('No se pudo iniciar la actividad — revisa tu conexión','err',6000);
+  }
 }
 
 // ── HORA STAMPS & VERIFICACIÓN ───────────────────────────────────
@@ -6930,6 +6964,7 @@ async function accionActObra(id, accion){
   if(accion==='iniciar'){
     update={estado:'en-progreso'};
     a.estado='en-progreso';
+    if(!a.hora_inicio){a.hora_inicio=nowHHMM();}
   } else if(accion==='completar'){
     // Route through photo gate
     var actFull=S.acts.find(function(x){return x.id===id;})||a;
@@ -6945,22 +6980,27 @@ async function accionActObra(id, accion){
   }
 
   renderEnObra();
-  // Also sync to S.acts
+  // Sync to S.acts
   var ai=S.acts.findIndex(function(x){return x.id===id;});
-  if(ai>=0) Object.assign(S.acts[ai],update);
-
+  if(ai>=0) Object.assign(S.acts[ai],update,{hora_inicio:a.hora_inicio});
   setSS('syncing','...');
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(update)});
     setSS('ok','✓');
     if(accion==='completar'){renderActs();renderHoy();}
+    // Stamp hora_inicio best-effort if set
+    if((accion==='iniciar')&&a.hora_inicio)
+      sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({hora_inicio:a.hora_inicio})}).catch(function(){});
   }catch(e){
     console.error('accionActObra error ('+accion+'):',e.message||e);
     var msg=String(e.message||e);
+    // Roll back
+    if(update.estado){a.estado=(update.estado==='en-progreso'?'pendiente':a.estado);renderEnObra();}
     if(accion==='urgente'&&msg.includes('column')&&msg.includes('prioridad')){
       setSS('err','Columna "prioridad" falta en la BD');
     } else {
-      setSS('err','Error: '+(msg.slice(0,60)));
+      setSS('err','Error al guardar');
+      showToast('No se pudo guardar el cambio — revisa tu conexión','err',6000);
     }
   }
 }
