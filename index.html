@@ -662,7 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_127';
+const APP_VERSION='20260605_128';
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
@@ -8656,7 +8656,7 @@ function renderPlan(){
     '<div style="display:flex;flex:1;overflow:hidden;position:relative">'+
       '<div id="gantt-lft" style="width:'+GSIDE+'px;flex-shrink:0;border-right:2px solid var(--border);overflow:hidden;display:flex;flex-direction:column;background:#fff;z-index:2">'+
         '<div style="height:'+GTOP+'px;border-bottom:1.5px solid var(--border);background:var(--bg2);flex-shrink:0;display:flex;align-items:center;padding:0 12px;font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:.08em">ACTIVIDAD / RESPONSABLE</div>'+
-        '<div id="gantt-nwrap" style="overflow:hidden;flex:1" onpointermove="ganttRowDragMove(event)" onpointerup="ganttRowDragEnd(event)" onpointercancel="ganttRowDragEnd(event)"><div id="gantt-names"></div></div>'+
+        '<div id="gantt-nwrap" style="overflow:hidden;flex:1"><div id="gantt-names"></div></div>'+
       '</div>'+
       '<div id="gantt-scroll" style="flex:1;overflow:auto" onscroll="ganttSyncScroll(this)">'+
         '<svg id="gantt-svg" style="display:block;user-select:none" onpointermove="ganttPtrMove(event)" onpointerup="ganttPtrUp(event)" onpointercancel="ganttPtrUp(event)"></svg>'+
@@ -9213,13 +9213,24 @@ function ganttPrint(){
   var svgFull='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="max-width:100%;height:auto;display:block" font-family="Arial,system-ui,sans-serif">'+
     '<defs><marker id="parr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,1 L5,3 L0,5 Z" fill="#94A3B8"/></marker></defs>'+
     s+'</svg>';
-  var W=window.open('','_blank');
-  if(!W){showToast('Bloqueado — permite ventanas emergentes en el navegador','err');return;}
-  W.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Gantt - '+esc(obra)+'</title>'+
-    '<style>*{box-sizing:border-box}body{margin:0;padding:10px;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
-    '@media print{body{margin:0;padding:0}@page{size:A4 landscape;margin:8mm}}</style>'+
-    '</head><body>'+svgFull+'<script>setTimeout(function(){window.print();},400);<\/script></body></html>');
-  W.document.close();
+  // In-page overlay — no popup needed, works on iPad Safari
+  var old=document.getElementById('gantt-print-overlay');if(old)old.remove();
+  var pst=document.getElementById('gantt-print-css');
+  if(!pst){
+    pst=document.createElement('style');pst.id='gantt-print-css';
+    pst.textContent='@media print{body>*:not(#gantt-print-overlay){display:none!important}#gantt-print-overlay{position:static!important;overflow:visible!important}#gantt-print-top{display:none!important}@page{size:A4 landscape;margin:8mm}}';
+    document.head.appendChild(pst);
+  }
+  var ov=document.createElement('div');
+  ov.id='gantt-print-overlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#fff;overflow:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact';
+  ov.innerHTML='<div id="gantt-print-top" style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 14px;display:flex;align-items:center;gap:10px;z-index:1">'+
+    '<span style="font-size:14px;font-weight:700;color:#4c1d95;flex:1">Vista previa — Gantt</span>'+
+    '<button onclick="window.print()" style="padding:8px 18px;background:#4c1d95;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨️ Imprimir / PDF</button>'+
+    '<button onclick="document.getElementById(\'gantt-print-overlay\').remove()" style="padding:8px 14px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:9px;font-size:13px;cursor:pointer;font-family:var(--font)">✕ Cerrar</button>'+
+  '</div>'+
+  '<div style="padding:12px">'+svgFull+'</div>';
+  document.body.appendChild(ov);
 }
 
 function ganttUnlink(succId,predId){
@@ -9262,17 +9273,19 @@ function ganttRowGrip(e,actId){
   var fullRow=allRows.find(function(r){return r.a.id===actId;});
   if(!fullRow) return;
   var area=fullRow.a.area||null;
-  // startIdx must be within same-area rows, not all rows
   var areaRows=allRows.filter(function(r){return r.a.area===area;});
   var idx=areaRows.findIndex(function(r){return r.a.id===actId;});
   _g.rowDrag={id:actId,startIdx:idx,currentIdx:idx,y0:e.clientY,area:area};
-  var wrap=document.getElementById('gantt-nwrap');
-  if(wrap){try{wrap.setPointerCapture(e.pointerId);}catch(ex){}}
-  var el=document.getElementById('grow-'+actId);
-  if(el) el.style.opacity='0.4';
+  var grip=document.getElementById('grow-'+actId);
+  if(grip) grip.style.opacity='0.45';
+  // Use document-level listeners — reliable on all devices without pointer capture
+  document.addEventListener('pointermove',_gRDMove,{passive:false});
+  document.addEventListener('pointerup',_gRDEnd);
+  document.addEventListener('pointercancel',_gRDEnd);
 }
-function ganttRowDragMove(e){
+function _gRDMove(e){
   if(!_g.rowDrag) return;
+  e.preventDefault();
   var dy=e.clientY-_g.rowDrag.y0;
   var rows=_gGetRows().filter(function(r){return r.t==='a'&&r.a.area===_g.rowDrag.area;});
   var newIdx=Math.max(0,Math.min(rows.length-1,_g.rowDrag.startIdx+Math.round(dy/GROW)));
@@ -9281,23 +9294,34 @@ function ganttRowDragMove(e){
     rows.forEach(function(r,i){
       var el=document.getElementById('grow-'+r.a.id);
       if(!el) return;
-      el.style.borderTop=(i===newIdx&&i!==_g.rowDrag.startIdx)?'2px solid var(--accent)':'';
+      var isTarget=i===newIdx&&i!==_g.rowDrag.startIdx;
+      el.style.borderTop=isTarget?'2.5px solid var(--accent)':'';
+      el.style.background=isTarget?'var(--accent-soft)':(i===_g.rowDrag.startIdx?'transparent':'');
     });
   }
 }
-function ganttRowDragEnd(e){
+function _gRDEnd(e){
+  document.removeEventListener('pointermove',_gRDMove);
+  document.removeEventListener('pointerup',_gRDEnd);
+  document.removeEventListener('pointercancel',_gRDEnd);
   if(!_g.rowDrag) return;
   var drag=_g.rowDrag;_g.rowDrag=null;
   var rows=_gGetRows().filter(function(r){return r.t==='a'&&r.a.area===drag.area;});
-  var el=document.getElementById('grow-'+drag.id);if(el){el.style.opacity='';el.style.borderTop='';}
+  // Clear visual state
+  rows.forEach(function(r){var el=document.getElementById('grow-'+r.a.id);if(el){el.style.opacity='';el.style.borderTop='';el.style.background='';}});
   if(drag.currentIdx!==drag.startIdx){
     var arr=rows.slice();
     var item=arr.splice(drag.startIdx,1)[0];
-    arr.splice(drag.currentIdx,0,item);
-    arr.forEach(function(r,i){_g.rowOrder[r.a.id]=i;});
+    if(item){
+      arr.splice(drag.currentIdx,0,item);
+      arr.forEach(function(r,i){_g.rowOrder[r.a.id]=i;});
+    }
   }
   _gRender();
 }
+// Keep old names as aliases (inline HTML still calls ganttRowDragMove/End in some paths)
+function ganttRowDragMove(e){_gRDMove(e);}
+function ganttRowDragEnd(e){_gRDEnd(e);}
 function ganttSyncScroll(el){var w=document.getElementById('gantt-nwrap');if(w) w.scrollTop=el.scrollTop;}
 
 function _ganttOpenPanel(a){
