@@ -6910,21 +6910,26 @@ function buildActCardObra(a){
         btn('verde',   'k_iniciar_'+k,   '▶ Iniciar',    "accionActObra(window._OA['"+k+"'],'iniciar')")+
         btn('',        'k_urgente_'+k,   a.prioridad==='urgente'?'↓ Normal':'🔴 Urgente', "accionActObra(window._OA['"+k+"'],'urgente')")+
         btn('',        'k_edit_'+k,      '✏️ Editar',    "goObraEdit('"+k+"')")+
-        (canEdit()?'<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>':'')+
+        '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
         '</div>';
     } else if(a.estado==='en-progreso'){
       btns = '<div class="tarea-acciones">'+
         btn('amarillo','k_pausa_'+k,     '⏸ Interrumpir', "pausarDesdeObra('"+k+"')")+
         btn('verde',   'k_comp_'+k,      '✓ Completar',   "accionActObra(window._OA['"+k+"'],'completar')")+
         btn('',        'k_edit2_'+k,     '✏️ Editar',     "goObraEdit('"+k+"')")+
-        (canEdit()?'<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>':'')+
+        '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
         '</div>';
     } else if(a.estado==='pausada'){
       btns = '<div class="tarea-acciones">'+
         btn('accent',  'k_ret_'+k,       '↺ Retomar',    "accionActObra(window._OA['"+k+"'],'retomar')")+
         btn('verde',   'k_comp2_'+k,     '✓ Completar',  "accionActObra(window._OA['"+k+"'],'completar')")+
         btn('',        'k_edit3_'+k,     '✏️ Editar',    "goObraEdit('"+k+"')")+
-        (canEdit()?'<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>':'')+
+        '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
+        '</div>';
+    } else if(a.estado==='completado'){
+      btns = '<div class="tarea-acciones">'+
+        btn('',        'k_edit4_'+k,     '✏️ Editar',    "goObraEdit('"+k+"')")+
+        '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
         '</div>';
     }
   }
