@@ -662,6 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
   <img id="fviewer-img" src="">
 </div>
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
+<input type="file" id="foto-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
 const APP_VERSION='20260605_140';
@@ -1322,9 +1323,21 @@ function abrirFotoUpload(actId){
     else showToast('El administrador debe configurar Google Drive primero','warn',6000);
     return;
   }
-  // Pre-warm Apps Script while file picker is open
   fetch(driveUrl+'?warm=1',{method:'GET'}).catch(function(){});
-  var inp=document.getElementById('foto-file-input');
+  var safeId=actId.replace(/'/g,"\\'");
+  document.getElementById('mcontent').innerHTML=
+    '<div class="mhandle"></div>'+
+    '<h3 style="margin-bottom:16px">📸 Agregar foto</h3>'+
+    '<div style="display:grid;gap:10px;margin-bottom:12px">'+
+      '<button onclick="closeModal();setTimeout(function(){_clickFotoInput(\''+safeId+'\',\'camera\')},80)" style="padding:18px;border-radius:14px;border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:16px;font-weight:700;cursor:pointer;font-family:var(--font)">📷 Tomar foto</button>'+
+      '<button onclick="closeModal();setTimeout(function(){_clickFotoInput(\''+safeId+'\',\'galeria\')},80)" style="padding:16px;border-radius:14px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">🖼 Elegir de galería</button>'+
+    '</div>'+
+    '<button onclick="closeModal()" style="width:100%;padding:12px;border-radius:14px;border:1.5px solid var(--border2);background:none;color:var(--text3);font-size:13px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
+  openModal();
+}
+
+function _clickFotoInput(actId, source){
+  var inp=document.getElementById(source==='camera'?'foto-camera-input':'foto-file-input');
   if(!inp) return;
   inp.dataset.actId=actId;
   inp.value='';
