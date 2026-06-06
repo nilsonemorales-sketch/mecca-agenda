@@ -10503,8 +10503,17 @@ function _ganttOpenPanel(a){
     var pid=pt.id;
     var p=(S.acts||[]).find(function(x){return x.id===pid;});
     var pc=p?_gTipoColor(p):{clr:'#9CA3AF'};
+    var lag=pt.lag||0;
+    var selSt='font-size:9px;font-weight:700;background:'+pc.clr+'22;color:'+pc.clr+';border:1px solid '+pc.clr+'44;border-radius:4px;padding:1px 4px;flex-shrink:0;cursor:pointer;outline:none;font-family:var(--font)';
+    var lagSt='width:36px;font-size:9px;padding:1px 3px;border:1.5px solid var(--border2);border-radius:4px;background:#fff;color:var(--text1);font-family:var(--font);text-align:center;flex-shrink:0';
     return '<div style="font-size:11px;color:var(--text2);padding:5px 8px;background:var(--bg3);border-radius:7px;margin-bottom:4px;display:flex;align-items:center;gap:6px;border-left:3px solid '+pc.clr+'">'+
-      '<span style="font-size:9px;font-weight:700;background:'+pc.clr+'22;color:'+pc.clr+';border-radius:4px;padding:1px 5px;flex-shrink:0">'+pt.tipo+(pt.lag?'+'+pt.lag+'d':'')+'</span>'+
+      (canE?
+        '<select onchange="ganttPanelLinkUpdate(\''+a.id+'\',\''+pid+'\',\'tipo\',this.value)" style="'+selSt+'">'+
+          ['FS','SS','FF'].map(function(t){return '<option value="'+t+'"'+(pt.tipo===t?' selected':'')+'>'+t+'</option>';}).join('')+
+        '</select>'+
+        '<input type="number" value="'+lag+'" min="-365" max="365" title="Desfase en días (negativo = adelantar)" onchange="ganttPanelLinkUpdate(\''+a.id+'\',\''+pid+'\',\'lag\',this.value)" style="'+lagSt+'">'+
+        '<span style="font-size:9px;color:var(--text3);flex-shrink:0">d</span>':
+        '<span style="font-size:9px;font-weight:700;background:'+pc.clr+'22;color:'+pc.clr+';border-radius:4px;padding:1px 5px;flex-shrink:0">'+pt.tipo+(lag?(lag>0?'+':'')+lag+'d':'')+'</span>')+
       '<span style="flex:1;overflow:hidden;text-overflow:ellipsis">'+esc(p?((p.descripcion||'#'+pid).slice(0,30)):'Act #'+pid)+'</span>'+
       '<button onclick="ganttUnlink(\''+a.id+'\',\''+pid+'\')" style="background:none;border:none;color:#DC2626;cursor:pointer;font-size:16px;padding:0 2px;line-height:1;flex-shrink:0" title="Eliminar enlace">✕</button>'+
     '</div>';
@@ -10610,6 +10619,24 @@ async function ganttPanelPct(actId,val){
     logCambio('avance','actividad',actId,a.descripcion||'',n+'%');
     _gRender();
   }catch(e){showToast('Error: '+e.message,'err');}
+}
+async function ganttPanelLinkUpdate(succId,predId,field,value){
+  var succ=(S.acts||[]).find(function(x){return x.id===succId;});if(!succ) return;
+  var preds=_gPredsTyped(succ);
+  var link=preds.find(function(pt){return pt.id===predId;});if(!link) return;
+  var oldPreds=succ.predecesoras;
+  _g.history.push({type:'link',actId:succId,oldPreds:oldPreds});
+  if(_g.history.length>30) _g.history.shift();
+  if(field==='tipo') link.tipo=value;
+  else if(field==='lag') link.lag=parseInt(value)||0;
+  var newPreds=JSON.stringify(preds);
+  try{
+    await sb('obra_actividades?id=eq.'+succId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({predecesoras:newPreds})});
+    succ.predecesoras=newPreds;
+    showToast('Enlace actualizado ✓');
+    logCambio('enlace','actividad',succId,succ.descripcion||'',field+'='+value);
+    _gRender();
+  }catch(e){_g.history.pop();showToast('Error: '+e.message,'err');}
 }
 
 </script>
