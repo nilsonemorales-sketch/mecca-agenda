@@ -10216,77 +10216,102 @@ function ganttPrint(){
   var rows=_gGetRows();
   if(!rows.length){showToast('Sin datos para imprimir');return;}
   var b=_gBounds(rows);
-  var ppd=7,PSIDE=230,PTOP=62,PAXH=22,PGROW=38,PGGRP=24;
-  var totalDays=Math.ceil((b.max-b.min)/86400000);
-  var chartW=Math.max(totalDays*ppd,300);
-  var svgW=PSIDE+chartW;
   var crit=_g.crit?_gCPM():new Set();
-  function px(ds){return PSIDE+Math.round((new Date(ds+'T12:00:00')-b.min)/86400000)*ppd;}
-  // First pass: compute row Y positions
+  var MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var PSIDE=240,PTOP=56,PAXH=30,PGROW=28,PGGRP=22;
+  var totalDays=Math.max(1,Math.ceil((b.max-b.min)/86400000));
+  var ppd=Math.max(3.5,Math.min(16,1030/totalDays));
+  var chartW=Math.ceil(totalDays*ppd);
+  var svgW=PSIDE+chartW;
+  function px(ds){return PSIDE+Math.round((new Date(ds+'T12:00:00')-b.min)/86400000*ppd);}
+  // First pass: row Y positions
   var ry=PTOP+PAXH,rowY={},amap={};
-  rows.forEach(function(r){if(r.t==='g'){ry+=PGGRP;}else{rowY[r.a.id]=ry+PGROW/2;amap[r.a.id]=r.a;ry+=PGROW;}});
-  var legendY=ry+14,svgH=legendY+36;
+  rows.forEach(function(r){if(r.t==='g')ry+=PGGRP;else{rowY[r.a.id]=ry+PGROW/2;amap[r.a.id]=r.a;ry+=PGROW;}});
+  var legendY=ry+12,svgH=legendY+28;
+  var actCnt=rows.filter(function(r){return r.t==='a';}).length;
   var s='';
-  // Background + purple header
   s+='<rect width="'+svgW+'" height="'+svgH+'" fill="#fff"/>';
-  s+='<rect width="'+svgW+'" height="'+PTOP+'" fill="#4c1d95"/>';
-  var obra=(S.user&&(S.user.obra||S.user.nombre))||'Mecca Agenda';
-  s+='<text x="14" y="26" font-size="15" font-weight="800" fill="#fff">PLANIFICACION GANTT</text>';
-  s+='<text x="14" y="46" font-size="10" fill="#c4b5fd">'+esc(obra)+'</text>';
-  s+='<text x="'+(svgW-12)+'" y="26" font-size="10" fill="#e9d5ff" text-anchor="end">Impreso: '+new Date().toLocaleDateString('es',{day:'2-digit',month:'2-digit',year:'numeric'})+'</text>';
-  var ft=(_g.tipoF?'Tipo: '+_g.tipoF:'')+(_g.areaFs.length?(_g.tipoF?' | ':'')+'Areas: '+_g.areaFs.join(', '):'');
-  if(ft)s+='<text x="'+(svgW-12)+'" y="44" font-size="9" fill="#c4b5fd" text-anchor="end">'+esc(ft)+'</text>';
-  // Column headers row
+  // Header
+  s+='<rect width="'+svgW+'" height="'+PTOP+'" fill="#3b0764"/>';
+  s+='<rect x="'+PSIDE+'" y="0" width="'+chartW+'" height="'+PTOP+'" fill="#4c1d95"/>';
+  var obra=esc((S.user&&(S.user.obra||S.user.nombre))||'Mecca Agenda');
+  s+='<text x="14" y="24" font-size="16" font-weight="800" fill="#fff" letter-spacing="1">PLAN DE TRABAJO</text>';
+  s+='<text x="14" y="44" font-size="9.5" fill="#ddd6fe">'+obra+'</text>';
+  var r0=b.min.toLocaleDateString('es',{month:'short',year:'numeric'});
+  var r1=b.max.toLocaleDateString('es',{month:'short',year:'numeric'});
+  s+='<text x="'+(PSIDE+chartW/2)+'" y="26" font-size="11" font-weight="600" fill="#ede9fe" text-anchor="middle">'+r0+' — '+r1+'</text>';
+  s+='<text x="'+(PSIDE+chartW/2)+'" y="44" font-size="9" fill="#c4b5fd" text-anchor="middle">'+actCnt+' actividades</text>';
+  s+='<text x="'+(svgW-10)+'" y="26" font-size="9" fill="#ede9fe" text-anchor="end">'+new Date().toLocaleDateString('es',{day:'2-digit',month:'2-digit',year:'numeric'})+'</text>';
+  var ft=(_g.areaFs.length?'Areas: '+_g.areaFs.join(', '):'')+(_g.tipoF?(_g.areaFs.length?' | ':'')+'Tipo: '+_g.tipoF:'')+(_g.workerFs.length?(_g.tipoF||_g.areaFs.length?' | ':'')+_g.workerFs.join(', '):'');
+  if(ft)s+='<text x="'+(svgW-10)+'" y="44" font-size="8.5" fill="#c4b5fd" text-anchor="end">'+esc(ft)+'</text>';
+  // Column headers
   s+='<rect x="0" y="'+PTOP+'" width="'+PSIDE+'" height="'+PAXH+'" fill="#f1f5f9"/>';
   s+='<rect x="'+PSIDE+'" y="'+PTOP+'" width="'+chartW+'" height="'+PAXH+'" fill="#f8fafc"/>';
-  s+='<text x="8" y="'+(PTOP+15)+'" font-size="8.5" font-weight="700" fill="#64748b">ACTIVIDAD / RESPONSABLE</text>';
+  s+='<text x="10" y="'+(PTOP+20)+'" font-size="8" font-weight="700" fill="#64748b" letter-spacing=".5">ACTIVIDAD</text>';
+  s+='<text x="'+(PSIDE-8)+'" y="'+(PTOP+20)+'" font-size="8" font-weight="700" fill="#64748b" text-anchor="end">RESPONSABLE</text>';
   // Month gridlines + labels
-  var MES=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
-  var gd=new Date(b.min.getTime());gd.setDate(1);
-  while(gd<=b.max){
-    var gx=PSIDE+Math.round((gd-b.min)/86400000)*ppd;
+  var gd=new Date(+b.min);gd.setDate(1);
+  while(+gd<=+b.max){
+    var gx=PSIDE+Math.round((+gd-+b.min)/86400000*ppd);
     if(gx>PSIDE){
-      s+='<line x1="'+gx+'" y1="'+PTOP+'" x2="'+gx+'" y2="'+svgH+'" stroke="#e2e8f0" stroke-width="0.7"/>';
-      s+='<text x="'+(gx+3)+'" y="'+(PTOP+PAXH-5)+'" font-size="8" font-weight="700" fill="#475569">'+MES[gd.getMonth()]+' '+gd.getFullYear()+'</text>';
+      s+='<line x1="'+gx+'" y1="'+PTOP+'" x2="'+gx+'" y2="'+legendY+'" stroke="#e2e8f0" stroke-width="0.6"/>';
+      s+='<text x="'+(gx+4)+'" y="'+(PTOP+14)+'" font-size="9" font-weight="700" fill="#334155">'+MES[gd.getMonth()]+' '+gd.getFullYear()+'</text>';
     }
     gd.setMonth(gd.getMonth()+1);
   }
+  // Week ticks (Mondays) when zoomed in
+  if(ppd>=5){
+    var wd=new Date(+b.min);
+    while(+wd<=+b.max){
+      if(wd.getDay()===1){
+        var wx=PSIDE+Math.round((+wd-+b.min)/86400000*ppd);
+        if(wx>PSIDE){
+          s+='<line x1="'+wx+'" y1="'+(PTOP+PAXH-10)+'" x2="'+wx+'" y2="'+(PTOP+PAXH)+'" stroke="#cbd5e1" stroke-width="0.5"/>';
+          s+='<text x="'+(wx+2)+'" y="'+(PTOP+PAXH-1)+'" font-size="6.5" fill="#94a3b8">'+wd.getDate()+'</text>';
+        }
+      }
+      wd.setDate(wd.getDate()+1);
+    }
+  }
   s+='<line x1="0" y1="'+(PTOP+PAXH)+'" x2="'+svgW+'" y2="'+(PTOP+PAXH)+'" stroke="#cbd5e1" stroke-width="1"/>';
-  s+='<line x1="'+PSIDE+'" y1="'+PTOP+'" x2="'+PSIDE+'" y2="'+svgH+'" stroke="#cbd5e1" stroke-width="1.5"/>';
+  s+='<line x1="'+PSIDE+'" y1="'+PTOP+'" x2="'+PSIDE+'" y2="'+legendY+'" stroke="#cbd5e1" stroke-width="1.5"/>';
   // Today dashed line
   var tdx=px(new Date().toISOString().slice(0,10));
-  if(tdx>PSIDE&&tdx<svgW){
-    s+='<line x1="'+tdx+'" y1="'+PTOP+'" x2="'+tdx+'" y2="'+svgH+'" stroke="#EF4444" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>';
-    s+='<text x="'+(tdx+2)+'" y="'+(PTOP+PAXH-5)+'" font-size="8" fill="#EF4444" font-weight="700">HOY</text>';
+  if(tdx>=PSIDE&&tdx<=svgW){
+    s+='<line x1="'+tdx+'" y1="'+(PTOP+PAXH)+'" x2="'+tdx+'" y2="'+legendY+'" stroke="#EF4444" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.75"/>';
+    s+='<text x="'+(tdx+2)+'" y="'+(PTOP+PAXH-1)+'" font-size="7" fill="#EF4444" font-weight="700">HOY</text>';
   }
-  // Rows (second pass)
+  // Activity rows
   var cy=PTOP+PAXH,si=0;
   rows.forEach(function(r){
     if(r.t==='g'){
       s+='<rect x="0" y="'+cy+'" width="'+svgW+'" height="'+PGGRP+'" fill="#ede9fe"/>';
       s+='<rect x="0" y="'+cy+'" width="4" height="'+PGGRP+'" fill="#7c3aed"/>';
-      s+='<text x="10" y="'+(cy+PGGRP/2+4)+'" font-size="10" font-weight="800" fill="#4c1d95">'+esc(r.area)+' ('+r.n+')</text>';
-      s+='<line x1="0" y1="'+(cy+PGGRP)+'" x2="'+svgW+'" y2="'+(cy+PGGRP)+'" stroke="#ddd6fe" stroke-width="1"/>';
+      var aLbl=r.area;if(aLbl.length>36)aLbl=aLbl.slice(0,35)+'…';
+      s+='<text x="10" y="'+(cy+PGGRP/2+4)+'" font-size="10" font-weight="800" fill="#3b0764">'+esc(aLbl)+'  ('+r.n+')</text>';
+      s+='<line x1="0" y1="'+(cy+PGGRP)+'" x2="'+svgW+'" y2="'+(cy+PGGRP)+'" stroke="#ddd6fe" stroke-width="0.8"/>';
       cy+=PGGRP;
     } else {
       var a=r.a,tc=_gTipoColor(a),ic=crit.has(a.id)&&_g.crit;
-      s+='<rect x="0" y="'+cy+'" width="'+svgW+'" height="'+PGROW+'" fill="'+(si%2===0?'#fff':'#f8fafc')+'"/>';
+      s+='<rect x="0" y="'+cy+'" width="'+svgW+'" height="'+PGROW+'" fill="'+(si%2===0?'#fff':'#f9fafb')+'"/>';
       s+='<rect x="0" y="'+cy+'" width="3" height="'+PGROW+'" fill="'+tc.clr+'"/>';
-      var nm=a.descripcion||'Act #'+a.id;if(nm.length>30)nm=nm.slice(0,29)+'…';
-      s+='<text x="8" y="'+(cy+PGROW/2-2)+'" font-size="10" font-weight="'+(ic?700:500)+'" fill="'+(ic?'#92400e':'#1e293b')+'">'+esc(nm)+'</text>';
-      var wk=a.personal_nombre||a.ingeniero_nombre||'';
-      if(wk){if(wk.length>28)wk=wk.slice(0,27)+'…';s+='<text x="8" y="'+(cy+PGROW/2+10)+'" font-size="8" fill="'+tc.clr+'">'+esc(tc.icon+' '+wk)+'</text>';}
-      s+='<line x1="0" y1="'+(cy+PGROW)+'" x2="'+svgW+'" y2="'+(cy+PGROW)+'" stroke="#e2e8f0" stroke-width="0.7"/>';
+      var maxC=Math.floor((PSIDE-82)/5.6);
+      var nm=a.descripcion||a.nombre||'Actividad';if(nm.length>maxC)nm=nm.slice(0,maxC-1)+'…';
+      s+='<text x="8" y="'+(cy+PGROW/2+4)+'" font-size="9.5" fill="'+(ic?'#92400e':'#1e293b')+'" font-weight="'+(ic?700:500)+'">'+esc(nm)+'</text>';
+      var wk=shortName(a.personal_nombre||a.ingeniero_nombre||'');
+      if(wk){if(wk.length>16)wk=wk.slice(0,15)+'…';s+='<text x="'+(PSIDE-7)+'" y="'+(cy+PGROW/2+4)+'" font-size="8.5" fill="'+tc.clr+'" text-anchor="end">'+esc(wk)+'</text>';}
+      s+='<line x1="4" y1="'+(cy+PGROW)+'" x2="'+svgW+'" y2="'+(cy+PGROW)+'" stroke="#f1f5f9" stroke-width="0.5"/>';
       var fi=a.fecha_inicio||a.fecha,ff=a.fecha_fin;
       if(fi&&ff){
-        var bx=px(fi),bw=Math.max(px(ff)-bx,6);
-        var by=cy+4,bh=PGROW-8;
-        var bs=ic?'#D97706':tc.clr;
-        // fill-opacity keeps the color visible without -print-color-adjust tricks
-        s+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="4" fill="'+bs+'" fill-opacity="0.22" stroke="'+bs+'" stroke-width="1.6"/>';
-        var pct=a.porcentaje||0;
-        if(pct>0){var pw=Math.round(bw*pct/100);if(pw>0)s+='<rect x="'+bx+'" y="'+by+'" width="'+pw+'" height="'+bh+'" rx="4" fill="'+bs+'" fill-opacity="0.6" stroke="none"/>';}
-        if(bw>52)s+='<text x="'+(bx+5)+'" y="'+(by+bh/2+3.5)+'" font-size="7.5" fill="'+bs+'" font-weight="700">'+fi.slice(5)+' - '+ff.slice(5)+'</text>';
+        var bx=px(fi),bxE=px(ff),bw=Math.max(bxE-bx,Math.ceil(ppd));
+        var by=cy+5,bh=PGROW-10,bc=ic?'#D97706':tc.clr,pct=a.porcentaje||0;
+        s+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="4" fill="'+bc+'" fill-opacity=".18" stroke="'+bc+'" stroke-width="1.5"/>';
+        if(pct>0){var pw=Math.round(bw*pct/100);if(pw>0)s+='<rect x="'+bx+'" y="'+by+'" width="'+pw+'" height="'+bh+'" rx="4" fill="'+bc+'" fill-opacity=".55"/>';}
+        var fiL=fi.slice(5).replace('-','/'),ffL=ff.slice(5).replace('-','/');
+        if(bw>70)s+='<text x="'+(bx+6)+'" y="'+(by+bh/2+3.5)+'" font-size="7.5" fill="'+bc+'" font-weight="700">'+fiL+' – '+ffL+'</text>';
+        else if(bw>26)s+='<text x="'+(bx+4)+'" y="'+(by+bh/2+3.5)+'" font-size="7" fill="'+bc+'" font-weight="700">'+fiL+'</text>';
+        if(a.estado==='completado')s+='<text x="'+(bx+bw+3)+'" y="'+(by+bh/2+4)+'" font-size="11" fill="#059669">✓</text>';
+        if(ic)s+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="4" fill="none" stroke="#F59E0B" stroke-width="2" opacity=".8"/>';
       }
       cy+=PGROW;si++;
     }
@@ -10306,45 +10331,50 @@ function ganttPrint(){
       var pd;
       if(x2>x1+5){var mx=(x1+x2)/2;pd='M'+x1+','+y1+' C'+mx+','+y1+' '+mx+','+y2+' '+x2+','+y2;}
       else{var ex=x1+10,ex2=x2-10,my2=(y1+y2)/2;pd='M'+x1+','+y1+' L'+ex+','+y1+' L'+ex+','+my2+' L'+ex2+','+my2+' L'+ex2+','+y2+' L'+x2+','+y2;}
-      s+='<path d="'+pd+'" stroke="'+ac+'" stroke-width="1.2" fill="none" opacity="0.65" marker-end="url(#parr)"/>';
+      s+='<path d="'+pd+'" stroke="'+ac+'" stroke-width="1.2" fill="none" opacity=".6" marker-end="url(#parr)"/>';
     });
   });
-  // Legend bar
+  // Legend footer
+  s+='<rect x="0" y="'+legendY+'" width="'+svgW+'" height="28" fill="#f8fafc"/>';
   s+='<line x1="0" y1="'+legendY+'" x2="'+svgW+'" y2="'+legendY+'" stroke="#e2e8f0" stroke-width="1"/>';
-  var lx=10,ly=legendY+17;
+  var lx=10,ly=legendY+18;
   [{clr:'#2563EB',lb:'Personal propio'},{clr:'#7C3AED',lb:'Contratista'},{clr:'#0891B2',lb:'Ingeniero'}].forEach(function(t){
-    s+='<rect x="'+lx+'" y="'+(ly-9)+'" width="12" height="12" rx="2" fill="'+t.clr+'"/>';
-    s+='<text x="'+(lx+15)+'" y="'+(ly+2)+'" font-size="9" fill="#475569">'+t.lb+'</text>';
-    lx+=108;
+    s+='<rect x="'+lx+'" y="'+(ly-9)+'" width="10" height="10" rx="2" fill="'+t.clr+'"/>';
+    s+='<text x="'+(lx+13)+'" y="'+ly+'" font-size="8.5" fill="#475569">'+t.lb+'</text>';
+    lx+=115;
   });
-  if(_g.crit){s+='<rect x="'+lx+'" y="'+(ly-9)+'" width="12" height="12" rx="2" fill="#F59E0B"/>';s+='<text x="'+(lx+15)+'" y="'+(ly+2)+'" font-size="9" fill="#475569">Ruta critica</text>';lx+=108;}
-  lx+=8;
+  if(_g.crit){s+='<rect x="'+lx+'" y="'+(ly-9)+'" width="10" height="10" rx="2" fill="#F59E0B"/>';s+='<text x="'+(lx+13)+'" y="'+ly+'" font-size="8.5" fill="#475569">Ruta crítica</text>';lx+=115;}
+  lx+=10;
   [{clr:'#94A3B8',lb:'FS'},{clr:'#0891B2',lb:'SS'},{clr:'#7C3AED',lb:'FF'}].forEach(function(t){
-    s+='<line x1="'+lx+'" y1="'+(ly-3)+'" x2="'+(lx+16)+'" y2="'+(ly-3)+'" stroke="'+t.clr+'" stroke-width="2"/>';
-    s+='<path d="M'+(lx+16)+','+(ly-5)+' L'+(lx+21)+','+(ly-3)+' L'+(lx+16)+','+(ly-1)+' Z" fill="'+t.clr+'"/>';
-    s+='<text x="'+(lx+24)+'" y="'+(ly+2)+'" font-size="9" fill="#64748b">'+t.lb+'</text>';
-    lx+=46;
+    s+='<line x1="'+lx+'" y1="'+(ly-4)+'" x2="'+(lx+14)+'" y2="'+(ly-4)+'" stroke="'+t.clr+'" stroke-width="1.8"/>';
+    s+='<path d="M'+(lx+14)+','+(ly-6)+' L'+(lx+19)+','+(ly-4)+' L'+(lx+14)+','+(ly-2)+' Z" fill="'+t.clr+'"/>';
+    s+='<text x="'+(lx+22)+'" y="'+ly+'" font-size="8.5" fill="#475569">'+t.lb+'</text>';
+    lx+=44;
   });
-  var svgFull='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="max-width:100%;height:auto;display:block" font-family="Arial,system-ui,sans-serif">'+
-    '<defs><marker id="parr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,1 L5,3 L0,5 Z" fill="#94A3B8"/></marker></defs>'+
+  var svgFull='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="width:100%;height:auto;display:block" font-family="Arial,Helvetica,sans-serif">'+
+    '<defs><marker id="parr" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto"><path d="M0,0.5 L5,2.5 L0,4.5 Z" fill="#94A3B8"/></marker></defs>'+
     s+'</svg>';
-  // In-page overlay — no popup needed, works on iPad Safari
+  // Print overlay — legal landscape 14×8.5"
   var old=document.getElementById('gantt-print-overlay');if(old)old.remove();
-  var pst=document.getElementById('gantt-print-css');
-  if(!pst){
-    pst=document.createElement('style');pst.id='gantt-print-css';
-    pst.textContent='@media print{body>*:not(#gantt-print-overlay){display:none!important}#gantt-print-overlay{position:static!important;overflow:visible!important}#gantt-print-top{display:none!important}@page{size:A4 landscape;margin:8mm}}';
-    document.head.appendChild(pst);
-  }
+  var pst=document.getElementById('gantt-print-css');if(pst)pst.remove();
+  pst=document.createElement('style');pst.id='gantt-print-css';
+  pst.textContent='@media print{body>*:not(#gantt-print-overlay){display:none!important}#gantt-print-overlay{position:static!important;overflow:visible!important}#gantt-print-top{display:none!important}@page{size:14in 8.5in;margin:10mm}}';
+  document.head.appendChild(pst);
   var ov=document.createElement('div');
   ov.id='gantt-print-overlay';
-  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#fff;overflow:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact';
-  ov.innerHTML='<div id="gantt-print-top" style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 14px;display:flex;align-items:center;gap:10px;z-index:1">'+
-    '<span style="font-size:14px;font-weight:700;color:#4c1d95;flex:1">Vista previa — Gantt</span>'+
-    '<button onclick="window.print()" style="padding:8px 18px;background:#4c1d95;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨️ Imprimir / PDF</button>'+
-    '<button onclick="document.getElementById(\'gantt-print-overlay\').remove()" style="padding:8px 14px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:9px;font-size:13px;cursor:pointer;font-family:var(--font)">✕ Cerrar</button>'+
-  '</div>'+
-  '<div style="padding:12px">'+svgFull+'</div>';
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#e8edf5;overflow:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact';
+  ov.innerHTML=
+    '<div id="gantt-print-top" style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:1;box-shadow:0 1px 4px rgba(0,0,0,.08)">'+
+      '<span style="font-size:13px;font-weight:700;color:#4c1d95;flex:1">Vista previa — Hoja legal 8½×14" (apaisado)</span>'+
+      '<span style="font-size:11px;color:#64748b;padding:4px 10px;background:#f1f5f9;border-radius:6px">'+actCnt+' actividades</span>'+
+      '<button onclick="window.print()" style="padding:8px 20px;background:#4c1d95;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">🖨️ Imprimir / PDF</button>'+
+      '<button onclick="document.getElementById(\'gantt-print-overlay\').remove()" style="padding:8px 14px;background:#f1f5f9;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;cursor:pointer;font-family:var(--font)">✕ Cerrar</button>'+
+    '</div>'+
+    '<div style="padding:16px">'+
+      '<div style="background:#fff;box-shadow:0 2px 16px rgba(0,0,0,.12);border-radius:6px;overflow:hidden">'+
+        svgFull+
+      '</div>'+
+    '</div>';
   document.body.appendChild(ov);
 }
 
@@ -10460,6 +10490,11 @@ function _ganttOpenPanel(a){
   var fi=a.fecha_inicio||a.fecha||'',ff=a.fecha_fin||'';
   var dur=fi&&ff?Math.round((new Date(ff+'T12:00:00')-new Date(fi+'T12:00:00'))/86400000)+' días':'—';
   var pct=a.porcentaje||0;
+  var canE=canEdit();
+  var durNum=fi&&ff?Math.max(0,Math.round((new Date(ff+'T12:00:00')-new Date(fi+'T12:00:00'))/86400000)):0;
+  var lblSt='color:var(--text3);font-size:9px;font-weight:700;letter-spacing:.07em;margin-bottom:3px';
+  var inpSt='width:100%;font-size:11px;padding:3px 5px;border:1.5px solid var(--border2);border-radius:6px;background:#fff;color:var(--text1);font-family:var(--font);box-sizing:border-box';
+  var numSt='width:58px;font-size:11px;padding:3px 5px;border:1.5px solid var(--border2);border-radius:6px;background:#fff;color:var(--text1);font-family:var(--font);box-sizing:border-box;text-align:center';
   var tc=_gTipoColor(a);
   var estC={completado:'#059669',pendiente:'#9CA3AF','en-progreso':'#7C3AED',bloqueado:'#EF4444'};
   var ec=estC[a.estado]||'#9CA3AF';
@@ -10493,17 +10528,18 @@ function _ganttOpenPanel(a){
       '</div>'+
     '</div>'+
     '<div style="padding:16px 18px">'+
-      '<div style="background:var(--bg3);border-radius:10px;padding:12px;margin-bottom:14px">'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">'+
-          '<div><div style="color:var(--text3);font-size:9px;font-weight:700;letter-spacing:.07em;margin-bottom:2px">INICIO</div><div style="font-weight:600">'+esc(fi||'—')+'</div></div>'+
-          '<div><div style="color:var(--text3);font-size:9px;font-weight:700;letter-spacing:.07em;margin-bottom:2px">FIN</div><div style="font-weight:600">'+esc(ff||'—')+'</div></div>'+
-          '<div><div style="color:var(--text3);font-size:9px;font-weight:700;letter-spacing:.07em;margin-bottom:2px">DURACIÓN</div><div style="font-weight:600">'+dur+'</div></div>'+
-          '<div><div style="color:var(--text3);font-size:9px;font-weight:700;letter-spacing:.07em;margin-bottom:2px">AVANCE</div><div style="font-weight:600">'+pct+'%</div></div>'+
+      '<div style="background:var(--bg3);border-radius:10px;padding:12px;margin-bottom:10px">'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+          '<div><div style="'+lblSt+'">INICIO</div>'+(canE?'<input type="date" id="gp-fi-'+a.id+'" value="'+fi+'" onchange="ganttPanelDate(\''+a.id+'\',\'fi\',this.value)" style="'+inpSt+'">':'<div style="font-weight:600;font-size:12px">'+esc(fi||'—')+'</div>')+'</div>'+
+          '<div><div style="'+lblSt+'">FIN</div>'+(canE?'<input type="date" id="gp-ff-'+a.id+'" value="'+ff+'" onchange="ganttPanelDate(\''+a.id+'\',\'ff\',this.value)" style="'+inpSt+'">':'<div style="font-weight:600;font-size:12px">'+esc(ff||'—')+'</div>')+'</div>'+
+          '<div><div style="'+lblSt+'">DURACIÓN</div>'+(canE?'<div style="display:flex;align-items:center;gap:5px"><input type="number" id="gp-dur-'+a.id+'" value="'+durNum+'" min="0" max="3650" onchange="ganttPanelDur(\''+a.id+'\',this.value)" style="'+numSt+'"><span style="font-size:10px;color:var(--text3)">días</span></div>':'<div style="font-weight:600;font-size:12px">'+dur+'</div>')+'</div>'+
+          '<div><div style="'+lblSt+'">AVANCE</div>'+(canE?'<div style="display:flex;align-items:center;gap:5px"><input type="number" id="gp-pct-'+a.id+'" value="'+pct+'" min="0" max="100" step="5" onchange="ganttPanelPct(\''+a.id+'\',this.value)" style="'+numSt+'"><span style="font-size:10px;color:var(--text3)">%</span></div>':'<div style="font-weight:600;font-size:12px">'+pct+'%</div>')+'</div>'+
         '</div>'+
       '</div>'+
       '<div style="margin-bottom:14px">'+
-        '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:5px"><span>Progreso</span><span>'+pct+'%</span></div>'+
-        '<div style="background:var(--bg3);border-radius:4px;height:8px;overflow:hidden"><div style="background:'+tc.clr+';height:100%;width:'+pct+'%;border-radius:4px;transition:width .3s"></div></div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:5px"><span>Progreso</span><span id="gp-pctlbl-'+a.id+'">'+pct+'%</span></div>'+
+        '<div style="background:var(--bg3);border-radius:4px;height:7px;overflow:hidden;'+(canE?'margin-bottom:5px':'')+'"><div id="gp-bar-'+a.id+'" style="background:'+tc.clr+';height:100%;width:'+pct+'%;border-radius:4px;transition:width .3s"></div></div>'+
+        (canE?'<input type="range" value="'+pct+'" min="0" max="100" step="5" style="width:100%;accent-color:'+tc.clr+';cursor:pointer;display:block" oninput="ganttPanelPctLive(\''+a.id+'\',this.value)" onchange="ganttPanelPct(\''+a.id+'\',this.value)">':'')+
       '</div>'+
       (a.personal_nombre?'<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:'+tc.clr+'18;border-radius:8px;margin-bottom:10px;font-size:12px;font-weight:600;color:'+tc.clr+'">'+esc(tc.icon+' '+a.personal_nombre)+'</div>':'')+
       (a.ingeniero_nombre&&a.tipo_personal!=='ingeniero'?'<div style="font-size:11px;color:var(--text2);margin-bottom:8px">👤 '+esc(a.ingeniero_nombre)+'</div>':'')+
@@ -10521,6 +10557,60 @@ function ganttClosePanel(){
   _g.sel=null;_gRender();
 }
 
+async function ganttPanelDate(actId,field,value){
+  if(!value) return;
+  var a=(S.acts||[]).find(function(x){return x.id===actId;});if(!a) return;
+  var body={};
+  if(field==='fi'){
+    if(a.fecha_inicio) body.fecha_inicio=value;
+    else if(a.fecha){body.fecha=value;body.fecha_inicio=value;}
+    else body.fecha_inicio=value;
+  } else {
+    body.fecha_fin=value;
+  }
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
+    Object.assign(a,body);
+    var fi2=a.fecha_inicio||a.fecha||'',ff2=a.fecha_fin||'';
+    var durEl=document.getElementById('gp-dur-'+actId);
+    if(durEl&&fi2&&ff2) durEl.value=Math.max(0,Math.round((new Date(ff2+'T12:00:00')-new Date(fi2+'T12:00:00'))/86400000));
+    showToast('Fecha guardada ✓');
+    logCambio('fecha','actividad',actId,a.descripcion||'',field==='fi'?'Panel inicio='+value:'Panel fin='+value);
+    _gRender();
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+async function ganttPanelDur(actId,days){
+  var n=Math.max(0,parseInt(days)||0);
+  var a=(S.acts||[]).find(function(x){return x.id===actId;});if(!a) return;
+  var fi=a.fecha_inicio||a.fecha;if(!fi) return;
+  var d=new Date(fi+'T12:00:00');d.setDate(d.getDate()+n);
+  var newFf=d.toISOString().slice(0,10);
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fecha_fin:newFf})});
+    a.fecha_fin=newFf;
+    var ffEl=document.getElementById('gp-ff-'+actId);if(ffEl) ffEl.value=newFf;
+    showToast('Duración actualizada ✓');
+    _gRender();
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+function ganttPanelPctLive(actId,val){
+  var n=Math.min(100,Math.max(0,parseInt(val)||0));
+  var barEl=document.getElementById('gp-bar-'+actId);if(barEl) barEl.style.width=n+'%';
+  var lblEl=document.getElementById('gp-pctlbl-'+actId);if(lblEl) lblEl.textContent=n+'%';
+  var pctEl=document.getElementById('gp-pct-'+actId);if(pctEl) pctEl.value=n;
+}
+async function ganttPanelPct(actId,val){
+  var n=Math.min(100,Math.max(0,parseInt(val)||0));
+  var a=(S.acts||[]).find(function(x){return x.id===actId;});if(!a) return;
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n})});
+    a.porcentaje=n;
+    ganttPanelPctLive(actId,n);
+    showToast('Avance guardado ✓');
+    logCambio('avance','actividad',actId,a.descripcion||'',n+'%');
+    _gRender();
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
 
 </script>
 </body>
