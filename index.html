@@ -1198,7 +1198,7 @@ const ESTADOS_ASIST=['presente','tarde','medio día','ausente','justificado'];
 
 let S={
   user:null, fecha:today(),
-  personal:[], asist:[], acts:[], pens:[], semanas:[], plan:[],
+  personal:[], asist:[], acts:[], pens:[], semanas:[], plan:[], planActs:[],
   semanaActual:null, currentTab:'hoy', busqueda:'',
   histFiltroIng:'todos', histFecha:'', histFechaFin:'', histActs:[], histAsist:[], histPens:[],
   cambios:[], cambiosOk:true, cambiosFiltroUser:'todos', cambiosFiltroFecha:'', cambiosFiltroFechaFin:'',
@@ -1572,6 +1572,7 @@ async function loadAll(){
     updateAsistPct();
     setTimeout(checkInactividadIngenieros, 300);
     loadSecundario();
+    loadPlanActividades();
     loadTareas();
   }catch(e){
     clearTimeout(retryTimer);
@@ -1590,6 +1591,14 @@ async function loadAll(){
 }
 
 // sbWithTimeout included in sb() above
+
+async function loadPlanActividades(){
+  try{
+    var data=await sb('obra_plan_actividades?order=orden.asc,created_at.asc',{});
+    S.planActs=data||[];
+    if(S.currentTab==='plan') renderPlan();
+  }catch(e){console.warn('plan_actividades no disponible:',e.message);}
+}
 
 async function loadDriveUrl(){
   try{
@@ -1626,6 +1635,16 @@ async function loadSecundario(){
     const h=new Date().getHours();
     if(h>=17) autoPenalidadInactividad();
   }catch(e){console.warn('loadSecundario pens error:',e);}
+}
+
+function calcularAvancePadre(planId){
+  var subs=(S.acts||[]).filter(function(a){return a.plan_id===planId;});
+  if(!subs.length){
+    var plan=(S.planActs||[]).find(function(p){return p.id===planId;});
+    return plan?(plan.avance_manual||0):0;
+  }
+  var done=subs.filter(function(a){return a.estado==='completado';}).length;
+  return Math.round(done/subs.length*100);
 }
 
 async function loadFecha(){
@@ -2052,6 +2071,35 @@ function renderHoy(){
   var periodoDesde=S.hoyPeriodoDesde||(()=>{var d=new Date(S.fecha);d.setDate(d.getDate()-6);return d.toISOString().slice(0,10);})();
   var periodoHasta=S.hoyPeriodoHasta||S.fecha;
 
+  // Planning widget — show 3 worst-performing plan activities
+  var planWidget='';
+  if((S.planActs||[]).length){
+    var planSorted=(S.planActs||[]).slice().sort(function(a,b){return calcularAvancePadre(a.id)-calcularAvancePadre(b.id);}).slice(0,3);
+    planWidget='<div style="margin:0 0 10px;background:#fff;border-radius:12px;border:1px solid var(--border);overflow:hidden">'+
+      '<div style="padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between">'+
+        '<span style="font-size:12px;font-weight:700;color:var(--text2)">&#128203; Planificación</span>'+
+        '<button onclick="switchTab(\'plan\')" style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--font)">Ver todo &#8594;</button>'+
+      '</div>'+
+      planSorted.map(function(p){
+        var av=calcularAvancePadre(p.id);
+        var clr=av>=80?'#059669':av>=40?'#D97706':'#DC2626';
+        var hoy2=new Date().toISOString().slice(0,10);
+        var diasR2=p.fecha_fin_plan?Math.ceil((new Date(p.fecha_fin_plan+'T12:00:00')-new Date(hoy2+'T12:00:00'))/86400000):null;
+        return '<div style="padding:8px 14px;border-top:1px solid var(--border)">'+
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
+            '<span style="width:8px;height:8px;border-radius:50%;background:'+clr+';flex-shrink:0"></span>'+
+            '<span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.nombre)+'</span>'+
+            '<span style="font-size:12px;font-weight:700;color:'+clr+'">'+av+'%</span>'+
+          '</div>'+
+          '<div style="background:var(--bg3);border-radius:3px;height:5px;overflow:hidden">'+
+            '<div style="background:'+clr+';height:100%;width:'+av+'%;border-radius:3px"></div>'+
+          '</div>'+
+          (diasR2!==null?'<div style="font-size:10px;color:var(--text3);margin-top:3px">'+(diasR2<0?'&#9888;&#65039; Vencida hace '+Math.abs(diasR2)+'d':diasR2+' días restantes')+'</div>':'')+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
+
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
 
@@ -2206,6 +2254,8 @@ function renderHoy(){
         ${!isDesktop&&canEdit()&&actsVista.length?`<div style="padding:8px 0;text-align:center;color:var(--text3);font-size:10.5px">← Deslizar para completar</div>`:''}
       </div>
     </div>
+
+    ${planWidget}
 
     <!-- Asistencia por período -->
     <div class="card" style="margin-top:10px">
@@ -3714,6 +3764,7 @@ function showAddActPropio(ai, ctx){
         <input type="time" id="a-hf" value="${a.hora_fin||''}"></div>
     </div>
     ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
+    ${(S.planActs||[]).length?`<div style="margin-top:12px"><label class="fl" style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px;letter-spacing:.07em">PLAN GENERAL</label><select id="sa-plan-id" style="width:100%;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:var(--font)"><option value="">— Sin vincular —</option>${(S.planActs||[]).map(p=>'<option value="'+p.id+'"'+((a.plan_id===p.id)?' selected':'')+'>'+esc(p.nombre)+(p.nivel?' ('+p.nivel+')':'')+'</option>').join('')}</select></div>`:''}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
@@ -3814,6 +3865,7 @@ function showAddActContratista(ai, preContratista, ctx){
     <input type="hidden" id="a-tipo" value="contratista">
     <input type="hidden" id="a-edit-id" value="${edit?a.id:''}">
     ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
+    ${(S.planActs||[]).length?`<div style="margin-top:12px"><label class="fl" style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px;letter-spacing:.07em">PLAN GENERAL</label><select id="sa-plan-id" style="width:100%;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:var(--font)"><option value="">— Sin vincular —</option>${(S.planActs||[]).map(p=>'<option value="'+p.id+'"'+((a.plan_id===p.id)?' selected':'')+'>'+esc(p.nombre)+(p.nivel?' ('+p.nivel+')':'')+'</option>').join('')}</select></div>`:''}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
@@ -3909,6 +3961,7 @@ function showAddActIngeniero(ai){
     <input type="hidden" id="a-tipo" value="ingeniero">
     <input type="hidden" id="a-edit-id" value="${edit?a.id:''}">
     ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
+    ${(S.planActs||[]).length?`<div style="margin-top:12px"><label class="fl" style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px;letter-spacing:.07em">PLAN GENERAL</label><select id="sa-plan-id" style="width:100%;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:var(--font)"><option value="">— Sin vincular —</option>${(S.planActs||[]).map(p=>'<option value="'+p.id+'"'+((a.plan_id===p.id)?' selected':'')+'>'+esc(p.nombre)+(p.nivel?' ('+p.nivel+')':'')+'</option>').join('')}</select></div>`:''}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
@@ -3940,6 +3993,7 @@ async function saveActIngeniero(ai){
     fecha_fin:(document.getElementById('a-ff')||{value:''}).value,
     fecha:S.fecha, foto_pendiente:false,
     predecesoras:(document.getElementById('a-preds')||{value:''}).value.trim()||null,
+    plan_id:(document.getElementById('sa-plan-id')||{value:''}).value||null,
   };
   // Only include time fields when they have a value (requires DB migration — safe to omit when null)
   var _hiI=(document.getElementById('a-hi')||{value:''}).value.trim();
@@ -4070,6 +4124,7 @@ async function saveAct(ai){
     fecha:S.fecha,
     foto_pendiente:false,
     predecesoras:getFld('a-preds','').trim()||null,
+    plan_id:(document.getElementById('sa-plan-id')||{value:''}).value||null,
   };
   // Only include time fields when they have a value (requires DB migration — safe to omit when null)
   var _hi=getFld('a-hi','').trim(),_hf=getFld('a-hf','').trim();
@@ -9070,7 +9125,7 @@ async function deleteOrden(id){
 // ══════════════════════════════════════════════════════════════════════
 // MÓDULO DE PLANIFICACIÓN — GANTT INTERACTIVO v2
 // ══════════════════════════════════════════════════════════════════════
-var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaFs:[],areaMenu:false,tipoF:'',workerFs:[],workerMenu:false,drag:null,bounds:null,ppd:0,rowY:{},rowOrder:{},linkTipo:'FS',linkLag:0,linkMode:'manual',rowDrag:null,history:[],mode:'gantt',groupMode:'area',collAreas:{}};
+var _g={zoom:'week',link:false,lSrc:null,sel:null,crit:false,areaFs:[],areaMenu:false,tipoF:'',workerFs:[],workerMenu:false,drag:null,bounds:null,ppd:0,rowY:{},rowOrder:{},linkTipo:'FS',linkLag:0,linkMode:'manual',rowDrag:null,history:[],mode:'gantt',groupMode:'area',collAreas:{},macroMode:false};
 var GROW=52,GGRP=32,GTOP=56,GSIDE=256;
 var GPPD={day:36,week:20,month:7};
 var GTYPES={
@@ -9157,6 +9212,7 @@ function renderPlan(){
   var _am=document.getElementById('gantt-area-menu');if(_am)_am.remove();
   var _wov=document.getElementById('gantt-worker-overlay');if(_wov)_wov.remove();
   var _wm=document.getElementById('gantt-worker-menu');if(_wm)_wm.remove();
+  if(_g.macroMode){renderPlanGeneral();return;}
   // Responsive sidebar
   GSIDE=window.innerWidth>=900?256:190;
   var el=document.getElementById('c-plan');if(!el) return;
@@ -9238,10 +9294,12 @@ function renderPlan(){
           '<button onclick="ganttHelp()" title="Ayuda" style="'+iconBtnSt+'">?</button>'+
           '<button onclick="ganttToggleChain()" title="'+(chainMode?'Vista por áreas':'Ordenar por cadenas')+'" style="'+iconBtnSt.replace('var(--bg3)',chainMode?'#7C3AED':'var(--bg3)').replace('var(--text2)',chainMode?'#fff':'var(--text2)')+'">⛓️</button>'+
           '<button onclick="ganttToggleMode()" title="'+(_g.mode==='table'?'Ver Gantt':'Rellenar fechas')+'" style="'+iconBtnSt.replace('var(--bg3)',_g.mode==='table'?'var(--accent)':'var(--bg3)').replace('var(--text2)',_g.mode==='table'?'#fff':'var(--text2)')+'">'+(_g.mode==='table'?'📊':'📋')+'</button>'+
+          '<button onclick="ganttToggleMacroMode()" title="Plan general de obra" style="'+iconBtnSt.replace('var(--bg3)',_g.macroMode?'var(--accent)':'var(--bg3)').replace('var(--text2)',_g.macroMode?'#fff':'var(--text2)')+'">📋</button>'+
           (bCnt?'<button onclick="_gOpenBandeja()" title="Actividades sin enlaces — integrar al plan" style="padding:0 12px;height:36px;border-radius:9px;border:1.5px solid #7C3AED;background:#EDE9FE;color:#5B21B6;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">📬 '+bCnt+' pendientes</button>':'')
         :
           '<button onclick="ganttPrint()" title="Imprimir Gantt" style="'+iconBtnSt+'">🖨️</button>'+
-          '<button onclick="ganttToggleChain()" title="'+(chainMode?'Vista por áreas':'Ordenar por cadenas')+'" style="'+iconBtnSt.replace('var(--bg3)',chainMode?'#7C3AED':'var(--bg3)').replace('var(--text2)',chainMode?'#fff':'var(--text2)')+'">⛓️</button>'
+          '<button onclick="ganttToggleChain()" title="'+(chainMode?'Vista por áreas':'Ordenar por cadenas')+'" style="'+iconBtnSt.replace('var(--bg3)',chainMode?'#7C3AED':'var(--bg3)').replace('var(--text2)',chainMode?'#fff':'var(--text2)')+'">⛓️</button>'+
+          '<button onclick="ganttToggleMacroMode()" title="Plan general de obra" style="'+iconBtnSt.replace('var(--bg3)',_g.macroMode?'var(--accent)':'var(--bg3)').replace('var(--text2)',_g.macroMode?'#fff':'var(--text2)')+'">📋</button>'
         )+
         '<div style="margin-left:auto;display:flex;gap:2px;background:var(--bg3);border-radius:9px;padding:3px;flex-shrink:0">'+zbHtml+'</div>'+
       '</div>'+
@@ -10637,6 +10695,252 @@ async function ganttPanelLinkUpdate(succId,predId,field,value){
     logCambio('enlace','actividad',succId,succ.descripcion||'',field+'='+value);
     _gRender();
   }catch(e){_g.history.pop();showToast('Error: '+e.message,'err');}
+}
+
+function ganttToggleMacroMode(){_g.macroMode=!_g.macroMode;renderPlan();}
+
+function renderPlanGeneral(){
+  var el=document.getElementById('c-plan');if(!el) return;
+  var plans=S.planActs||[];
+  var catF=S._planCatF||'';var nivF=S._planNivF||'';
+  if(catF) plans=plans.filter(function(p){return p.categoria===catF;});
+  if(nivF) plans=plans.filter(function(p){return p.nivel===nivF;});
+  var CATS=['Estructura','MEP','Drywall','Acabados','Otro'];
+  var NIVS=['N2','N3','N4','N5','N6','N7','Áreas Comunes','Penthouse'];
+  var catColors={'Estructura':'#2563EB','MEP':'#0891B2','Drywall':'#7C3AED','Acabados':'#059669','Otro':'#64748B'};
+  var btnSt2='height:32px;padding:0 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0';
+  var toolbar='<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2);padding:8px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+    '<button onclick="ganttToggleMacroMode()" style="'+btnSt2+';color:var(--accent);border-color:var(--accent)">&#9664; Gantt</button>'+
+    '<span style="font-size:13px;font-weight:700;color:var(--text1);flex:1">Plan General de Obra</span>'+
+    '<select onchange="S._planCatF=this.value;renderPlanGeneral()" style="'+btnSt2+'">'+
+      '<option value="">Todas las categorías</option>'+
+      CATS.map(function(c){return '<option value="'+c+'"'+(catF===c?' selected':'')+'>'+c+'</option>';}).join('')+
+    '</select>'+
+    '<select onchange="S._planNivF=this.value;renderPlanGeneral()" style="'+btnSt2+'">'+
+      '<option value="">Todos los niveles</option>'+
+      NIVS.map(function(n){return '<option value="'+n+'"'+(nivF===n?' selected':'')+'>'+n+'</option>';}).join('')+
+    '</select>'+
+    (isAdmin()?'<button onclick="abrirModalNuevaPlanAct()" style="'+btnSt2.replace('var(--bg3)','var(--accent)').replace('var(--text2)','#fff')+';border-color:var(--accent);font-weight:700">+ Nueva</button>':'')+
+    '<button onclick="S._planVista=(S._planVista===\'gantt\'?\'lista\':\'gantt\');renderPlanGeneral()" style="'+btnSt2+'">'+(S._planVista==='gantt'?'&#128203; Lista':'&#128202; Gantt')+'</button>'+
+  '</div>';
+  var body='';
+  if(S._planVista==='gantt'){
+    body=renderPlanGanttMacroHTML(S.planActs||[]);
+  } else {
+    if(!plans.length){
+      body='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;gap:12px;color:var(--text3)">'+
+        '<div style="font-size:36px">&#128203;</div>'+
+        '<div style="font-size:14px;font-weight:600">Sin actividades de plan</div>'+
+        (isAdmin()?'<button onclick="abrirModalNuevaPlanAct()" class="ibtn primary">+ Agregar primera actividad</button>':'')+
+      '</div>';
+    } else {
+      body='<div style="padding:12px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1">';
+      plans.forEach(function(p){
+        var avance=calcularAvancePadre(p.id);
+        var subs=(S.acts||[]).filter(function(a){return a.plan_id===p.id;});
+        var done=subs.filter(function(a){return a.estado==='completado';}).length;
+        var clrCat=catColors[p.categoria]||'#64748B';
+        var barClr=avance>=80?'#059669':avance>=40?'#D97706':'#DC2626';
+        var hoy=new Date().toISOString().slice(0,10);
+        var diasR=p.fecha_fin_plan?Math.ceil((new Date(p.fecha_fin_plan+'T12:00:00')-new Date(hoy+'T12:00:00'))/86400000):null;
+        var open=S._planOpen&&S._planOpen[p.id];
+        var subHtml='';
+        if(open&&subs.length){
+          subHtml='<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:6px">';
+          subs.forEach(function(a){
+            var sc={'completado':'#059669','en-progreso':'#7C3AED','pendiente':'#9CA3AF','pausada':'#D97706'}[a.estado]||'#9CA3AF';
+            subHtml+='<div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:4px 6px;background:var(--bg2);border-radius:6px">'+
+              '<span style="width:8px;height:8px;border-radius:50%;background:'+sc+';flex-shrink:0"></span>'+
+              '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.descripcion||'Actividad')+'</span>'+
+              '<span style="font-size:10px;color:var(--text3);flex-shrink:0">'+esc(a.personal_nombre||a.ingeniero_nombre||'')+'</span>'+
+            '</div>';
+          });
+          subHtml+='</div>';
+        }
+        body+='<div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden;border:1px solid var(--border)">'+
+          '<div onclick="planToggleCard(\''+p.id+'\')" style="padding:12px 14px;cursor:pointer">'+
+            '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">'+
+              '<div style="flex:1;min-width:0">'+
+                '<div style="font-size:13px;font-weight:700;color:var(--text1);margin-bottom:4px">'+esc(p.nombre)+'</div>'+
+                '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+                  (p.categoria?'<span style="font-size:10px;font-weight:600;background:'+clrCat+'22;color:'+clrCat+';padding:1px 7px;border-radius:10px">'+esc(p.categoria)+'</span>':'')+
+                  (p.nivel?'<span style="font-size:10px;background:var(--bg3);color:var(--text3);padding:1px 7px;border-radius:10px">&#128205; '+esc(p.nivel)+'</span>':'')+
+                  (diasR!==null?'<span style="font-size:10px;background:'+(diasR<0?'#FEE2E2':diasR<7?'#FEF3C7':'var(--bg3)')+';color:'+(diasR<0?'#DC2626':diasR<7?'#D97706':'var(--text3)')+';padding:1px 7px;border-radius:10px">'+(diasR<0?'&#9888;&#65039; Vencido':'&#9200; '+diasR+'d')+'</span>':'')+
+                '</div>'+
+              '</div>'+
+              '<div style="text-align:right;flex-shrink:0">'+
+                '<div style="font-size:20px;font-weight:800;color:'+barClr+'">'+avance+'%</div>'+
+                (subs.length?'<div style="font-size:10px;color:var(--text3)">'+done+'/'+subs.length+' sub</div>':'')+
+              '</div>'+
+            '</div>'+
+            '<div style="background:var(--bg3);border-radius:4px;height:8px;overflow:hidden">'+
+              '<div style="background:'+barClr+';height:100%;width:'+avance+'%;border-radius:4px;transition:width .4s"></div>'+
+            '</div>'+
+            (p.fecha_inicio_plan||p.fecha_fin_plan?'<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--text3)">'+
+              '<span>Plan: '+(p.fecha_inicio_plan||'—')+' &#8594; '+(p.fecha_fin_plan||'—')+'</span>'+
+              (subs.length?'<span>'+(open?'&#9650; Ocultar':'&#9660; '+subs.length+' activ.')+'</span>':'')+
+            '</div>':'')+
+          '</div>'+
+          subHtml+
+          (isAdmin()?'<div style="padding:0 14px 10px;display:flex;gap:6px">'+
+            '<button onclick="event.stopPropagation();editarPlanAct(\''+p.id+'\')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--border2);border-radius:6px;background:var(--bg3);color:var(--text2);cursor:pointer;font-family:var(--font)">&#9998;&#65039; Editar</button>'+
+            '<button onclick="event.stopPropagation();eliminarPlanAct(\''+p.id+'\')" style="font-size:11px;padding:3px 10px;border:1.5px solid #FCA5A5;border-radius:6px;background:#FEF2F2;color:#DC2626;cursor:pointer;font-family:var(--font)">&#128465;</button>'+
+          '</div>':'')+
+        '</div>';
+      });
+      body+='</div>';
+    }
+  }
+  el.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+toolbar+'<div style="flex:1;overflow:auto">'+body+'</div></div>';
+}
+
+function renderPlanGanttMacroHTML(plans){
+  if(!plans.length) return '<div style="padding:40px;text-align:center;color:var(--text3)">Sin actividades en el plan</div>';
+  var hoy=new Date().toISOString().slice(0,10);
+  var allDates=[];
+  plans.forEach(function(p){if(p.fecha_inicio_plan)allDates.push(p.fecha_inicio_plan);if(p.fecha_fin_plan)allDates.push(p.fecha_fin_plan);});
+  if(!allDates.length){allDates.push(hoy);allDates.push(new Date(Date.now()+90*86400000).toISOString().slice(0,10));}
+  var minD=allDates.reduce(function(a,b){return a<b?a:b;});
+  var maxD=allDates.reduce(function(a,b){return a>b?a:b;});
+  var mn=new Date(minD+'T12:00:00');mn.setDate(mn.getDate()-7);
+  var mx=new Date(maxD+'T12:00:00');mx.setDate(mx.getDate()+14);
+  var totalDays=Math.ceil((mx-mn)/86400000);
+  var ppd=Math.max(4,Math.min(14,800/totalDays));
+  var LSIDE=180,HROW=36,HHEAD=32;
+  var svgW=LSIDE+Math.ceil(totalDays*ppd);
+  var svgH=HHEAD+plans.length*HROW+20;
+  function px(ds){return LSIDE+Math.round((new Date(ds+'T12:00:00')-mn)/86400000*ppd);}
+  var catColors={'Estructura':'#2563EB','MEP':'#0891B2','Drywall':'#7C3AED','Acabados':'#059669','Otro':'#64748B'};
+  var s='<rect width="'+svgW+'" height="'+svgH+'" fill="#fff"/>';
+  s+='<rect y="0" width="'+svgW+'" height="'+HHEAD+'" fill="#f1f5f9"/>';
+  s+='<rect y="0" width="'+LSIDE+'" height="'+svgH+'" fill="#f8f6ff"/>';
+  var MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var gd=new Date(mn.getTime());gd.setDate(1);
+  while(+gd<=+mx){
+    var gx=LSIDE+Math.round((+gd-+mn)/86400000*ppd);
+    if(gx>LSIDE){
+      s+='<line x1="'+gx+'" y1="0" x2="'+gx+'" y2="'+svgH+'" stroke="#e2e8f0" stroke-width="0.5"/>';
+      s+='<text x="'+(gx+3)+'" y="20" font-size="9" font-weight="700" fill="#475569" font-family="system-ui">'+MES[gd.getMonth()]+' '+gd.getFullYear()+'</text>';
+    }
+    gd.setMonth(gd.getMonth()+1);
+  }
+  if(ppd>=5){var wd=new Date(+mn);while(+wd<=+mx){if(wd.getDay()===1){var wx=LSIDE+Math.round((+wd-+mn)/86400000*ppd);if(wx>LSIDE){s+='<line x1="'+wx+'" y1="22" x2="'+wx+'" y2="'+HHEAD+'" stroke="#cbd5e1" stroke-width="0.5"/>';s+='<text x="'+(wx+2)+'" y="30" font-size="6.5" fill="#94a3b8" font-family="system-ui">'+wd.getDate()+'</text>';}}wd.setDate(wd.getDate()+1);}}
+  s+='<line x1="0" y1="'+HHEAD+'" x2="'+svgW+'" y2="'+HHEAD+'" stroke="#cbd5e1" stroke-width="1"/>';
+  s+='<line x1="'+LSIDE+'" y1="0" x2="'+LSIDE+'" y2="'+svgH+'" stroke="#cbd5e1" stroke-width="1.5"/>';
+  var tdx=px(hoy);
+  if(tdx>LSIDE&&tdx<svgW){
+    s+='<line x1="'+tdx+'" y1="'+HHEAD+'" x2="'+tdx+'" y2="'+svgH+'" stroke="#EF4444" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.8"/>';
+    s+='<text x="'+(tdx+2)+'" y="'+(HHEAD-2)+'" font-size="7.5" fill="#EF4444" font-weight="700" font-family="system-ui">HOY</text>';
+  }
+  plans.forEach(function(p,i){
+    var cy=HHEAD+i*HROW;
+    var avance=calcularAvancePadre(p.id);
+    var barClr=avance>=80?'#059669':avance>=40?'#D97706':'#DC2626';
+    var nm=p.nombre;if(nm.length>22)nm=nm.slice(0,21)+'…';
+    s+='<rect x="0" y="'+cy+'" width="'+svgW+'" height="'+HROW+'" fill="'+(i%2===0?'#fff':'#faf9ff')+'"/>';
+    s+='<text x="8" y="'+(cy+HROW/2+4)+'" font-size="10" fill="#1e293b" font-family="system-ui">'+esc(nm)+'</text>';
+    s+='<text x="'+(LSIDE-6)+'" y="'+(cy+HROW/2+4)+'" font-size="9" fill="'+barClr+'" text-anchor="end" font-family="system-ui">'+avance+'%</text>';
+    s+='<line x1="0" y1="'+(cy+HROW)+'" x2="'+svgW+'" y2="'+(cy+HROW)+'" stroke="#f1f5f9" stroke-width="0.5"/>';
+    if(p.fecha_inicio_plan&&p.fecha_fin_plan){
+      var bx=px(p.fecha_inicio_plan),bxE=px(p.fecha_fin_plan),bw=Math.max(bxE-bx,8);
+      var by=cy+6,bh=HROW-12;
+      var clrCat=catColors[p.categoria]||'#64748B';
+      s+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="4" fill="'+clrCat+'" fill-opacity=".2" stroke="'+clrCat+'" stroke-width="1.4"/>';
+      if(avance>0){var pw=Math.round(bw*avance/100);if(pw>0)s+='<rect x="'+bx+'" y="'+by+'" width="'+pw+'" height="'+bh+'" rx="4" fill="'+barClr+'" fill-opacity=".55"/>';}
+      if(bw>60)s+='<text x="'+(bx+6)+'" y="'+(by+bh/2+3.5)+'" font-size="8" fill="'+clrCat+'" font-weight="700" font-family="system-ui">'+p.fecha_inicio_plan.slice(5).replace('-','/')+'–'+p.fecha_fin_plan.slice(5).replace('-','/')+'</text>';
+    }
+  });
+  return '<div style="overflow:auto;padding:0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="display:block;min-width:'+svgW+'px;height:auto" font-family="system-ui,sans-serif">'+s+'</svg></div>';
+}
+
+function planToggleCard(id){
+  if(!S._planOpen) S._planOpen={};
+  S._planOpen[id]=!S._planOpen[id];
+  renderPlanGeneral();
+}
+
+function abrirModalNuevaPlanAct(editId){
+  var ex=editId?(S.planActs||[]).find(function(p){return p.id===editId;}):null;
+  var CATS=['Estructura','MEP','Drywall','Acabados','Otro'];
+  var NIVS=['N2','N3','N4','N5','N6','N7','Áreas Comunes','Penthouse'];
+  var inpSt='width:100%;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:var(--font);background:#fff;color:var(--text1);box-sizing:border-box';
+  document.getElementById('mcontent').innerHTML=
+    '<div style="padding:20px">'+
+      '<h3 style="margin:0 0 16px;font-size:16px;color:var(--text1)">'+(ex?'Editar':'Nueva')+' actividad general</h3>'+
+      '<div style="display:flex;flex-direction:column;gap:12px">'+
+        '<div><label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">NOMBRE *</label>'+
+          '<input id="pa-nombre" type="text" placeholder="Ej: Instalación de pisos N3" value="'+esc(ex?ex.nombre:'')+'" style="'+inpSt+'"></div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+          '<div><label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">CATEGORÍA</label>'+
+            '<select id="pa-cat" style="'+inpSt+'">'+
+              '<option value="">— Selecciona —</option>'+
+              CATS.map(function(c){return '<option value="'+c+'"'+(ex&&ex.categoria===c?' selected':'')+'>'+c+'</option>';}).join('')+
+            '</select></div>'+
+          '<div><label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">NIVEL</label>'+
+            '<select id="pa-nivel" style="'+inpSt+'">'+
+              '<option value="">— Selecciona —</option>'+
+              NIVS.map(function(n){return '<option value="'+n+'"'+(ex&&ex.nivel===n?' selected':'')+'>'+n+'</option>';}).join('')+
+            '</select></div>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+          '<div><label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">INICIO PLANIFICADO</label>'+
+            '<input id="pa-fi" type="date" value="'+(ex&&ex.fecha_inicio_plan?ex.fecha_inicio_plan:'')+'" style="'+inpSt+'"></div>'+
+          '<div><label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">FIN PLANIFICADO</label>'+
+            '<input id="pa-ff" type="date" value="'+(ex&&ex.fecha_fin_plan?ex.fecha_fin_plan:'')+'" style="'+inpSt+'"></div>'+
+        '</div>'+
+        '<div><label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">AVANCE MANUAL % (si no hay subactividades)</label>'+
+          '<input id="pa-avance" type="number" min="0" max="100" value="'+(ex?ex.avance_manual||0:0)+'" style="'+inpSt.replace('width:100%','width:100px')+'" placeholder="0-100"></div>'+
+        '<div><label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">ORDEN</label>'+
+          '<input id="pa-orden" type="number" value="'+(ex?ex.orden||0:0)+'" style="'+inpSt.replace('width:100%','width:80px')+'"></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px;margin-top:20px">'+
+        '<button onclick="savePlanAct('+(ex?"'"+ex.id+"'":'')+')" class="ibtn primary" style="flex:1">'+esc(ex?'Guardar cambios':'Crear actividad')+'</button>'+
+        '<button onclick="closeModal()" class="ibtn" style="padding:0 16px">Cancelar</button>'+
+      '</div>'+
+    '</div>';
+  openModal();
+}
+
+function editarPlanAct(id){abrirModalNuevaPlanAct(id);}
+
+async function savePlanAct(editId){
+  var nombre=document.getElementById('pa-nombre').value.trim();
+  if(!nombre){showToast('El nombre es obligatorio','warn');return;}
+  var body={
+    nombre:nombre,
+    categoria:document.getElementById('pa-cat').value||null,
+    nivel:document.getElementById('pa-nivel').value||null,
+    fecha_inicio_plan:document.getElementById('pa-fi').value||null,
+    fecha_fin_plan:document.getElementById('pa-ff').value||null,
+    avance_manual:parseInt(document.getElementById('pa-avance').value)||0,
+    orden:parseInt(document.getElementById('pa-orden').value)||0,
+  };
+  closeModal();
+  try{
+    if(editId){
+      await sb('obra_plan_actividades?id=eq.'+editId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
+      var idx=(S.planActs||[]).findIndex(function(p){return p.id===editId;});
+      if(idx>=0) Object.assign(S.planActs[idx],body);
+      showToast('Actividad actualizada ✓');
+    } else {
+      body.id=uid();
+      var res=await sb('obra_plan_actividades',{method:'POST',prefer:'return=representation',body:JSON.stringify(body)});
+      if(!S.planActs) S.planActs=[];
+      S.planActs.push(Array.isArray(res)?res[0]:body);
+      showToast('Actividad creada ✓');
+    }
+    renderPlanGeneral();
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+
+async function eliminarPlanAct(id){
+  if(!confirm('¿Eliminar esta actividad del plan?')) return;
+  try{
+    await sb('obra_plan_actividades?id=eq.'+id,{method:'DELETE',prefer:'return=minimal'});
+    S.planActs=(S.planActs||[]).filter(function(p){return p.id!==id;});
+    showToast('Eliminado ✓');
+    renderPlanGeneral();
+  }catch(e){showToast('Error: '+e.message,'err');}
 }
 
 </script>
