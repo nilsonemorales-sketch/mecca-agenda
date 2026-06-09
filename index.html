@@ -675,8 +675,8 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260609_2';
-const APP_BUILD='mecca-v3';
+const APP_VERSION='20260609_3';
+const APP_BUILD='mecca-v4';
 // Auto-update: fetch sw.js with unique timestamp (bypasses ALL caches, even CDN).
 // If the CACHE version in sw.js doesn't match APP_BUILD, reload with cache-busted URL.
 (function(){
@@ -4385,6 +4385,49 @@ function renderReportes(){
         '</div>'+
       '</div>':'')+
     (actsF.length===0?'<div class="empty">Sin actividades para los filtros seleccionados</div>':
+      RF.sortBy==='area' ? (function(){
+        // Grouped by location — build ordered groups
+        var groups={};
+        var order=[];
+        actsF.forEach(function(a){
+          var k=(a.area||'Sin ubicación').trim();
+          if(!groups[k]){groups[k]=[];order.push(k);}
+          groups[k].push(a);
+        });
+        return order.map(function(loc){
+          var grp=groups[loc];
+          var done=grp.filter(function(a){return a.estado==='completado';}).length;
+          var pctG=Math.round(done/grp.length*100);
+          return'<div style="margin-bottom:14px">'+
+            '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--accent);border-radius:var(--r) var(--r) 0 0;color:#fff">'+
+              '<span style="font-size:12px;font-weight:700">📍 '+esc(loc)+'</span>'+
+              '<span style="font-size:11px;opacity:.85">'+done+'/'+grp.length+' · '+pctG+'%</span>'+
+            '</div>'+
+            '<div style="border:1.5px solid var(--accent);border-top:none;border-radius:0 0 var(--r) var(--r);overflow:hidden">'+
+            grp.map(function(a,i){
+              var isSel=!!(S.repSel&&S.repSel[a.id]);
+              var bgColor=isSel?'var(--accent-soft)':'var(--bg2)';
+              return'<div style="padding:8px 10px;background:'+bgColor+';border-top:'+(i>0?'1px solid var(--border)':'none')+';cursor:pointer;border-left:3px solid '+(a.tipo_personal==='contratista'?'var(--purple)':'var(--accent)')+(isSel?';outline:1.5px solid var(--accent)':'')+'" onclick="repTogSel(\''+a.id+'\')">'+
+                '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">'+
+                  '<div style="display:flex;align-items:center;gap:8px">'+
+                    '<input type="checkbox"'+(isSel?' checked':'')+' onclick="event.stopPropagation();repTogSel(\''+a.id+'\')" style="accent-color:var(--accent);width:14px;height:14px;flex-shrink:0;cursor:pointer">'+
+                    '<span style="font-size:12px;font-weight:500">'+esc(a.descripcion)+'</span>'+
+                  '</div>'+
+                  '<span class="pill '+a.estado.replace(' ','-')+'" style="font-size:9px;flex-shrink:0">'+a.estado+'</span>'+
+                '</div>'+
+                '<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text3);padding-left:22px">'+
+                  (a.personal_nombre?'<span>👤 '+esc(a.personal_nombre)+'</span>':'')+
+                  (a.ingeniero_nombre?'<span>🏗 '+esc(a.ingeniero_nombre)+'</span>':'')+
+                  (a.fecha?'<span>'+a.fecha+'</span>':'')+
+                  (a.porcentaje>0?'<span>'+a.porcentaje+'%</span>':'')+
+                  '<span class="pill '+a.tipo_personal+'" style="font-size:9px">'+a.tipo_personal+'</span>'+
+                '</div>'+
+              '</div>';
+            }).join('')+
+            '</div>'+
+          '</div>';
+        }).join('');
+      })() :
       actsF.map(function(a){
         var isSel=!!(S.repSel&&S.repSel[a.id]);
         var borderColor=isSel?'var(--accent)':(a.tipo_personal==='contratista'?'var(--purple)':'var(--border)');
