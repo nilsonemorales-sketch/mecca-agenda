@@ -518,8 +518,8 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="tab" data-tab="fotos" onclick="goTab('fotos')">📷 Fotos</div>
     <div class="tab" data-tab="planos" onclick="goTab('planos')">📐 Planos</div>
     <div class="tab" data-tab="compras" onclick="goTab('compras')">🛒 Compras</div>
-    <div class="tab" data-tab="plan" onclick="goTab('plan')">📅 Plan</div>
-    <div class="tab" data-tab="plan2" onclick="goTab('plan2')">🗂️ Plan 2.0</div>
+    <div class="tab" data-tab="plan" id="tab-plan" onclick="goTab('plan')" style="display:none">📅 Plan</div>
+    <div class="tab" data-tab="plan2" id="tab-plan2" onclick="goTab('plan2')" style="display:none">🗂️ Plan 2.0</div>
   </div>
 
   <div class="body">
@@ -1816,6 +1816,13 @@ function updateUserUI(){
     const b=document.getElementById('inactividad-banner');
     if(b) b.style.display='none';
   }
+  // Plan tabs: solo visibles para admin
+  var tP=document.getElementById('tab-plan');
+  var tP2=document.getElementById('tab-plan2');
+  var adminVal=isAdmin();
+  if(tP) tP.style.display=adminVal?'':'none';
+  if(tP2) tP2.style.display=adminVal?'':'none';
+  if(!adminVal&&(S.currentTab==='plan'||S.currentTab==='plan2')) goTab('hoy');
   // All tabs visible to all users (historial/penalidades accessible via sub-tabs)
   updateFAB();
 }
@@ -9215,6 +9222,7 @@ function _gSelSt(extra){
 }
 
 function renderPlan(){
+  if(!isAdmin()){goTab('hoy');return;}
   // Clean up any portal elements from previous render
   var _ov=document.getElementById('gantt-area-overlay');if(_ov)_ov.remove();
   var _am=document.getElementById('gantt-area-menu');if(_am)_am.remove();
@@ -11276,6 +11284,7 @@ function p2SetTab(tab){P2.tab=tab;renderPlan2();}
 
 // ── Entrada principal ─────────────────────────────────────────────────────
 function renderPlan2(){
+  if(!isAdmin()){goTab('hoy');return;}
   var el=document.getElementById('c-plan2');if(!el)return;
   if(!S.planActs||!S.planActs.length){
     el.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+p2hdr()+
