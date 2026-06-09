@@ -11721,9 +11721,16 @@ function p2GanttHTML(proj,endDate,target,TODAY){
 }
 
 if('serviceWorker' in navigator){
+  var _swReloaded=false;
   window.addEventListener('load',function(){
     navigator.serviceWorker.register('./sw.js')
-      .then(function(reg){reg.update();})
+      .then(function(reg){
+        reg.update();
+        // Auto-reload when a new SW takes control (new version deployed)
+        navigator.serviceWorker.addEventListener('controllerchange',function(){
+          if(!_swReloaded){_swReloaded=true;window.location.reload();}
+        });
+      })
       .catch(function(err){console.warn('SW:',err);});
   });
 }

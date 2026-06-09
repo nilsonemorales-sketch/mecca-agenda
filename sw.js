@@ -1,7 +1,7 @@
 // Mecca Agenda — Service Worker
 // Network-first para la página principal: siempre carga fresh del servidor.
 
-var CACHE = 'mecca-v1';
+var CACHE = 'mecca-v2';
 
 self.addEventListener('install', function(e) {
   self.skipWaiting(); // Activa inmediatamente sin esperar reload
@@ -21,10 +21,12 @@ self.addEventListener('activate', function(e) {
 self.addEventListener('fetch', function(e) {
   var req = e.request;
 
-  // Navegación (el HTML principal): SIEMPRE red, nunca caché
+  // Navegación (el HTML principal): SIEMPRE red con cache:'reload'
+  // cache:'reload' envía Cache-Control:no-cache a la CDN de GitHub Pages,
+  // forzando contenido fresco en lugar del HTML cacheado (max-age=600).
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req, { cache: 'no-store' }).catch(function() {
+      fetch(req, { cache: 'reload' }).catch(function() {
         return caches.match(req); // offline fallback
       })
     );
