@@ -1,7 +1,7 @@
 // Mecca Agenda — Service Worker
 // Network-first para la página principal: siempre carga fresh del servidor.
 
-var CACHE = 'mecca-v5';
+var CACHE = 'mecca-v6';
 
 self.addEventListener('install', function(e) {
   self.skipWaiting(); // Activa inmediatamente sin esperar reload

@@ -507,7 +507,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
   <div class="sync idle" id="sync">
     <div class="sdot idle" id="sdot"></div>
     <span id="smsg">Iniciando...</span>
-    <span style="margin-left:auto;font-size:9px;opacity:.45;font-family:monospace">v0609c</span>
+    <span style="margin-left:auto;font-size:9px;opacity:.45;font-family:monospace">v0609d</span>
   </div>
 
   <div class="tabs">
@@ -675,8 +675,8 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260609_4';
-const APP_BUILD='mecca-v5';
+const APP_VERSION='20260609_5';
+const APP_BUILD='mecca-v6';
 // Auto-update: fetch sw.js with unique timestamp (bypasses ALL caches, even CDN).
 // If the CACHE version in sw.js doesn't match APP_BUILD, reload with cache-busted URL.
 (function(){
@@ -4231,6 +4231,41 @@ function renderReportes(){
   const actProp=S.acts.filter(a=>a.tipo_personal==='propio').length;
   const actCont=S.acts.filter(a=>a.tipo_personal==='contratista').length;
   const pct=propios.length?Math.round(pres/propios.length*100):0;
+  const urgentesD=S.acts.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';}).length;
+  const retrasadasD=S.acts.filter(function(a){return isRetrasada(a)&&a.estado!=='completado';}).length;
+  const pctComp=actTotal?Math.round(actDone/actTotal*100):0;
+
+  // Visual data for dashboard charts
+  var dByStatus={completado:actDone,'en-progreso':S.acts.filter(function(a){return a.estado==='en-progreso';}).length,pausada:S.acts.filter(function(a){return a.estado==='pausada';}).length,pendiente:S.acts.filter(function(a){return a.estado==='pendiente';}).length};
+  var dStatDefs=[{k:'completado',c:'#2f9e44',l:'Completado'},{k:'en-progreso',c:'#1a56db',l:'En progreso'},{k:'pausada',c:'#e67700',l:'Pausada'},{k:'pendiente',c:'#868e96',l:'Pendiente'}];
+  var dStatusBar='';
+  if(actTotal){
+    var dSegs=dStatDefs.map(function(s){var p2=Math.round(dByStatus[s.k]/actTotal*100);return p2>0?'<div style="flex:'+p2+';background:'+s.c+';min-width:2px" title="'+s.l+': '+dByStatus[s.k]+'"></div>':'';}).join('');
+    var dLeg=dStatDefs.filter(function(s){return dByStatus[s.k]>0;}).map(function(s){return'<span style="font-size:9px;color:var(--text3);display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+s.c+';flex-shrink:0"></span>'+s.l+' '+dByStatus[s.k]+'</span>';}).join('');
+    dStatusBar='<div style="height:8px;border-radius:4px;overflow:hidden;display:flex;margin-bottom:6px">'+dSegs+'</div><div style="display:flex;gap:8px;flex-wrap:wrap">'+dLeg+'</div>';
+  }
+  var dAreaData=[];
+  var dAreaGrp={};
+  S.acts.forEach(function(a){var ar=(a.area||'Sin área').trim();if(!dAreaGrp[ar])dAreaGrp[ar]={total:0,done:0,inprog:0};dAreaGrp[ar].total++;if(a.estado==='completado')dAreaGrp[ar].done++;if(a.estado==='en-progreso')dAreaGrp[ar].inprog++;});
+  Object.keys(dAreaGrp).forEach(function(k){var g=dAreaGrp[k];dAreaData.push({area:k,total:g.total,done:g.done,inprog:g.inprog,pct:Math.round(g.done/g.total*100)});});
+  dAreaData.sort(function(a,b){return b.total-a.total;});
+  var dAreaHtml='';
+  if(dAreaData.length>1){
+    dAreaHtml=dAreaData.slice(0,8).map(function(a){
+      var c=a.pct>=75?'#2f9e44':a.pct>=40?'#1a56db':'#868e96';
+      var ipW=a.total?Math.round(a.inprog/a.total*100):0;
+      return'<div style="margin-bottom:8px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'+
+          '<span style="font-size:11px;color:var(--text2);font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.area)+'</span>'+
+          '<span style="font-size:10px;color:'+c+';font-weight:700;font-family:var(--mono);flex-shrink:0;margin-left:8px">'+a.done+'/'+a.total+' · '+a.pct+'%</span>'+
+        '</div>'+
+        '<div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;display:flex">'+
+          '<div style="width:'+a.pct+'%;background:'+c+';height:100%"></div>'+
+          (ipW>0?'<div style="width:'+ipW+'%;background:#1a56db55;height:100%"></div>':'')+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }
 
   // Multi-select filter state — migrates from old single-string format automatically
   if(!S.repFiltros) S.repFiltros={};
@@ -4296,9 +4331,31 @@ function renderReportes(){
     '<div class="stats-row">'+
       '<div class="scard"><div class="v" style="color:var(--blue)">'+pct+'%</div><div class="l">Asistencia</div></div>'+
       '<div class="scard"><div class="v" style="color:var(--accent)">'+actDone+'/'+actTotal+'</div><div class="l">Completadas</div></div>'+
-      '<div class="scard"><div class="v" style="color:var(--accent)">'+actProp+'</div><div class="l">Propios</div></div>'+
-      '<div class="scard"><div class="v" style="color:var(--purple)">'+actCont+'</div><div class="l">Contratistas</div></div>'+
+      '<div class="scard"><div class="v" style="color:'+(urgentesD?'#e03131':'var(--text3)')+'">'+urgentesD+'</div><div class="l">Urgentes</div></div>'+
+      '<div class="scard"><div class="v" style="color:'+(retrasadasD?'#e03131':'var(--text3)')+'">'+retrasadasD+'</div><div class="l">Retrasadas</div></div>'+
     '</div>'+
+
+    // Visual overview — progress bar + area breakdown
+    (actTotal?
+      '<div style="background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:12px">'+
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:'+(dAreaHtml?'12px':'0px')+'">'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:8px">AVANCE GENERAL</div>'+
+            dStatusBar+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0">'+
+            '<div style="font-size:30px;font-weight:900;color:var(--accent);line-height:1">'+pctComp+'<span style="font-size:14px;font-weight:600">%</span></div>'+
+            '<div style="font-size:9px;color:var(--text3);margin-top:2px">completado</div>'+
+          '</div>'+
+        '</div>'+
+        (dAreaHtml?
+          '<div style="border-top:1px solid var(--border);padding-top:10px">'+
+            '<div style="font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:8px">AVANCE POR ÁREA</div>'+
+            dAreaHtml+
+          '</div>'
+        :'')+
+      '</div>'
+    :'')+
 
     // Filter bar — chip multi-select
     '<div style="background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:12px">'+
@@ -5192,6 +5249,15 @@ function exportarPDF(){
         '</select></div>'+
     '</div>'+
 
+    '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:6px">AGRUPAR ACTIVIDADES POR</div>'+
+    '<div style="margin-bottom:16px">'+
+      '<select id="pdf-agrupar" style="'+SEL+'">'+
+        '<option value="">Sin agrupar (por tipo: personal / contratistas)</option>'+
+        '<option value="area">📍 Ubicación / Área</option>'+
+        '<option value="contratista">👤 Contratista</option>'+
+      '</select>'+
+    '</div>'+
+
     '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:8px">SECCIONES A INCLUIR</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px">'+
       [
@@ -5212,6 +5278,31 @@ function exportarPDF(){
       '<button class="btn primary" onclick="pdfGenerar()">Generar PDF</button>'+
     '</div>';
 
+  // Auto pre-fill from filters active in the current view
+  (function(){
+    var e;
+    if(S.reportesVista==='custom'&&S.repC){
+      var C=S.repC;
+      if(C.tipo)                           {e=document.getElementById('pdf-tipo-pers');if(e)e.value=C.tipo;}
+      if(C.estado&&C.estado!=='activas')   {e=document.getElementById('pdf-estado');if(e)e.value=C.estado;}
+      if(C.contratista)                    {e=document.getElementById('pdf-contratista');if(e)e.value=C.contratista;}
+      if(C.responsable)                    {e=document.getElementById('pdf-ingeniero');if(e)e.value=C.responsable;}
+      if(C.ubicacion)                      {e=document.getElementById('pdf-ubicacion');if(e)e.value=C.ubicacion;}
+      if(C.desde)                          {e=document.getElementById('pdf-fi');if(e)e.value=C.desde;}
+      if(C.hasta)                          {e=document.getElementById('pdf-ff');if(e)e.value=C.hasta;}
+      var agMap={ubicacion:'area',contratista:'contratista'};
+      var ag=document.getElementById('pdf-agrupar');
+      if(ag&&C.agrupar&&agMap[C.agrupar])ag.value=agMap[C.agrupar];
+    } else if(S.repFiltros){
+      var RF=S.repFiltros;
+      if(RF.tipos&&RF.tipos.length===1)        {e=document.getElementById('pdf-tipo-pers');if(e)e.value=RF.tipos[0];}
+      if(RF.estados&&RF.estados.length===1)    {e=document.getElementById('pdf-estado');if(e)e.value=RF.estados[0];}
+      if(RF.contratistas&&RF.contratistas.length===1){e=document.getElementById('pdf-contratista');if(e)e.value=RF.contratistas[0];}
+      if(RF.ingenieros&&RF.ingenieros.length===1)    {e=document.getElementById('pdf-ingeniero');if(e)e.value=RF.ingenieros[0];}
+      if(RF.areas&&RF.areas.length===1)        {e=document.getElementById('pdf-ubicacion');if(e)e.value=RF.areas[0];}
+      if(RF.agrupar){var ag2=document.getElementById('pdf-agrupar');if(ag2)ag2.value=RF.agrupar;}
+    }
+  })();
   pdfUpdateFiltros();
   openModal();
 }
@@ -5294,6 +5385,7 @@ function pdfGenerar(){
     filtroEstado:       document.getElementById('pdf-estado')?.value||'',
     filtroPrioridad:    document.getElementById('pdf-prioridad')?.value||'',
     filtroUbicacion:    document.getElementById('pdf-ubicacion')?.value||'',
+    agruparPor:         document.getElementById('pdf-agrupar')?.value||'',
     secciones:{
       resumen:     !!document.getElementById('pdf-s-resumen')?.checked,
       asistencia:  !!document.getElementById('pdf-s-asist')?.checked,
@@ -5322,6 +5414,7 @@ async function generarPDF(opts){
   var fEst=opts.filtroEstado||'';
   var fPrio=opts.filtroPrioridad||'';
   var fUbic=opts.filtroUbicacion||'';
+  var fAgrup=opts.agruparPor||'';
 
   closeModal();
   setSS('syncing','Generando PDF...');
@@ -5694,11 +5787,52 @@ async function generarPDF(opts){
       y+=rowH+0.5;
     }
 
+    // ── ACTIVIDADES AGRUPADAS (por área o contratista) ───────────────
+    if(fAgrup&&(secs.propios||secs.contratistas)){
+      var actsGrp=[];
+      if(secs.propios)     actsGrp=actsGrp.concat(acts.filter(function(a){return a.tipo_personal==='propio';}));
+      if(secs.contratistas)actsGrp=actsGrp.concat(acts.filter(function(a){return a.tipo_personal==='contratista';}));
+      if(actsGrp.length){
+        var grpColor2=fAgrup==='area'?ACC:PUR;
+        var grpFn2=fAgrup==='area'?function(a){return(a.area||'Sin ubicacion').trim();}:function(a){return a.personal_nombre||'Sin asignar';};
+        var grpTotalComp=actsGrp.filter(function(a){return a.estado==='completado';}).length;
+        var grpTotalPct=Math.round(grpTotalComp/actsGrp.length*100);
+        var grpLabel2=fAgrup==='area'?'POR UBICACION':'POR CONTRATISTA';
+        secBanner('ACTIVIDADES '+grpLabel2+'  — '+actsGrp.length+' total  |  '+grpTotalComp+' completadas ('+grpTotalPct+'%)',grpColor2);
+        var grps2={},grpOrder2=[];
+        actsGrp.forEach(function(a){var k=grpFn2(a);if(!grps2[k]){grps2[k]=[];grpOrder2.push(k);}grps2[k].push(a);});
+        grpOrder2.sort();
+        grpOrder2.forEach(function(grpName){
+          var grpActs2=grps2[grpName];
+          var grpComp2=grpActs2.filter(function(a){return a.estado==='completado';}).length;
+          var grpPct2=Math.round(grpComp2/grpActs2.length*100);
+          chk(12);
+          fc(LGRAY);doc.rect(M,y,RW,9,'F');
+          fc(grpColor2);doc.rect(M,y,4,9,'F');
+          dc(grpColor2);doc.setLineWidth(0.5);doc.line(M,y+9,W-M,y+9);
+          tc(TXT);doc.setFontSize(8.5);doc.setFont('helvetica','bold');
+          doc.text(safe(grpName),M+8,y+5.8);
+          tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+          doc.text(grpComp2+'/'+grpActs2.length+' ('+grpPct2+'%)',W-M,y+3.5,{align:'right'});
+          var barC3=grpPct2>=80?GRN:grpPct2>=40?AMB:RED;
+          fc([220,220,225]);doc.rect(M+90,y+5.5,RW-94,1.5,'F');
+          fc(barC3);doc.rect(M+90,y+5.5,Math.max(0.5,(RW-94)*grpPct2/100),1.5,'F');
+          tc(barC3);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+          doc.text(grpPct2+'%',W-M,y+8.5,{align:'right'});
+          y+=11;
+          actTableHeader(grpColor2);
+          grpActs2.forEach(function(a,i){actTableRow(a,i+1,grpColor2);});
+          y+=3;
+        });
+        hrLine();
+      }
+    }
+
     // ── ACTIVIDADES PERSONAL X LA CASA ────────────────────────────
-    if(secs.propios){
+    if(secs.propios&&!fAgrup){
       var actP=acts.filter(function(a){return a.tipo_personal==='propio';});
       if(actP.length){
-        var compP=actP.filter(function(a){return a.estado==='completado';}).length;
+        var compP=acts.filter(function(a){return a.tipo_personal==='propio'&&a.estado==='completado';}).length;
         var pctP=Math.round(compP/actP.length*100);
         secBanner('PERSONAL X LA CASA  — '+actP.length+' actividades  |  '+compP+' completadas ('+pctP+'%)');
         actTableHeader(ACC);
@@ -5846,7 +5980,7 @@ async function generarPDF(opts){
     }
 
     // ── CONTRATISTAS ──────────────────────────────────────────────
-    if(secs.contratistas){
+    if(secs.contratistas&&!fAgrup){
       var actC=acts.filter(function(a){return a.tipo_personal==='contratista';});
       if(actC.length){
         var compC=actC.filter(function(a){return a.estado==='completado';}).length;
@@ -8267,6 +8401,12 @@ function renderRepPersonalizado(){
   ];
 
   var h='<div style="padding:12px 14px">';
+
+  // Header row with PDF button
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">';
+  h+='<div style="font-size:13px;font-weight:700;color:var(--text)">Reporte personalizado</div>';
+  h+='<button onclick="exportarPDF()" style="padding:8px 14px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:6px">📄 Exportar PDF</button>';
+  h+='</div>';
 
   // Stats
   h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">';
