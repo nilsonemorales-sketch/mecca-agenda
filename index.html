@@ -11187,14 +11187,135 @@ async function eliminarPlanAct(id){
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PLAN 2.0 — Estimador de fecha de término
+// PLAN 2.0 — Estimador de fecha de término · Mecca Residence 2026
 // ═══════════════════════════════════════════════════════════════════════════
-var P2={
-  tab:'partidas',
-  rates:{},       // planId → %/semana
-  activeMap:{},   // planId → boolean
-  params:{workDaysPerWeek:6,rainDaysPerWeek:0.5,productivityFactor:0.85,targetDate:'2026-10-31'}
+
+var P2 = {
+  tab: 'partidas',
+  state:  {},   // {[id]:{pct?,rate?,active?}} — sobreescribe INIT
+  params: {workDaysPerWeek:6, rainDaysPerWeek:0.5, productivityFactor:0.85, targetDate:'2026-10-31'}
 };
+// Persistencia localStorage
+(function(){
+  try{
+    var d=localStorage.getItem('mecca_p2');
+    if(d){var o=JSON.parse(d);P2.state=o.state||{};if(o.params)P2.params=o.params;}
+  }catch(e){}
+})();
+
+function p2Persist(){
+  try{localStorage.setItem('mecca_p2',JSON.stringify({state:P2.state,params:P2.params}));}catch(e){}
+}
+
+// ── Dataset base (hardcoded con desglose N2-N6) ────────────────────────────
+// Distribuciones por nivel aproximadas al % global de hoy (8/jun/2026)
+var P2_INIT=[
+  // ── COMPLETADAS ──────────────────────────────────────────────────
+  {id:'p01',name:'Trabajos Preliminares',         cat:'struct',pct:100,rate:5, active:false},
+  {id:'p02',name:'Movimiento de Tierra',           cat:'struct',pct:100,rate:5, active:false},
+  {id:'p03',name:'Fundaciones',                    cat:'struct',pct:100,rate:5, active:false},
+  {id:'p04',name:'N1 — Parqueo / Lobby',           cat:'struct',pct:100,rate:6, active:false},
+  // Fila 5 — Estructura N2-N6
+  {id:'p05_N2',name:'N2 — Estructura',             cat:'struct',pct:100,rate:6, active:false},
+  {id:'p05_N3',name:'N3 — Estructura',             cat:'struct',pct:100,rate:6, active:false},
+  {id:'p05_N4',name:'N4 — Estructura',             cat:'struct',pct:100,rate:6, active:false},
+  {id:'p05_N5',name:'N5 — Estructura',             cat:'struct',pct:100,rate:6, active:false},
+  {id:'p05_N6',name:'N6 — Estructura',             cat:'struct',pct:100,rate:6, active:false},
+  {id:'p06',  name:'N7 — Estructura',              cat:'struct',pct:100,rate:6, active:false},
+  // Fila 7 — Mampostería y Tabiquería N2-N6 (avg 100%)
+  {id:'p07_N2',name:'N2 — Mampostería',            cat:'struct',pct:100,rate:7, active:false},
+  {id:'p07_N3',name:'N3 — Mampostería',            cat:'struct',pct:100,rate:7, active:false},
+  {id:'p07_N4',name:'N4 — Mampostería',            cat:'struct',pct:100,rate:7, active:false},
+  {id:'p07_N5',name:'N5 — Mampostería',            cat:'struct',pct:100,rate:7, active:false},
+  {id:'p07_N6',name:'N6 — Mampostería',            cat:'struct',pct:100,rate:7, active:false},
+  // Fila 8 — Instalaciones Sanitarias N2-N6 (avg 100%)
+  {id:'p08_N2',name:'N2 — Inst. Sanitarias',       cat:'mep',   pct:100,rate:6, active:false},
+  {id:'p08_N3',name:'N3 — Inst. Sanitarias',       cat:'mep',   pct:100,rate:6, active:false},
+  {id:'p08_N4',name:'N4 — Inst. Sanitarias',       cat:'mep',   pct:100,rate:6, active:false},
+  {id:'p08_N5',name:'N5 — Inst. Sanitarias',       cat:'mep',   pct:100,rate:6, active:false},
+  {id:'p08_N6',name:'N6 — Inst. Sanitarias',       cat:'mep',   pct:100,rate:6, active:false},
+  // Fila 9 — Repellos y Friso N2-N6 (avg 95%: 100,100,100,100,75)
+  {id:'p09_N2',name:'N2 — Repellos y Friso',       cat:'finish',pct:100,rate:9, active:false},
+  {id:'p09_N3',name:'N3 — Repellos y Friso',       cat:'finish',pct:100,rate:9, active:false},
+  {id:'p09_N4',name:'N4 — Repellos y Friso',       cat:'finish',pct:100,rate:9, active:false},
+  {id:'p09_N5',name:'N5 — Repellos y Friso',       cat:'finish',pct:100,rate:9, active:false},
+  {id:'p09_N6',name:'N6 — Repellos y Friso',       cat:'finish',pct:75, rate:9, active:true},
+  // Fila 10 — Instalaciones Eléctricas N2-N6 (avg 85%: 100,100,90,80,55)
+  {id:'p10_N2',name:'N2 — Inst. Eléctricas',       cat:'mep',   pct:100,rate:7, active:false},
+  {id:'p10_N3',name:'N3 — Inst. Eléctricas',       cat:'mep',   pct:100,rate:7, active:false},
+  {id:'p10_N4',name:'N4 — Inst. Eléctricas',       cat:'mep',   pct:90, rate:7, active:true},
+  {id:'p10_N5',name:'N5 — Inst. Eléctricas',       cat:'mep',   pct:80, rate:7, active:true},
+  {id:'p10_N6',name:'N6 — Inst. Eléctricas',       cat:'mep',   pct:55, rate:7, active:true},
+  // Fila 11 — Pintura Exterior (sin desglose, 90%)
+  {id:'p11',  name:'Pintura Exterior',              cat:'ext',   pct:90, rate:5, active:true},
+  // Fila 12 — Sheetrock y Cielos N2-N6 (avg 25%: 55,30,20,15,5)
+  {id:'p12_N2',name:'N2 — Sheetrock y Cielos',     cat:'finish',pct:55, rate:8, active:true},
+  {id:'p12_N3',name:'N3 — Sheetrock y Cielos',     cat:'finish',pct:30, rate:8, active:true},
+  {id:'p12_N4',name:'N4 — Sheetrock y Cielos',     cat:'finish',pct:20, rate:8, active:true},
+  {id:'p12_N5',name:'N5 — Sheetrock y Cielos',     cat:'finish',pct:15, rate:8, active:true},
+  {id:'p12_N6',name:'N6 — Sheetrock y Cielos',     cat:'finish',pct:5,  rate:8, active:true},
+  // Fila 13 — Porcelanato y Zócalos N2-N6 (avg 30%: 65,35,25,20,5)
+  {id:'p13_N2',name:'N2 — Porcelanato y Zócalos',  cat:'finish',pct:65, rate:7, active:true},
+  {id:'p13_N3',name:'N3 — Porcelanato y Zócalos',  cat:'finish',pct:35, rate:7, active:true},
+  {id:'p13_N4',name:'N4 — Porcelanato y Zócalos',  cat:'finish',pct:25, rate:7, active:true},
+  {id:'p13_N5',name:'N5 — Porcelanato y Zócalos',  cat:'finish',pct:20, rate:7, active:true},
+  {id:'p13_N6',name:'N6 — Porcelanato y Zócalos',  cat:'finish',pct:5,  rate:7, active:true},
+  // Fila 14 — Puertas Interiores N2-N6 (avg 5%: 20,5,0,0,0)
+  {id:'p14_N2',name:'N2 — Puertas Interiores',     cat:'finish',pct:20, rate:6, active:true},
+  {id:'p14_N3',name:'N3 — Puertas Interiores',     cat:'finish',pct:5,  rate:6, active:true},
+  {id:'p14_N4',name:'N4 — Puertas Interiores',     cat:'finish',pct:0,  rate:6, active:false},
+  {id:'p14_N5',name:'N5 — Puertas Interiores',     cat:'finish',pct:0,  rate:6, active:false},
+  {id:'p14_N6',name:'N6 — Puertas Interiores',     cat:'finish',pct:0,  rate:6, active:false},
+  // Fila 15 — Ventanas Aluminio N2-N6 (0%)
+  {id:'p15_N2',name:'N2 — Ventanas Aluminio',      cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p15_N3',name:'N3 — Ventanas Aluminio',      cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p15_N4',name:'N4 — Ventanas Aluminio',      cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p15_N5',name:'N5 — Ventanas Aluminio',      cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p15_N6',name:'N6 — Ventanas Aluminio',      cat:'finish',pct:0,  rate:5, active:false},
+  // Fila 16 — Cocinas y Línea Blanca N2-N6 (avg 5%: 20,5,0,0,0)
+  {id:'p16_N2',name:'N2 — Cocinas y Línea Blanca', cat:'finish',pct:20, rate:5, active:true},
+  {id:'p16_N3',name:'N3 — Cocinas y Línea Blanca', cat:'finish',pct:5,  rate:5, active:true},
+  {id:'p16_N4',name:'N4 — Cocinas y Línea Blanca', cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p16_N5',name:'N5 — Cocinas y Línea Blanca', cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p16_N6',name:'N6 — Cocinas y Línea Blanca', cat:'finish',pct:0,  rate:5, active:false},
+  // Fila 17 — Baños y Grifería N2-N6 (0%)
+  {id:'p17_N2',name:'N2 — Baños y Grifería',       cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p17_N3',name:'N3 — Baños y Grifería',       cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p17_N4',name:'N4 — Baños y Grifería',       cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p17_N5',name:'N5 — Baños y Grifería',       cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p17_N6',name:'N6 — Baños y Grifería',       cat:'finish',pct:0,  rate:5, active:false},
+  // Fila 18 — Closets y Puertas Principales N2-N6 (0%)
+  {id:'p18_N2',name:'N2 — Closets y Ptas. Pples',  cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p18_N3',name:'N3 — Closets y Ptas. Pples',  cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p18_N4',name:'N4 — Closets y Ptas. Pples',  cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p18_N5',name:'N5 — Closets y Ptas. Pples',  cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p18_N6',name:'N6 — Closets y Ptas. Pples',  cat:'finish',pct:0,  rate:5, active:false},
+  // Fila 19 — Pintura Interior N2-N6 (avg 20%: 45,25,15,10,5)
+  {id:'p19_N2',name:'N2 — Pintura Interior',        cat:'finish',pct:45, rate:9, active:true},
+  {id:'p19_N3',name:'N3 — Pintura Interior',        cat:'finish',pct:25, rate:9, active:true},
+  {id:'p19_N4',name:'N4 — Pintura Interior',        cat:'finish',pct:15, rate:9, active:true},
+  {id:'p19_N5',name:'N5 — Pintura Interior',        cat:'finish',pct:10, rate:9, active:true},
+  {id:'p19_N6',name:'N6 — Pintura Interior',        cat:'finish',pct:5,  rate:9, active:true},
+  // Fila 20 — Ascensor (sin desglose, 10%)
+  {id:'p20',  name:'Ascensor',                       cat:'mep',   pct:10, rate:4, active:true},
+  // Fila 21 — Herrería y Barandas N2-N6 (0%)
+  {id:'p21_N2',name:'N2 — Herrería y Barandas',     cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p21_N3',name:'N3 — Herrería y Barandas',     cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p21_N4',name:'N4 — Herrería y Barandas',     cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p21_N5',name:'N5 — Herrería y Barandas',     cat:'finish',pct:0,  rate:5, active:false},
+  {id:'p21_N6',name:'N6 — Herrería y Barandas',     cat:'finish',pct:0,  rate:5, active:false},
+  // Filas 22-25 sin desglose (0%)
+  {id:'p22',  name:'Escalera',                       cat:'struct',pct:0,  rate:4, active:false},
+  {id:'p23',  name:'Amenidades Azotea',              cat:'finish',pct:0,  rate:4, active:false},
+  {id:'p24',  name:'Equipos Especiales',             cat:'mep',   pct:0,  rate:3, active:false},
+  {id:'p25',  name:'Jardinería',                     cat:'ext',   pct:0,  rate:3, active:false},
+  // Fila 26 — Limpieza Final y Entrega N2-N6 (0%)
+  {id:'p26_N2',name:'N2 — Limpieza Final',           cat:'finish',pct:0,  rate:4, active:false},
+  {id:'p26_N3',name:'N3 — Limpieza Final',           cat:'finish',pct:0,  rate:4, active:false},
+  {id:'p26_N4',name:'N4 — Limpieza Final',           cat:'finish',pct:0,  rate:4, active:false},
+  {id:'p26_N5',name:'N5 — Limpieza Final',           cat:'finish',pct:0,  rate:4, active:false},
+  {id:'p26_N6',name:'N6 — Limpieza Final',           cat:'finish',pct:0,  rate:4, active:false}
+];
 
 var P2C={
   navy:'#1e1b4b',navyLite:'#EEEDFE',
@@ -11205,7 +11326,6 @@ var P2C={
   purple:'#534AB7',
   gray:'#888780',grayLite:'#F1EFE8',grayBrd:'#D3D1C7'
 };
-
 var P2_CATS={
   struct:{label:'Estructura',color:'#185FA5'},
   mep:   {label:'MEP',       color:'#BA7517'},
@@ -11213,61 +11333,38 @@ var P2_CATS={
   ext:   {label:'Exterior',  color:'#534AB7'}
 };
 
-function p2GetCat(cat){
-  if(!cat) return 'finish';
-  var c=cat.toLowerCase();
-  if(/hormi|estruct|losa|repla|mamp|bloqu|demol/.test(c)) return 'struct';
-  if(/plom|elect|mep|gas|aire|acond/.test(c)) return 'mep';
-  if(/facha|exter|paisaj|piscin|ascen/.test(c)) return 'ext';
-  return 'finish';
-}
-
-function p2FmtDate(d){
-  if(!d) return '—';
-  return d.toLocaleDateString('es-DO',{day:'2-digit',month:'short',year:'numeric'});
-}
-function p2FmtShort(d){
-  if(!d) return '—';
-  return d.toLocaleDateString('es-DO',{day:'2-digit',month:'short'});
-}
+function p2FmtDate(d){if(!d)return'—';return d.toLocaleDateString('es-DO',{day:'2-digit',month:'short',year:'numeric'});}
+function p2FmtShort(d){if(!d)return'—';return d.toLocaleDateString('es-DO',{day:'2-digit',month:'short'});}
 function p2DiffDays(a,b){return Math.round((b.getTime()-a.getTime())/86400000);}
 function p2AddDays(n){var r=new Date();r.setHours(12,0,0,0);r.setDate(r.getDate()+Math.ceil(n));return r;}
 function p2Today(){var d=new Date();d.setHours(12,0,0,0);return d;}
 
-function p2GetPct(p){
-  var subs=(S.acts||[]).filter(function(a){return a.plan_id===p.id;});
-  if(subs.length){var done=subs.filter(function(a){return a.estado==='completado';}).length;return Math.round(done/subs.length*100);}
-  return p.avance_manual||0;
-}
-function p2GetRate(id){return P2.rates[id]!==undefined?P2.rates[id]:5;}
-function p2IsActive(p,pct){return P2.activeMap[p.id]!==undefined?P2.activeMap[p.id]:pct>0;}
+function p2Val(id,field,def){var s=P2.state[id];return(s&&s[field]!==undefined)?s[field]:def;}
+function p2Set(id,field,val){if(!P2.state[id])P2.state[id]={};P2.state[id][field]=val;p2Persist();}
 
 function p2BuildPartidas(){
-  return (S.planActs||[]).map(function(p){
-    var pct=p2GetPct(p);
-    return{id:p.id,name:p.nombre||'Sin nombre',cat:p2GetCat(p.categoria),
-      pct:pct,rate:p2GetRate(p.id),active:p2IsActive(p,pct)};
+  return P2_INIT.map(function(p){
+    return{id:p.id,name:p.name,cat:p.cat,
+      pct:p2Val(p.id,'pct',p.pct),rate:p2Val(p.id,'rate',p.rate),active:p2Val(p.id,'active',p.active)};
   });
 }
 
 function p2Calc(partidas,mult){
-  mult=mult||1;
-  var pr=P2.params;
+  mult=mult||1;var pr=P2.params;
   var eff=((pr.workDaysPerWeek-pr.rainDaysPerWeek)/pr.workDaysPerWeek)*pr.productivityFactor*mult;
   return partidas.map(function(p){
     var rem=Math.max(0,100-p.pct);
     var adjRate=Math.round(p.rate*eff*10)/10;
     var wks=rem===0?0:(adjRate>0&&p.active?rem/adjRate:9999);
     var days=Math.ceil(wks*7);
-    var end=rem===0?p2Today():p2AddDays(days);
     return{id:p.id,name:p.name,cat:p.cat,pct:p.pct,rate:p.rate,active:p.active,
-      rem:rem,adjRate:adjRate,wks:Math.round(wks*10)/10,days:days,end:end};
+      rem:rem,adjRate:adjRate,wks:Math.round(wks*10)/10,days:days,
+      end:rem===0?p2Today():p2AddDays(days)};
   });
 }
-
 function p2MaxEnd(proj){
   var a=proj.filter(function(p){return p.rem>0;});
-  if(!a.length) return p2Today();
+  if(!a.length)return p2Today();
   return new Date(Math.max.apply(null,a.map(function(p){return p.end.getTime();})));
 }
 
@@ -11275,14 +11372,8 @@ function p2MaxEnd(proj){
 function renderPlan2(){
   if(!isAdmin()){goTab('hoy');return;}
   var el=document.getElementById('c-plan2');if(!el)return;
-
-  var partidas=p2BuildPartidas();
-  if(!partidas.length){
-    el.innerHTML='<div style="padding:40px;text-align:center;color:'+P2C.gray+'">Sin partidas cargadas</div>';
-    return;
-  }
-
   var TODAY=p2Today();
+  var partidas=p2BuildPartidas();
   var proj    =p2Calc(partidas,1);
   var projOpt =p2Calc(partidas,1.3);
   var projPes =p2Calc(partidas,0.7);
@@ -11299,20 +11390,16 @@ function renderPlan2(){
 
   var h='<div style="height:100%;overflow-y:auto;overflow-x:hidden;padding:12px 14px;box-sizing:border-box;font-family:var(--font)">';
 
-  // ── Cabecera ──────────────────────────────────────────────────────────
+  // Header
   h+='<div style="background:'+P2C.navy+';border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
-  h+='<div>';
-  h+='<div style="color:rgba(174,169,236,.8);font-size:10px;letter-spacing:.1em;text-transform:uppercase">BRIDEX SRL · Mecca Residence 2026</div>';
+  h+='<div><div style="color:rgba(174,169,236,.8);font-size:10px;letter-spacing:.1em;text-transform:uppercase">BRIDEX SRL · Mecca Residence 2026</div>';
   h+='<div style="color:#fff;font-size:15px;font-weight:500;margin-top:2px">Estimador de fecha de término</div>';
-  h+='<div style="color:rgba(174,169,236,.6);font-size:11px;margin-top:1px">Hoy: '+p2FmtDate(TODAY)+'</div>';
-  h+='</div>';
-  h+='<div style="text-align:right">';
-  h+='<div style="font-size:22px;font-weight:500;color:'+(ok?'#9FE1CB':'#F5C4B3')+'">'+p2FmtDate(end)+'</div>';
-  h+='<div style="font-size:11px;color:'+(ok?'#9FE1CB':'#F5C4B3')+'">'+
-    (ok?'✓ '+margin+' días antes del objetivo':'⚠ '+Math.abs(margin)+' días después del objetivo')+'</div>';
+  h+='<div style="color:rgba(174,169,236,.6);font-size:11px;margin-top:1px">Hoy: '+p2FmtDate(TODAY)+'</div></div>';
+  h+='<div style="text-align:right"><div style="font-size:22px;font-weight:500;color:'+(ok?'#9FE1CB':'#F5C4B3')+'">'+p2FmtDate(end)+'</div>';
+  h+='<div style="font-size:11px;color:'+(ok?'#9FE1CB':'#F5C4B3')+'">'+(ok?'✓ '+margin+' días antes del objetivo':'⚠ '+Math.abs(margin)+' días después del objetivo')+'</div>';
   h+='</div></div>';
 
-  // ── Tabs ──────────────────────────────────────────────────────────────
+  // Tabs
   h+='<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">';
   [['partidas','📋 Partidas'],['params','⚙️ Parámetros'],['result','📊 Proyección']].forEach(function(t){
     var a=P2.tab===t[0];
@@ -11320,14 +11407,9 @@ function renderPlan2(){
   });
   h+='</div>';
 
-  // ── Contenido del tab ─────────────────────────────────────────────────
-  if(P2.tab==='partidas'){
-    h+=p2TabPartidas(proj,target);
-  } else if(P2.tab==='params'){
-    h+=p2TabParams(margin,ok,eff);
-  } else {
-    h+=p2TabResult(proj,projOpt,projPes,end,endOpt,endPes,target,margin,ok,critical,avgPct,done,TODAY);
-  }
+  if(P2.tab==='partidas')     h+=p2TabPartidas(proj,target);
+  else if(P2.tab==='params')  h+=p2TabParams(margin,ok,eff);
+  else                         h+=p2TabResult(proj,projOpt,projPes,end,endOpt,endPes,target,margin,ok,critical,avgPct,done,TODAY);
 
   h+='</div>';
   el.innerHTML=h;
@@ -11337,43 +11419,43 @@ function renderPlan2(){
 function p2TabPartidas(proj,target){
   var TH='text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:'+P2C.navy+';font-weight:500';
   var TD='padding:7px 8px;border-bottom:.5px solid '+P2C.grayBrd+';vertical-align:middle';
-  var h='<div style="overflow-x:auto">';
-  h+='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  var h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
   h+='<thead><tr style="background:'+P2C.navyLite+'">';
   h+='<th style="'+TH+'">Partida</th>';
-  h+='<th style="'+TH+';width:140px">% completado</th>';
-  h+='<th style="'+TH+';width:70px;text-align:center">%/sem</th>';
-  h+='<th style="'+TH+';width:60px;text-align:center">Activo</th>';
-  h+='<th style="'+TH+';width:95px;text-align:right">Fin proy.</th>';
+  h+='<th style="'+TH+';width:140px">% hoy</th>';
+  h+='<th style="'+TH+';width:68px;text-align:center">%/sem</th>';
+  h+='<th style="'+TH+';width:50px;text-align:center">Activo</th>';
+  h+='<th style="'+TH+';width:90px;text-align:right">Fin est.</th>';
   h+='</tr></thead><tbody>';
   proj.forEach(function(p,i){
     var cc=P2_CATS[p.cat]?P2_CATS[p.cat].color:P2C.gray;
     var late=p.rem>0&&p.end>target;
+    var safeId=p.id.replace(/-/g,'_').replace(/\./g,'_');
     h+='<tr style="background:'+(i%2===0?'var(--bg)':P2C.grayLite)+'">';
     h+='<td style="'+TD+'"><span style="width:8px;height:8px;border-radius:50%;background:'+cc+';display:inline-block;margin-right:6px;vertical-align:middle"></span>'+esc(p.name)+'</td>';
     h+='<td style="'+TD+'"><div style="display:flex;align-items:center;gap:6px">';
     h+='<input type="range" min="0" max="100" step="1" value="'+p.pct+'"';
-    h+=' oninput="document.getElementById(\'p2pct_'+p.id.replace(/-/g,'_')+'\').textContent=this.value+\'%\'"';
-    h+=' onchange="p2SavePct(\''+p.id+'\',+this.value)"';
+    h+=' oninput="var s=document.getElementById(\'p2b_'+safeId+'\');if(s)s.textContent=this.value+\'%\'"';
+    h+=' onchange="p2Set(\''+p.id+'\',\'pct\',+this.value);renderPlan2()"';
     h+=' style="flex:1;accent-color:'+cc+';min-width:70px">';
-    h+='<span id="p2pct_'+p.id.replace(/-/g,'_')+'" style="width:32px;text-align:right;font-weight:500">'+p.pct+'%</span>';
+    h+='<span id="p2b_'+safeId+'" style="width:32px;text-align:right;font-weight:500;font-size:11px">'+p.pct+'%</span>';
     h+='</div></td>';
     h+='<td style="'+TD+';text-align:center">';
     h+='<input type="number" min="0.5" max="30" step="0.5" value="'+p.rate+'"';
-    h+=' onchange="P2.rates[\''+p.id+'\']=+this.value;renderPlan2()"';
-    h+=' style="width:50px;text-align:center;font-size:12px;border:.5px solid '+P2C.grayBrd+';border-radius:4px;padding:3px 4px;background:var(--bg);color:var(--text1);font-family:var(--font)">';
+    h+=' onchange="p2Set(\''+p.id+'\',\'rate\',+this.value);renderPlan2()"';
+    h+=' style="width:48px;text-align:center;font-size:12px;border:.5px solid '+P2C.grayBrd+';border-radius:4px;padding:3px 4px;background:var(--bg);color:var(--text1);font-family:var(--font)">';
     h+='</td>';
     h+='<td style="'+TD+';text-align:center">';
-    h+='<input type="checkbox"'+(p.active?' checked':'')+' onchange="P2.activeMap[\''+p.id+'\']=this.checked;renderPlan2()" style="accent-color:'+P2C.navy+';width:15px;height:15px;cursor:pointer">';
+    h+='<input type="checkbox"'+(p.active?' checked':'')+' onchange="p2Set(\''+p.id+'\',\'active\',this.checked);renderPlan2()" style="accent-color:'+P2C.navy+';width:15px;height:15px;cursor:pointer">';
     h+='</td>';
     h+='<td style="'+TD+';text-align:right"><span style="font-size:11px;font-weight:500;color:'+(p.rem===0?P2C.green:late?P2C.red:P2C.blue)+'">';
-    h+=(p.rem===0?'✓ Completo':p2FmtDate(p.end).replace(' 2026',''));
+    h+=(p.rem===0?'✓':p2FmtDate(p.end).replace(' 2026','').replace(' 2027',''));
     h+='</span></td></tr>';
   });
   h+='</tbody></table></div>';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">';
-  h+='<div style="font-size:11px;color:'+P2C.gray+'"><strong>%/sem</strong> = ritmo de avance semanal estimado con el equipo actual.</div>';
-  h+='<button onclick="P2.rates={};P2.activeMap={};renderPlan2()" style="font-size:11px;color:'+P2C.gray+';background:transparent;border:.5px solid '+P2C.grayBrd+';border-radius:6px;padding:4px 10px;cursor:pointer;font-family:var(--font)">↺ Resetear</button>';
+  h+='<div style="font-size:11px;color:'+P2C.gray+'"><strong>%/sem</strong> = ritmo de avance semanal estimado · Los cambios se guardan localmente.</div>';
+  h+='<button onclick="P2.state={};p2Persist();renderPlan2()" style="font-size:11px;color:'+P2C.gray+';background:transparent;border:.5px solid '+P2C.grayBrd+';border-radius:6px;padding:4px 10px;cursor:pointer;font-family:var(--font)">↺ Resetear todo</button>';
   h+='</div>';
   return h;
 }
@@ -11382,50 +11464,34 @@ function p2TabPartidas(proj,target){
 function p2TabParams(margin,ok,eff){
   var pr=P2.params;
   var h='<div style="display:grid;gap:12px">';
-
-  // Calendario
   h+='<div style="background:var(--bg3);border-radius:10px;padding:14px 16px;border:.5px solid '+P2C.grayBrd+'">';
   h+='<div style="font-size:12px;font-weight:500;color:'+P2C.navy+';margin-bottom:12px">Calendario de trabajo</div>';
   h+='<div style="margin-bottom:16px"><div style="font-size:11px;color:var(--text3);margin-bottom:8px">Días laborables por semana</div>';
   h+='<div style="display:flex;gap:8px">';
   [[5,'5 días (L–V)'],[6,'6 días (L–S)'],[7,'7 días']].forEach(function(d){
     var a=pr.workDaysPerWeek===d[0];
-    h+='<button onclick="P2.params.workDaysPerWeek='+d[0]+';renderPlan2()" style="padding:6px 12px;border-radius:6px;cursor:pointer;font-family:var(--font);font-size:12px;border:.5px solid '+(a?P2C.navy:P2C.grayBrd)+';background:'+(a?P2C.navy:'transparent')+';color:'+(a?'#fff':P2C.gray)+'">'+d[1]+'</button>';
+    h+='<button onclick="P2.params.workDaysPerWeek='+d[0]+';p2Persist();renderPlan2()" style="padding:6px 12px;border-radius:6px;cursor:pointer;font-family:var(--font);font-size:12px;border:.5px solid '+(a?P2C.navy:P2C.grayBrd)+';background:'+(a?P2C.navy:'transparent')+';color:'+(a?'#fff':P2C.gray)+'">'+d[1]+'</button>';
   });
   h+='</div></div>';
-
-  // Slider lluvia
-  h+='<div style="margin-bottom:14px">';
-  h+='<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">';
-  h+='<span>Días de paralización / lluvia por semana</span>';
-  h+='<strong id="p2-rain-lbl" style="color:'+P2C.blue+'">'+pr.rainDaysPerWeek+' días/sem</strong></div>';
+  h+='<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">';
+  h+='<span>Días de paralización / lluvia por semana</span><strong id="p2-rain-lbl" style="color:'+P2C.blue+'">'+pr.rainDaysPerWeek+' días/sem</strong></div>';
   h+='<input type="range" min="0" max="3" step="0.5" value="'+pr.rainDaysPerWeek+'"';
-  h+=' oninput="document.getElementById(\'p2-rain-lbl\').textContent=this.value+\' días/sem\'"';
-  h+=' onchange="P2.params.rainDaysPerWeek=+this.value;renderPlan2()"';
-  h+=' style="width:100%;accent-color:'+P2C.blue+'">';
-  h+='</div>';
-
-  // Slider productividad
-  h+='<div style="margin-bottom:4px">';
-  h+='<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">';
-  h+='<span>Factor de productividad del equipo</span>';
-  h+='<strong id="p2-prod-lbl" style="color:'+P2C.green+'">'+Math.round(pr.productivityFactor*100)+'%</strong></div>';
+  h+=' oninput="var l=document.getElementById(\'p2-rain-lbl\');if(l)l.textContent=this.value+\' días/sem\'"';
+  h+=' onchange="P2.params.rainDaysPerWeek=+this.value;p2Persist();renderPlan2()"';
+  h+=' style="width:100%;accent-color:'+P2C.blue+'"></div>';
+  h+='<div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">';
+  h+='<span>Factor de productividad del equipo</span><strong id="p2-prod-lbl" style="color:'+P2C.green+'">'+Math.round(pr.productivityFactor*100)+'%</strong></div>';
   h+='<input type="range" min="0.5" max="1.0" step="0.05" value="'+pr.productivityFactor+'"';
-  h+=' oninput="document.getElementById(\'p2-prod-lbl\').textContent=Math.round(this.value*100)+\'%\'"';
-  h+=' onchange="P2.params.productivityFactor=+this.value;renderPlan2()"';
-  h+=' style="width:100%;accent-color:'+P2C.green+'">';
+  h+=' oninput="var l=document.getElementById(\'p2-prod-lbl\');if(l)l.textContent=Math.round(this.value*100)+\'%\'"';
+  h+=' onchange="P2.params.productivityFactor=+this.value;p2Persist();renderPlan2()"';
+  h+=' style="width:100%;accent-color:'+P2C.green+'"></div>';
   h+='</div>';
-  h+='</div>';
-
-  // Fecha objetivo
   h+='<div style="background:var(--bg3);border-radius:10px;padding:14px 16px;border:.5px solid '+P2C.grayBrd+'">';
   h+='<div style="font-size:12px;font-weight:500;color:'+P2C.navy+';margin-bottom:10px">Fecha objetivo de entrega</div>';
   h+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">';
-  h+='<input type="date" value="'+pr.targetDate+'" onchange="P2.params.targetDate=this.value;renderPlan2()" style="font-size:14px;border:.5px solid '+P2C.grayBrd+';border-radius:6px;padding:7px 10px;background:var(--bg);color:var(--text1);font-family:var(--font)">';
-  h+='<div style="font-size:12px;color:'+P2C.gray+'">Margen actual: <strong style="color:'+(ok?P2C.green:P2C.red)+'">'+(ok?'+'+margin+' días':margin+' días')+'</strong></div>';
+  h+='<input type="date" value="'+pr.targetDate+'" onchange="P2.params.targetDate=this.value;p2Persist();renderPlan2()" style="font-size:14px;border:.5px solid '+P2C.grayBrd+';border-radius:6px;padding:7px 10px;background:var(--bg);color:var(--text1);font-family:var(--font)">';
+  h+='<div style="font-size:12px;color:'+P2C.gray+'">Margen: <strong style="color:'+(ok?P2C.green:P2C.red)+'">'+(ok?'+'+margin+' días':margin+' días')+'</strong></div>';
   h+='</div></div>';
-
-  // Eficiencia operativa
   var ec=eff>=75?P2C.green:eff>=60?P2C.amber:P2C.red;
   var eb=eff>=75?P2C.greenLite:eff>=60?P2C.amberLite:P2C.redLite;
   h+='<div style="background:'+eb+';border-radius:10px;padding:12px 16px;border:.5px solid '+ec+'40">';
@@ -11435,35 +11501,29 @@ function p2TabParams(margin,ok,eff){
   [['Días efectivos/sem',diasEf,P2C.blue],['Productividad equipo',Math.round(pr.productivityFactor*100)+'%',P2C.green],['Eficiencia neta',eff+'%',ec]].forEach(function(x){
     h+='<div><div style="font-size:20px;font-weight:500;color:'+x[2]+'">'+x[1]+'</div><div style="font-size:10px;color:'+P2C.gray+'">'+x[0]+'</div></div>';
   });
-  h+='</div></div>';
-  h+='</div>';
+  h+='</div></div></div>';
   return h;
 }
 
 // ── Tab Proyección ────────────────────────────────────────────────────────
 function p2TabResult(proj,projOpt,projPes,end,endOpt,endPes,target,margin,ok,critical,avgPct,done,TODAY){
   var h='';
-
-  // KPIs
-  h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">';
   var weeksLeft=Math.ceil(Math.max(p2DiffDays(TODAY,end),0)/7);
+  h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">';
   h+=p2KPI('Fin proyectado',p2FmtDate(end).replace(' 2026','').replace(' 2027',''),null,ok?P2C.green:P2C.red);
   h+=p2KPI('Semanas restantes',weeksLeft,'desde hoy',P2C.blue);
-  h+=p2KPI('Partida crítica',critical?critical.name.split(' ')[0]:'—',critical?p2FmtShort(critical.end):null,P2C.amber);
+  h+=p2KPI('Partida crítica',critical?critical.name.split('—').pop().trim().split(' ')[0]:'—',critical?p2FmtShort(critical.end):null,P2C.amber);
   h+=p2KPI('Avance global',avgPct+'%',done+'/'+proj.length+' completas',P2C.purple);
   h+='</div>';
 
-  // Banner estado
   var bc=ok?P2C.green:margin>-21?P2C.amber:P2C.red;
   var bb=ok?P2C.greenLite:margin>-21?P2C.amberLite:P2C.redLite;
   var bm=ok?'Proyecto en marcha — dentro del objetivo':margin>-21?'Atención — riesgo menor de retraso':'Alerta — retraso significativo proyectado';
   h+='<div style="background:'+bb+';border:.5px solid '+bc+';border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px">';
   h+='<span style="font-size:24px">'+(ok?'🟢':margin>-21?'🟡':'🔴')+'</span>';
   h+='<div><div style="font-size:13px;font-weight:500;color:'+bc+'">'+bm+'</div>';
-  h+='<div style="font-size:11px;color:'+P2C.gray+';margin-top:2px">Objetivo: <strong>'+p2FmtDate(target)+'</strong> · Base: <strong>'+p2FmtDate(end)+'</strong>'+(ok?' · '+margin+' días de margen':' · '+Math.abs(margin)+' días de retraso')+'</div>';
-  h+='</div></div>';
+  h+='<div style="font-size:11px;color:'+P2C.gray+';margin-top:2px">Objetivo: <strong>'+p2FmtDate(target)+'</strong> · Base: <strong>'+p2FmtDate(end)+'</strong>'+(ok?' · '+margin+' días de margen':' · '+Math.abs(margin)+' días de retraso')+'</div></div></div>';
 
-  // Escenarios
   h+='<div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:'+P2C.gray+';border-bottom:.5px solid '+P2C.grayBrd+';padding-bottom:5px;margin-bottom:10px">Escenarios de entrega</div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">';
   h+=p2ScenCard('Optimista','+30% ritmo',endOpt,target,P2C.green,P2C.greenLite);
@@ -11471,20 +11531,16 @@ function p2TabResult(proj,projOpt,projPes,end,endOpt,endPes,target,margin,ok,cri
   h+=p2ScenCard('Pesimista','−30% ritmo',endPes,target,P2C.red,P2C.redLite);
   h+='</div>';
 
-  // Gantt
   h+='<div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:'+P2C.gray+';border-bottom:.5px solid '+P2C.grayBrd+';padding-bottom:5px;margin-bottom:10px">Cronograma proyectado</div>';
   h+=p2GanttHTML(proj,end,target,TODAY);
 
-  // Tabla detalle
   h+='<div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:'+P2C.gray+';border-bottom:.5px solid '+P2C.grayBrd+';padding-bottom:5px;margin-bottom:10px;margin-top:18px">Detalle por partida</div>';
   var TH='text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:'+P2C.navy+';font-weight:500';
   var TD='padding:7px 8px;border-bottom:.5px solid '+P2C.grayBrd+';vertical-align:middle';
   h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
-  h+='<thead><tr style="background:'+P2C.navyLite+'">';
-  h+='<th style="'+TH+'">Partida</th><th style="'+TH+';width:90px">Progreso</th>';
-  h+='<th style="'+TH+';text-align:center;width:50px">Resta</th>';
-  h+='<th style="'+TH+';text-align:center;width:60px">Sem.</th>';
-  h+='<th style="'+TH+';text-align:right;width:110px">Fin proyectado</th>';
+  h+='<thead><tr style="background:'+P2C.navyLite+'"><th style="'+TH+'">Partida</th>';
+  h+='<th style="'+TH+';width:90px">Progreso</th><th style="'+TH+';text-align:center;width:50px">Resta</th>';
+  h+='<th style="'+TH+';text-align:center;width:55px">Sem.</th><th style="'+TH+';text-align:right;width:100px">Fin est.</th>';
   h+='</tr></thead><tbody>';
   var sorted=[].concat(proj).sort(function(a,b){return b.end-a.end;});
   sorted.forEach(function(p,i){
@@ -11502,17 +11558,14 @@ function p2TabResult(proj,projOpt,projPes,end,endOpt,endPes,target,margin,ok,cri
   return h;
 }
 
-// ── KPI card ──────────────────────────────────────────────────────────────
 function p2KPI(lbl,val,sub,color){
   var h='<div style="background:'+P2C.grayLite+';border-radius:8px;padding:10px 12px;text-align:center">';
   h+='<div style="font-size:10px;color:'+P2C.gray+';text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">'+lbl+'</div>';
   h+='<div style="font-size:18px;font-weight:500;color:'+color+';line-height:1.2">'+val+'</div>';
-  if(sub) h+='<div style="font-size:10px;color:'+P2C.gray+';margin-top:2px">'+sub+'</div>';
-  h+='</div>';
-  return h;
+  if(sub)h+='<div style="font-size:10px;color:'+P2C.gray+';margin-top:2px">'+sub+'</div>';
+  h+='</div>';return h;
 }
 
-// ── Scenario card ─────────────────────────────────────────────────────────
 function p2ScenCard(label,sub,end,target,color,bg){
   var diff=p2DiffDays(end,target);
   var h='<div style="background:'+bg+';border-radius:10px;padding:10px 12px;border:.5px solid '+color+'50">';
@@ -11520,32 +11573,25 @@ function p2ScenCard(label,sub,end,target,color,bg){
   h+='<div style="font-size:10px;color:'+P2C.gray+';margin-bottom:6px">'+sub+'</div>';
   h+='<div style="font-size:14px;font-weight:500;color:'+color+'">'+p2FmtDate(end).replace(' 2026','').replace(' 2027','')+'</div>';
   h+='<div style="font-size:10px;color:'+(diff>=0?P2C.green:P2C.red)+';margin-top:2px">'+(diff>=0?'+'+diff+' días':diff+' días')+'</div>';
-  h+='</div>';
-  return h;
+  h+='</div>';return h;
 }
 
-// ── Gantt ─────────────────────────────────────────────────────────────────
 function p2GanttHTML(proj,endDate,target,TODAY){
   var maxD=Math.max(p2DiffDays(TODAY,endDate)+14,30);
   var tx=Math.min(Math.max(p2DiffDays(TODAY,target)/maxD,0),1);
   var sorted=[].concat(proj).sort(function(a,b){return b.days-a.days;});
-
   var h='<div style="overflow-x:auto"><div style="min-width:380px">';
-
-  // Cabecera de meses
   h+='<div style="position:relative;height:18px;margin-left:132px;margin-bottom:6px">';
   h+='<span style="position:absolute;left:0;font-size:9px;color:'+P2C.blue+';font-weight:500">Hoy</span>';
   var dm=new Date(TODAY);dm.setDate(1);dm.setMonth(dm.getMonth()+1);
   while(p2DiffDays(TODAY,dm)<=maxD){
-    var mx=p2DiffDays(TODAY,dm)/maxD*100;
+    var mx2=p2DiffDays(TODAY,dm)/maxD*100;
     var ml=dm.toLocaleDateString('es-DO',{month:'short'});
-    h+='<span style="position:absolute;left:'+mx+'%;font-size:9px;color:'+P2C.gray+';transform:translateX(-50%)">'+ml+'</span>';
+    h+='<span style="position:absolute;left:'+mx2+'%;font-size:9px;color:'+P2C.gray+';transform:translateX(-50%)">'+ml+'</span>';
     dm=new Date(dm);dm.setMonth(dm.getMonth()+1);
   }
   h+='<span style="position:absolute;left:'+(tx*100)+'%;font-size:11px;color:'+P2C.amber+';transform:translateX(-50%);line-height:1">◆</span>';
   h+='</div>';
-
-  // Barras
   sorted.forEach(function(p){
     var bw=Math.min(p.days/maxD,1);
     var cc=P2_CATS[p.cat]?P2_CATS[p.cat].color:P2C.gray;
@@ -11553,46 +11599,26 @@ function p2GanttHTML(proj,endDate,target,TODAY){
     h+='<div style="display:flex;align-items:center;margin-bottom:4px">';
     h+='<div style="width:130px;flex-shrink:0;font-size:11px;color:var(--text1);padding-right:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">';
     h+='<span style="width:7px;height:7px;border-radius:50%;background:'+cc+';display:inline-block;margin-right:4px;vertical-align:middle"></span>'+esc(p.name);
-    h+='</div>';
-    h+='<div style="flex:1;position:relative;height:20px">';
+    h+='</div><div style="flex:1;position:relative;height:20px">';
     h+='<div style="position:absolute;inset:0;background:'+P2C.grayLite+';border-radius:4px"></div>';
     if(p.rem>0){
-      var op=p.active?'0.9':'0.45';
-      h+='<div style="position:absolute;top:0;left:0;width:'+(bw*100)+'%;height:100%;background:'+(late?P2C.red:cc)+';border-radius:4px;opacity:'+op+';display:flex;align-items:center;justify-content:flex-end;padding-right:4px">';
-      if(bw>0.13) h+='<span style="font-size:9px;color:#fff;font-weight:500">'+p.wks+'s</span>';
+      h+='<div style="position:absolute;top:0;left:0;width:'+(bw*100)+'%;height:100%;background:'+(late?P2C.red:cc)+';border-radius:4px;opacity:'+(p.active?'0.9':'0.45')+';display:flex;align-items:center;justify-content:flex-end;padding-right:4px">';
+      if(bw>0.13)h+='<span style="font-size:9px;color:#fff;font-weight:500">'+p.wks+'s</span>';
       h+='</div>';
-    } else {
+    }else{
       h+='<div style="position:absolute;inset:0;background:'+P2C.greenLite+';border-radius:4px;display:flex;align-items:center;padding-left:6px"><span style="font-size:9px;color:'+P2C.green+';font-weight:500">✓</span></div>';
     }
     h+='<div style="position:absolute;top:-3px;bottom:-3px;left:'+(tx*100)+'%;width:1.5px;background:'+P2C.amber+';z-index:2;border-radius:1px"></div>';
-    h+='</div>';
-    h+='<div style="width:72px;text-align:right;font-size:10px;font-weight:500;padding-left:5px;flex-shrink:0;color:'+(p.rem===0?P2C.green:late?P2C.red:P2C.blue)+'">';
+    h+='</div><div style="width:72px;text-align:right;font-size:10px;font-weight:500;padding-left:5px;flex-shrink:0;color:'+(p.rem===0?P2C.green:late?P2C.red:P2C.blue)+'">';
     h+=(p.rem===0?'✓':p2FmtShort(p.end));
-    h+='</div>';
-    h+='</div>';
+    h+='</div></div>';
   });
-
-  // Leyenda
   h+='<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:'+P2C.gray+'">';
-  Object.keys(P2_CATS).forEach(function(k){
-    h+='<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:'+P2_CATS[k].color+';display:inline-block"></span>'+P2_CATS[k].label+'</span>';
-  });
+  Object.keys(P2_CATS).forEach(function(k){h+='<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:'+P2_CATS[k].color+';display:inline-block"></span>'+P2_CATS[k].label+'</span>';});
   h+='<span style="display:flex;align-items:center;gap:4px"><span style="width:1.5px;height:12px;background:'+P2C.amber+';display:inline-block"></span>Objetivo</span>';
   h+='<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:'+P2C.red+';display:inline-block"></span>Retraso</span>';
-  h+='</div>';
-
-  h+='</div></div>';
+  h+='</div></div></div>';
   return h;
-}
-
-// ── Guardar % desde slider de partidas ────────────────────────────────────
-async function p2SavePct(id,val){
-  var p=(S.planActs||[]).find(function(x){return x.id===id;});
-  if(p) p.avance_manual=val;
-  try{
-    await sb('obra_plan_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({avance_manual:val})});
-  }catch(e){showToast('Error guardando: '+e.message,'err');}
-  renderPlan2();
 }
 
 </script>
