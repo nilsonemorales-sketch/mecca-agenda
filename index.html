@@ -507,7 +507,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
   <div class="sync idle" id="sync">
     <div class="sdot idle" id="sdot"></div>
     <span id="smsg">Iniciando...</span>
-    <span style="margin-left:auto;font-size:9px;opacity:.45;font-family:monospace">v0609d</span>
+    <span style="margin-left:auto;font-size:9px;opacity:.45;font-family:monospace">v0609e</span>
   </div>
 
   <div class="tabs">
@@ -675,8 +675,8 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260609_5';
-const APP_BUILD='mecca-v6';
+const APP_VERSION='20260609_6';
+const APP_BUILD='mecca-v7';
 // Auto-update: fetch sw.js with unique timestamp (bypasses ALL caches, even CDN).
 // If the CACHE version in sw.js doesn't match APP_BUILD, reload with cache-busted URL.
 (function(){
@@ -1234,6 +1234,7 @@ let S={
   equipoVista:'asistencia', // 'asistencia' | 'contratistas' | 'personal' | 'penalidades' | 'bonificaciones'
   reportesVista:'dashboard',// 'dashboard' | 'proyeccion' | 'apto' | 'semana' | 'historial'
   repAptoSel:'',
+  repCData:null, repCLoading:false,
   compras:[], comprasEstadoFiltro:'',
   kbf:{tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false,sinContratista:false},
   driveUrl:'',
@@ -5832,7 +5833,7 @@ async function generarPDF(opts){
     if(secs.propios&&!fAgrup){
       var actP=acts.filter(function(a){return a.tipo_personal==='propio';});
       if(actP.length){
-        var compP=acts.filter(function(a){return a.tipo_personal==='propio'&&a.estado==='completado';}).length;
+        var compP=actP.filter(function(a){return a.estado==='completado';}).length;
         var pctP=Math.round(compP/actP.length*100);
         secBanner('PERSONAL X LA CASA  — '+actP.length+' actividades  |  '+compP+' completadas ('+pctP+'%)');
         actTableHeader(ACC);
@@ -8302,8 +8303,18 @@ function renderRepPersonalizado(){
   var ingOpts=Object.values(USERS).map(function(u){return{val:u.nombre,label:u.nombre};});
   var ubicOpts=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort();
 
+  // Choose data source: Supabase cache for date ranges, S.acts for default view
+  var hasDates=!!(F.desde||F.hasta);
+  if(hasDates&&S.repCData===null&&!S.repCLoading){
+    // Trigger fetch and show loading state
+    loadRepCData();
+    el.innerHTML='<div style="padding:60px 20px;text-align:center"><div style="font-size:32px;margin-bottom:10px">⏳</div><div style="font-size:14px;font-weight:600;color:var(--text2)">Cargando actividades...</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Consultando el servidor</div></div>';
+    return;
+  }
+  var baseActs=hasDates?(S.repCData||[]):(S.acts||[]);
+
   // Apply filters
-  var acts=(S.acts||[]).filter(function(a){
+  var acts=baseActs.filter(function(a){
     if(F.tipo && a.tipo_personal!==F.tipo) return false;
     if(F.estado==='activas' && a.estado==='completado') return false;
     else if(F.estado && F.estado!=='activas' && a.estado!==F.estado) return false;
@@ -8405,7 +8416,7 @@ function renderRepPersonalizado(){
   // Header row with PDF button
   h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">';
   h+='<div style="font-size:13px;font-weight:700;color:var(--text)">Reporte personalizado</div>';
-  h+='<button onclick="exportarPDF()" style="padding:8px 14px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:6px">📄 Exportar PDF</button>';
+  h+='<button onclick="exportarPDFDesdeReporte()" style="padding:8px 14px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;gap:6px">📄 Exportar PDF</button>';
   h+='</div>';
 
   // Stats
@@ -8472,13 +8483,17 @@ function renderRepPersonalizado(){
     h+='</select></div></div>';
   }
 
-  // Row 4: fecha desde + hasta
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+  // Row 4: fecha desde + hasta + buscar
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">';
   h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:3px">Desde</div>';
-  h+='<input type="date" value="'+F.desde+'" onchange="S.repC.desde=this.value;renderRepPersonalizado()" style="'+SEL+'"></div>';
+  h+='<input type="date" value="'+F.desde+'" onchange="S.repC.desde=this.value;S.repCData=null;renderRepPersonalizado()" style="'+SEL+'"></div>';
   h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:3px">Hasta</div>';
-  h+='<input type="date" value="'+F.hasta+'" onchange="S.repC.hasta=this.value;renderRepPersonalizado()" style="'+SEL+'"></div>';
+  h+='<input type="date" value="'+F.hasta+'" onchange="S.repC.hasta=this.value;S.repCData=null;renderRepPersonalizado()" style="'+SEL+'"></div>';
+  h+='<button onclick="S.repCData=null;loadRepCData()" style="padding:8px 14px;border-radius:8px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">🔍 Buscar</button>';
   h+='</div>';
+  if(hasDates&&S.repCData!==null){
+    h+='<div style="margin-top:8px;font-size:10px;color:var(--text3)">'+S.repCData.length+' actividades cargadas del servidor · <button onclick="S.repCData=null;loadRepCData()" style="border:none;background:none;color:var(--accent);font-size:10px;cursor:pointer;padding:0;font-family:var(--font)">Actualizar</button></div>';
+  }
   h+='</div>'; // end filter panel
 
   // Grouping selector
@@ -8491,8 +8506,8 @@ function renderRepPersonalizado(){
   });
   h+='</div></div>';
 
-  // Completadas note
-  if(!S.actMostrarTodas){
+  // Completadas note (only relevant when NOT using date range fetch)
+  if(!hasDates&&!S.actMostrarTodas){
     h+='<div style="display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border:1px solid var(--border2);border-radius:8px;padding:8px 12px;margin-bottom:10px">';
     h+='<span style="font-size:11px;color:var(--text3)">Solo actividades activas</span>';
     h+='<button onclick="S.actMostrarTodas=true;loadActsAll().then(function(){renderRepPersonalizado();})" style="font-size:11px;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--font)">+ Ver completadas</button>';
@@ -8526,6 +8541,58 @@ function renderRepPersonalizado(){
 
   h+='<div style="height:80px"></div></div>';
   el.innerHTML=h;
+}
+
+// Fetch activities from Supabase for the date range in S.repC
+async function loadRepCData(){
+  if(S.repCLoading) return;
+  S.repCLoading=true;
+  var F=S.repC||{};
+  var q='obra_actividades?order=fecha.desc,created_at.desc&limit=800';
+  if(F.desde) q+='&fecha=gte.'+F.desde;
+  if(F.hasta) q+='&fecha=lte.'+F.hasta;
+  try{ S.repCData=await sb(q); }catch(e){ S.repCData=[]; }
+  S.repCLoading=false;
+  renderRepPersonalizado();
+}
+
+// Generate PDF directly from current Reporte view state — no modal needed
+async function exportarPDFDesdeReporte(){
+  var F=S.repC||{};
+  var data=(F.desde||F.hasta)?(S.repCData||[]):(S.acts||[]);
+  if(!data.length){
+    // Prompt to load data first if using date range
+    if((F.desde||F.hasta)&&!S.repCData){
+      alert('Carga los datos primero usando el botón "Buscar"');
+    } else {
+      alert('No hay actividades para generar el PDF');
+    }
+    return;
+  }
+  var fi=F.desde||(data.length?data[data.length-1].fecha:S.fecha)||S.fecha;
+  var ff=F.hasta||(data.length?data[0].fecha:S.fecha)||S.fecha;
+  var grpMap={ubicacion:'area',contratista:'contratista'};
+  var agruparPor=grpMap[F.agrupar]||'';
+  var isSameDay=!F.desde&&!F.hasta;
+  await generarPDF({
+    fi:fi, ff:ff,
+    filtroContratista:F.contratista||'',
+    filtroIngeniero:F.responsable||'',
+    filtroTipoPersonal:F.tipo||'',
+    filtroEstado:(F.estado==='activas'?'':F.estado)||'',
+    filtroPrioridad:F.prioridad||'',
+    filtroUbicacion:F.ubicacion||'',
+    agruparPor:agruparPor,
+    secciones:{
+      resumen:true,
+      asistencia:isSameDay,
+      propios:!F.tipo||F.tipo==='propio',
+      contratistas:!F.tipo||F.tipo==='contratista',
+      urgentes:F.prioridad==='urgente',
+      retrasadas:isSameDay,
+      penalidades:isSameDay,
+    }
+  });
 }
 
 function renderReporteUrgentes(){
