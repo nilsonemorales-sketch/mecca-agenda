@@ -10701,98 +10701,120 @@ function ganttToggleMacroMode(){_g.macroMode=!_g.macroMode;renderPlan();}
 
 function renderPlanGeneral(){
   var el=document.getElementById('c-plan');if(!el) return;
-  var plans=S.planActs||[];
-  var catF=S._planCatF||'';var nivF=S._planNivF||'';
-  if(catF) plans=plans.filter(function(p){return p.categoria===catF;});
-  if(nivF) plans=plans.filter(function(p){return p.nivel===nivF;});
-  var CATS=['Estructura','MEP','Drywall','Acabados','Otro'];
-  var NIVS=['N2','N3','N4','N5','N6','N7','Áreas Comunes','Penthouse'];
-  var catColors={'Estructura':'#2563EB','MEP':'#0891B2','Drywall':'#7C3AED','Acabados':'#059669','Otro':'#64748B'};
-  var btnSt2='height:32px;padding:0 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0';
-  var toolbar='<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2);padding:8px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
-    '<button onclick="ganttToggleMacroMode()" style="'+btnSt2+';color:var(--accent);border-color:var(--accent)">&#9664; Gantt</button>'+
-    '<span style="font-size:13px;font-weight:700;color:var(--text1);flex:1">Plan General de Obra</span>'+
-    '<select onchange="S._planCatF=this.value;renderPlanGeneral()" style="'+btnSt2+'">'+
-      '<option value="">Todas las categorías</option>'+
-      CATS.map(function(c){return '<option value="'+c+'"'+(catF===c?' selected':'')+'>'+c+'</option>';}).join('')+
-    '</select>'+
-    '<select onchange="S._planNivF=this.value;renderPlanGeneral()" style="'+btnSt2+'">'+
+  var allPlans=S.planActs||[];
+  var catF=S._planCatF||'';
+  var nivF=S._planNivF||'';
+  var NIVEL_ORDER=['N1','N2','N3','N4','N5','N6','N7','Inicio','Fase 1','Fase 2','Fase 3','Fase 4','Fin'];
+  var cats=[...new Set(allPlans.map(function(p){return p.categoria;}).filter(Boolean))].sort();
+  var allNivs=[...new Set(allPlans.map(function(p){return p.nivel;}).filter(Boolean))];
+  allNivs.sort(function(a,b){var ai=NIVEL_ORDER.indexOf(a),bi=NIVEL_ORDER.indexOf(b);if(ai<0)ai=99;if(bi<0)bi=99;return ai-bi;});
+  var groups={};
+  allPlans.forEach(function(p){var n=p.nivel||'General';if(!groups[n])groups[n]=[];groups[n].push(p);});
+  var orderedNivs=NIVEL_ORDER.filter(function(n){return groups[n];});
+  Object.keys(groups).forEach(function(n){if(orderedNivs.indexOf(n)<0)orderedNivs.push(n);});
+  if(nivF) orderedNivs=orderedNivs.filter(function(n){return n===nivF;});
+  var btnSt='height:32px;padding:0 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0';
+  var selSt='height:32px;padding:0 8px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0';
+  var toolbar='<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2);padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+    '<button onclick="ganttToggleMacroMode()" style="'+btnSt+';color:var(--accent);border-color:var(--accent)">&#9664; Gantt</button>'+
+    '<span style="font-size:13px;font-weight:700;color:var(--text1);flex:1">Plan General</span>'+
+    '<select onchange="S._planNivF=this.value;renderPlanGeneral()" style="'+selSt+'">'+
       '<option value="">Todos los niveles</option>'+
-      NIVS.map(function(n){return '<option value="'+n+'"'+(nivF===n?' selected':'')+'>'+n+'</option>';}).join('')+
+      allNivs.map(function(n){return '<option value="'+n+'"'+(nivF===n?' selected':'')+'>'+n+'</option>';}).join('')+
     '</select>'+
-    (isAdmin()?'<button onclick="abrirModalNuevaPlanAct()" style="'+btnSt2.replace('var(--bg3)','var(--accent)').replace('var(--text2)','#fff')+';border-color:var(--accent);font-weight:700">+ Nueva</button>':'')+
-    '<button onclick="S._planVista=(S._planVista===\'gantt\'?\'lista\':\'gantt\');renderPlanGeneral()" style="'+btnSt2+'">'+(S._planVista==='gantt'?'&#128203; Lista':'&#128202; Gantt')+'</button>'+
+    '<select onchange="S._planCatF=this.value;renderPlanGeneral()" style="'+selSt+'">'+
+      '<option value="">Todas las categorías</option>'+
+      cats.map(function(c){return '<option value="'+c+'"'+(catF===c?' selected':'')+'>'+c+'</option>';}).join('')+
+    '</select>'+
+    (isAdmin()?'<button onclick="abrirModalNuevaPlanAct()" style="'+btnSt.replace('var(--bg3)','var(--accent)').replace('var(--text2)','#fff')+';border-color:var(--accent);font-weight:700">+ Nueva</button>':'')+
   '</div>';
-  var body='';
-  if(S._planVista==='gantt'){
-    body=renderPlanGanttMacroHTML(S.planActs||[]);
+  var body='<div style="padding:12px;display:flex;flex-direction:column;gap:10px">';
+  if(!allPlans.length){
+    body+='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;gap:12px;color:var(--text3)">'+
+      '<div style="font-size:36px">&#128203;</div>'+
+      '<div style="font-size:14px;font-weight:600">Sin actividades de plan</div>'+
+      (isAdmin()?'<button onclick="abrirModalNuevaPlanAct()" class="ibtn primary">+ Agregar primera actividad</button>':'')+
+    '</div>';
   } else {
-    if(!plans.length){
-      body='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;gap:12px;color:var(--text3)">'+
-        '<div style="font-size:36px">&#128203;</div>'+
-        '<div style="font-size:14px;font-weight:600">Sin actividades de plan</div>'+
-        (isAdmin()?'<button onclick="abrirModalNuevaPlanAct()" class="ibtn primary">+ Agregar primera actividad</button>':'')+
-      '</div>';
-    } else {
-      body='<div style="padding:12px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1">';
-      plans.forEach(function(p){
-        var avance=calcularAvancePadre(p.id);
-        var subs=(S.acts||[]).filter(function(a){return a.plan_id===p.id;});
-        var done=subs.filter(function(a){return a.estado==='completado';}).length;
-        var clrCat=catColors[p.categoria]||'#64748B';
-        var barClr=avance>=80?'#059669':avance>=40?'#D97706':'#DC2626';
-        var hoy=new Date().toISOString().slice(0,10);
-        var diasR=p.fecha_fin_plan?Math.ceil((new Date(p.fecha_fin_plan+'T12:00:00')-new Date(hoy+'T12:00:00'))/86400000):null;
-        var open=S._planOpen&&S._planOpen[p.id];
-        var subHtml='';
-        if(open&&subs.length){
-          subHtml='<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:6px">';
-          subs.forEach(function(a){
-            var sc={'completado':'#059669','en-progreso':'#7C3AED','pendiente':'#9CA3AF','pausada':'#D97706'}[a.estado]||'#9CA3AF';
-            subHtml+='<div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:4px 6px;background:var(--bg2);border-radius:6px">'+
-              '<span style="width:8px;height:8px;border-radius:50%;background:'+sc+';flex-shrink:0"></span>'+
-              '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.descripcion||'Actividad')+'</span>'+
-              '<span style="font-size:10px;color:var(--text3);flex-shrink:0">'+esc(a.personal_nombre||a.ingeniero_nombre||'')+'</span>'+
-            '</div>';
-          });
-          subHtml+='</div>';
-        }
-        body+='<div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden;border:1px solid var(--border)">'+
-          '<div onclick="planToggleCard(\''+p.id+'\')" style="padding:12px 14px;cursor:pointer">'+
-            '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">'+
-              '<div style="flex:1;min-width:0">'+
-                '<div style="font-size:13px;font-weight:700;color:var(--text1);margin-bottom:4px">'+esc(p.nombre)+'</div>'+
-                '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
-                  (p.categoria?'<span style="font-size:10px;font-weight:600;background:'+clrCat+'22;color:'+clrCat+';padding:1px 7px;border-radius:10px">'+esc(p.categoria)+'</span>':'')+
-                  (p.nivel?'<span style="font-size:10px;background:var(--bg3);color:var(--text3);padding:1px 7px;border-radius:10px">&#128205; '+esc(p.nivel)+'</span>':'')+
-                  (diasR!==null?'<span style="font-size:10px;background:'+(diasR<0?'#FEE2E2':diasR<7?'#FEF3C7':'var(--bg3)')+';color:'+(diasR<0?'#DC2626':diasR<7?'#D97706':'var(--text3)')+';padding:1px 7px;border-radius:10px">'+(diasR<0?'&#9888;&#65039; Vencido':'&#9200; '+diasR+'d')+'</span>':'')+
-                '</div>'+
-              '</div>'+
-              '<div style="text-align:right;flex-shrink:0">'+
-                '<div style="font-size:20px;font-weight:800;color:'+barClr+'">'+avance+'%</div>'+
-                (subs.length?'<div style="font-size:10px;color:var(--text3)">'+done+'/'+subs.length+' sub</div>':'')+
-              '</div>'+
-            '</div>'+
-            '<div style="background:var(--bg3);border-radius:4px;height:8px;overflow:hidden">'+
-              '<div style="background:'+barClr+';height:100%;width:'+avance+'%;border-radius:4px;transition:width .4s"></div>'+
-            '</div>'+
-            (p.fecha_inicio_plan||p.fecha_fin_plan?'<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--text3)">'+
-              '<span>Plan: '+(p.fecha_inicio_plan||'—')+' &#8594; '+(p.fecha_fin_plan||'—')+'</span>'+
-              (subs.length?'<span>'+(open?'&#9650; Ocultar':'&#9660; '+subs.length+' activ.')+'</span>':'')+
-            '</div>':'')+
+    orderedNivs.forEach(function(niv){
+      var items=(groups[niv]||[]).filter(function(p){return !catF||p.categoria===catF;});
+      if(!items.length) return;
+      items.sort(function(a,b){return (a.orden||0)-(b.orden||0);});
+      var grpAvg=Math.round(items.reduce(function(s,p){return s+calcularAvancePadre(p.id);},0)/items.length);
+      var grpBarClr=grpAvg>=80?'#059669':grpAvg>=40?'#D97706':'#DC2626';
+      var grpDone=items.filter(function(p){return calcularAvancePadre(p.id)===100;}).length;
+      var grpOpen=!S._planGrpOpen||S._planGrpOpen[niv]!==false;
+      body+='<div>'+
+        '<div onclick="planToggleGrp(\''+niv+'\')" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-radius:10px;cursor:pointer;border:1px solid var(--border);margin-bottom:'+(grpOpen?'6px':'0')+'">'+
+          '<span style="font-size:13px;font-weight:800;color:var(--text1);flex:1">'+niv+'</span>'+
+          '<span style="font-size:10px;color:var(--text3)">'+grpDone+'/'+items.length+' listas</span>'+
+          '<div style="width:70px;height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden;flex-shrink:0">'+
+            '<div style="width:'+grpAvg+'%;height:100%;background:'+grpBarClr+';border-radius:3px"></div>'+
           '</div>'+
-          subHtml+
-          (isAdmin()?'<div style="padding:0 14px 10px;display:flex;gap:6px">'+
-            '<button onclick="event.stopPropagation();editarPlanAct(\''+p.id+'\')" style="font-size:11px;padding:3px 10px;border:1.5px solid var(--border2);border-radius:6px;background:var(--bg3);color:var(--text2);cursor:pointer;font-family:var(--font)">&#9998;&#65039; Editar</button>'+
-            '<button onclick="event.stopPropagation();eliminarPlanAct(\''+p.id+'\')" style="font-size:11px;padding:3px 10px;border:1.5px solid #FCA5A5;border-radius:6px;background:#FEF2F2;color:#DC2626;cursor:pointer;font-family:var(--font)">&#128465;</button>'+
-          '</div>':'')+
-        '</div>';
-      });
-      body+='</div>';
-    }
+          '<span style="font-size:12px;font-weight:700;color:'+grpBarClr+';min-width:34px;text-align:right">'+grpAvg+'%</span>'+
+          '<span style="font-size:10px;color:var(--text3);flex-shrink:0">'+(grpOpen?'&#9650;':'&#9660;')+'</span>'+
+        '</div>'+
+        (grpOpen?'<div style="display:flex;flex-direction:column;gap:4px">'+items.map(function(p){return _planCard(p);}).join('')+'</div>':'')+
+      '</div>';
+    });
   }
-  el.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+toolbar+'<div style="flex:1;overflow:auto">'+body+'</div></div>';
+  body+='</div>';
+  el.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+toolbar+'<div style="flex:1;overflow-y:auto">'+body+'</div></div>';
 }
+function planToggleGrp(niv){
+  if(!S._planGrpOpen) S._planGrpOpen={};
+  S._planGrpOpen[niv]=(S._planGrpOpen[niv]===false?true:false);
+  renderPlanGeneral();
+}
+function _planCard(p){
+  var avance=calcularAvancePadre(p.id);
+  var subs=(S.acts||[]).filter(function(a){return a.plan_id===p.id;});
+  var done=subs.filter(function(a){return a.estado==='completado';}).length;
+  var barClr=avance>=80?'#059669':avance>=40?'#D97706':'#DC2626';
+  var open=S._planOpen&&S._planOpen[p.id];
+  var canE=canEdit();
+  var subHtml='';
+  if(open&&subs.length){
+    subHtml='<div style="padding:6px 12px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:4px">';
+    subs.forEach(function(a){
+      var sc={'completado':'#059669','en-progreso':'#7C3AED','pendiente':'#9CA3AF','pausada':'#D97706'}[a.estado]||'#9CA3AF';
+      subHtml+='<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--bg2);border-radius:7px">'+
+        '<span style="width:7px;height:7px;border-radius:50%;background:'+sc+';flex-shrink:0"></span>'+
+        '<span style="flex:1;font-size:11px;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.descripcion||'')+'</span>'+
+        '<span style="font-size:10px;color:var(--text3);flex-shrink:0">'+esc(a.area||'')+'</span>'+
+        '<span style="font-size:10px;color:var(--text3);flex-shrink:0">'+esc(shortName(a.personal_nombre||a.ingeniero_nombre||''))+'</span>'+
+      '</div>';
+    });
+    subHtml+='</div>';
+  }
+  return '<div style="background:'+(avance===100?'#F0FDF4':'#fff')+';border:1px solid '+(avance===100?'#86EFAC':'var(--border)')+';border-radius:9px;overflow:hidden">'+
+    '<div style="padding:8px 12px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:'+(canE?'5px':'2px')+'">'+
+        (avance===100?'<span style="color:#059669;font-size:12px;flex-shrink:0">&#10003;</span>':'<span style="width:12px;flex-shrink:0"></span>')+
+        '<span style="flex:1;font-size:12px;font-weight:600;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(p.nombre)+'">'+esc(p.nombre)+'</span>'+
+        '<span id="plan-pct-'+p.id+'" style="font-size:13px;font-weight:700;color:'+barClr+';flex-shrink:0;min-width:36px;text-align:right">'+avance+'%</span>'+
+        (canE&&avance<100?'<button onclick="planMarkComplete(\''+p.id+'\')" title="Marcar 100%" style="height:24px;padding:0 6px;border-radius:6px;border:1.5px solid #86EFAC;background:#F0FDF4;color:#059669;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;font-family:var(--font)">&#10003;</button>':'')+
+        (isAdmin()?'<button onclick="editarPlanAct(\''+p.id+'\')" title="Editar" style="height:24px;width:24px;border-radius:6px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;flex-shrink:0;padding:0">&#9998;</button>':'')+
+        (subs.length?'<button onclick="planToggleCard(\''+p.id+'\')" style="height:24px;padding:0 6px;border-radius:6px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text3);font-size:10px;cursor:pointer;flex-shrink:0;font-family:var(--font)">'+(open?'&#9650;':'&#9660; '+subs.length)+'</button>':'')+
+      '</div>'+
+      (canE?'<input type="range" min="0" max="100" value="'+avance+'" oninput="planSliderLive(\''+p.id+'\',this.value)" onchange="planUpdateAvance(\''+p.id+'\',this.value)" style="width:100%;height:4px;accent-color:'+barClr+';cursor:pointer;display:block;margin:0">':
+        '<div style="background:#e5e7eb;border-radius:2px;height:4px"><div style="background:'+barClr+';height:100%;width:'+avance+'%;border-radius:2px"></div></div>')+
+    '</div>'+subHtml+'</div>';
+}
+function planSliderLive(planId,val){
+  var n=parseInt(val)||0;
+  var b=document.getElementById('plan-pct-'+planId);
+  if(b){b.textContent=n+'%';b.style.color=n>=80?'#059669':n>=40?'#D97706':'#DC2626';}
+}
+async function planUpdateAvance(planId,val){
+  var n=Math.min(100,Math.max(0,parseInt(val)||0));
+  var p=(S.planActs||[]).find(function(x){return x.id===planId;});if(!p) return;
+  try{
+    await sb('obra_plan_actividades?id=eq.'+planId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({avance_manual:n})});
+    p.avance_manual=n;renderPlanGeneral();
+  }catch(e){showToast('Error al guardar','err');}
+}
+async function planMarkComplete(planId){await planUpdateAvance(planId,100);}
 
 function renderPlanGanttMacroHTML(plans){
   if(!plans.length) return '<div style="padding:40px;text-align:center;color:var(--text3)">Sin actividades en el plan</div>';
@@ -10861,8 +10883,12 @@ function planToggleCard(id){
 
 function abrirModalNuevaPlanAct(editId){
   var ex=editId?(S.planActs||[]).find(function(p){return p.id===editId;}):null;
-  var CATS=['Estructura','MEP','Drywall','Acabados','Otro'];
-  var NIVS=['N2','N3','N4','N5','N6','N7','Áreas Comunes','Penthouse'];
+  var NIVEL_ORDER=['N1','N2','N3','N4','N5','N6','N7','Inicio','Fase 1','Fase 2','Fase 3','Fase 4','Fin'];
+  var CATS=[...new Set((S.planActs||[]).map(function(p){return p.categoria;}).filter(Boolean))].sort();
+  if(!CATS.length) CATS=['Civil','Estructura','Arquitectura','MEP','Especial','Logística','Cierre'];
+  var NIVS=[...new Set((S.planActs||[]).map(function(p){return p.nivel;}).filter(Boolean))];
+  NIVS.sort(function(a,b){var ai=NIVEL_ORDER.indexOf(a),bi=NIVEL_ORDER.indexOf(b);if(ai<0)ai=99;if(bi<0)bi=99;return ai-bi;});
+  if(!NIVS.length) NIVS=['N1','N2','N3','N4','N5','N6','N7','Inicio','Fase 1','Fase 2','Fase 3','Fase 4','Fin'];
   var inpSt='width:100%;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:var(--font);background:#fff;color:var(--text1);box-sizing:border-box';
   document.getElementById('mcontent').innerHTML=
     '<div style="padding:20px">'+
