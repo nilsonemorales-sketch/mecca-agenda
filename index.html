@@ -674,7 +674,17 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleFotoFile(this)">
 
 <script>
-const APP_VERSION='20260605_140';
+const APP_VERSION='20260609_1';
+const APP_BUILD='mecca-v2';
+// Auto-update: fetch sw.js with unique timestamp (bypasses ALL caches, even CDN).
+// If the CACHE version in sw.js doesn't match APP_BUILD, reload with cache-busted URL.
+(function(){
+  if(/[?&]_r=/.test(location.search)){try{history.replaceState(null,'',location.pathname);}catch(e){}return;}
+  fetch('./sw.js?_='+Date.now()).then(function(r){return r.text();}).then(function(txt){
+    var m=txt.match(/var CACHE=['"]([^'"]+)['"]/);
+    if(m&&m[1]!==APP_BUILD)location.replace(location.pathname+'?_r='+Date.now());
+  }).catch(function(){});
+})();
 const SB='https://qeurcozssghkqgezilfj.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
