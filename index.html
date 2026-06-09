@@ -11175,12 +11175,13 @@ async function eliminarPlanAct(id){
   }catch(e){showToast('Error: '+e.message,'err');}
 }
 
+
 // ═══════════════════════════════════════════════════════════════════════════
-// PLAN 2.0 — Módulo de planificación visual
+// PLAN 2.0 — Cockpit de planificación por niveles
 // ═══════════════════════════════════════════════════════════════════════════
-var P2={tab:'mapa'};
-var P2_NIV_ORDER=['N1','N2','N3','N4','N5','N6','N7','General','Proyecto','Inicio','Fin'];
-var P2_CAT_COLORS={
+var P2={tab:'vista',exp:{}};
+var P2_NIV=['N1','N2','N3','N4','N5','N6','N7'];
+var P2_CAT_CLR={
   'Demolición':'#DC2626','Replanteo':'#7C3AED','Hormigón':'#2563EB','Estructura':'#1D4ED8',
   'Albañilería':'#D97706','Mampostería':'#D97706','Bloquería':'#D97706',
   'Impermeabilización':'#0891B2','Plomería':'#059669','Eléctrico':'#F59E0B','MEP':'#F59E0B',
@@ -11189,107 +11190,160 @@ var P2_CAT_COLORS={
   'Logística':'#64748B','Cierre':'#374151'
 };
 
-function p2Color(cat){
-  for(var k in P2_CAT_COLORS){if(cat&&cat.toLowerCase().indexOf(k.toLowerCase())>=0)return P2_CAT_COLORS[k];}
-  return '#6B7280';
+function p2CatClr(cat){
+  if(!cat)return'#6B7280';
+  for(var k in P2_CAT_CLR){if(cat.toLowerCase().indexOf(k.toLowerCase())>=0)return P2_CAT_CLR[k];}
+  return'#6B7280';
 }
-function p2AvanceColor(pct){
-  if(pct>=100)return{bg:'#DCFCE7',bar:'#16A34A',txt:'#166534'};
-  if(pct>=80) return{bg:'#D1FAE5',bar:'#059669',txt:'#065F46'};
-  if(pct>=50) return{bg:'#FEF3C7',bar:'#D97706',txt:'#92400E'};
-  if(pct>=20) return{bg:'#FFEDD5',bar:'#F97316',txt:'#9A3412'};
-  if(pct>0)  return{bg:'#FEE2E2',bar:'#DC2626',txt:'#991B1B'};
-  return{bg:'#F1F5F9',bar:'#CBD5E1',txt:'#94A3B8'};
+function p2AvClr(pct){
+  if(pct>=100)return{bg:'#DCFCE7',bar:'#16A34A',txt:'#166534',lt:'#BBF7D0'};
+  if(pct>=80) return{bg:'#D1FAE5',bar:'#059669',txt:'#065F46',lt:'#A7F3D0'};
+  if(pct>=50) return{bg:'#FEF3C7',bar:'#D97706',txt:'#92400E',lt:'#FDE68A'};
+  if(pct>=20) return{bg:'#FFEDD5',bar:'#F97316',txt:'#9A3412',lt:'#FED7AA'};
+  if(pct>0)  return{bg:'#FEE2E2',bar:'#DC2626',txt:'#991B1B',lt:'#FECACA'};
+  return{bg:'#F8FAFC',bar:'#CBD5E1',txt:'#94A3B8',lt:'#E2E8F0'};
 }
-function p2Avance(p){
+function p2Av(p){
   var subs=(S.acts||[]).filter(function(a){return a.plan_id===p.id;});
   if(subs.length){var d=subs.filter(function(a){return a.estado==='completado';}).length;return Math.round(d/subs.length*100);}
   return p.avance_manual||0;
 }
-
-// ── Proyección ───────────────────────────────────────────────────────────
-function p2Projection(){
-  var plans=S.planActs||[];
-  if(!plans.length)return null;
-  var total=plans.length;
-  var avgs=plans.map(function(p){return p2Avance(p);});
-  var overall=Math.round(avgs.reduce(function(s,v){return s+v;},0)/total);
-
-  // Gather start/end dates
-  var starts=[],ends=[];
-  plans.forEach(function(p){
-    if(p.fecha_inicio_plan)starts.push(p.fecha_inicio_plan);
-    if(p.fecha_fin_plan)ends.push(p.fecha_fin_plan);
-  });
-  var targetDate=ends.length?ends.reduce(function(a,b){return a>b?a:b;}):null;
-  var startDate=starts.length?starts.reduce(function(a,b){return a<b?a:b;}):null;
-
-  var today=new Date();today.setHours(12,0,0,0);
-  var todayStr=today.toISOString().slice(0,10);
-
-  var projectedDate=null;
-  var status='sin-fechas';
-  var weeksRemaining=null;
-  var velocity=null; // % per week
-
-  if(startDate&&overall>0){
-    var st=new Date(startDate+'T12:00:00');
-    var daysElapsed=Math.max(1,Math.round((today-st)/86400000));
-    var weeksElapsed=daysElapsed/7;
-    velocity=overall/weeksElapsed; // % per week
-    if(velocity>0){
-      var remaining=100-overall;
-      weeksRemaining=remaining/velocity;
-      var projMs=today.getTime()+weeksRemaining*7*86400000;
-      projectedDate=new Date(projMs).toISOString().slice(0,10);
-    }
-  }
-
-  if(targetDate&&projectedDate){
-    if(projectedDate<=targetDate)status='on-track';
-    else{
-      var diff=Math.round((new Date(projectedDate+'T12:00:00')-new Date(targetDate+'T12:00:00'))/86400000);
-      status=diff>30?'behind':'at-risk';
-    }
-  } else if(projectedDate){
-    status='projected';
-  }
-
-  return{overall:overall,targetDate:targetDate,startDate:startDate,projectedDate:projectedDate,
-    status:status,weeksRemaining:weeksRemaining?Math.ceil(weeksRemaining):null,
-    velocity:velocity?Math.round(velocity*10)/10:null,total:total,
-    done:avgs.filter(function(v){return v>=100;}).length};
+function p2NivAvg(arr){
+  if(!arr||!arr.length)return 0;
+  return Math.round(arr.reduce(function(s,p){return s+p2Av(p);},0)/arr.length);
 }
+function p2IsExp(key){return P2.exp[key]!==false;}
+function p2ToggleExp(key){P2.exp[key]=!p2IsExp(key);renderPlan2();}
+function p2SetTab(tab){P2.tab=tab;renderPlan2();}
 
-function p2FmtDate(d){
+function p2FmtD(d){
   if(!d)return'–';
   var p=d.split('-');
-  var MONTHS=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  return p[2]+' '+MONTHS[parseInt(p[1])-1]+' '+p[0];
+  var M=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  return p[2]+' '+M[parseInt(p[1])-1]+' '+p[0];
 }
 
-// ── Shared header ─────────────────────────────────────────────────────────
-function p2Header(){
-  var tabs=[['mapa','🗺️ Mapa'],['dashboard','📊 Dashboard'],['gantt','📅 Cronograma']];
-  return '<div style="flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
-    '<span style="font-size:14px;font-weight:800;color:var(--text1);flex-shrink:0">Plan 2.0</span>'+
-    '<div style="display:flex;gap:2px;padding:2px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">'+
-      tabs.map(function(t){
-        var a=P2.tab===t[0];
-        return '<button onclick="p2SetTab(\''+t[0]+'\')" style="height:30px;padding:0 11px;border-radius:8px;border:none;font-family:var(--font);font-size:12px;font-weight:'+(a?'700':'500')+';cursor:pointer;background:'+(a?'var(--accent)':'transparent')+';color:'+(a?'#fff':'var(--text2)')+'">'+t[1]+'</button>';
-      }).join('')+
+function p2Proj(){
+  var plans=S.planActs||[];if(!plans.length)return null;
+  var avgs=plans.map(function(p){return p2Av(p);});
+  var overall=Math.round(avgs.reduce(function(s,v){return s+v;},0)/plans.length);
+  var ends=[],starts=[];
+  plans.forEach(function(p){if(p.fecha_fin_plan)ends.push(p.fecha_fin_plan);if(p.fecha_inicio_plan)starts.push(p.fecha_inicio_plan);});
+  var targetDate=ends.length?ends.reduce(function(a,b){return a>b?a:b;}):null;
+  var startDate=starts.length?starts.reduce(function(a,b){return a<b?a:b;}):null;
+  var today=new Date();today.setHours(12,0,0,0);
+  var projectedDate=null,velocity=null,weeksRemaining=null,status='sin-fechas';
+  if(startDate&&overall>0){
+    var st=new Date(startDate+'T12:00:00');
+    var wEl=Math.max(0.5,(today-st)/(7*86400000));
+    velocity=Math.round(overall/wEl*10)/10;
+    if(velocity>0){
+      weeksRemaining=Math.ceil((100-overall)/velocity);
+      projectedDate=new Date(today.getTime()+weeksRemaining*7*86400000).toISOString().slice(0,10);
+    }
+  }
+  if(targetDate&&projectedDate){
+    var diff=Math.round((new Date(projectedDate+'T12:00:00')-new Date(targetDate+'T12:00:00'))/86400000);
+    status=diff<=-7?'on-track':diff<=14?'at-risk':'behind';
+  } else if(projectedDate){status='projected';}
+  return{overall:overall,targetDate:targetDate,startDate:startDate,projectedDate:projectedDate,
+    status:status,weeksRemaining:weeksRemaining,velocity:velocity,
+    total:plans.length,done:avgs.filter(function(v){return v>=100;}).length};
+}
+
+// ── Header cockpit ────────────────────────────────────────────────────────
+function p2Cockpit(){
+  var proj=p2Proj();
+  var stMap={'on-track':{lbl:'En tiempo',clr:'#059669',bg:'#DCFCE7'},
+    'at-risk':{lbl:'En riesgo',clr:'#D97706',bg:'#FEF3C7'},
+    'behind':{lbl:'Atrasado',clr:'#DC2626',bg:'#FEE2E2'},
+    'projected':{lbl:'Proyectado',clr:'#2563EB',bg:'#DBEAFE'},
+    'sin-fechas':{lbl:'Sin fechas',clr:'#6B7280',bg:'#F1F5F9'}};
+  var sc=stMap[(proj&&proj.status)||'sin-fechas'];
+  var oc=proj?p2AvClr(proj.overall):p2AvClr(0);
+  var overall=proj?proj.overall:0;
+
+  var tabs=[['vista','📊 Vista'],['gantt','📅 Cronograma']];
+
+  return '<div style="flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border)">'+
+    // Barra de estado del proyecto
+    '<div style="padding:14px 16px 10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">'+
+      // Avance general
+      '<div style="flex:1;min-width:180px">'+
+        '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">'+
+          '<span style="font-size:34px;font-weight:900;color:'+oc.txt+';line-height:1">'+overall+'%</span>'+
+          '<span style="font-size:12px;color:var(--text3)">avance general</span>'+
+          '<span style="padding:2px 9px;border-radius:12px;font-size:10px;font-weight:700;background:'+sc.bg+';color:'+sc.clr+'">'+sc.lbl+'</span>'+
+        '</div>'+
+        '<div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden">'+
+          '<div style="height:100%;width:'+overall+'%;background:'+oc.bar+';border-radius:4px;transition:width .5s"></div>'+
+        '</div>'+
+      '</div>'+
+      // KPIs derecha
+      '<div style="display:flex;gap:16px;flex-wrap:wrap">'+
+        (proj&&proj.done!==undefined?'<div style="text-align:center"><div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.07em">LISTAS</div><div style="font-size:18px;font-weight:800;color:var(--text1)">'+proj.done+'/'+proj.total+'</div></div>':'')+
+        (proj&&proj.velocity?'<div style="text-align:center"><div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.07em">RITMO</div><div style="font-size:18px;font-weight:800;color:var(--text1)">'+proj.velocity+'%</div><div style="font-size:8px;color:var(--text3)">por semana</div></div>':'')+
+        (proj&&proj.targetDate?'<div style="text-align:center"><div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.07em">OBJETIVO</div><div style="font-size:13px;font-weight:700;color:var(--text2)">'+p2FmtD(proj.targetDate)+'</div></div>':'')+
+        (proj&&proj.projectedDate?'<div style="text-align:center"><div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.07em">ESTIMADO</div><div style="font-size:13px;font-weight:700;color:'+oc.txt+'">'+p2FmtD(proj.projectedDate)+'</div>'+(proj.weeksRemaining?'<div style="font-size:8px;color:var(--text3)">~'+proj.weeksRemaining+' sem</div>':'')+' </div>':'')+
+      '</div>'+
     '</div>'+
-    '<span style="flex:1"></span>'+
-    (isAdmin()?'<button onclick="abrirModalNuevaPlanAct()" style="height:30px;padding:0 10px;border-radius:8px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">+ Nueva partida</button>':'')+
+    // Tabs + acciones
+    '<div style="padding:0 14px 10px;display:flex;gap:8px;align-items:center">'+
+      '<div style="display:flex;gap:2px;padding:2px;background:var(--bg3);border-radius:9px;border:1px solid var(--border)">'+
+        tabs.map(function(t){var a=P2.tab===t[0];return'<button onclick="p2SetTab(\''+t[0]+'\')" style="height:28px;padding:0 12px;border-radius:7px;border:none;font-family:var(--font);font-size:11px;font-weight:'+(a?'700':'500')+';cursor:pointer;background:'+(a?'var(--accent)':'transparent')+';color:'+(a?'#fff':'var(--text2)')+'">'+t[1]+'</button>';}).join('')+
+      '</div>'+
+      '<span style="flex:1"></span>'+
+      (isAdmin()?'<button onclick="abrirModalNuevaPlanAct()" style="height:28px;padding:0 10px;border-radius:8px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">+ Partida</button>':'')+
+    '</div>'+
   '</div>';
 }
 
-function p2SetTab(tab){P2.tab=tab;renderPlan2();}
+// ── Tarjeta de partida (inline slider) ────────────────────────────────────
+function p2Card(p){
+  var pa=p2Av(p);
+  var pc=p2AvClr(pa);
+  var hasSubs=(S.acts||[]).some(function(a){return a.plan_id===p.id;});
+  var catClr=p2CatClr(p.categoria||'');
+  return '<div style="padding:8px 12px;background:var(--bg2);border-radius:8px;border-left:3px solid '+catClr+';border-top:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border)">'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:'+((!hasSubs&&canEdit())?'5px':'2px')+'">'+
+      (pa>=100?'<span style="color:#059669;font-size:14px;flex-shrink:0">✓</span>':'<span style="width:14px;flex-shrink:0"></span>')+
+      '<span style="flex:1;font-size:11px;font-weight:600;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(p.nombre)+'">'+esc(p.nombre)+'</span>'+
+      '<span id="p2v-pct-'+p.id+'" style="font-size:13px;font-weight:800;color:'+pc.txt+';min-width:36px;text-align:right;flex-shrink:0">'+pa+'%</span>'+
+      (isAdmin()?'<button onclick="p2EditMadre(\''+p.id+'\')" title="Editar fechas/avance" style="height:22px;width:22px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--text3);font-size:10px;cursor:pointer;flex-shrink:0;padding:0">✏</button>':'')+
+    '</div>'+
+    (!hasSubs&&canEdit()?
+      '<input type="range" min="0" max="100" value="'+pa+'" '+
+        'oninput="p2LivePct(\''+p.id+'\',this.value)" '+
+        'onchange="p2SavePct(\''+p.id+'\',this.value)" '+
+        'style="width:100%;height:4px;accent-color:'+catClr+';cursor:pointer;display:block;margin:0">':
+      '<div style="height:4px;background:#e5e7eb;border-radius:2px"><div style="height:4px;background:'+pc.bar+';width:'+pa+'%;border-radius:2px"></div></div>'+
+      (hasSubs?'<div style="font-size:9px;color:var(--text3);margin-top:2px">desde actividades enlazadas</div>':'')+
+    '')+
+  '</div>';
+}
 
+function p2LivePct(id,val){
+  var n=parseInt(val)||0;
+  var b=document.getElementById('p2v-pct-'+id);
+  if(!b)return;
+  var c=p2AvClr(n);
+  b.textContent=n+'%';b.style.color=c.txt;
+}
+
+async function p2SavePct(planId,val){
+  var n=Math.min(100,Math.max(0,parseInt(val)||0));
+  var p=(S.planActs||[]).find(function(x){return x.id===planId;});if(!p)return;
+  try{
+    await sb('obra_plan_actividades?id=eq.'+planId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({avance_manual:n})});
+    p.avance_manual=n;renderPlan2();
+  }catch(e){showToast('Error al guardar','err');}
+}
+
+// ── Vista principal ───────────────────────────────────────────────────────
 function renderPlan2(){
   var el=document.getElementById('c-plan2');if(!el)return;
-  if(!(S.planActs&&S.planActs.length)){
-    el.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+p2Header()+
+  if(!S.planActs||!S.planActs.length){
+    el.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+p2Cockpit()+
       '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text3)">'+
       '<div style="font-size:36px">📋</div>'+
       '<div style="font-size:14px;font-weight:600">Sin partidas en el plan</div>'+
@@ -11297,374 +11351,215 @@ function renderPlan2(){
       '</div></div>';
     return;
   }
-  if(P2.tab==='mapa')      renderP2Mapa();
-  else if(P2.tab==='dashboard') renderP2Dashboard();
-  else                     renderP2Gantt();
+  if(P2.tab==='gantt'){renderP2Gantt();return;}
+  renderP2Vista();
 }
 
-// ── Vista 1: Mapa de Calor ────────────────────────────────────────────────
-function renderP2Mapa(){
+function renderP2Vista(){
   var el=document.getElementById('c-plan2');if(!el)return;
   var plans=S.planActs||[];
-  var cats=[...new Set(plans.map(function(p){return p.categoria||'Sin categoría';}))].sort();
-  var nivs=[...new Set(plans.map(function(p){return p.nivel||'General';}))];
-  nivs.sort(function(a,b){var ai=P2_NIV_ORDER.indexOf(a),bi=P2_NIV_ORDER.indexOf(b);if(ai<0)ai=99;if(bi<0)bi=99;return ai-bi;});
 
-  // Build lookup: {cat_niv: [plans]}
-  var lookup={};
+  // Separar por nivel físico vs general
+  var byNiv={};var genPlans=[];
   plans.forEach(function(p){
-    var k=(p.categoria||'Sin categoría')+'||'+(p.nivel||'General');
-    if(!lookup[k])lookup[k]=[];
-    lookup[k].push(p);
+    var n=p.nivel||'';
+    if(P2_NIV.indexOf(n)>=0){if(!byNiv[n])byNiv[n]=[];byNiv[n].push(p);}
+    else genPlans.push(p);
   });
 
-  var thSt='padding:6px 10px;font-size:10px;font-weight:700;color:var(--text3);text-align:center;background:var(--bg3);border:1px solid var(--border);letter-spacing:.05em;white-space:nowrap';
-  var thLSt='padding:6px 10px;font-size:11px;font-weight:700;color:var(--text1);background:var(--bg3);border:1px solid var(--border);white-space:nowrap;text-align:left;min-width:120px';
+  // Ordenar niveles por avance desc (patrón takt visible)
+  var nivList=P2_NIV.filter(function(n){return byNiv[n]&&byNiv[n].length;});
+  nivList.sort(function(a,b){return p2NivAvg(byNiv[b])-p2NivAvg(byNiv[a]);});
 
-  var html='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+p2Header()+
-    '<div style="flex:1;overflow:auto;padding:12px">'+
-    '<table style="border-collapse:collapse;width:100%;min-width:'+(120+nivs.length*90)+'px">'+
-    '<thead><tr>'+
-      '<th style="'+thLSt+'">Partida / Nivel</th>'+
-      nivs.map(function(n){return'<th style="'+thSt+'">'+esc(n)+'</th>';}).join('')+
-    '</tr></thead><tbody>';
+  var body='<div style="padding:12px;display:flex;flex-direction:column;gap:8px">';
 
-  cats.forEach(function(cat){
-    var catRows=plans.filter(function(p){return(p.categoria||'Sin categoría')===cat;});
-    if(!catRows.length)return;
-    // Compute cat avg
-    var catAvg=Math.round(catRows.reduce(function(s,p){return s+p2Avance(p);},0)/catRows.length);
-    var catClr=p2Color(cat);
-    html+='<tr>'+
-      '<td colspan="'+(nivs.length+1)+'" style="padding:5px 10px;font-size:11px;font-weight:800;color:'+catClr+';background:'+catClr+'18;border:1px solid var(--border)">'+
-        '<span style="display:inline-flex;align-items:center;gap:8px">'+
-          esc(cat)+
-          '<span style="height:4px;width:50px;background:#e5e7eb;border-radius:2px;display:inline-block">'+
-            '<span style="height:4px;width:'+catAvg+'%;background:'+catClr+';border-radius:2px;display:block"></span>'+
-          '</span>'+
-          '<span style="font-size:10px;font-weight:700;color:'+catClr+'">'+catAvg+'%</span>'+
-        '</span>'+
-      '</td>'+
-    '</tr>';
+  // Secciones de nivel
+  nivList.forEach(function(niv){
+    var nPlans=byNiv[niv].slice().sort(function(a,b){return(a.orden||0)-(b.orden||0);});
+    var avg=p2NivAvg(nPlans);
+    var c=p2AvClr(avg);
+    var isExp=p2IsExp(niv);
+    var done=nPlans.filter(function(p){return p2Av(p)>=100;}).length;
 
-    // Find unique nombres within this category (could span multiple niveles)
-    var nombres=[...new Set(catRows.map(function(p){return p.nombre;}))];
-    nombres.forEach(function(nom){
-      var rowPlans=catRows.filter(function(p){return p.nombre===nom;});
-      html+='<tr>';
-      html+='<td style="padding:5px 10px;font-size:11px;color:var(--text2);border:1px solid var(--border);background:var(--bg2)">'+esc(nom)+'</td>';
-      nivs.forEach(function(niv){
-        var k=(cat)+'||'+(niv);
-        var cell=lookup[k]?lookup[k].filter(function(p){return p.nombre===nom;}):[];
-        if(!cell.length){
-          html+='<td style="border:1px solid var(--border);background:var(--bg3);text-align:center">'+
-            '<span style="font-size:10px;color:var(--border)">—</span></td>';
-          return;
-        }
-        var pct=p2Avance(cell[0]);
-        var c=p2AvanceColor(pct);
-        html+='<td style="border:1px solid var(--border);background:'+c.bg+';text-align:center;cursor:pointer;padding:4px" onclick="p2EditMadre(\''+cell[0].id+'\')">'+
-          '<div style="font-size:14px;font-weight:800;color:'+c.txt+'">'+pct+'%</div>'+
-          '<div style="height:3px;background:#0002;border-radius:2px;margin:2px 4px 0">'+
-            '<div style="height:3px;background:'+c.bar+';width:'+pct+'%;border-radius:2px"></div>'+
+    body+='<div style="border-radius:12px;overflow:hidden;border:1.5px solid '+c.lt+'">'+
+      // Header del nivel
+      '<div onclick="p2ToggleExp(\''+niv+'\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:'+c.bg+';cursor:pointer;user-select:none">'+
+        '<div style="width:40px;height:40px;border-radius:10px;background:'+c.bar+';color:#fff;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1">'+niv+'</div>'+
+        '<div style="flex:1">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'+
+            '<span style="font-size:12px;font-weight:600;color:var(--text2)">'+done+' / '+nPlans.length+' completadas</span>'+
+            '<span style="font-size:22px;font-weight:900;color:'+c.txt+'">'+avg+'%</span>'+
           '</div>'+
-        '</td>';
-      });
-      html+='</tr>';
-    });
-  });
-
-  html+='</tbody></table></div></div>';
-  el.innerHTML=html;
-}
-
-// ── Vista 2: Dashboard ────────────────────────────────────────────────────
-function renderP2Dashboard(){
-  var el=document.getElementById('c-plan2');if(!el)return;
-  var proj=p2Projection();
-  var plans=S.planActs||[];
-
-  // Status config
-  var statusCfg={
-    'on-track':{lbl:'En tiempo',clr:'#059669',bg:'#DCFCE7',icon:'✓'},
-    'at-risk': {lbl:'En riesgo', clr:'#D97706',bg:'#FEF3C7',icon:'⚠'},
-    'behind':  {lbl:'Atrasado',  clr:'#DC2626',bg:'#FEE2E2',icon:'✕'},
-    'projected':{lbl:'Proyectado',clr:'#2563EB',bg:'#DBEAFE',icon:'→'},
-    'sin-fechas':{lbl:'Sin fechas',clr:'#6B7280',bg:'#F1F5F9',icon:'–'}
-  };
-  var sc=statusCfg[proj?proj.status:'sin-fechas'];
-
-  // KPI cards
-  var kpiSt='flex:1;min-width:120px;padding:14px;border-radius:12px;border:1px solid var(--border);background:var(--bg2);text-align:center';
-  var kpis='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
-  kpis+='<div style="'+kpiSt+'">'+
-    '<div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:4px">AVANCE GENERAL</div>'+
-    '<div style="font-size:36px;font-weight:900;color:'+(proj?p2AvanceColor(proj.overall).txt:'#9CA3AF')+';line-height:1">'+
-      (proj?proj.overall:'–')+'%'+
-    '</div>'+
-    '<div style="height:5px;background:#e5e7eb;border-radius:3px;margin:6px 0 0">'+
-      '<div style="height:5px;background:'+(proj?p2AvanceColor(proj.overall).bar:'#CBD5E1')+';width:'+(proj?proj.overall:0)+'%;border-radius:3px"></div>'+
-    '</div>'+
-  '</div>';
-
-  kpis+='<div style="'+kpiSt+'">'+
-    '<div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:4px">PARTIDAS LISTAS</div>'+
-    '<div style="font-size:36px;font-weight:900;color:var(--text1);line-height:1">'+(proj?proj.done:0)+'</div>'+
-    '<div style="font-size:12px;color:var(--text3);margin-top:4px">de '+(proj?proj.total:0)+' partidas</div>'+
-  '</div>';
-
-  kpis+='<div style="'+kpiSt+';background:'+sc.bg+';border-color:'+sc.clr+'40">'+
-    '<div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:4px">ESTADO</div>'+
-    '<div style="font-size:22px;line-height:1">'+sc.icon+'</div>'+
-    '<div style="font-size:13px;font-weight:700;color:'+sc.clr+'">'+sc.lbl+'</div>'+
-  '</div>';
-
-  kpis+='<div style="'+kpiSt+'">'+
-    '<div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:4px">FECHA OBJETIVO</div>'+
-    '<div style="font-size:14px;font-weight:800;color:var(--text1);">'+(proj&&proj.targetDate?p2FmtDate(proj.targetDate):'Sin configurar')+'</div>'+
-    (isAdmin()?'<button onclick="p2SetTargetDate()" style="margin-top:6px;height:22px;padding:0 8px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:10px;cursor:pointer;font-family:var(--font)">Editar</button>':'')+
-  '</div>';
-
-  kpis+='<div style="'+kpiSt+'">'+
-    '<div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:4px">ENTREGA ESTIMADA</div>'+
-    '<div style="font-size:14px;font-weight:800;color:'+(proj&&proj.projectedDate?p2AvanceColor(proj.status==='on-track'?100:proj.status==='at-risk'?60:20).txt:'#9CA3AF')+'">'+
-      (proj&&proj.projectedDate?p2FmtDate(proj.projectedDate):'Sin datos')+'</div>'+
-    (proj&&proj.weeksRemaining?'<div style="font-size:11px;color:var(--text3);margin-top:2px">~'+proj.weeksRemaining+' sem. restantes</div>':'')+
-  '</div>';
-
-  kpis+='<div style="'+kpiSt+'">'+
-    '<div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.08em;margin-bottom:4px">VELOCIDAD</div>'+
-    '<div style="font-size:24px;font-weight:900;color:var(--text1);line-height:1">'+(proj&&proj.velocity?proj.velocity:'–')+'</div>'+
-    '<div style="font-size:11px;color:var(--text3);margin-top:2px">% por semana</div>'+
-  '</div>';
-
-  kpis+='</div>';
-
-  // Progress by category
-  var cats=[...new Set(plans.map(function(p){return p.categoria||'Sin categoría';}))].sort();
-  var catBars='<div style="margin-bottom:14px">'+
-    '<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.07em">AVANCE POR CATEGORÍA</div>'+
-    '<div style="display:flex;flex-direction:column;gap:6px">';
-  cats.forEach(function(cat){
-    var catPlans=plans.filter(function(p){return(p.categoria||'Sin categoría')===cat;});
-    var avg=Math.round(catPlans.reduce(function(s,p){return s+p2Avance(p);},0)/catPlans.length);
-    var clr=p2Color(cat);
-    var c=p2AvanceColor(avg);
-    catBars+='<div style="display:flex;align-items:center;gap:8px">'+
-      '<span style="font-size:11px;color:var(--text2);min-width:110px;text-align:right">'+esc(cat)+'</span>'+
-      '<div style="flex:1;height:18px;background:var(--bg3);border-radius:4px;overflow:hidden;position:relative">'+
-        '<div style="height:100%;width:'+avg+'%;background:'+clr+';border-radius:4px;transition:width .3s"></div>'+
-        '<span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:'+(avg>40?'#fff':c.txt)+'">'+avg+'%</span>'+
+          '<div style="height:7px;background:#0001;border-radius:4px;overflow:hidden">'+
+            '<div style="height:100%;width:'+avg+'%;background:'+c.bar+';border-radius:4px"></div>'+
+          '</div>'+
+        '</div>'+
+        '<span style="font-size:12px;color:'+c.txt+';flex-shrink:0;width:16px;text-align:center">'+(isExp?'▲':'▼')+'</span>'+
       '</div>'+
+      // Lista expandida
+      (isExp?'<div style="padding:8px;display:flex;flex-direction:column;gap:5px;background:var(--bg)">'+
+        nPlans.map(function(p){return p2Card(p);}).join('')+
+      '</div>':'')+
     '</div>';
   });
-  catBars+='</div></div>';
 
-  // Progress by nivel
-  var NIVEL_ORDER=['N1','N2','N3','N4','N5','N6','N7'];
-  var nivBars='<div>'+
-    '<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;letter-spacing:.07em">AVANCE POR NIVEL</div>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap">';
-  NIVEL_ORDER.forEach(function(niv){
-    var nivPlans=plans.filter(function(p){return p.nivel===niv;});
-    if(!nivPlans.length)return;
-    var avg=Math.round(nivPlans.reduce(function(s,p){return s+p2Avance(p);},0)/nivPlans.length);
-    var c=p2AvanceColor(avg);
-    var done=nivPlans.filter(function(p){return p2Avance(p)>=100;}).length;
-    nivBars+='<div style="flex:1;min-width:70px;padding:10px;border-radius:10px;background:'+c.bg+';border:1px solid '+c.bar+'40;text-align:center;cursor:pointer" onclick="p2FilterNivel(\''+niv+'\')">'+
-      '<div style="font-size:13px;font-weight:800;color:var(--text1)">'+niv+'</div>'+
-      '<div style="font-size:20px;font-weight:900;color:'+c.txt+';margin:3px 0">'+avg+'%</div>'+
-      '<div style="height:4px;background:#0001;border-radius:2px;margin:0 0 3px">'+
-        '<div style="height:4px;width:'+avg+'%;background:'+c.bar+';border-radius:2px"></div>'+
+  // Sección de partidas generales
+  if(genPlans.length){
+    genPlans.sort(function(a,b){return(a.orden||0)-(b.orden||0);});
+    var gAvg=p2NivAvg(genPlans);
+    var gc=p2AvClr(gAvg);
+    var gExp=p2IsExp('_gen');
+    var gDone=genPlans.filter(function(p){return p2Av(p)>=100;}).length;
+
+    body+='<div style="border-radius:12px;overflow:hidden;border:1.5px solid var(--border)">'+
+      '<div onclick="p2ToggleExp(\'_gen\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg2);cursor:pointer;user-select:none">'+
+        '<div style="width:40px;height:40px;border-radius:10px;background:#64748B;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-align:center;line-height:1.2">GEN<br>ERAL</div>'+
+        '<div style="flex:1">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'+
+            '<span style="font-size:12px;font-weight:600;color:var(--text2)">'+gDone+' / '+genPlans.length+' partidas generales</span>'+
+            '<span style="font-size:22px;font-weight:900;color:'+gc.txt+'">'+gAvg+'%</span>'+
+          '</div>'+
+          '<div style="height:7px;background:#e2e8f0;border-radius:4px;overflow:hidden">'+
+            '<div style="height:100%;width:'+gAvg+'%;background:#64748B;border-radius:4px"></div>'+
+          '</div>'+
+        '</div>'+
+        '<span style="font-size:12px;color:var(--text3);flex-shrink:0;width:16px;text-align:center">'+(gExp?'▲':'▼')+'</span>'+
       '</div>'+
-      '<div style="font-size:9px;color:var(--text3)">'+done+'/'+nivPlans.length+'</div>'+
+      (gExp?'<div style="padding:8px;display:flex;flex-direction:column;gap:5px;background:var(--bg)">'+
+        genPlans.map(function(p){return p2Card(p);}).join('')+
+      '</div>':'')+
     '</div>';
-  });
-  nivBars+='</div></div>';
+  }
 
-  var el2=document.getElementById('c-plan2');
-  el2.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+p2Header()+
-    '<div style="flex:1;overflow-y:auto;padding:14px">'+kpis+catBars+nivBars+'</div></div>';
+  body+='</div>';
+  el.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+p2Cockpit()+'<div style="flex:1;overflow-y:auto">'+body+'</div></div>';
 }
 
-// ── Vista 3: Gantt Macro ──────────────────────────────────────────────────
+// ── Cronograma (Gantt) ────────────────────────────────────────────────────
 function renderP2Gantt(){
   var el=document.getElementById('c-plan2');if(!el)return;
   var plans=S.planActs||[];
-  var proj=p2Projection();
+  var proj=p2Proj();
   var hoy=new Date().toISOString().slice(0,10);
 
-  // Sort by nivel then orden
   var sorted=plans.slice().sort(function(a,b){
-    var ai=P2_NIV_ORDER.indexOf(a.nivel||'General'),bi=P2_NIV_ORDER.indexOf(b.nivel||'General');
+    var ai=P2_NIV.indexOf(a.nivel||''),bi=P2_NIV.indexOf(b.nivel||'');
     if(ai<0)ai=99;if(bi<0)bi=99;
-    if(ai!==bi)return ai-bi;
-    return(a.orden||0)-(b.orden||0);
+    if(ai!==bi)return ai-bi;return(a.orden||0)-(b.orden||0);
   });
 
-  // Date range
-  var allDates=[];
-  sorted.forEach(function(p){if(p.fecha_inicio_plan)allDates.push(p.fecha_inicio_plan);if(p.fecha_fin_plan)allDates.push(p.fecha_fin_plan);});
-  allDates.push(hoy);
-  if(proj&&proj.projectedDate)allDates.push(proj.projectedDate);
-  if(!allDates.length){allDates.push(hoy);allDates.push(new Date(Date.now()+120*86400000).toISOString().slice(0,10));}
-  var minD=allDates.reduce(function(a,b){return a<b?a:b;});
-  var maxD=allDates.reduce(function(a,b){return a>b?a:b;});
+  var allD=[hoy];
+  sorted.forEach(function(p){if(p.fecha_inicio_plan)allD.push(p.fecha_inicio_plan);if(p.fecha_fin_plan)allD.push(p.fecha_fin_plan);});
+  if(proj&&proj.projectedDate)allD.push(proj.projectedDate);
+  var minD=allD.reduce(function(a,b){return a<b?a:b;});
+  var maxD=allD.reduce(function(a,b){return a>b?a:b;});
   var mn=new Date(minD+'T12:00:00');mn.setDate(mn.getDate()-14);
   var mx=new Date(maxD+'T12:00:00');mx.setDate(mx.getDate()+21);
   var totalDays=Math.ceil((mx-mn)/86400000);
-
-  var LSIDE=170,HROW=34,HHEAD=36;
-  var ppd=Math.max(3,Math.min(12,700/totalDays));
+  var LSIDE=165,HROW=32,HHEAD=34;
+  var ppd=Math.max(3,Math.min(14,Math.floor(680/totalDays)));
   var svgW=LSIDE+Math.ceil(totalDays*ppd);
-  var svgH=HHEAD+sorted.length*HROW+10;
-
+  var svgH=HHEAD+sorted.length*HROW+8;
   function px(ds){return LSIDE+Math.round((new Date(ds+'T12:00:00')-mn)/86400000*ppd);}
-
-  var s='<rect width="'+svgW+'" height="'+svgH+'" fill="var(--bg2,#fafafa)"/>';
-  s+='<rect y="0" width="'+svgW+'" height="'+HHEAD+'" fill="#f1f5f9"/>';
-  s+='<rect y="0" width="'+LSIDE+'" height="'+svgH+'" fill="#f8f6ff"/>';
+  var MO=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var s='<rect width="'+svgW+'" height="'+svgH+'" fill="#FAFAFA"/>';
+  s+='<rect y="0" width="'+svgW+'" height="'+HHEAD+'" fill="#F1F5F9"/>';
+  s+='<rect y="0" width="'+LSIDE+'" height="'+svgH+'" fill="#F5F3FF"/>';
 
   // Month lines
-  var MO=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   var gd=new Date(mn.getTime());gd.setDate(1);
   while(+gd<=+mx){
     var gx=LSIDE+Math.round((+gd-+mn)/86400000*ppd);
-    if(gx>LSIDE){
-      s+='<line x1="'+gx+'" y1="0" x2="'+gx+'" y2="'+svgH+'" stroke="#e2e8f0" stroke-width="0.5"/>';
-      s+='<text x="'+(gx+3)+'" y="18" font-size="9" font-weight="700" fill="#475569" font-family="system-ui">'+MO[gd.getMonth()]+' '+gd.getFullYear()+'</text>';
-    }
+    if(gx>LSIDE){s+='<line x1="'+gx+'" y1="0" x2="'+gx+'" y2="'+svgH+'" stroke="#E2E8F0" stroke-width="0.6"/>';s+='<text x="'+(gx+3)+'" y="17" font-size="9" font-weight="700" fill="#64748B" font-family="system-ui">'+MO[gd.getMonth()]+' '+String(gd.getFullYear()).slice(2)+'</text>';}
     gd.setMonth(gd.getMonth()+1);
   }
-  // Week lines
-  if(ppd>=5){var wd=new Date(+mn);while(+wd<=+mx){if(wd.getDay()===1){var wx=LSIDE+Math.round((+wd-+mn)/86400000*ppd);if(wx>LSIDE){s+='<line x1="'+wx+'" y1="24" x2="'+wx+'" y2="'+svgH+'" stroke="#e2e8f0" stroke-width="0.4"/>';s+='<text x="'+(wx+2)+'" y="32" font-size="6" fill="#94a3b8" font-family="system-ui">'+wd.getDate()+'</text>';}}wd.setDate(wd.getDate()+1);}}
+  // Week ticks
+  if(ppd>=6){var wd2=new Date(+mn);while(+wd2<=+mx){if(wd2.getDay()===1){var wx=LSIDE+Math.round((+wd2-+mn)/86400000*ppd);if(wx>LSIDE){s+='<line x1="'+wx+'" y1="22" x2="'+wx+'" y2="'+svgH+'" stroke="#E2E8F0" stroke-width="0.4"/>';s+='<text x="'+(wx+2)+'" y="30" font-size="6" fill="#94A3B8" font-family="system-ui">'+wd2.getDate()+'</text>';}}wd2.setDate(wd2.getDate()+1);}}
 
-  s+='<line x1="0" y1="'+HHEAD+'" x2="'+svgW+'" y2="'+HHEAD+'" stroke="#cbd5e1" stroke-width="1"/>';
-  s+='<line x1="'+LSIDE+'" y1="0" x2="'+LSIDE+'" y2="'+svgH+'" stroke="#cbd5e1" stroke-width="1.5"/>';
+  s+='<line x1="0" y1="'+HHEAD+'" x2="'+svgW+'" y2="'+HHEAD+'" stroke="#CBD5E1" stroke-width="1"/>';
+  s+='<line x1="'+LSIDE+'" y1="0" x2="'+LSIDE+'" y2="'+svgH+'" stroke="#CBD5E1" stroke-width="1.5"/>';
 
-  // TODAY line
+  // Projected end
+  if(proj&&proj.projectedDate){var pdx=px(proj.projectedDate);if(pdx>LSIDE&&pdx<svgW){s+='<rect x="'+(pdx-1)+'" y="'+HHEAD+'" width="2" height="'+(svgH-HHEAD)+'" fill="#7C3AED" opacity=".5"/>';s+='<text x="'+(pdx+3)+'" y="'+(HHEAD-3)+'" font-size="7.5" fill="#7C3AED" font-weight="700" font-family="system-ui">ESTIMADO</text>';}}
+
+  // Today
   var tdx=px(hoy);
-  if(tdx>LSIDE&&tdx<svgW){
-    s+='<rect x="'+(tdx-1)+'" y="'+HHEAD+'" width="2" height="'+(svgH-HHEAD)+'" fill="#EF4444" opacity=".7"/>';
-    s+='<text x="'+(tdx+3)+'" y="'+(HHEAD-2)+'" font-size="8" fill="#EF4444" font-weight="700" font-family="system-ui">HOY</text>';
-  }
-
-  // PROJECTED END line
-  if(proj&&proj.projectedDate&&proj.projectedDate!==hoy){
-    var pdx=px(proj.projectedDate);
-    if(pdx>LSIDE&&pdx<svgW){
-      s+='<line x1="'+pdx+'" y1="'+HHEAD+'" x2="'+pdx+'" y2="'+svgH+'" stroke="#7C3AED" stroke-width="1.5" stroke-dasharray="5,3" opacity=".8"/>';
-      s+='<text x="'+(pdx+3)+'" y="'+(HHEAD-2)+'" font-size="8" fill="#7C3AED" font-weight="700" font-family="system-ui">EST.</text>';
-    }
-  }
+  if(tdx>LSIDE&&tdx<svgW){s+='<rect x="'+(tdx-1)+'" y="'+HHEAD+'" width="2" height="'+(svgH-HHEAD)+'" fill="#EF4444" opacity=".8"/>';s+='<text x="'+(tdx+3)+'" y="'+(HHEAD-3)+'" font-size="7.5" fill="#EF4444" font-weight="700" font-family="system-ui">HOY</text>';}
 
   // Rows
   sorted.forEach(function(p,i){
     var cy=HHEAD+i*HROW;
-    var avance=p2Avance(p);
-    var c=p2AvanceColor(avance);
-    var catClr=p2Color(p.categoria||'');
-    var nm=p.nombre;if(nm.length>20)nm=nm.slice(0,19)+'…';
-    // Row bg
-    s+='<rect x="0" y="'+cy+'" width="'+svgW+'" height="'+HROW+'" fill="'+(i%2===0?'#fff':'#faf9ff')+'"/>';
-    // Nivel pill
-    if(p.nivel){s+='<rect x="3" y="'+(cy+8)+'" width="18" height="'+Math.min(18,HROW-10)+'" rx="3" fill="'+catClr+'22"/>';s+='<text x="12" y="'+(cy+HROW/2+4)+'" font-size="7.5" fill="'+catClr+'" text-anchor="middle" font-weight="700" font-family="system-ui">'+(p.nivel||'').slice(-2)+'</text>';}
-    // Nombre
-    s+='<text x="26" y="'+(cy+HROW/2+4)+'" font-size="10" fill="#1e293b" font-family="system-ui">'+esc(nm)+'</text>';
-    // Avance %
-    s+='<text x="'+(LSIDE-5)+'" y="'+(cy+HROW/2+4)+'" font-size="9" fill="'+c.txt+'" text-anchor="end" font-weight="700" font-family="system-ui">'+avance+'%</text>';
-    // Row line
-    s+='<line x1="0" y1="'+(cy+HROW)+'" x2="'+svgW+'" y2="'+(cy+HROW)+'" stroke="#f1f5f9" stroke-width="0.5"/>';
-
-    // Gantt bar (if dates exist)
+    var av=p2Av(p);var ac=p2AvClr(av);var cc=p2CatClr(p.categoria||'');
+    var nm=p.nombre;if(nm.length>21)nm=nm.slice(0,20)+'…';
+    s+='<rect x="0" y="'+cy+'" width="'+svgW+'" height="'+HROW+'" fill="'+(i%2===0?'#FFFFFF':'#FAFAFA')+'"/>';
+    // Nivel badge
+    if(P2_NIV.indexOf(p.nivel||'')>=0){s+='<rect x="3" y="'+(cy+6)+'" width="16" height="20" rx="3" fill="'+cc+'22"/>';s+='<text x="11" y="'+(cy+HROW/2+4)+'" font-size="7" fill="'+cc+'" text-anchor="middle" font-weight="700" font-family="system-ui">'+(p.nivel||'').replace('N','N')+'</text>';}
+    s+='<text x="24" y="'+(cy+HROW/2+4)+'" font-size="10" fill="#1E293B" font-family="system-ui">'+esc(nm)+'</text>';
+    s+='<text x="'+(LSIDE-5)+'" y="'+(cy+HROW/2+4)+'" font-size="9" fill="'+ac.txt+'" text-anchor="end" font-weight="700" font-family="system-ui">'+av+'%</text>';
+    s+='<line x1="0" y1="'+(cy+HROW)+'" x2="'+svgW+'" y2="'+(cy+HROW)+'" stroke="#F1F5F9" stroke-width="0.5"/>';
     if(p.fecha_inicio_plan&&p.fecha_fin_plan){
       var bx=px(p.fecha_inicio_plan),bxE=px(p.fecha_fin_plan),bw=Math.max(bxE-bx,6);
       var by=cy+5,bh=HROW-10;
-      // Background bar (planned)
-      s+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="3" fill="'+catClr+'" fill-opacity=".15" stroke="'+catClr+'" stroke-width="1"/>';
-      // Progress fill
-      if(avance>0){var pw=Math.round(bw*avance/100);if(pw>0)s+='<rect x="'+bx+'" y="'+by+'" width="'+pw+'" height="'+bh+'" rx="3" fill="'+c.bar+'" fill-opacity=".7"/>';}
-      // Date labels
-      if(bw>55)s+='<text x="'+(bx+4)+'" y="'+(by+bh/2+3)+'" font-size="7.5" fill="'+catClr+'" font-weight="600" font-family="system-ui">'+p.fecha_inicio_plan.slice(5).replace('-','/')+'</text>';
-    } else {
-      // No dates — show "click to set" hint
-      var hintX=LSIDE+Math.round((new Date(hoy+'T12:00:00')-mn)/86400000*ppd);
-      if(hintX>LSIDE)s+='<text x="'+(hintX+4)+'" y="'+(cy+HROW/2+4)+'" font-size="8" fill="#CBD5E1" font-family="system-ui" font-style="italic">Sin fechas — click para editar</text>';
+      s+='<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="3" fill="'+cc+'" fill-opacity=".12" stroke="'+cc+'" stroke-width="1"/>';
+      if(av>0){var pw=Math.round(bw*av/100);if(pw>0)s+='<rect x="'+bx+'" y="'+by+'" width="'+pw+'" height="'+bh+'" rx="3" fill="'+ac.bar+'" fill-opacity=".65"/>';}
     }
   });
 
-  var svgEl='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="display:block;min-width:'+svgW+'px;height:auto;cursor:pointer" font-family="system-ui,sans-serif" onclick="p2GanttClick(event,'+LSIDE+','+HROW+','+HHEAD+','+ppd+',\''+mn.toISOString().slice(0,10)+'\')">'+s+'</svg>';
-
-  var el2=document.getElementById('c-plan2');
-  el2.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+p2Header()+
-    '<div style="flex:1;overflow:auto;padding:0">'+svgEl+'</div></div>';
+  var svgEl='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+svgW+' '+svgH+'" style="display:block;min-width:'+svgW+'px;height:auto;cursor:pointer" onclick="p2GanttClick(event,'+LSIDE+','+HROW+','+HHEAD+','+ppd+',\''+mn.toISOString().slice(0,10)+'\')">'+s+'</svg>';
+  el.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'+p2Cockpit()+'<div style="flex:1;overflow:auto">'+svgEl+'</div></div>';
 }
 
-function p2GanttClick(evt,LSIDE,HROW,HHEAD,ppd,minDateStr){
+function p2GanttClick(evt,LSIDE,HROW,HHEAD,ppd,minD){
   var svg=evt.currentTarget;
   var rect=svg.getBoundingClientRect();
-  var x=evt.clientX-rect.left,y=evt.clientY-rect.top;
+  var x=(evt.clientX-rect.left)*(svg.viewBox.baseVal.width/rect.width);
+  var y=(evt.clientY-rect.top)*(svg.viewBox.baseVal.height/rect.height);
   if(x<LSIDE||y<HHEAD)return;
   var rowIdx=Math.floor((y-HHEAD)/HROW);
-  var plans=S.planActs||[];
-  var sorted=plans.slice().sort(function(a,b){
-    var ai=P2_NIV_ORDER.indexOf(a.nivel||'General'),bi=P2_NIV_ORDER.indexOf(b.nivel||'General');
-    if(ai<0)ai=99;if(bi<0)bi=99;
-    if(ai!==bi)return ai-bi;return(a.orden||0)-(b.orden||0);
+  var sorted=(S.planActs||[]).slice().sort(function(a,b){
+    var ai=P2_NIV.indexOf(a.nivel||''),bi=P2_NIV.indexOf(b.nivel||'');
+    if(ai<0)ai=99;if(bi<0)bi=99;if(ai!==bi)return ai-bi;return(a.orden||0)-(b.orden||0);
   });
-  if(rowIdx<0||rowIdx>=sorted.length)return;
-  p2EditMadre(sorted[rowIdx].id);
+  if(rowIdx>=0&&rowIdx<sorted.length)p2EditMadre(sorted[rowIdx].id);
 }
 
-// ── Edit modal ────────────────────────────────────────────────────────────
+// ── Modal editar partida ──────────────────────────────────────────────────
 function p2EditMadre(planId){
-  var p=(S.planActs||[]).find(function(x){return x.id===planId;});
-  if(!p)return;
-  var avance=p2Avance(p);
-  var hasSubs=(S.acts||[]).filter(function(a){return a.plan_id===p.id;}).length>0;
-  var catClr=p2Color(p.categoria||'');
-
-  openModal('<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">'+
-    '<span style="width:12px;height:12px;border-radius:3px;background:'+catClr+';flex-shrink:0"></span>'+
-    '<h3 style="margin:0;font-size:15px">'+esc(p.nombre)+'</h3>'+
-  '</div>'+
-  '<div style="font-size:11px;color:var(--text3);margin-bottom:14px">'+esc(p.categoria||'')+(p.nivel?' · '+p.nivel:'')+'</div>'+
-
-  // Avance slider
-  '<div class="fw">'+
-    '<label class="fl">Avance manual</label>'+
-    (hasSubs?'<div style="font-size:11px;color:#D97706;margin-bottom:4px;padding:5px 8px;background:#FEF3C7;border-radius:6px">Tiene actividades enlazadas — el avance se calcula desde ellas</div>':'')+
-    '<div style="display:flex;align-items:center;gap:10px">'+
-      '<input type="range" id="p2-slider-'+planId+'" min="0" max="100" value="'+avance+'" oninput="var b=document.getElementById(\'p2-pct-'+planId+'\');b.textContent=this.value+\'%\'" style="flex:1;accent-color:var(--accent)">'+
-      '<span id="p2-pct-'+planId+'" style="font-size:16px;font-weight:800;color:var(--accent);min-width:42px;text-align:right">'+avance+'%</span>'+
+  var p=(S.planActs||[]).find(function(x){return x.id===planId;});if(!p)return;
+  var av=p2Av(p);
+  var hasSubs=(S.acts||[]).some(function(a){return a.plan_id===p.id;});
+  var cc=p2CatClr(p.categoria||'');
+  openModal(
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">'+
+      '<span style="width:11px;height:11px;border-radius:3px;background:'+cc+';flex-shrink:0"></span>'+
+      '<h3 style="margin:0;font-size:14px;flex:1">'+esc(p.nombre)+'</h3>'+
     '</div>'+
-  '</div>'+
-
-  // Date fields
-  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:2px">'+
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:14px">'+esc(p.categoria||'Sin categoría')+(p.nivel?' · '+p.nivel:'')+'</div>'+
     '<div class="fw">'+
-      '<label class="fl">Fecha inicio plan</label>'+
-      '<input type="date" id="p2-fi-'+planId+'" value="'+(p.fecha_inicio_plan||'')+'" class="sel">'+
+      '<label class="fl">Avance manual</label>'+
+      (hasSubs?'<div style="font-size:10px;color:#D97706;margin-bottom:6px;padding:4px 8px;background:#FEF3C7;border-radius:5px">Tiene actividades enlazadas — avance calculado desde ellas</div>':'')+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<input type="range" id="p2m-sl-'+planId+'" min="0" max="100" value="'+av+'" oninput="var b=document.getElementById(\'p2m-pct-'+planId+'\');b.textContent=this.value+\'%\'" style="flex:1;accent-color:'+cc+'">'+
+        '<span id="p2m-pct-'+planId+'" style="font-size:17px;font-weight:800;color:'+cc+';min-width:44px;text-align:right">'+av+'%</span>'+
+      '</div>'+
     '</div>'+
-    '<div class="fw">'+
-      '<label class="fl">Fecha fin plan</label>'+
-      '<input type="date" id="p2-ff-'+planId+'" value="'+(p.fecha_fin_plan||'')+'" class="sel">'+
-    '</div>'+
-  '</div>',
-
-  // Actions
-  '<button class="btn" onclick="closeModal()">Cancelar</button>'+
-  '<button class="btn primary" onclick="p2SaveMadre(\''+planId+'\')">Guardar</button>');
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">'+
+      '<div class="fw"><label class="fl">Inicio planificado</label><input type="date" id="p2m-fi-'+planId+'" value="'+(p.fecha_inicio_plan||'')+'" class="sel"></div>'+
+      '<div class="fw"><label class="fl">Fin planificado</label><input type="date" id="p2m-ff-'+planId+'" value="'+(p.fecha_fin_plan||'')+'" class="sel"></div>'+
+    '</div>',
+    '<button class="btn" onclick="closeModal()">Cancelar</button>'+
+    '<button class="btn primary" onclick="p2SaveMadre(\''+planId+'\')">Guardar</button>'
+  );
 }
 
 async function p2SaveMadre(planId){
-  var slider=document.getElementById('p2-slider-'+planId);
-  var fi=document.getElementById('p2-fi-'+planId);
-  var ff=document.getElementById('p2-ff-'+planId);
-  if(!slider)return;
-  var body={avance_manual:parseInt(slider.value)||0};
-  if(fi&&fi.value)body.fecha_inicio_plan=fi.value;else body.fecha_inicio_plan=null;
-  if(ff&&ff.value)body.fecha_fin_plan=ff.value;else body.fecha_fin_plan=null;
+  var sl=document.getElementById('p2m-sl-'+planId);
+  var fi=document.getElementById('p2m-fi-'+planId);
+  var ff=document.getElementById('p2m-ff-'+planId);
+  if(!sl)return;
+  var body={avance_manual:parseInt(sl.value)||0,
+    fecha_inicio_plan:(fi&&fi.value)||null,
+    fecha_fin_plan:(ff&&ff.value)||null};
   try{
     await sb('obra_plan_actividades?id=eq.'+planId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
     var p=(S.planActs||[]).find(function(x){return x.id===planId;});
@@ -11673,20 +11568,7 @@ async function p2SaveMadre(planId){
   }catch(e){showToast('Error: '+e.message,'err');}
 }
 
-function p2SetTargetDate(){
-  var proj=p2Projection();
-  var cur=proj&&proj.targetDate?proj.targetDate:'';
-  var d=prompt('Fecha objetivo del proyecto (YYYY-MM-DD):', cur);
-  if(!d)return;
-  // Set as fecha_fin_plan on all plans that don't have one, or just show info
-  showToast('Para cambiar la fecha, edita cada partida individualmente');
-}
-
-function p2FilterNivel(niv){
-  P2.tab='mapa';renderPlan2();
-}
 
 </script>
 
 </body>
-</html>
