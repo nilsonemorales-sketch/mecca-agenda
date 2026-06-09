@@ -11493,14 +11493,17 @@ function p2TogMad(id){P2.expMad[id]=!P2.expMad[id];renderPlan2();}
 function p2AddSub(planId){
   var p=(S.planActs||[]).find(function(x){return x.id===planId;});if(!p)return;
   var cc=p2cc(p.categoria||'');
-  openModal(
-    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:12px">'+
+  var mc=document.getElementById('mcontent');if(!mc)return;
+  mc.innerHTML=
+    '<div class="mhandle"></div>'+
+    '<h3 style="margin-bottom:4px">Nueva tarea</h3>'+
+    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:14px">'+
       '<span style="width:10px;height:10px;border-radius:3px;background:'+cc+';flex-shrink:0"></span>'+
-      '<span style="font-size:12px;font-weight:700;color:var(--text1)">'+esc(p.nombre)+'</span>'+
+      '<span style="font-size:12px;color:var(--text2)">'+esc(p.nombre)+'</span>'+
     '</div>'+
-    '<div class="fw"><label class="fl">Descripción de la tarea</label>'+
+    '<div class="fw" style="margin-bottom:10px"><label class="fl">Descripción de la tarea</label>'+
       '<input id="p2s-desc" class="sel" placeholder="Ej: Friso exterior, Instalación tuberías..."></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">'+
       '<div class="fw"><label class="fl">Fecha</label>'+
         '<input type="date" id="p2s-fecha" class="sel" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
       '<div class="fw"><label class="fl">Estado</label>'+
@@ -11509,10 +11512,12 @@ function p2AddSub(planId){
           '<option value="en-progreso">En progreso</option>'+
           '<option value="completado">Completado</option>'+
         '</select></div>'+
-    '</div>',
-    '<button class="btn" onclick="closeModal()">Cancelar</button>'+
-    '<button class="btn primary" onclick="p2SaveSub(\''+planId+'\')">Agregar tarea</button>'
-  );
+    '</div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn" style="flex:1" onclick="closeModal()">Cancelar</button>'+
+      '<button class="btn primary" style="flex:2" onclick="p2SaveSub(\''+planId+'\')">Agregar tarea</button>'+
+    '</div>';
+  openModal();
   setTimeout(function(){var i=document.getElementById('p2s-desc');if(i)i.focus();},100);
 }
 
@@ -11538,26 +11543,30 @@ function p2EditMadre(planId){
   var p=(S.planActs||[]).find(function(x){return x.id===planId;});if(!p)return;
   var av=p2av(p);var cc=p2cc(p.categoria||'');
   var hasSubs=(S.acts||[]).some(function(a){return a.plan_id===p.id;});
-  openModal(
+  var mc=document.getElementById('mcontent');if(!mc)return;
+  mc.innerHTML=
+    '<div class="mhandle"></div>'+
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">'+
       '<span style="width:11px;height:11px;border-radius:3px;background:'+cc+'"></span>'+
       '<h3 style="margin:0;font-size:14px">'+esc(p.nombre)+'</h3>'+
     '</div>'+
     '<div style="font-size:11px;color:var(--text3);margin-bottom:14px">'+esc(p.categoria||'')+(p.nivel?' · '+p.nivel:'')+'</div>'+
-    '<div class="fw"><label class="fl">Avance manual</label>'+
+    '<div class="fw" style="margin-bottom:12px"><label class="fl">Avance manual</label>'+
       (hasSubs?'<div style="font-size:10px;color:#D97706;margin-bottom:5px;padding:4px 8px;background:#FEF3C7;border-radius:5px">Calculado desde actividades enlazadas</div>':'')+
       '<div style="display:flex;align-items:center;gap:10px">'+
         '<input type="range" id="p2m-sl-'+planId+'" min="0" max="100" value="'+av+'" oninput="var b=document.getElementById(\'p2m-n-'+planId+'\');b.textContent=this.value+\'%\'" style="flex:1;accent-color:'+cc+'">'+
         '<span id="p2m-n-'+planId+'" style="font-size:17px;font-weight:800;color:'+cc+';min-width:44px;text-align:right">'+av+'%</span>'+
       '</div>'+
     '</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">'+
       '<div class="fw"><label class="fl">Inicio planificado</label><input type="date" id="p2m-fi-'+planId+'" value="'+(p.fecha_inicio_plan||'')+'" class="sel"></div>'+
       '<div class="fw"><label class="fl">Fin planificado</label><input type="date" id="p2m-ff-'+planId+'" value="'+(p.fecha_fin_plan||'')+'" class="sel"></div>'+
-    '</div>',
-    '<button class="btn" onclick="closeModal()">Cancelar</button>'+
-    '<button class="btn primary" onclick="p2SaveMadre(\''+planId+'\')">Guardar</button>'
-  );
+    '</div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn" style="flex:1" onclick="closeModal()">Cancelar</button>'+
+      '<button class="btn primary" style="flex:2" onclick="p2SaveMadre(\''+planId+'\')">Guardar</button>'+
+    '</div>';
+  openModal();
 }
 
 async function p2SaveMadre(planId){
