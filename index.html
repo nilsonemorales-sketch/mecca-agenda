@@ -616,6 +616,10 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="7" y1="2" x2="7" y2="6"/><line x1="17" y1="2" x2="17" y2="6"/><line x1="7" y1="14" x2="10" y2="14"/><line x1="7" y1="18" x2="13" y2="18"/></svg>
       <span class="blbl">Gantt</span>
     </button>
+    <button class="bnav-btn" id="bn-plan2" onclick="goTab('plan2')" style="display:none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/><circle cx="12" cy="7" r="2" fill="currentColor" stroke="none"/></svg>
+      <span class="blbl">Plan 2.0</span>
+    </button>
   </nav>
   </div><!-- /main-col -->
 </div>
@@ -1831,9 +1835,11 @@ function updateUserUI(){
   // Plan tabs: solo visibles para admin
   var tP=document.getElementById('tab-plan');
   var tP2=document.getElementById('tab-plan2');
+  var bnP2=document.getElementById('bn-plan2');
   var adminVal=isAdmin();
-  if(tP) tP.style.display=adminVal?'':'none';
-  if(tP2) tP2.style.display=adminVal?'':'none';
+  if(tP)   tP.style.display=adminVal?'':'none';
+  if(tP2)  tP2.style.display=adminVal?'':'none';
+  if(bnP2) bnP2.style.display=adminVal?'':'none';
   if(!adminVal&&(S.currentTab==='plan'||S.currentTab==='plan2')) goTab('hoy');
   // All tabs visible to all users (historial/penalidades accessible via sub-tabs)
   updateFAB();
