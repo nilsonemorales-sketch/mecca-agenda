@@ -11564,6 +11564,20 @@ function p2Persist(){
   try{localStorage.setItem('mecca_p2',JSON.stringify({state:P2.state,params:P2.params}));}catch(e){}
 }
 
+// ── Plan 2.0 — estado Supabase/IA ─────────────────────────────────────────
+P2.sbData=null;P2.sbLoading=false;P2.sbDays={};P2.sbExtra=[];
+P2.aiKey='';P2.aiChat=[];P2.aiLoading=false;P2._showAdd=false;
+(function(){
+  try{var d=localStorage.getItem('mecca_p2sb');if(d){var o=JSON.parse(d);
+    if(o.sbDays)P2.sbDays=o.sbDays;
+    if(o.sbExtra)P2.sbExtra=o.sbExtra||[];
+    if(o.aiKey)P2.aiKey=o.aiKey;
+  }}catch(e){}
+}());
+function p2sbPersist(){
+  try{localStorage.setItem('mecca_p2sb',JSON.stringify({sbDays:P2.sbDays,sbExtra:P2.sbExtra,aiKey:P2.aiKey}));}catch(e){}
+}
+
 // ── Dataset base (hardcoded con desglose N2-N6) ────────────────────────────
 // Distribuciones por nivel aproximadas al % global de hoy (8/jun/2026)
 var P2_INIT=[
@@ -11758,7 +11772,7 @@ function renderPlan2(){
 
   // Tabs
   h+='<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">';
-  [['partidas','📋 Partidas'],['params','⚙️ Parámetros'],['result','📊 Proyección']].forEach(function(t){
+  [['partidas','📋 Partidas'],['params','⚙️ Parámetros'],['result','📊 Proyección'],['obras','🏗️ Actividades']].forEach(function(t){
     var a=P2.tab===t[0];
     h+='<button onclick="P2.tab=\''+t[0]+'\';renderPlan2()" style="padding:7px 14px;border-radius:8px;cursor:pointer;font-family:var(--font);font-size:13px;border:.5px solid '+(a?P2C.navy:P2C.grayBrd)+';background:'+(a?P2C.navy:'transparent')+';color:'+(a?'#fff':P2C.gray)+'">'+t[1]+'</button>';
   });
@@ -11766,6 +11780,7 @@ function renderPlan2(){
 
   if(P2.tab==='partidas')     h+=p2TabPartidas(proj,target);
   else if(P2.tab==='params')  h+=p2TabParams(margin,ok,eff);
+  else if(P2.tab==='obras'){  if(P2.sbData===null&&!P2.sbLoading)p2sbLoad(); h+=p2sbRenderTab(); }
   else                         h+=p2TabResult(proj,projOpt,projPes,end,endOpt,endPes,target,margin,ok,critical,avgPct,done,TODAY);
 
   h+='</div>';
@@ -11976,6 +11991,290 @@ function p2GanttHTML(proj,endDate,target,TODAY){
   h+='<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:'+P2C.red+';display:inline-block"></span>Retraso</span>';
   h+='</div></div></div>';
   return h;
+}
+
+// ── Plan 2.0 — Actividades desde Supabase ─────────────────────────────────
+
+async function p2sbLoad(){
+  if(P2.sbLoading)return;
+  P2.sbLoading=true;
+  renderPlan2();
+  try{
+    var data=await sb('obra_actividades?select=id,descripcion,area,estado,porcentaje&order=area.asc,descripcion.asc&limit=500');
+    P2.sbData=Array.isArray(data)?data:[];
+  }catch(e){P2.sbData=[];}
+  P2.sbLoading=false;
+  renderPlan2();
+}
+
+function p2sbGetRem(act){
+  if(act.estado==='completado'||(+(act.porcentaje)||0)>=100)return 0;
+  if(P2.sbDays[act.id]!=null)return Math.max(0,+(P2.sbDays[act.id])||0);
+  return 30;
+}
+
+function p2sbCalc(){
+  var today=p2Today();
+  var sbActs=(P2.sbData||[]).map(function(a){
+    var rem=p2sbGetRem(a);
+    return{id:a.id,name:a.descripcion||'—',area:a.area||'Sin área',
+      pct:+(a.porcentaje)||0,estado:a.estado||'pendiente',
+      remDays:rem,endDate:rem===0?today:p2AddDays(rem),isExtra:false,
+      userSet:P2.sbDays[a.id]!=null};
+  });
+  var extraActs=(P2.sbExtra||[]).map(function(a){
+    var rem=Math.max(0,+(a.days)||0);
+    return{id:a.id,name:a.name||'—',area:a.area||'Sin área',
+      pct:0,estado:'pendiente',
+      remDays:rem,endDate:rem===0?today:p2AddDays(rem),isExtra:true,userSet:true};
+  });
+  var allActs=sbActs.concat(extraActs);
+  var areaMap={};
+  allActs.forEach(function(a){if(!areaMap[a.area])areaMap[a.area]=[];areaMap[a.area].push(a);});
+  var areas={};var maxEnd=today;
+  Object.keys(areaMap).sort().forEach(function(area){
+    var acts=areaMap[area];
+    var maxDays=Math.max.apply(null,acts.map(function(a){return a.remDays;}));
+    var endDate=maxDays===0?today:p2AddDays(maxDays);
+    if(endDate>maxEnd)maxEnd=endDate;
+    areas[area]={acts:acts,maxDays:maxDays,endDate:endDate};
+  });
+  return{areas:areas,projectEnd:maxEnd,total:allActs.length};
+}
+
+function p2sbSetDays(inp){
+  var id=inp.getAttribute('data-sbid');if(!id)return;
+  P2.sbDays[id]=Math.max(0,+(inp.value)||0);
+  p2sbPersist();renderPlan2();
+}
+
+function p2sbAddExtra(){
+  var nEl=document.getElementById('p2sb-nm');
+  var aEl=document.getElementById('p2sb-ar');
+  var dEl=document.getElementById('p2sb-dy');
+  if(!nEl||!aEl||!dEl)return;
+  var name=(nEl.value||'').trim();var area=(aEl.value||'Sin área').trim();var days=Math.max(1,+(dEl.value)||1);
+  if(!name){nEl.focus();return;}
+  P2.sbExtra.push({id:'x'+Date.now(),name:name,area:area,days:days});
+  p2sbPersist();P2._showAdd=false;renderPlan2();
+}
+
+function p2sbRemoveExtra(id){
+  P2.sbExtra=(P2.sbExtra||[]).filter(function(a){return a.id!==id;});
+  p2sbPersist();renderPlan2();
+}
+
+function p2sbRenderTab(){
+  if(P2.sbLoading){
+    return'<div style="text-align:center;padding:50px 20px;color:'+P2C.gray+'"><div style="font-size:28px;margin-bottom:8px">⟳</div><div style="font-size:13px">Cargando actividades desde Supabase…</div></div>';
+  }
+  if(P2.sbData===null){
+    return'<div style="text-align:center;padding:50px 20px"><button onclick="p2sbLoad()" style="background:'+P2C.navy+';color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:14px;cursor:pointer;font-family:var(--font)">Cargar actividades desde Supabase</button></div>';
+  }
+  var calc=p2sbCalc();
+  var today=p2Today();
+  var daysLeft=Math.max(p2DiffDays(today,calc.projectEnd),0);
+  var target=new Date(P2.params.targetDate+'T12:00:00');
+  var margin=p2DiffDays(calc.projectEnd,target);
+  var ok=margin>=0;
+  var h='';
+
+  // Prominent completion date banner
+  h+='<div style="background:'+(ok?P2C.greenLite:P2C.redLite)+';border-radius:12px;padding:20px 24px;margin-bottom:14px;border:1.5px solid '+(ok?P2C.green:P2C.red)+'60;text-align:center">';
+  h+='<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:'+(ok?P2C.green:P2C.red)+';margin-bottom:6px;opacity:.9">Fecha proyectada de entrega</div>';
+  h+='<div style="font-size:38px;font-weight:600;color:'+(ok?P2C.green:P2C.red)+';line-height:1;letter-spacing:-.01em">'+p2FmtDate(calc.projectEnd)+'</div>';
+  h+='<div style="display:flex;justify-content:center;gap:18px;margin-top:10px;flex-wrap:wrap">';
+  h+='<span style="font-size:12px;color:var(--text2)"><strong style="color:var(--text1)">'+daysLeft+'</strong> días restantes</span>';
+  h+='<span style="font-size:12px;color:'+(ok?P2C.green:P2C.red)+'">'+(ok?'✓ '+margin+' días antes del objetivo':'⚠ '+Math.abs(margin)+' días de retraso')+'</span>';
+  h+='<span style="font-size:12px;color:var(--text2)">Objetivo: <strong>'+p2FmtDate(target)+'</strong></span>';
+  h+='</div></div>';
+
+  // Toolbar
+  var bst='border-radius:7px;padding:7px 13px;font-size:12px;cursor:pointer;font-family:var(--font);border:.5px solid ';
+  h+='<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">';
+  h+='<button onclick="P2.sbData=null;p2sbLoad()" style="background:'+P2C.navy+';color:#fff;'+bst+P2C.navy+'">🔄 Actualizar</button>';
+  h+='<button onclick="P2._showAdd=!P2._showAdd;renderPlan2()" style="background:'+(P2._showAdd?P2C.red:'transparent')+';color:'+(P2._showAdd?'#fff':P2C.navy)+';'+bst+(P2._showAdd?P2C.red:P2C.navy)+'">'+(P2._showAdd?'✕ Cancelar':'＋ Agregar actividad')+'</button>';
+  h+='<span style="font-size:11px;color:'+P2C.gray+'">'+calc.total+' actividades · edita días restantes por fila</span>';
+  h+='</div>';
+
+  // Add activity form
+  if(P2._showAdd){
+    h+='<div style="background:'+P2C.navyLite+';border-radius:10px;padding:14px 16px;margin-bottom:14px;border:.5px solid '+P2C.navy+'40">';
+    h+='<div style="font-size:12px;font-weight:500;color:'+P2C.navy+';margin-bottom:10px">Agregar actividad temporal (no se guarda en Supabase)</div>';
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">';
+    h+='<div><div style="font-size:11px;color:'+P2C.gray+';margin-bottom:3px">Nombre</div>';
+    h+='<input id="p2sb-nm" type="text" placeholder="Ej: Instalación AC" style="width:170px;font-family:var(--font);font-size:12px;border:.5px solid '+P2C.grayBrd+';border-radius:6px;padding:7px 9px;background:var(--bg);color:var(--text1)"></div>';
+    h+='<div><div style="font-size:11px;color:'+P2C.gray+';margin-bottom:3px">Área</div>';
+    h+='<input id="p2sb-ar" type="text" placeholder="Ej: Nivel 7" style="width:110px;font-family:var(--font);font-size:12px;border:.5px solid '+P2C.grayBrd+';border-radius:6px;padding:7px 9px;background:var(--bg);color:var(--text1)"></div>';
+    h+='<div><div style="font-size:11px;color:'+P2C.gray+';margin-bottom:3px">Días restantes</div>';
+    h+='<input id="p2sb-dy" type="number" min="1" max="9999" placeholder="30" style="width:80px;text-align:center;font-family:var(--font);font-size:12px;border:.5px solid '+P2C.grayBrd+';border-radius:6px;padding:7px 9px;background:var(--bg);color:var(--text1)"></div>';
+    h+='<button onclick="p2sbAddExtra()" style="background:'+P2C.navy+';color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:var(--font)">Agregar</button>';
+    h+='</div></div>';
+  }
+
+  // Area groups
+  var areaKeys=Object.keys(calc.areas).sort();
+  if(!areaKeys.length){
+    h+='<div style="text-align:center;padding:30px;color:'+P2C.gray+'">No hay actividades registradas. Verifica la conexión a Supabase.</div>';
+  }
+  var TDst='padding:8px 14px;border-bottom:.5px solid '+P2C.grayBrd+';vertical-align:middle';
+  areaKeys.forEach(function(area){
+    var ag=calc.areas[area];
+    var aOk=ag.endDate<=target;
+    h+='<div style="margin-bottom:12px;background:var(--bg3);border-radius:10px;border:.5px solid '+P2C.grayBrd+';overflow:hidden">';
+    h+='<div style="background:'+(aOk?P2C.navyLite:P2C.redLite)+';padding:9px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">';
+    h+='<div style="font-size:13px;font-weight:500;color:'+P2C.navy+'">'+esc(area)+'</div>';
+    h+='<div style="display:flex;align-items:center;gap:12px">';
+    h+='<span style="font-size:11px;color:'+P2C.gray+'">'+ag.acts.length+' act.</span>';
+    h+='<span style="font-size:11px;color:'+P2C.gray+'">Crítico: <strong>'+ag.maxDays+'</strong> días</span>';
+    h+='<span style="font-size:12px;font-weight:500;color:'+(aOk?P2C.green:P2C.red)+'">'+p2FmtDate(ag.endDate)+'</span>';
+    h+='</div></div>';
+    ag.acts.forEach(function(act){
+      var stC=act.estado==='completado'?P2C.green:act.estado==='activo'||act.estado==='en_progreso'?P2C.blue:P2C.gray;
+      h+='<div style="display:flex;align-items:center;gap:8px;'+TDst+';flex-wrap:wrap">';
+      h+='<div style="flex:1;min-width:120px">';
+      h+='<div style="font-size:12px;color:var(--text1)">'+esc(act.name)+'</div>';
+      h+='<div style="margin-top:2px;display:flex;align-items:center;gap:5px">';
+      h+='<span style="font-size:10px;color:'+stC+'">●</span>';
+      h+='<span style="font-size:10px;color:'+P2C.gray+'">'+esc(act.estado)+'</span>';
+      if(act.pct>0)h+='<span style="font-size:10px;color:'+P2C.blue+'"> · '+act.pct+'% completado</span>';
+      h+='</div></div>';
+      if(!act.isExtra){
+        h+='<div style="display:flex;align-items:center;gap:5px;flex-shrink:0">';
+        h+='<span style="font-size:10px;color:'+P2C.gray+'">Días rest.:</span>';
+        h+='<input type="number" min="0" max="9999" value="'+act.remDays+'" data-sbid="'+act.id+'" onchange="p2sbSetDays(this)"';
+        h+=' style="width:58px;text-align:center;font-size:12px;border:.5px solid '+(act.userSet?P2C.blue:P2C.grayBrd)+';border-radius:5px;padding:4px 5px;background:var(--bg);color:var(--text1);font-family:var(--font)">';
+        if(!act.userSet)h+='<span title="Estimado por defecto (30 días)" style="font-size:10px;color:'+P2C.amber+'">⚠</span>';
+        h+='</div>';
+      }
+      h+='<div style="text-align:right;flex-shrink:0;min-width:82px">';
+      if(act.remDays===0){
+        h+='<span style="font-size:12px;font-weight:500;color:'+P2C.green+'">✓ Completo</span>';
+      }else{
+        h+='<div style="font-size:12px;font-weight:500;color:'+P2C.blue+'">'+act.remDays+' días</div>';
+        h+='<div style="font-size:10px;color:'+P2C.gray+'">'+p2FmtShort(act.endDate)+'</div>';
+      }
+      h+='</div>';
+      if(act.isExtra){
+        h+='<button onclick="p2sbRemoveExtra(\''+act.id+'\')" style="background:transparent;border:.5px solid '+P2C.red+'60;color:'+P2C.red+';border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:var(--font);flex-shrink:0">✕</button>';
+      }
+      h+='</div>';
+    });
+    h+='</div>';
+  });
+
+  h+=p2sbAIPanel();
+  return h;
+}
+
+function p2sbAIPanel(){
+  var h='<div style="margin-top:18px;background:var(--bg3);border-radius:12px;border:.5px solid '+P2C.grayBrd+';overflow:hidden">';
+  h+='<div style="background:'+P2C.navy+';padding:11px 16px;display:flex;align-items:center;justify-content:space-between">';
+  h+='<div><div style="color:#fff;font-size:13px;font-weight:500">✨ Asistente IA · Plan de Obra</div>';
+  h+='<div style="color:rgba(174,169,236,.65);font-size:10px;margin-top:1px">Análisis de actividades con Claude</div></div>';
+  h+=(P2.aiKey?'<span style="font-size:10px;color:rgba(159,225,203,.9)">● Conectado</span>':'<span style="font-size:10px;color:rgba(245,196,179,.8)">● Sin API key</span>');
+  h+='</div><div style="padding:14px 16px">';
+
+  if(!P2.aiKey){
+    h+='<div style="background:'+P2C.amberLite+';border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:'+P2C.amber+'">⚠️ Introduce tu API key de Anthropic para activar el asistente.</div>';
+    h+='<div style="display:flex;gap:8px;margin-bottom:10px">';
+    h+='<input id="p2-aikey" type="password" placeholder="sk-ant-..." style="flex:1;font-family:var(--font);font-size:12px;border:.5px solid '+P2C.grayBrd+';border-radius:6px;padding:8px 10px;background:var(--bg);color:var(--text1)">';
+    h+='<button onclick="var k=document.getElementById(\'p2-aikey\');if(k&&k.value.trim()){P2.aiKey=k.value.trim();p2sbPersist();renderPlan2()}" style="background:'+P2C.navy+';color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:var(--font)">Guardar</button>';
+    h+='</div>';
+  }else{
+    h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">';
+    h+='<button onclick="P2.aiKey=\'\';p2sbPersist();renderPlan2()" style="background:transparent;border:.5px solid '+P2C.grayBrd+';color:'+P2C.gray+';border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;font-family:var(--font)">Cambiar API key</button>';
+    h+='</div>';
+  }
+
+  if((P2.aiChat||[]).length){
+    h+='<div id="p2-chat-box" style="max-height:300px;overflow-y:auto;margin-bottom:12px;display:flex;flex-direction:column;gap:10px">';
+    (P2.aiChat||[]).forEach(function(msg){
+      var isU=msg.role==='user';
+      h+='<div style="display:flex;'+(isU?'justify-content:flex-end':'justify-content:flex-start')+'">';
+      h+='<div style="max-width:88%;background:'+(isU?P2C.navy:'var(--bg)')+';color:'+(isU?'#fff':'var(--text1)')+';border-radius:'+(isU?'12px 12px 4px 12px':'12px 12px 12px 4px')+';padding:9px 13px;font-size:12px;line-height:1.55;border:.5px solid '+(isU?'transparent':P2C.grayBrd)+'">';
+      var txt=esc(msg.content).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+      h+=txt+'</div></div>';
+    });
+    h+='</div>';
+  }
+
+  if(P2.aiLoading){
+    h+='<div style="text-align:center;padding:10px;color:'+P2C.gray+'"><span style="font-size:12px">✨ Analizando actividades del proyecto…</span></div>';
+  }
+
+  if(!P2.aiLoading&&!(P2.aiChat||[]).length){
+    var qs=['¿Qué actividades están bloqueando la entrega?','¿Cuál área tiene más riesgo de retraso?','Si acelero el área crítica 10 días, ¿cuánto adelanta el proyecto?','Resume el estado actual y los riesgos principales'];
+    h+='<div style="margin-bottom:10px"><div style="font-size:10px;color:'+P2C.gray+';margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Preguntas rápidas</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
+    qs.forEach(function(q){
+      var qe=q.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      h+='<button onclick="document.getElementById(\'p2-ai-inp\').value=\''+qe+'\';" style="background:'+P2C.navyLite+';color:'+P2C.navy+';border:.5px solid '+P2C.navy+'30;border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer;font-family:var(--font);text-align:left">'+esc(q)+'</button>';
+    });
+    h+='</div></div>';
+  }
+
+  h+='<div style="display:flex;gap:8px">';
+  h+='<input id="p2-ai-inp" type="text" placeholder="Pregunta sobre el plan de obra…"';
+  h+=' onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){var v=this.value.trim();if(v){p2sbAsk(v);this.value=\'\';event.preventDefault();}}"';
+  h+=' style="flex:1;font-family:var(--font);font-size:13px;border:.5px solid '+P2C.grayBrd+';border-radius:8px;padding:9px 12px;background:var(--bg);color:var(--text1)">';
+  h+='<button onclick="var i=document.getElementById(\'p2-ai-inp\');if(i&&i.value.trim()){p2sbAsk(i.value.trim());i.value=\'\'}"';
+  h+=' style="background:'+P2C.navy+';color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;font-family:var(--font)"'+(P2.aiLoading?' disabled':'')+'>';
+  h+=(P2.aiLoading?'…':'Preguntar')+'</button>';
+  h+='</div></div></div>';
+  return h;
+}
+
+async function p2sbAsk(q){
+  if(!P2.aiKey){
+    P2.aiChat=P2.aiChat||[];
+    P2.aiChat.push({role:'assistant',content:'Configura una API key de Anthropic para usar el asistente.'});
+    renderPlan2();return;
+  }
+  if(P2.aiLoading)return;
+  P2.aiChat=P2.aiChat||[];
+  P2.aiChat.push({role:'user',content:q});
+  P2.aiLoading=true;
+  renderPlan2();
+  setTimeout(function(){var c=document.getElementById('p2-chat-box');if(c)c.scrollTop=c.scrollHeight;},10);
+  var calc=p2sbCalc();
+  var today=p2Today();
+  var target=new Date(P2.params.targetDate+'T12:00:00');
+  var margin=p2DiffDays(calc.projectEnd,target);
+  var ctx='Eres un asistente experto en construcción para "Mecca Residence" — edificio 7 pisos, 11 unidades, Santo Domingo, República Dominicana.\n';
+  ctx+='Hoy: '+p2FmtDate(today)+'\n';
+  ctx+='Entrega proyectada: '+p2FmtDate(calc.projectEnd)+'\n';
+  ctx+='Objetivo: '+p2FmtDate(target)+'\n';
+  ctx+='Margen: '+(margin>=0?'+'+margin+' días (adelantado)':margin+' días (retrasado)')+'\n\n';
+  ctx+='Actividades por área (dentro de la misma área corren en paralelo; se usa el camino más largo):\n';
+  Object.keys(calc.areas).sort().forEach(function(area){
+    var ag=calc.areas[area];
+    ctx+='\n'+area+' → Fin: '+p2FmtDate(ag.endDate)+' ('+ag.maxDays+' días críticos)\n';
+    ag.acts.forEach(function(a){
+      ctx+='  • '+a.name+' | '+a.estado+' | '+a.pct+'% | '+a.remDays+' días rest. | Fin: '+p2FmtDate(a.endDate)+'\n';
+    });
+  });
+  ctx+='\nResponde en español, de forma práctica y directa. Sé conciso.';
+  try{
+    var r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'content-type':'application/json','x-api-key':P2.aiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,messages:[{role:'user',content:ctx+'\n\nPregunta: '+q}]})
+    });
+    var j=await r.json();
+    if(j.content&&j.content[0]&&j.content[0].text){
+      P2.aiChat.push({role:'assistant',content:j.content[0].text});
+    }else if(j.error){
+      P2.aiChat.push({role:'assistant',content:'Error API: '+(j.error.message||JSON.stringify(j.error))});
+    }else{
+      P2.aiChat.push({role:'assistant',content:'Respuesta inesperada de la API.'});
+    }
+  }catch(e){
+    P2.aiChat.push({role:'assistant',content:'Error de conexión: '+e.message});
+  }
+  P2.aiLoading=false;
+  renderPlan2();
+  setTimeout(function(){var c=document.getElementById('p2-chat-box');if(c)c.scrollTop=c.scrollHeight;},10);
 }
 
 if('serviceWorker' in navigator){
