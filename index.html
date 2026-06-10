@@ -11566,16 +11566,15 @@ function p2Persist(){
 
 // ── Plan 2.0 — estado Supabase/IA ─────────────────────────────────────────
 P2.sbData=null;P2.sbLoading=false;P2.sbDays={};P2.sbExtra=[];
-P2.aiKey='';P2.aiChat=[];P2.aiLoading=false;P2._showAdd=false;
+P2._showAdd=false;
 (function(){
   try{var d=localStorage.getItem('mecca_p2sb');if(d){var o=JSON.parse(d);
     if(o.sbDays)P2.sbDays=o.sbDays;
     if(o.sbExtra)P2.sbExtra=o.sbExtra||[];
-    if(o.aiKey)P2.aiKey=o.aiKey;
   }}catch(e){}
 }());
 function p2sbPersist(){
-  try{localStorage.setItem('mecca_p2sb',JSON.stringify({sbDays:P2.sbDays,sbExtra:P2.sbExtra,aiKey:P2.aiKey}));}catch(e){}
+  try{localStorage.setItem('mecca_p2sb',JSON.stringify({sbDays:P2.sbDays,sbExtra:P2.sbExtra}));}catch(e){}
 }
 
 // ── Dataset base (hardcoded con desglose N2-N6) ────────────────────────────
@@ -12163,118 +12162,7 @@ function p2sbRenderTab(){
     h+='</div>';
   });
 
-  h+=p2sbAIPanel();
   return h;
-}
-
-function p2sbAIPanel(){
-  var h='<div style="margin-top:18px;background:var(--bg3);border-radius:12px;border:.5px solid '+P2C.grayBrd+';overflow:hidden">';
-  h+='<div style="background:'+P2C.navy+';padding:11px 16px;display:flex;align-items:center;justify-content:space-between">';
-  h+='<div><div style="color:#fff;font-size:13px;font-weight:500">✨ Asistente IA · Plan de Obra</div>';
-  h+='<div style="color:rgba(174,169,236,.65);font-size:10px;margin-top:1px">Análisis de actividades con Claude</div></div>';
-  h+=(P2.aiKey?'<span style="font-size:10px;color:rgba(159,225,203,.9)">● Conectado</span>':'<span style="font-size:10px;color:rgba(245,196,179,.8)">● Sin API key</span>');
-  h+='</div><div style="padding:14px 16px">';
-
-  if(!P2.aiKey){
-    h+='<div style="background:'+P2C.amberLite+';border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:'+P2C.amber+'">⚠️ Introduce tu API key de Anthropic para activar el asistente.</div>';
-    h+='<div style="display:flex;gap:8px;margin-bottom:10px">';
-    h+='<input id="p2-aikey" type="password" placeholder="sk-ant-..." style="flex:1;font-family:var(--font);font-size:12px;border:.5px solid '+P2C.grayBrd+';border-radius:6px;padding:8px 10px;background:var(--bg);color:var(--text1)">';
-    h+='<button onclick="var k=document.getElementById(\'p2-aikey\');if(k&&k.value.trim()){P2.aiKey=k.value.trim();p2sbPersist();renderPlan2()}" style="background:'+P2C.navy+';color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:var(--font)">Guardar</button>';
-    h+='</div>';
-  }else{
-    h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">';
-    h+='<button onclick="P2.aiKey=\'\';p2sbPersist();renderPlan2()" style="background:transparent;border:.5px solid '+P2C.grayBrd+';color:'+P2C.gray+';border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;font-family:var(--font)">Cambiar API key</button>';
-    h+='</div>';
-  }
-
-  if((P2.aiChat||[]).length){
-    h+='<div id="p2-chat-box" style="max-height:300px;overflow-y:auto;margin-bottom:12px;display:flex;flex-direction:column;gap:10px">';
-    (P2.aiChat||[]).forEach(function(msg){
-      var isU=msg.role==='user';
-      h+='<div style="display:flex;'+(isU?'justify-content:flex-end':'justify-content:flex-start')+'">';
-      h+='<div style="max-width:88%;background:'+(isU?P2C.navy:'var(--bg)')+';color:'+(isU?'#fff':'var(--text1)')+';border-radius:'+(isU?'12px 12px 4px 12px':'12px 12px 12px 4px')+';padding:9px 13px;font-size:12px;line-height:1.55;border:.5px solid '+(isU?'transparent':P2C.grayBrd)+'">';
-      var txt=esc(msg.content).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
-      h+=txt+'</div></div>';
-    });
-    h+='</div>';
-  }
-
-  if(P2.aiLoading){
-    h+='<div style="text-align:center;padding:10px;color:'+P2C.gray+'"><span style="font-size:12px">✨ Analizando actividades del proyecto…</span></div>';
-  }
-
-  if(!P2.aiLoading&&!(P2.aiChat||[]).length){
-    var qs=['¿Qué actividades están bloqueando la entrega?','¿Cuál área tiene más riesgo de retraso?','Si acelero el área crítica 10 días, ¿cuánto adelanta el proyecto?','Resume el estado actual y los riesgos principales'];
-    h+='<div style="margin-bottom:10px"><div style="font-size:10px;color:'+P2C.gray+';margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Preguntas rápidas</div>';
-    h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
-    qs.forEach(function(q){
-      var qe=q.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      h+='<button onclick="document.getElementById(\'p2-ai-inp\').value=\''+qe+'\';" style="background:'+P2C.navyLite+';color:'+P2C.navy+';border:.5px solid '+P2C.navy+'30;border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer;font-family:var(--font);text-align:left">'+esc(q)+'</button>';
-    });
-    h+='</div></div>';
-  }
-
-  h+='<div style="display:flex;gap:8px">';
-  h+='<input id="p2-ai-inp" type="text" placeholder="Pregunta sobre el plan de obra…"';
-  h+=' onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){var v=this.value.trim();if(v){p2sbAsk(v);this.value=\'\';event.preventDefault();}}"';
-  h+=' style="flex:1;font-family:var(--font);font-size:13px;border:.5px solid '+P2C.grayBrd+';border-radius:8px;padding:9px 12px;background:var(--bg);color:var(--text1)">';
-  h+='<button onclick="var i=document.getElementById(\'p2-ai-inp\');if(i&&i.value.trim()){p2sbAsk(i.value.trim());i.value=\'\'}"';
-  h+=' style="background:'+P2C.navy+';color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;font-family:var(--font)"'+(P2.aiLoading?' disabled':'')+'>';
-  h+=(P2.aiLoading?'…':'Preguntar')+'</button>';
-  h+='</div></div></div>';
-  return h;
-}
-
-async function p2sbAsk(q){
-  if(!P2.aiKey){
-    P2.aiChat=P2.aiChat||[];
-    P2.aiChat.push({role:'assistant',content:'Configura una API key de Anthropic para usar el asistente.'});
-    renderPlan2();return;
-  }
-  if(P2.aiLoading)return;
-  P2.aiChat=P2.aiChat||[];
-  P2.aiChat.push({role:'user',content:q});
-  P2.aiLoading=true;
-  renderPlan2();
-  setTimeout(function(){var c=document.getElementById('p2-chat-box');if(c)c.scrollTop=c.scrollHeight;},10);
-  var calc=p2sbCalc();
-  var today=p2Today();
-  var target=new Date(P2.params.targetDate+'T12:00:00');
-  var margin=p2DiffDays(calc.projectEnd,target);
-  var ctx='Eres un asistente experto en construcción para "Mecca Residence" — edificio 7 pisos, 11 unidades, Santo Domingo, República Dominicana.\n';
-  ctx+='Hoy: '+p2FmtDate(today)+'\n';
-  ctx+='Entrega proyectada: '+p2FmtDate(calc.projectEnd)+'\n';
-  ctx+='Objetivo: '+p2FmtDate(target)+'\n';
-  ctx+='Margen: '+(margin>=0?'+'+margin+' días (adelantado)':margin+' días (retrasado)')+'\n\n';
-  ctx+='Actividades por área (dentro de la misma área corren en paralelo; se usa el camino más largo):\n';
-  Object.keys(calc.areas).sort().forEach(function(area){
-    var ag=calc.areas[area];
-    ctx+='\n'+area+' → Fin: '+p2FmtDate(ag.endDate)+' ('+ag.maxDays+' días críticos)\n';
-    ag.acts.forEach(function(a){
-      ctx+='  • '+a.name+' | '+a.estado+' | '+a.pct+'% | '+a.remDays+' días rest. | Fin: '+p2FmtDate(a.endDate)+'\n';
-    });
-  });
-  ctx+='\nResponde en español, de forma práctica y directa. Sé conciso.';
-  try{
-    var r=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'content-type':'application/json','x-api-key':P2.aiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1024,messages:[{role:'user',content:ctx+'\n\nPregunta: '+q}]})
-    });
-    var j=await r.json();
-    if(j.content&&j.content[0]&&j.content[0].text){
-      P2.aiChat.push({role:'assistant',content:j.content[0].text});
-    }else if(j.error){
-      P2.aiChat.push({role:'assistant',content:'Error API: '+(j.error.message||JSON.stringify(j.error))});
-    }else{
-      P2.aiChat.push({role:'assistant',content:'Respuesta inesperada de la API.'});
-    }
-  }catch(e){
-    P2.aiChat.push({role:'assistant',content:'Error de conexión: '+e.message});
-  }
-  P2.aiLoading=false;
-  renderPlan2();
-  setTimeout(function(){var c=document.getElementById('p2-chat-box');if(c)c.scrollTop=c.scrollHeight;},10);
 }
 
 if('serviceWorker' in navigator){
