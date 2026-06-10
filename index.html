@@ -11572,15 +11572,16 @@ function p2Persist(){
 
 // ── Plan 2.0 — estado Supabase/IA ─────────────────────────────────────────
 P2.sbData=null;P2.sbLoading=false;P2.sbDays={};P2.sbExtra=[];
-P2._showAdd=false;
+P2._showAdd=false;P2.sbAreaDeps={};P2._openDep=null;
 (function(){
   try{var d=localStorage.getItem('mecca_p2sb');if(d){var o=JSON.parse(d);
     if(o.sbDays)P2.sbDays=o.sbDays;
     if(o.sbExtra)P2.sbExtra=o.sbExtra||[];
+    if(o.sbAreaDeps)P2.sbAreaDeps=o.sbAreaDeps;
   }}catch(e){}
 }());
 function p2sbPersist(){
-  try{localStorage.setItem('mecca_p2sb',JSON.stringify({sbDays:P2.sbDays,sbExtra:P2.sbExtra}));}catch(e){}
+  try{localStorage.setItem('mecca_p2sb',JSON.stringify({sbDays:P2.sbDays,sbExtra:P2.sbExtra,sbAreaDeps:P2.sbAreaDeps}));}catch(e){}
 }
 
 // ── Dataset base (hardcoded con desglose N2-N6) ────────────────────────────
@@ -11713,6 +11714,7 @@ function p2FmtDate(d){if(!d)return'—';return d.toLocaleDateString('es-DO',{day
 function p2FmtShort(d){if(!d)return'—';return d.toLocaleDateString('es-DO',{day:'2-digit',month:'short'});}
 function p2DiffDays(a,b){return Math.round((b.getTime()-a.getTime())/86400000);}
 function p2AddDays(n){var r=new Date();r.setHours(12,0,0,0);r.setDate(r.getDate()+Math.ceil(n));return r;}
+function p2AddDaysFrom(d,n){var r=new Date(d);r.setDate(r.getDate()+Math.ceil(n));return r;}
 function p2Today(){var d=new Date();d.setHours(12,0,0,0);return d;}
 
 function p2Val(id,field,def){var s=P2.state[id];return(s&&s[field]!==undefined)?s[field]:def;}
@@ -12080,6 +12082,18 @@ function p2GanttHTML(proj,endDate,target,TODAY){
 
 // ── Plan 2.0 — Actividades desde Supabase ─────────────────────────────────
 
+function p2sbToggleDep2(inp){
+  var area=inp.getAttribute('data-a');
+  var dep=inp.getAttribute('data-d');
+  if(!area||!dep)return;
+  if(!P2.sbAreaDeps[area])P2.sbAreaDeps[area]=[];
+  var idx=P2.sbAreaDeps[area].indexOf(dep);
+  if(inp.checked&&idx===-1)P2.sbAreaDeps[area].push(dep);
+  else if(!inp.checked&&idx!==-1)P2.sbAreaDeps[area].splice(idx,1);
+  p2sbPersist();
+  renderPlan2();
+}
+
 async function p2sbLoad(){
   if(P2.sbLoading)return;
   P2.sbLoading=true;
@@ -12098,32 +12112,68 @@ function p2sbGetRem(act){
   return 30;
 }
 
+function p2sbAreaTopoSort(areaNames,deps){
+  var inDeg={},adj={};
+  areaNames.forEach(function(a){inDeg[a]=0;adj[a]=[];});
+  areaNames.forEach(function(a){
+    (deps[a]||[]).forEach(function(pred){
+      if(adj[pred])adj[pred].push(a);
+      if(inDeg[a]!==undefined)inDeg[a]++;
+    });
+  });
+  var queue=areaNames.filter(function(a){return inDeg[a]===0;});
+  var sorted=[];
+  while(queue.length){
+    var cur=queue.shift();sorted.push(cur);
+    adj[cur].forEach(function(s){inDeg[s]--;if(inDeg[s]===0)queue.push(s);});
+  }
+  areaNames.forEach(function(a){if(sorted.indexOf(a)===-1)sorted.push(a);});
+  return sorted;
+}
+
 function p2sbCalc(){
   var today=p2Today();
   var sbActs=(P2.sbData||[]).map(function(a){
     var rem=p2sbGetRem(a);
     return{id:a.id,name:a.descripcion||'—',area:a.area||'Sin área',
       pct:+(a.porcentaje)||0,estado:a.estado||'pendiente',
-      remDays:rem,endDate:rem===0?today:p2AddDays(rem),isExtra:false,
-      userSet:P2.sbDays[a.id]!=null};
+      remDays:rem,isExtra:false,userSet:P2.sbDays[a.id]!=null};
   });
   var extraActs=(P2.sbExtra||[]).map(function(a){
     var rem=Math.max(0,+(a.days)||0);
     return{id:a.id,name:a.name||'—',area:a.area||'Sin área',
-      pct:0,estado:'pendiente',
-      remDays:rem,endDate:rem===0?today:p2AddDays(rem),isExtra:true,userSet:true};
+      pct:0,estado:'pendiente',remDays:rem,isExtra:true,userSet:true};
   });
   var allActs=sbActs.concat(extraActs);
   var areaMap={};
   allActs.forEach(function(a){if(!areaMap[a.area])areaMap[a.area]=[];areaMap[a.area].push(a);});
-  var areas={};var maxEnd=today;
-  Object.keys(areaMap).sort().forEach(function(area){
+  var areaNames=Object.keys(areaMap).sort();
+  var areas={};
+  areaNames.forEach(function(area){
     var acts=areaMap[area];
-    var maxDays=Math.max.apply(null,acts.map(function(a){return a.remDays;}));
-    var endDate=maxDays===0?today:p2AddDays(maxDays);
-    if(endDate>maxEnd)maxEnd=endDate;
-    areas[area]={acts:acts,maxDays:maxDays,endDate:endDate};
+    var maxDays=acts.length?Math.max.apply(null,acts.map(function(a){return a.remDays;})):0;
+    areas[area]={acts:acts,maxDays:maxDays,startDate:today,endDate:today};
   });
+  // Forward pass in topological order — respects dependencies
+  var sorted=p2sbAreaTopoSort(areaNames,P2.sbAreaDeps);
+  sorted.forEach(function(area){
+    var deps=P2.sbAreaDeps[area]||[];
+    var start=today;
+    deps.forEach(function(dep){
+      if(areas[dep]&&areas[dep].endDate>start)start=areas[dep].endDate;
+    });
+    areas[area].startDate=start;
+    areas[area].endDate=areas[area].maxDays===0?start:p2AddDaysFrom(start,areas[area].maxDays);
+  });
+  // Set individual act endDates relative to area startDate
+  areaNames.forEach(function(area){
+    var ad=areas[area];
+    ad.acts.forEach(function(act){
+      act.endDate=act.remDays===0?ad.startDate:p2AddDaysFrom(ad.startDate,act.remDays);
+    });
+  });
+  var maxEnd=today;
+  areaNames.forEach(function(area){if(areas[area].endDate>maxEnd)maxEnd=areas[area].endDate;});
   return{areas:areas,projectEnd:maxEnd,total:allActs.length};
 }
 
@@ -12206,15 +12256,45 @@ function p2sbRenderTab(mob){
   areaKeys.forEach(function(area){
     var ag=calc.areas[area];
     var aOk=ag.endDate<=target;
-    h+='<div style="margin-bottom:12px;background:var(--bg3);border-radius:10px;border:.5px solid '+P2C.grayBrd+';overflow:hidden">';
+    var aDeps=P2.sbAreaDeps[area]||[];
+    var depOpen=P2._openDep===area;
+    // Start offset indicator
+    var startDelay=p2DiffDays(today,ag.startDate);
+    h+='<div style="margin-bottom:12px;background:var(--bg3);border-radius:10px;border:.5px solid '+(aDeps.length?P2C.blue+'60':P2C.grayBrd)+';overflow:hidden">';
     // Area header — compact on mobile
     h+='<div style="background:'+(aOk?P2C.navyLite:P2C.redLite)+';padding:'+(mob?'8px 12px':'9px 14px')+';display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">';
+    h+='<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">';
     h+='<div style="font-size:'+(mob?'14px':'13px')+';font-weight:600;color:'+P2C.navy+'">'+esc(area)+'</div>';
-    h+='<div style="display:flex;align-items:center;gap:'+(mob?'8px':'12px')+'">';
+    if(startDelay>0)h+='<span style="font-size:10px;color:'+P2C.blue+';background:'+P2C.blueLite+';border-radius:4px;padding:1px 5px;flex-shrink:0">⏳ inicio +'+startDelay+'d</span>';
+    h+='</div>';
+    h+='<div style="display:flex;align-items:center;gap:'+(mob?'6px':'10px')+'">';
     if(!mob)h+='<span style="font-size:11px;color:'+P2C.gray+'">'+ag.acts.length+' act.</span>';
     h+='<span style="font-size:11px;color:'+P2C.gray+'"><strong>'+ag.maxDays+'</strong> días</span>';
     h+='<span style="font-size:'+(mob?'13px':'12px')+';font-weight:500;color:'+(aOk?P2C.green:P2C.red)+'">'+p2FmtDate(ag.endDate)+'</span>';
+    h+='<button data-da="'+esc(area)+'" onclick="P2._openDep=P2._openDep===this.getAttribute(\'data-da\')?null:this.getAttribute(\'data-da\');renderPlan2()" style="background:'+(depOpen?P2C.navy:aDeps.length?P2C.blue:P2C.grayBrd)+';color:'+(depOpen||aDeps.length?'#fff':P2C.gray)+';border:none;border-radius:5px;padding:3px 7px;font-size:11px;cursor:pointer;font-family:var(--font);flex-shrink:0">🔗'+(aDeps.length?' '+aDeps.length:'')+'</button>';
     h+='</div></div>';
+    // Dependency editor panel
+    if(depOpen){
+      var otherAreas=areaKeys.filter(function(a){return a!==area;});
+      h+='<div style="background:'+P2C.navyLite+';padding:10px 14px;border-bottom:.5px solid '+P2C.grayBrd+'">';
+      h+='<div style="font-size:11px;font-weight:500;color:'+P2C.navy+';margin-bottom:8px">🔗 '+esc(area)+' empieza DESPUÉS de:</div>';
+      if(!otherAreas.length){
+        h+='<div style="font-size:11px;color:'+P2C.gray+'">No hay otras áreas todavía.</div>';
+      }else{
+        h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
+        otherAreas.forEach(function(other){
+          var checked=aDeps.indexOf(other)!==-1;
+          h+='<label style="display:flex;align-items:center;gap:5px;background:'+(checked?P2C.blueLite:'var(--bg)')+';border:.5px solid '+(checked?P2C.blue:P2C.grayBrd)+';border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;color:var(--text1)">';
+          h+='<input type="checkbox"'+(checked?' checked':'')+' data-a="'+esc(area)+'" data-d="'+esc(other)+'" onchange="p2sbToggleDep2(this)" style="accent-color:'+P2C.blue+';width:14px;height:14px">';
+          h+=esc(other)+'</label>';
+        });
+        h+='</div>';
+      }
+      if(aDeps.length){
+        h+='<button onclick="P2.sbAreaDeps['+JSON.stringify(area)+']=[];p2sbPersist();renderPlan2()" style="margin-top:8px;background:transparent;border:.5px solid '+P2C.red+'60;color:'+P2C.red+';border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--font)">✕ Quitar todas</button>';
+      }
+      h+='</div>';
+    }
     ag.acts.forEach(function(act){
       var stC=act.estado==='completado'?P2C.green:act.estado==='activo'||act.estado==='en_progreso'?P2C.blue:P2C.gray;
       if(mob){
