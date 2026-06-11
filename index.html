@@ -1478,8 +1478,27 @@ async function driveTestUrl(){
   }
 }
 
-function driveGuardarUrl(){
-  var url=(document.getElementById('drive-url-inp')||{}).value||'';
+async function driveGuardarUrl(){
+  var url=((document.getElementById('drive-url-inp')||{}).value||'').trim();
+  var res=document.getElementById('drive-test-res');
+  if(url){
+    if(url.indexOf('https://script.google.com/macros/')!==0){
+      if(res) res.innerHTML='<span style="color:#e03131">✗ URL inválida: debe ser el Web App de Apps Script (empieza con https://script.google.com/macros/...). No pegues la URL de esta app.</span>';
+      return;
+    }
+    if(res) res.innerHTML='<span style="color:#868e96">Verificando conexión...</span>';
+    try{
+      var r=await fetch(url+'?test=1',{method:'GET'});
+      var j=await r.json();
+      if(!(j.ok||j.status==='ok')){
+        if(res) res.innerHTML='<span style="color:#e03131">✗ La URL responde pero no es el Web App esperado. No se guardó.</span>';
+        return;
+      }
+    }catch(e){
+      if(res) res.innerHTML='<span style="color:#e03131">✗ No se pudo verificar la URL ('+esc(e.message)+'). No se guardó.</span>';
+      return;
+    }
+  }
   if(url) localStorage.setItem('mecca_drive_url',url);
   else localStorage.removeItem('mecca_drive_url');
   S.driveUrl=url;
