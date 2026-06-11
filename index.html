@@ -9311,7 +9311,7 @@ function ordenHTML(o){
     ${canEdit()&&o.estado!=='recibida'&&o.estado!=='cancelada'?`
     <div style="display:flex;border-top:1px solid var(--border)">
       ${o.estado==='borrador'?`<button onclick="cambiarEstadoOrden('${o.id}','pendiente')" style="flex:1;padding:10px;border:none;background:#fffbeb;color:#d97706;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">▶ Enviar a aprobación</button>`:''}
-      ${o.estado==='pendiente'?`<button onclick="cambiarEstadoOrden('${o.id}','aprobada')" style="flex:1;padding:10px;border:none;background:#eff6ff;color:#2563eb;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">✓ Aprobar</button>`:''}
+      ${o.estado==='pendiente'&&isAdmin()?`<button onclick="cambiarEstadoOrden('${o.id}','aprobada')" style="flex:1;padding:10px;border:none;background:#eff6ff;color:#2563eb;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">✓ Aprobar</button>`:''}
       ${o.estado==='aprobada'?`<button onclick="cambiarEstadoOrden('${o.id}','recibida')" style="flex:1;padding:10px;border:none;background:#ecfdf5;color:#059669;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">📦 Marcar recibida</button>`:''}
       <button onclick="cambiarEstadoOrden('${o.id}','cancelada')" style="padding:10px 14px;border:none;border-left:1px solid var(--border);background:#fef2f2;color:#dc2626;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">✕ Cancelar</button>
     </div>`:''}
@@ -9464,6 +9464,7 @@ async function saveOrden(id){
 }
 
 async function cambiarEstadoOrden(id,nuevoEstado){
+  if(nuevoEstado==='aprobada'&&!isAdmin()){alert('Solo el administrador puede aprobar órdenes de compra.');return;}
   const o=S.compras.find(x=>x.id===id);
   if(!o) return;
   o.estado=nuevoEstado;
