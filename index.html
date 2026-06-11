@@ -1425,8 +1425,21 @@ async function handleFotoFile(inp){
     if(e.message==='DRIVE_NOT_CONFIGURED'){
       driveConfigModal();
     } else {
-      setSS('err','Error subiendo foto');
-      alert('Error: '+e.message);
+      setSS('err','No se pudo subir');
+      // Friendly modal instead of raw alert
+      var isFetch=e.message==='Failed to fetch'||e.message.indexOf('fetch')>=0||e.message.indexOf('network')>=0||e.message.indexOf('NetworkError')>=0;
+      document.getElementById('mcontent').innerHTML=
+        '<div class="mhandle"></div>'+
+        '<div style="text-align:center;padding:8px 0 4px">'+
+          '<div style="font-size:32px;margin-bottom:8px">📡</div>'+
+          '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">No se pudo subir la foto</div>'+
+          '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">'+(isFetch?'Sin conexión o el servidor de fotos no está disponible.<br>Revisa tu señal e intenta de nuevo.':esc(e.message))+'</div>'+
+        '</div>'+
+        '<div style="display:flex;flex-direction:column;gap:8px">'+
+          '<button class="btn primary" onclick="closeModal();abrirFotoUpload(\''+actId.replace(/'/g,"\\'")+'\')" style="padding:12px">↺ Reintentar</button>'+
+          '<button class="btn" onclick="closeModal()">Cancelar</button>'+
+        '</div>';
+      openModal();
     }
   }
 }
