@@ -1352,7 +1352,9 @@ async function uploadFoto(file, actId){
   });
   var json=await resp.json();
   if(!json.success) throw new Error(json.error||'Error subiendo foto');
-  return json.thumbUrl||json.url;
+  var resultUrl=json.thumbUrl||json.url||'';
+  if(!resultUrl||resultUrl==='undefined') throw new Error('El servidor no devolvió una URL válida para la foto');
+  return resultUrl;
 }
 
 function abrirFotoUpload(actId){
@@ -1442,6 +1444,9 @@ function driveConfigModal(){
       '<button class="btn" onclick="closeModal()">Cancelar</button>'+
       '<button class="btn" onclick="driveTestUrl()" style="background:#f8f9fa">Probar</button>'+
       '<button class="btn primary" onclick="driveGuardarUrl()">Guardar</button>'+
+    '</div>'+
+    '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
+      '<button onclick="closeModal();limpiarFotosInvalidas()" style="width:100%;padding:9px;border-radius:var(--r);border:1px solid #f08c00;background:#fff3cd;color:#856404;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">🔧 Reparar fotos inválidas (fotos de Edgar)</button>'+
     '</div>';
   openModal();
 }
@@ -1470,6 +1475,34 @@ function driveGuardarUrl(){
     body:JSON.stringify({key:'drive_url',value:url})}).catch(function(){});
   closeModal();
   setSS('ok','Drive configurado');
+}
+
+async function limpiarFotosInvalidas(){
+  if(!isAdmin()) return;
+  setSS('syncing','Buscando fotos inválidas...');
+  try{
+    var acts=await sb('obra_actividades?fotos=neq.&select=id,fotos&limit=500');
+    var reparadas=0;
+    for(var i=0;i<acts.length;i++){
+      var a=acts[i];
+      var entries=(a.fotos||'').split('||').filter(Boolean);
+      var validas=entries.filter(function(e){
+        var url=e.indexOf('::')>0?e.slice(0,e.indexOf('::')):e;
+        return _isFotoUrlValida(url);
+      });
+      if(validas.length!==entries.length){
+        var nuevosFotos=validas.join('||');
+        await sb('obra_actividades?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:nuevosFotos||null})});
+        // Update in-memory too
+        var inMem=S.acts?S.acts.find(function(x){return x.id===a.id;}):null;
+        if(inMem) inMem.fotos=nuevosFotos;
+        reparadas++;
+      }
+    }
+    setSS('ok','✓ '+reparadas+' actividad'+(reparadas!==1?'es':'')+' reparada'+(reparadas!==1?'s':''));
+    if(reparadas>0){renderActs&&renderActs();renderEnObra&&renderEnObra();}
+    alert('Limpieza completada: '+reparadas+' actividad'+(reparadas!==1?'es reparadas':' reparada')+' (fotos inválidas eliminadas).');
+  }catch(e){setSS('err','Error');alert('Error: '+e.message);}
 }
 
 async function migrarFotosADrive(){
@@ -3301,10 +3334,13 @@ function actHTML(a, ai, tipo){
 
 // ── FOTO REQUERIDA PARA COMPLETAR ────────────────────
 function tieneFoto(a){ return a&&a.fotos&&a.fotos.split('||').filter(Boolean).length>0; }
+function _isFotoUrlValida(url){
+  return !!url&&url!=='undefined'&&url!=='null'&&!url.startsWith('blob:');
+}
 function parseFotos(s){
   return (s||'').split('||').filter(Boolean).map(function(e){
     var i=e.indexOf('::');return i>0?{url:e.slice(0,i),by:e.slice(i+2)}:{url:e,by:null};
-  });
+  }).filter(function(f){return _isFotoUrlValida(f.url);});
 }
 function fotoUrls(s){return parseFotos(s).map(function(f){return f.url;});}
 
