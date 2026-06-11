@@ -5296,7 +5296,8 @@ function exportarPDF(){
     '<div style="margin-bottom:16px">'+
       '<select id="pdf-agrupar" style="'+SEL+'">'+
         '<option value="">Sin agrupar (por tipo: personal / contratistas)</option>'+
-        '<option value="area">📍 Ubicación / Área</option>'+
+        '<option value="area">📍 Ubicación / Área (todas en el mismo PDF)</option>'+
+        '<option value="area-hoja">📄 Ubicación — 1 hoja por nivel</option>'+
         '<option value="contratista">👤 Contratista</option>'+
       '</select>'+
     '</div>'+
@@ -5831,43 +5832,66 @@ async function generarPDF(opts){
     }
 
     // ── ACTIVIDADES AGRUPADAS (por área o contratista) ───────────────
+    var fAgrupBase=fAgrup==='area-hoja'?'area':fAgrup;
+    var fAgrupPorHoja=fAgrup==='area-hoja';
     if(fAgrup&&(secs.propios||secs.contratistas)){
       var actsGrp=[];
       if(secs.propios)     actsGrp=actsGrp.concat(acts.filter(function(a){return a.tipo_personal==='propio';}));
       if(secs.contratistas)actsGrp=actsGrp.concat(acts.filter(function(a){return a.tipo_personal==='contratista';}));
       if(actsGrp.length){
-        var grpColor2=fAgrup==='area'?ACC:PUR;
-        var grpFn2=fAgrup==='area'?function(a){return(a.area||'Sin ubicacion').trim();}:function(a){return a.personal_nombre||'Sin asignar';};
+        var grpColor2=fAgrupBase==='area'?ACC:PUR;
+        var grpFn2=fAgrupBase==='area'?function(a){return(a.area||'Sin ubicacion').trim();}:function(a){return a.personal_nombre||'Sin asignar';};
         var grpTotalComp=actsGrp.filter(function(a){return a.estado==='completado';}).length;
         var grpTotalPct=Math.round(grpTotalComp/actsGrp.length*100);
-        var grpLabel2=fAgrup==='area'?'POR UBICACION':'POR CONTRATISTA';
-        secBanner('ACTIVIDADES '+grpLabel2+'  — '+actsGrp.length+' total  |  '+grpTotalComp+' completadas ('+grpTotalPct+'%)',grpColor2);
+        var grpLabel2=fAgrupBase==='area'?'POR UBICACION':'POR CONTRATISTA';
+        if(!fAgrupPorHoja) secBanner('ACTIVIDADES '+grpLabel2+'  — '+actsGrp.length+' total  |  '+grpTotalComp+' completadas ('+grpTotalPct+'%)',grpColor2);
         var grps2={},grpOrder2=[];
         actsGrp.forEach(function(a){var k=grpFn2(a);if(!grps2[k]){grps2[k]=[];grpOrder2.push(k);}grps2[k].push(a);});
         grpOrder2.sort();
-        grpOrder2.forEach(function(grpName){
+        grpOrder2.forEach(function(grpName,grpIdx){
           var grpActs2=grps2[grpName];
           var grpComp2=grpActs2.filter(function(a){return a.estado==='completado';}).length;
           var grpPct2=Math.round(grpComp2/grpActs2.length*100);
-          chk(12);
-          fc(LGRAY);doc.rect(M,y,RW,9,'F');
-          fc(grpColor2);doc.rect(M,y,4,9,'F');
-          dc(grpColor2);doc.setLineWidth(0.5);doc.line(M,y+9,W-M,y+9);
-          tc(TXT);doc.setFontSize(8.5);doc.setFont('helvetica','bold');
-          doc.text(safe(grpName),M+8,y+5.8);
-          tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-          doc.text(grpComp2+'/'+grpActs2.length+' ('+grpPct2+'%)',W-M,y+3.5,{align:'right'});
-          var barC3=grpPct2>=80?GRN:grpPct2>=40?AMB:RED;
-          fc([220,220,225]);doc.rect(M+90,y+5.5,RW-94,1.5,'F');
-          fc(barC3);doc.rect(M+90,y+5.5,Math.max(0.5,(RW-94)*grpPct2/100),1.5,'F');
-          tc(barC3);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
-          doc.text(grpPct2+'%',W-M,y+8.5,{align:'right'});
-          y+=11;
+          if(fAgrupPorHoja){
+            // Force new page for each area
+            doc.addPage();drawHeader();y=24;
+            // Large area name banner at top of page
+            fc(grpColor2);doc.rect(M,y,RW,16,'F');
+            fc(WHT);doc.rect(M+2,y+2,RW-4,12,'F');
+            fc(grpColor2);doc.rect(M,y,5,16,'F');
+            tc(grpColor2);doc.setFontSize(16);doc.setFont('helvetica','bold');
+            doc.text(safe(grpName),M+10,y+11.5);
+            // Stats on the right
+            var barC3a=grpPct2>=80?GRN:grpPct2>=40?AMB:RED;
+            tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','normal');
+            doc.text(grpComp2+'/'+grpActs2.length+' actividades  |  '+grpPct2+'% completado',W-M,y+7,{align:'right'});
+            fc([220,220,225]);doc.rect(W-M-50,y+10,50,2,'F');
+            fc(barC3a);doc.rect(W-M-50,y+10,Math.max(1,50*grpPct2/100),2,'F');
+            // Period
+            tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+            doc.text('Mecca Residence  |  '+periodo,M+10,y+14.5);
+            y+=20;
+          } else {
+            chk(12);
+            fc(LGRAY);doc.rect(M,y,RW,9,'F');
+            fc(grpColor2);doc.rect(M,y,4,9,'F');
+            dc(grpColor2);doc.setLineWidth(0.5);doc.line(M,y+9,W-M,y+9);
+            tc(TXT);doc.setFontSize(8.5);doc.setFont('helvetica','bold');
+            doc.text(safe(grpName),M+8,y+5.8);
+            tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+            doc.text(grpComp2+'/'+grpActs2.length+' ('+grpPct2+'%)',W-M,y+3.5,{align:'right'});
+            var barC3=grpPct2>=80?GRN:grpPct2>=40?AMB:RED;
+            fc([220,220,225]);doc.rect(M+90,y+5.5,RW-94,1.5,'F');
+            fc(barC3);doc.rect(M+90,y+5.5,Math.max(0.5,(RW-94)*grpPct2/100),1.5,'F');
+            tc(barC3);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+            doc.text(grpPct2+'%',W-M,y+8.5,{align:'right'});
+            y+=11;
+          }
           actTableHeader(grpColor2);
           grpActs2.forEach(function(a,i){actTableRow(a,i+1,grpColor2);});
           y+=3;
         });
-        hrLine();
+        if(!fAgrupPorHoja) hrLine();
       }
     }
 
