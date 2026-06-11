@@ -6149,12 +6149,13 @@ async function loadHistorial(){
     const fechaQ = S.histFecha ? `&fecha=gte.${S.histFecha}` : `&fecha=gte.${new Date(Date.now()-30*24*60*60*1000).toISOString().slice(0,10)}`; // default last 30 days
     const fechaQ2 = S.histFechaFin ? `&fecha=lte.${S.histFechaFin}` : '';
     const ingQ = S.histFiltroIng!=='todos' ? `&ingeniero_id=eq.${S.histFiltroIng}` : '';
-    const [acts, asist, pens] = await Promise.all([
+    const [acts, asist, pens, creadoLogs] = await Promise.all([
       sb(`obra_actividades?order=fecha.desc,created_at.desc&limit=100${fechaQ}${fechaQ2}${ingQ}`),
       sb(`obra_asistencia?order=fecha.desc&limit=100${fechaQ}${fechaQ2}${ingQ}`),
       sb(`obra_penalidades?order=fecha.desc&limit=50${fechaQ}${fechaQ2}`),
+      sb(`obra_cambios?accion=eq.creado&entidad=eq.actividad&limit=500`).catch(()=>[]),
     ]);
-    S.histActs=acts; S.histAsist=asist; S.histPens=pens;
+    S.histActs=acts; S.histAsist=asist; S.histPens=pens; S.histCreadoLogs=creadoLogs||[];
     setSS('ok','✓ '+hhmm());
     renderHistorial();
   }catch(e){ setSS('err','Error cargando historial'); }
@@ -6272,6 +6273,15 @@ function renderHistorial(){
   const histAsist = S.histAsist||[];
   const histPens = S.histPens||[];
 
+  // Map actId → {nombre, color} of who created it
+  const creadoPorMap = {};
+  (S.histCreadoLogs||[]).forEach(function(c){
+    if(c.entidad_id && !creadoPorMap[c.entidad_id]){
+      const u = Object.values(USERS).find(function(u){return u.nombre===c.usuario_nombre;})||null;
+      creadoPorMap[c.entidad_id] = {nombre: c.usuario_nombre||'', color: u?u.color:'var(--text3)'};
+    }
+  });
+
   // Build per-engineer summary
   const ingData = Object.entries(USERS).map(([uid_, u])=>{
     const myActs = histActs.filter(a=>a.ingeniero_id===uid_);
@@ -6333,6 +6343,7 @@ function renderHistorial(){
         <div id="acts-${uid_}">
           ${myActs.map(a=>{
             const fotos=fotoUrls(a.fotos);
+            const cp=creadoPorMap[a.id];
             return`<div style="padding:8px;background:var(--bg3);border:1px solid var(--border);border-left:3px solid ${a.tipo_personal==='contratista'?'var(--purple)':'var(--accent)'};border-radius:var(--r);margin-bottom:6px">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:4px">
                 <span style="font-size:12px;font-weight:500;flex:1">${esc(a.descripcion)}</span>
@@ -6343,6 +6354,7 @@ function renderHistorial(){
                 ${a.personal_nombre?`<span>👷 ${esc(a.personal_nombre)}</span>`:''}
                 ${a.porcentaje>0?`<span>⚡ ${a.porcentaje}%</span>`:''}
               </div>
+              ${cp?`<div style="margin-top:4px"><span style="font-size:10px;font-weight:600;color:${cp.color};background:${cp.color}18;border-radius:5px;padding:2px 7px">✍️ Agregado por ${esc(cp.nombre)}</span></div>`:''}
               ${fotos.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">
                 ${fotos.map(f=>`<img src="${f}" style="width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--border2);cursor:pointer" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${a.fecha}','${esc(a.area||'')}','','','${a.id}')" loading="lazy">`).join('')}
                 <button onclick="descargarFotos(${JSON.stringify(fotos)}, '${a.fecha}', '${esc(a.area||'')}')" style="width:56px;height:56px;border-radius:6px;border:1px solid var(--accent);background:rgba(200,240,96,.08);color:var(--accent);font-size:10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">↓<span style="font-size:8px">Bajar</span></button>
