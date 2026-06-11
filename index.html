@@ -5740,20 +5740,27 @@ async function generarPDF(opts){
       fc(LGRAY2);doc.rect(M,y,RW,7,'F');
       dc(BOR);doc.setLineWidth(0.3);doc.line(M,y+7,W-M,y+7);
       tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
-      if(fi!==ff){
-        doc.text('FECHA',       M+3,   y+4.5);
-        doc.text('DESCRIPCION', M+22,  y+4.5);
-        doc.text('AREA',        M+77,  y+4.5);
-        doc.text('ESTADO',      M+101, y+4.5);
-        doc.text('ASIGNADO',    M+124, y+4.5);
-        doc.text('RESPONSABLE', M+156, y+4.5);
+      if(fAgrupPorHoja){
+        // No AREA col — use the space for wider DESCRIPCION
+        doc.text('#',           M+2,   y+4.5);
+        doc.text('DESCRIPCION', M+9,   y+4.5);
+        doc.text('ESTADO',      M+90,  y+4.5);
+        doc.text('ASIGNADO',    M+120, y+4.5);
+        doc.text('RESPONSABLE', M+154, y+4.5);
+      } else if(fi!==ff){
+        doc.text('FECHA',       M+2,   y+4.5);
+        doc.text('DESCRIPCION', M+18,  y+4.5);
+        doc.text('AREA',        M+68,  y+4.5);
+        doc.text('ESTADO',      M+88,  y+4.5);
+        doc.text('ASIGNADO',    M+116, y+4.5);
+        doc.text('RESPONSABLE', M+150, y+4.5);
       } else {
-        doc.text('#',           M+3,   y+4.5);
-        doc.text('DESCRIPCION', M+12,  y+4.5);
-        doc.text('AREA',        M+75,  y+4.5);
-        doc.text('ESTADO',      M+103, y+4.5);
-        doc.text('ASIGNADO',    M+128, y+4.5);
-        doc.text('RESPONSABLE', M+159, y+4.5);
+        doc.text('#',           M+2,   y+4.5);
+        doc.text('DESCRIPCION', M+10,  y+4.5);
+        doc.text('AREA',        M+68,  y+4.5);
+        doc.text('ESTADO',      M+88,  y+4.5);
+        doc.text('ASIGNADO',    M+116, y+4.5);
+        doc.text('RESPONSABLE', M+150, y+4.5);
       }
       y+=7; _rowIdx=0;
     }
@@ -5762,15 +5769,22 @@ async function generarPDF(opts){
       var ec=ESTADO_C[a.estado]||MUT;
       var el=ESTADO_L[a.estado]||safe(a.estado).toUpperCase();
       var isMulti=fi!==ff;
-      var descX=isMulti?M+22:M+12;
-      var descW=isMulti?52:60;
+      // Column X positions and widths
+      var descX,descW,estadoX,asigX,respX,barW;
+      if(fAgrupPorHoja){
+        descX=M+9;  descW=79; estadoX=M+90; asigX=M+120; respX=M+154; barW=28;
+      } else if(isMulti){
+        descX=M+18; descW=48; estadoX=M+88; asigX=M+116; respX=M+150; barW=26;
+      } else {
+        descX=M+10; descW=56; estadoX=M+88; asigX=M+116; respX=M+150; barW=26;
+      }
       // Set font BEFORE splitTextToSize so widths are computed at render size
       doc.setFontSize(7.5);doc.setFont('helvetica','bold');
       var dLines=doc.splitTextToSize(safe(a.descripcion),descW).slice(0,2);
       doc.setFontSize(6);doc.setFont('helvetica','italic');
       var nLines=[];
       if(a.notas&&a.notas.trim()){
-        nLines=doc.splitTextToSize('Obs: '+safe(a.notas),isMulti?148:158).slice(0,3);
+        nLines=doc.splitTextToSize('Obs: '+safe(a.notas),RW-8).slice(0,2);
       }
       var mainH=dLines.length>1?10:7;
       var rowH=mainH+(nLines.length>0?nLines.length*3.5+2:0);
@@ -5778,51 +5792,43 @@ async function generarPDF(opts){
       if(_rowIdx%2===0){fc(LGRAY);doc.rect(M,y,RW,rowH,'F');}
       _rowIdx++;
       if(a.prioridad==='urgente'){fc(RED);doc.rect(M,y,1.5,rowH,'F');}
-      var ty=y+4.5;   // primary text baseline
-      var ty2=y+8.5;  // secondary desc line baseline
+      var ty=y+4.5;
+      var ty2=y+8.5;
       var badgeTop=y+2.3;
+      // # or FECHA
+      tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
       if(isMulti){
-        tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-        doc.text(safe(a.fecha||''),M+3,ty);
-        tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
-        doc.text(dLines[0]||'',descX,ty);
-        if(dLines[1]){tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(dLines[1],descX,ty2);}
-        tc(ACC);doc.setFontSize(7);doc.setFont('helvetica','normal');
-        doc.text(safe(a.area||'').slice(0,16),M+77,ty);
-        doc.setFontSize(6);doc.setFont('helvetica','bold');
-        var estW=doc.getTextWidth(el)+4;if(estW<14)estW=14;
-        fc(ec);doc.roundedRect(M+101,badgeTop,estW,4.5,0.8,0.8,'F');
-        tc(WHT);doc.text(el,M+102.5,ty);
-        tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-        doc.text(safe(a.personal_nombre||'—').slice(0,18),M+124,ty);
-        doc.text(safe(a.ingeniero_nombre||'—').slice(0,18),M+156,ty);
-        if(a.porcentaje>0){
-          fc(BOR);doc.rect(M+101,y+mainH-2,28,1.5,'F');
-          fc(a.porcentaje>=100?GRN:a.porcentaje>=50?ACC:AMB);
-          doc.rect(M+101,y+mainH-2,Math.max(0.5,28*a.porcentaje/100),1.5,'F');
-        }
+        doc.text(safe(a.fecha||''),M+2,ty);
       } else {
-        tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-        doc.text(String(idx),M+3,ty);
-        tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
-        doc.text(dLines[0]||'',descX,ty);
-        if(dLines[1]){tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(dLines[1],descX,ty2);}
-        tc(ACC);doc.setFontSize(7);doc.setFont('helvetica','normal');
-        doc.text(safe(a.area||'').slice(0,16),M+75,ty);
-        doc.setFontSize(6);doc.setFont('helvetica','bold');
-        var el2w=doc.getTextWidth(el)+4;if(el2w<14)el2w=14;
-        fc(ec);doc.roundedRect(M+103,badgeTop,el2w,4.5,0.8,0.8,'F');
-        tc(WHT);doc.text(el,M+104.5,ty);
-        tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-        doc.text(safe(a.personal_nombre||'—').slice(0,17),M+128,ty);
-        doc.text(safe(a.ingeniero_nombre||'—').slice(0,17),M+159,ty);
-        if(a.porcentaje>0){
-          fc(BOR);doc.rect(M+103,y+mainH-2,25,1.5,'F');
-          fc(a.porcentaje>=100?GRN:a.porcentaje>=50?ACC:AMB);
-          doc.rect(M+103,y+mainH-2,Math.max(0.5,25*a.porcentaje/100),1.5,'F');
-        }
+        doc.text(String(idx),M+2,ty);
       }
-      // Notes — every line rendered, contained in row
+      // DESCRIPCION
+      tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
+      doc.text(dLines[0]||'',descX,ty);
+      if(dLines[1]){tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(dLines[1],descX,ty2);}
+      // AREA (not shown in area-hoja mode)
+      if(!fAgrupPorHoja){
+        tc(ACC);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+        var areaStr=safe(a.area||'');
+        doc.text(doc.splitTextToSize(areaStr,18)[0]||'',M+68,ty);
+      }
+      // ESTADO badge
+      doc.setFontSize(6);doc.setFont('helvetica','bold');
+      var estW=doc.getTextWidth(el)+4;if(estW<14)estW=14;if(estW>28)estW=28;
+      fc(ec);doc.roundedRect(estadoX,badgeTop,estW,4.5,0.8,0.8,'F');
+      tc(WHT);doc.text(el,estadoX+1.5,ty);
+      // Progress bar (under badge)
+      if(a.porcentaje>0){
+        fc(BOR);doc.rect(estadoX,y+mainH-2,barW,1.5,'F');
+        fc(a.porcentaje>=100?GRN:a.porcentaje>=50?ACC:AMB);
+        doc.rect(estadoX,y+mainH-2,Math.max(0.5,barW*a.porcentaje/100),1.5,'F');
+      }
+      // ASIGNADO
+      tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text(doc.splitTextToSize(safe(a.personal_nombre||'—'),32)[0]||'',asigX,ty);
+      // RESPONSABLE
+      doc.text(doc.splitTextToSize(safe(a.ingeniero_nombre||'—'),30)[0]||'',respX,ty);
+      // Notes
       if(nLines.length>0){
         tc([150,155,165]);doc.setFontSize(6);doc.setFont('helvetica','italic');
         nLines.forEach(function(nl,ni){doc.text(nl,descX,y+mainH+2+ni*3.5);});
