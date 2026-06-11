@@ -6747,6 +6747,12 @@ async function loadFotos(){
     </div>`;
     return;
   }
+  // One-time auto-repair: clean invalid foto URLs (runs once per device)
+  if(!localStorage.getItem('mecca_fotos_repaired_v1')){
+    limpiarFotosInvalidas().catch(function(){}).finally(function(){
+      localStorage.setItem('mecca_fotos_repaired_v1','1');
+    });
+  }
   setSS('syncing','Cargando fotos...');
   el.innerHTML='<div class="empty"><div class="spinner"></div><br><br>Cargando fotos...</div>';
   try{
