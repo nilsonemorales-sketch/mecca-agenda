@@ -3177,7 +3177,7 @@ function actsDesktopTable(acts, showDate){
     +'<col style="width:130px">'   // Área
     +'<col style="width:130px">'   // Responsable
     +'<col style="width:48px">'    // %
-    +(canEdit()?'<col style="width:36px"><col style="width:36px">':'')  // 🔴 ✓
+    +(canEdit()?'<col style="width:36px"><col style="width:36px"><col style="width:36px">':'')  // 🔴 ✓ 📸
     +'</colgroup>';
   html+='<thead><tr style="background:var(--bg3);border-bottom:2px solid var(--border)">';
   html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">ESTADO</th>';
@@ -3185,7 +3185,7 @@ function actsDesktopTable(acts, showDate){
   html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">UBICACIÓN</th>';
   html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">RESPONSABLE</th>';
   html+='<th style="padding:6px 8px;text-align:center;font-size:10.5px;color:var(--text3);font-weight:700">%</th>';
-  if(canEdit()) html+='<th style="padding:6px 4px;text-align:center;font-size:10.5px;color:#e03131;font-weight:700">🔴</th><th></th>';
+  if(canEdit()) html+='<th style="padding:6px 4px;text-align:center;font-size:10.5px;color:#e03131;font-weight:700">🔴</th><th></th><th style="padding:6px 4px;text-align:center;font-size:10.5px;color:var(--text3);font-weight:700">📸</th>';
   html+='</tr></thead><tbody>';
 
   acts.forEach(function(a,i){
@@ -3274,6 +3274,16 @@ function actsDesktopTable(acts, showDate){
       html+='<td style="padding:6px 4px;text-align:center" onclick="event.stopPropagation()">';
       if(a.estado!=='completado') html+='<button title="Completar" onclick="marcarActCompletada(\''+a.id+'\')" style="background:#d3f9d8;color:#2f9e44;border:1px solid #a9e6b8;border-radius:6px;padding:2px 6px;font-size:12px;cursor:pointer;font-weight:700;line-height:1.4">✓</button>';
       html+='</td>';
+    }
+    // Fotos
+    if(canEdit()){
+      var nFotos=parseFotos(a.fotos).length;
+      html+='<td style="padding:6px 4px;text-align:center" onclick="event.stopPropagation()">'
+        +'<button title="Ver / subir fotos" onclick="abrirFotoUpload(\''+a.id+'\')" '
+        +'style="background:'+(nFotos>0?'#fff9db':'transparent')+';color:'+(nFotos>0?'#e67700':'#ced4da')+';border:1px solid '+(nFotos>0?'#ffe066':'#dee2e6')+';border-radius:6px;padding:2px 6px;font-size:12px;cursor:pointer;line-height:1.4">'
+        +'📸'+(nFotos>0?'<sup style="font-size:9px;font-weight:700;margin-left:1px">'+nFotos+'</sup>':'')
+        +'</button>'
+        +'</td>';
     }
     html+='</tr>';
   });
