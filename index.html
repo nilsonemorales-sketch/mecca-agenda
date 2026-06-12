@@ -1684,6 +1684,7 @@ async function loadPlanActividades(){
   try{
     var data=await sb('obra_plan_actividades?order=orden.asc,created_at.asc',{});
     S.planActs=data||[];
+    try{var cfg=await sb('obra_config?key=in.(fecha_entrega,fecha_inicio_obra,plan_params)');S.planCfg=S.planCfg||{};(cfg||[]).forEach(function(r){S.planCfg[r.key]=r.value;});}catch(e2){S.planCfg=S.planCfg||{};}
     if(S.currentTab==='plan') renderPlan();
   }catch(e){console.warn('plan_actividades no disponible:',e.message);}
 }
@@ -11195,6 +11196,99 @@ async function ganttPanelLinkUpdate(succId,predId,field,value){
 
 function ganttToggleMacroMode(){_g.macroMode=!_g.macroMode;renderPlan();}
 
+// ── Proyección de término (integrado desde Plan 2.0 — datos 100% Supabase) ──
+function _planParams(){
+  var def={workDaysPerWeek:6,rainDaysPerWeek:1,productivityFactor:1};
+  try{var c=S.planCfg&&S.planCfg.plan_params?JSON.parse(S.planCfg.plan_params):null;if(c)for(var k in def)if(c[k]!=null)def[k]=c[k];}catch(e){}
+  return def;
+}
+function planProjCalc(){
+  var hoy=new Date();hoy.setHours(12,0,0,0);
+  var inicioObra=(S.planCfg&&S.planCfg.fecha_inicio_obra)||'2026-05-27';
+  var pr=_planParams();
+  var eff=((pr.workDaysPerWeek-pr.rainDaysPerWeek)/pr.workDaysPerWeek)*pr.productivityFactor;
+  var items=(S.planActs||[]).map(function(p){
+    var av=calcularAvancePadre(p.id);
+    var start=p.fecha_inicio_real;
+    if(!start){var subs=(S.acts||[]).filter(function(a){return a.plan_id===p.id&&a.fecha;});if(subs.length)start=subs.map(function(a){return a.fecha;}).sort()[0];}
+    var rate=null;
+    if(av>0){
+      var d0=new Date((start||inicioObra)+'T12:00:00');
+      var wks=Math.max(1,(hoy-d0)/6048e5);
+      rate=av/wks;
+    }
+    return{p:p,av:av,rate:rate};
+  });
+  var catAvg={};
+  items.forEach(function(x){if(x.rate){var c=x.p.categoria||'_';(catAvg[c]=catAvg[c]||[]).push(x.rate);}});
+  Object.keys(catAvg).forEach(function(c){catAvg[c]=catAvg[c].reduce(function(a,b){return a+b;},0)/catAvg[c].length;});
+  var all=items.filter(function(x){return x.rate;}).map(function(x){return x.rate;});
+  var globalAvg=all.length?all.reduce(function(a,b){return a+b;},0)/all.length:10;
+  function proj(mult){
+    var maxEnd=hoy,critName='';
+    items.forEach(function(x){
+      if(x.av>=100)return;
+      var r=(x.rate!=null?x.rate:(catAvg[x.p.categoria||'_']||globalAvg));
+      r=Math.max(2,r)*eff*mult;
+      var dias=Math.ceil((100-x.av)/r*7);
+      var end=new Date(hoy.getTime()+dias*864e5);
+      if(end>maxEnd){maxEnd=end;critName=x.p.nombre;}
+    });
+    return{end:maxEnd,crit:critName};
+  }
+  var avg=items.length?Math.round(items.reduce(function(s,x){return s+x.av;},0)/items.length):0;
+  return{real:proj(1),opt:proj(1.25),pes:proj(0.75),avance:avg,ritmo:Math.round(globalAvg*10)/10,muestras:all.length,eff:Math.round(eff*100),pr:pr};
+}
+function _planFmtD(d){var M=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];return d.getDate()+' '+M[d.getMonth()]+' '+d.getFullYear();}
+function _planProjCard(){
+  if(!(S.planActs||[]).length)return '';
+  var P=planProjCalc();
+  var entrega=S.planCfg&&S.planCfg.fecha_entrega;
+  var margin=null,ok=true;
+  if(entrega&&/^\d{4}-\d{2}-\d{2}$/.test(entrega)){margin=Math.round((new Date(entrega+'T12:00:00')-P.real.end)/864e5);ok=margin>=0;}
+  var adm=isAdmin();
+  var inSt='background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:7px;color:#fff;font-size:11px;padding:3px 6px;font-family:var(--font)';
+  var h='<div style="background:linear-gradient(135deg,#1E1B4B,#312E81);border-radius:12px;padding:14px 16px;color:#fff">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">';
+  h+='<div><div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#A5B4FC">Proyección de término · según ritmo real de obra</div>';
+  h+='<div style="font-size:22px;font-weight:700;margin-top:2px">'+_planFmtD(P.real.end)+'</div>';
+  h+='<div style="font-size:11px;color:#C7D2FE;margin-top:1px">optimista '+_planFmtD(P.opt.end)+' · pesimista '+_planFmtD(P.pes.end)+'</div>';
+  if(P.real.crit)h+='<div style="font-size:11px;color:#FCA5A5;margin-top:3px">&#127919; Ruta crítica: '+esc(P.real.crit)+'</div>';
+  h+='</div>';
+  h+='<div style="text-align:right"><div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#A5B4FC">Fecha de entrega</div>';
+  if(adm)h+='<input type="date" value="'+esc(entrega||'')+'" onchange="planSetEntrega(this.value)" style="margin-top:3px;'+inSt+';font-size:13px;padding:4px 8px;color-scheme:dark">';
+  else h+='<div style="font-size:16px;font-weight:700;margin-top:2px">'+(entrega?_planFmtD(new Date(entrega+'T12:00:00')):'&#8212;')+'</div>';
+  if(margin!=null)h+='<div style="font-size:12px;font-weight:700;margin-top:4px;color:'+(ok?'#6EE7B7':'#FCA5A5')+'">'+(ok?'&#10003; '+margin+' días de margen':'&#9888; '+Math.abs(margin)+' días de atraso proyectado')+'</div>';
+  h+='</div></div>';
+  h+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);font-size:11px;color:#C7D2FE;align-items:center">';
+  h+='<span>Avance global <b style="color:#fff">'+P.avance+'%</b></span>';
+  h+='<span>Ritmo observado <b style="color:#fff">'+P.ritmo+'%/sem</b>'+(P.muestras?' &#183; '+P.muestras+' partidas medidas':'')+'</span>';
+  h+='<span>Eficiencia <b style="color:#fff">'+P.eff+'%</b></span>';
+  if(adm){
+    h+='<span style="flex:1"></span>';
+    h+='<label style="display:inline-flex;align-items:center;gap:4px">Días lab/sem <select onchange="planSetParam(\'workDaysPerWeek\',+this.value)" style="'+inSt+'">'+[5,5.5,6,7].map(function(d){return '<option value="'+d+'"'+(P.pr.workDaysPerWeek===d?' selected':'')+' style="color:#000">'+d+'</option>';}).join('')+'</select></label>';
+    h+='<label style="display:inline-flex;align-items:center;gap:4px">Lluvia/sem <select onchange="planSetParam(\'rainDaysPerWeek\',+this.value)" style="'+inSt+'">'+[0,0.5,1,1.5,2].map(function(d){return '<option value="'+d+'"'+(P.pr.rainDaysPerWeek===d?' selected':'')+' style="color:#000">'+d+'</option>';}).join('')+'</select></label>';
+  }
+  h+='</div></div>';
+  return h;
+}
+async function planSetEntrega(v){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return;
+  try{
+    await sb('obra_config',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:JSON.stringify({key:'fecha_entrega',value:v})});
+    S.planCfg=S.planCfg||{};S.planCfg.fecha_entrega=v;
+    showToast('Fecha de entrega guardada','ok');renderPlanGeneral();
+  }catch(e){showToast('Error al guardar','err');}
+}
+async function planSetParam(k,v){
+  var pr=_planParams();pr[k]=v;
+  try{
+    await sb('obra_config',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:JSON.stringify({key:'plan_params',value:JSON.stringify(pr)})});
+    S.planCfg=S.planCfg||{};S.planCfg.plan_params=JSON.stringify(pr);
+    renderPlanGeneral();
+  }catch(e){showToast('Error al guardar','err');}
+}
+
 function renderPlanGeneral(){
   var tab=_g.lpsTab||'general';
   if(tab==='lookahead'){renderLookahead();return;}
@@ -11229,6 +11323,7 @@ function renderPlanGeneral(){
     (isAdmin()?'<button onclick="abrirModalNuevaPlanAct()" style="'+btnSt.replace('var(--bg3)','var(--accent)').replace('var(--text2)','#fff')+';border-color:var(--accent);font-weight:700">+ Nueva</button>':'')+
   '</div>';
   var body='<div style="padding:12px;display:flex;flex-direction:column;gap:10px">';
+  body+=_planProjCard();
   if(!allPlans.length){
     body+='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;gap:12px;color:var(--text3)">'+
       '<div style="font-size:36px">&#128203;</div>'+
@@ -11310,8 +11405,11 @@ async function planUpdateAvance(planId,val){
   var n=Math.min(100,Math.max(0,parseInt(val)||0));
   var p=(S.planActs||[]).find(function(x){return x.id===planId;});if(!p) return;
   try{
-    await sb('obra_plan_actividades?id=eq.'+planId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({avance_manual:n})});
-    p.avance_manual=n;renderPlanGeneral();
+    var bd={avance_manual:n};var hoyD=new Date().toISOString().slice(0,10);
+    if(n>0&&!p.fecha_inicio_real){bd.fecha_inicio_real=hoyD;}
+    if(n>=100&&!p.fecha_fin_real){bd.fecha_fin_real=hoyD;}
+    await sb('obra_plan_actividades?id=eq.'+planId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(bd)});
+    p.avance_manual=n;if(bd.fecha_inicio_real)p.fecha_inicio_real=bd.fecha_inicio_real;if(bd.fecha_fin_real)p.fecha_fin_real=bd.fecha_fin_real;renderPlanGeneral();
   }catch(e){showToast('Error al guardar','err');}
 }
 async function planMarkComplete(planId){await planUpdateAvance(planId,100);}
