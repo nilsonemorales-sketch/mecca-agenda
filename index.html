@@ -668,6 +668,8 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <!-- MODAL -->
 <div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
   <div class="msheet" id="mcontent"></div>
+  <!-- Logo Bridex para reportes PDF — colocar bridex-logo.png en la raíz del proyecto -->
+  <img id="bdx-logo-img" src="./bridex-logo.png" crossorigin="anonymous" style="display:none" alt="">
 </div>
 
 <!-- FOTO VIEWER -->
@@ -5517,6 +5519,28 @@ async function generarPDF(opts){
 
   closeModal();
   setSS('syncing','Generando PDF...');
+  // ── Pre-load Bridex logo ──────────────────────────────────────
+  var _bdxLogoData=null;
+  try{
+    var _lgEl=document.getElementById('bdx-logo-img');
+    if(_lgEl){
+      if(!_lgEl.complete||_lgEl.naturalWidth===0){
+        await new Promise(function(res){_lgEl.onload=res;_lgEl.onerror=res;setTimeout(res,2000);});
+      }
+      if(_lgEl.complete&&_lgEl.naturalWidth>0){
+        // Crop: show icon + BRIDEX text (top ~74% of the original logo)
+        var _showH=Math.round(_lgEl.naturalHeight*0.74);
+        var _hMM=17, _wMM=_hMM*(_lgEl.naturalWidth/_showH);
+        var _lc=document.createElement('canvas');
+        var _ldpi=4;
+        _lc.width=Math.round(_wMM*_ldpi);_lc.height=Math.round(_hMM*_ldpi);
+        var _lctx=_lc.getContext('2d');
+        _lctx.fillStyle='#fff';_lctx.fillRect(0,0,_lc.width,_lc.height);
+        _lctx.drawImage(_lgEl,0,0,_lgEl.naturalWidth,_showH,0,0,_lc.width,_lc.height);
+        _bdxLogoData={data:_lc.toDataURL('image/png'),w:_wMM,h:_hMM};
+      }
+    }
+  }catch(e){}
   try{
     const mismodia=fi===ff;
     let asist=S.asist||[], acts=S.acts||[], pens=S.pens||[], retrs=[];
@@ -5620,37 +5644,41 @@ async function generarPDF(opts){
       fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');
       fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
       // ── LOGO BLOCK (left) ──
-      // Purple icon square
-      fc(BDX_PUR);doc.roundedRect(M,3.5,14,14,2.5,2.5,'F');
-      tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');
-      doc.text('B',M+4.5,13.5);
-      // "BRIDEX" in dark green bold
-      tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');
-      doc.text('BRIDEX',M+17,13);
-      var bxW=doc.getTextWidth('BRIDEX');
-      // "SRL" small inline
-      tc(BDX_GRN);doc.setFontSize(7);doc.setFont('helvetica','normal');
-      doc.text('SRL',M+17+bxW+2,12.3);
-      // Arq. tagline in purple italic
-      tc(BDX_PUR);doc.setFontSize(6);doc.setFont('helvetica','italic');
-      doc.text('Martha M. Reyes Cabrera, Arq.',M+17,17);
-      // Services tagline
-      tc(BDX_PUR);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
-      doc.text('ARQUITECTURA • URBANISMO • CONSTRUCCION • SERVICIOS',M+17,20.5);
+      var _divX=M+96; // divider between logo and report info
+      if(_bdxLogoData){
+        // Real Bridex logo image
+        try{ doc.addImage(_bdxLogoData.data,'PNG',M,2.5,_bdxLogoData.w,_bdxLogoData.h); }catch(e){}
+        _divX=M+Math.ceil(_bdxLogoData.w)+4;
+      } else {
+        // Text-based fallback
+        fc(BDX_PUR);doc.roundedRect(M,3.5,14,14,2.5,2.5,'F');
+        tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');
+        doc.text('B',M+4.5,13.5);
+        tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');
+        doc.text('BRIDEX',M+17,13);
+        var bxW=doc.getTextWidth('BRIDEX');
+        tc(BDX_GRN);doc.setFontSize(7);doc.setFont('helvetica','normal');
+        doc.text('SRL',M+17+bxW+2,12.3);
+        tc(BDX_PUR);doc.setFontSize(6);doc.setFont('helvetica','italic');
+        doc.text('Martha M. Reyes Cabrera, Arq.',M+17,17);
+        tc(BDX_PUR);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+        doc.text('ARQUITECTURA • URBANISMO • CONSTRUCCION • SERVICIOS',M+17,20.5);
+      }
       // ── VERTICAL DIVIDER ──
-      dc([210,190,215]);doc.setLineWidth(0.3);doc.line(M+96,4,M+96,20.5);
-      // ── REPORT INFO (right) ──
+      dc([200,185,210]);doc.setLineWidth(0.25);doc.line(_divX,4,_divX,20.5);
+      // ── REPORT INFO (right of divider) ──
       var pg=doc.internal.getCurrentPageInfo().pageNumber;
+      var infoX=W-M;
       tc(TXT);doc.setFontSize(10);doc.setFont('helvetica','bold');
-      doc.text(titulo,W-M,9.5,{align:'right'});
+      doc.text(titulo,infoX,9.5,{align:'right'});
       tc(BDX_GRN);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
-      doc.text(periodo,W-M,15,{align:'right'});
+      doc.text(periodo,infoX,15,{align:'right'});
       if(subtitulo){
         tc(BDX_PUR);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
-        doc.text(subtitulo,W-M,19.5,{align:'right'});
+        doc.text(subtitulo,infoX,19.5,{align:'right'});
       } else {
         tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-        doc.text('Pagina '+pg,W-M,19.5,{align:'right'});
+        doc.text('Pag. '+pg,infoX,19.5,{align:'right'});
       }
       // ── BOTTOM SEPARATOR ──
       fc(BDX_GRN);doc.rect(0,22,W,1,'F');
@@ -5955,8 +5983,8 @@ async function generarPDF(opts){
           var grpComp2=grpActs2.filter(function(a){return a.estado==='completado';}).length;
           var grpPct2=Math.round(grpComp2/grpActs2.length*100);
           if(fAgrupPorHoja){
-            // Force new page for each area
-            doc.addPage();drawHeader();y=26;
+            // First area: use current page; subsequent areas: new page
+            if(grpIdx>0){doc.addPage();drawHeader();y=26;}
             // Large area banner
             fc(BDX_GRN);doc.rect(M,y,RW,18,'F');
             fc(WHT);doc.rect(M+5,y+2,RW-5,14,'F');
