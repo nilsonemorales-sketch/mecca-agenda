@@ -1053,6 +1053,7 @@ async function autoPenalidadInactividad(){
 
 // Multi-location selection state
 let _ubicacionesSeleccionadas = [];
+let _actSaving = false; // guard: prevents double-submit while a network save is in flight
 
 function initMultiUbicacion(){
   // Button-based addition instead of auto-change
@@ -4087,6 +4088,7 @@ function showAddActIngeniero(ai){
 }
 
 async function saveActIngeniero(ai){
+  if(_actSaving) return;
   const desc=document.getElementById('a-d').value.trim(); if(!desc)return;
   const ing=document.getElementById('a-ing').value;
   const areaVal=_ubicacionesSeleccionadas.length>0?_ubicacionesSeleccionadas[0]:(document.getElementById('a-area-single')||{value:''}).value.trim();
@@ -4119,6 +4121,7 @@ async function saveActIngeniero(ai){
   if((a.estado==='en-progreso'||a.estado==='completado')&&!a.hora_inicio){a.hora_inicio=nowHHMM();}
   if(a.estado==='completado'&&!a.hora_fin){a.hora_fin=nowHHMM();}
   closeModal(); setSS('syncing','Guardando...');
+  _actSaving = true;
   const _createdIngActs=[];
   try{
     if(!editIdIng){
@@ -4146,8 +4149,11 @@ async function saveActIngeniero(ai){
       if((oldAIng.porcentaje||0)!==(a.porcentaje||0)) diffsIng.push('avance: '+(oldAIng.porcentaje||0)+'% → '+(a.porcentaje||0)+'%');
       logCambio('editado','actividad',editIdIng,a.descripcion,diffsIng.length?diffsIng.join('; '):'Editado');
     }
+    _actSaving = false;
     setSS('ok','✓ '+hhmm()); reRenderActs();
+    if(!editIdIng) showToast('✅ Actividad guardada','ok',3500);
   }catch(e){
+    _actSaving = false;
     // Roll back optimistic additions if DB save failed
     _createdIngActs.forEach(function(act){var i=S.acts.indexOf(act);if(i>=0)S.acts.splice(i,1);});
     if(_createdIngActs.length) reRenderActs();
@@ -4197,6 +4203,7 @@ function calcPct(){
 }
 
 async function saveAct(ai){
+  if(_actSaving) return;
   const desc=document.getElementById('a-d').value.trim();if(!desc)return;
   const getFld=(id,def='')=>{const el=document.getElementById(id);return el?el.value:def;};
   // Block saving a contratista activity without a contractor assigned
@@ -4250,6 +4257,7 @@ async function saveAct(ai){
   if((a.estado==='en-progreso'||a.estado==='completado')&&!a.hora_inicio){a.hora_inicio=nowHHMM();}
   if(a.estado==='completado'&&!a.hora_fin){a.hora_fin=nowHHMM();}
   closeModal();setSS('syncing','Guardando...');
+  _actSaving = true;
   const _createdActs=[];
   try{
     if(!editId){
@@ -4268,6 +4276,7 @@ async function saveAct(ai){
       // Then persist to DB
       for(const act of _createdActs){
         await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(act)});
+        act.foto_pendiente=false;
         logCambio('creado','actividad',act.id,act.descripcion+(act.area?' — '+act.area:''),'Nueva actividad en '+(act.area||'sin área'));
       }
     }else{
@@ -4283,9 +4292,12 @@ async function saveAct(ai){
       if((oldA.personal_nombre||'')!==(a.personal_nombre||'')) diffs.push('responsable: '+(oldA.personal_nombre||'—')+' → '+(a.personal_nombre||'—'));
       logCambio('editado','actividad',editId,a.descripcion,diffs.length?diffs.join('; '):'Editado');
     }
+    _actSaving = false;
     setSS('ok','✓ '+hhmm()); reRenderActs();
+    if(!editId) showToast('✅ Actividad guardada','ok',3500);
     if(S.currentTab==='enobra') loadTareas();
   }catch(e){
+    _actSaving = false;
     // Roll back optimistic additions if DB save failed
     _createdActs.forEach(function(act){var i=S.acts.indexOf(act);if(i>=0)S.acts.splice(i,1);});
     if(_createdActs.length) reRenderActs();
@@ -9290,6 +9302,7 @@ try{
 }catch(e){ showLockScreen(); }
 
 setInterval(async function(){
+  if(_actSaving) return; // skip auto-refresh while a save is in flight to avoid overwriting optimistic state
   try{
     var asist=await sb('obra_asistencia?fecha=eq.'+S.fecha);
     var acts=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300');
