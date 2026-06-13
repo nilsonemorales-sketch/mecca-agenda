@@ -5669,16 +5669,18 @@ async function generarPDF(opts){
       // ── REPORT INFO (right of divider) ──
       var pg=doc.internal.getCurrentPageInfo().pageNumber;
       var infoX=W-M;
-      tc(TXT);doc.setFontSize(10);doc.setFont('helvetica','bold');
-      doc.text(titulo,infoX,9.5,{align:'right'});
-      tc(BDX_GRN);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
-      doc.text(periodo,infoX,15,{align:'right'});
+      tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');
+      doc.text(titulo,infoX,8,{align:'right'});
+      tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+      doc.text('MECCA RESIDENCE 2026',infoX,13,{align:'right'});
+      tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text(periodo,infoX,17.5,{align:'right'});
       if(subtitulo){
-        tc(BDX_PUR);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
-        doc.text(subtitulo,infoX,19.5,{align:'right'});
+        tc(BDX_PUR);doc.setFontSize(5);doc.setFont('helvetica','italic');
+        doc.text(safe(subtitulo).slice(0,55),infoX,21,{align:'right'});
       } else {
-        tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-        doc.text('Pag. '+pg,infoX,19.5,{align:'right'});
+        tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+        doc.text('Pag. '+pg,infoX,21,{align:'right'});
       }
       // ── BOTTOM SEPARATOR ──
       fc(BDX_GRN);doc.rect(0,22,W,1,'F');
@@ -5749,31 +5751,44 @@ async function generarPDF(opts){
       var actHoy=acts.filter(function(a){return a.fecha===fi;});
       var comp=actHoy.filter(function(a){return a.estado==='completado';});
       var enProg=actHoy.filter(function(a){return a.estado==='en-progreso';});
-      chk(28);
+      chk(38);
       var boxes=[
         {l:'Presentes',  v:pres.length+'/'+propios.length, c:GRN},
         {l:'Ausentes',   v:aus.length,                     c:aus.length>0?RED:MUT},
-        {l:'Act. del dia',v:actHoy.length,                 c:ACC},
+        {l:'En Progreso',v:enProg.length,                  c:BDX_PUR},
         {l:'Retrasadas', v:retrs.length,                   c:retrs.length>0?RED:MUT},
         {l:'Completadas',v:comp.length,                    c:comp.length>0?GRN:MUT},
       ];
       var bw=(RW-12)/5;
       boxes.forEach(function(b,i){
         var bx=M+i*(bw+3);
-        // White card with border
         fc(WHT);doc.roundedRect(bx,y,bw,16,1.5,1.5,'F');
         dc(BOR);doc.setLineWidth(0.3);doc.roundedRect(bx,y,bw,16,1.5,1.5,'S');
-        // Colored top cap
-        fc(b.c);doc.roundedRect(bx,y,bw,2,1,1,'F');
-        fc(b.c);doc.rect(bx,y+1,bw,1,'F');
-        // Number
+        fc(b.c);doc.roundedRect(bx,y,bw,2.5,1,1,'F');
+        fc(b.c);doc.rect(bx,y+1.5,bw,1,'F');
         tc(b.c);doc.setFontSize(14);doc.setFont('helvetica','bold');
         doc.text(String(b.v),bx+bw/2,y+11,{align:'center'});
-        // Label
         tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
         doc.text(b.l,bx+bw/2,y+14.5,{align:'center'});
       });
-      y+=20;hrLine();
+      y+=19;
+      // ── Completion rate bar ──────────────────────────────────
+      chk(9);
+      var _totalA=actHoy.length||1;
+      var _compR=Math.round(comp.length/_totalA*100);
+      var _fillCR=_compR>=80?BDX_GRN:_compR>=50?AMB:RED;
+      fc(LGRAY2);doc.roundedRect(M,y,RW,7,1.5,1.5,'F');
+      tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text('Avance del dia',M+4,y+4.5);
+      var _brX=M+36; var _brW=W-M-_brX-22;
+      fc([218,222,230]);doc.roundedRect(_brX,y+1.8,_brW,3.5,1,1,'F');
+      if(_compR>0){
+        fc(_fillCR);
+        doc.roundedRect(_brX,y+1.8,Math.max(2,_brW*_compR/100),3.5,1,1,'F');
+      }
+      tc(_fillCR);doc.setFontSize(9);doc.setFont('helvetica','bold');
+      doc.text(_compR+'%',W-M,y+5.5,{align:'right'});
+      y+=9;hrLine();
     }
 
     // ── ASISTENCIA ────────────────────────────────────────────────
@@ -5881,11 +5896,11 @@ async function generarPDF(opts){
       // Column X positions and widths
       var descX,descW,estadoX,asigX,respX,barW;
       if(fAgrupPorHoja){
-        descX=M+12; descW=76; estadoX=M+90; asigX=M+122; respX=M+155; barW=28;
+        descX=M+12; descW=76; estadoX=M+90; asigX=M+122; respX=M+155; barW=24;
       } else if(isMulti){
-        descX=M+20; descW=46; estadoX=M+88; asigX=M+118; respX=M+152; barW=26;
+        descX=M+20; descW=46; estadoX=M+88; asigX=M+118; respX=M+152; barW=22;
       } else {
-        descX=M+12; descW=54; estadoX=M+88; asigX=M+118; respX=M+152; barW=26;
+        descX=M+12; descW=54; estadoX=M+88; asigX=M+118; respX=M+152; barW=22;
       }
       // Measure text BEFORE computing heights
       doc.setFontSize(7.5);doc.setFont('helvetica','bold');
@@ -5901,13 +5916,13 @@ async function generarPDF(opts){
       var rowH=mainH+(nLines.length>0?nLines.length*4+2:0);
       chk(rowH+1);
       // Row background: alternating
-      if(_rowIdx%2===0){fc(LGRAY);doc.rect(M,y,RW,rowH,'F');}
+      fc(_rowIdx%2===0?LGRAY:WHT);doc.rect(M,y,RW,rowH,'F');
       _rowIdx++;
-      // Urgente: left red stripe
-      if(a.prioridad==='urgente'){fc(RED);doc.rect(M,y,2,rowH,'F');}
+      // Left status stripe: urgente = red, otherwise = status color
+      fc(a.prioridad==='urgente'?RED:ec);doc.rect(M,y,2.5,rowH,'F');
       // Vertical positions
-      var ty=y+5;      // main text baseline (centered in 10mm row)
-      var ty2=y+9.5;   // second desc line (well below badge)
+      var ty=y+(mainH>10?6:5.5);  // main text baseline
+      var ty2=y+(mainH>10?11:9.5); // second desc line
       var badgeTop=y+2;
       var badgeH=4.5;
       var barTopY=badgeTop+badgeH+1; // y+7.5: always BELOW the badge
@@ -5933,18 +5948,17 @@ async function generarPDF(opts){
       }
       // ── ESTADO badge ── (placed at badgeTop, clear of bar)
       doc.setFontSize(6);doc.setFont('helvetica','bold');
-      var estW=doc.getTextWidth(el)+5;if(estW<15)estW=15;if(estW>28)estW=28;
-      fc(ec);doc.roundedRect(estadoX,badgeTop,estW,badgeH,1,1,'F');
-      tc(WHT);doc.text(el,estadoX+2,badgeTop+3.3);
-      // ── PROGRESS BAR ── (below badge, never overlapping)
+      var estW=doc.getTextWidth(el)+6;if(estW<16)estW=16;if(estW>30)estW=30;
+      fc(ec);doc.roundedRect(estadoX,badgeTop,estW,badgeH,1.2,1.2,'F');
+      tc(WHT);doc.text(el,estadoX+estW/2,badgeTop+3.3,{align:'center'});
+      // ── PROGRESS BAR ── (always shown, clear of badge)
+      fc([220,225,232]);doc.rect(estadoX,barTopY,barW,2,'F');
       if(a.porcentaje>0){
-        fc([210,220,210]);doc.rect(estadoX,barTopY,barW,1.8,'F');
         var barFillC=a.porcentaje>=100?BDX_GRN:a.porcentaje>=50?AMB:RED;
-        fc(barFillC);doc.rect(estadoX,barTopY,Math.max(1,barW*a.porcentaje/100),1.8,'F');
-        // Percentage label next to bar
-        tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
-        doc.text(a.porcentaje+'%',estadoX+barW+2,barTopY+1.5);
+        fc(barFillC);doc.rect(estadoX,barTopY,Math.max(1,barW*a.porcentaje/100),2,'F');
       }
+      tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+      doc.text((a.porcentaje||0)+'%',estadoX+barW+2,barTopY+1.6);
       // ── ASIGNADO ──
       tc(TXT);doc.setFontSize(7);doc.setFont('helvetica','normal');
       doc.text(doc.splitTextToSize(safe(a.personal_nombre||'—'),30)[0]||'',asigX,ty);
@@ -6678,12 +6692,14 @@ function exportarHistorialPDF(uid_){
       }
       dc([200,185,210]);doc.setLineWidth(0.25);doc.line(M+96,4,M+96,20.5);
       var pg2=doc.internal.getCurrentPageInfo().pageNumber;
-      tc(TXT);doc.setFontSize(10);doc.setFont('helvetica','bold');
-      doc.text('HISTORIAL DE INGENIERO',W-M,9.5,{align:'right'});
-      tc(BDX_GRN);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
-      doc.text(per,W-M,15,{align:'right'});
-      tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-      doc.text('Pag. '+pg2,W-M,19.5,{align:'right'});
+      tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');
+      doc.text('HISTORIAL DE INGENIERO',W-M,8,{align:'right'});
+      tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+      doc.text('MECCA RESIDENCE 2026',W-M,13,{align:'right'});
+      tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text(per,W-M,17.5,{align:'right'});
+      tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+      doc.text('Pag. '+pg2,W-M,21,{align:'right'});
       fc(BDX_GRN);doc.rect(0,22,W,1,'F');
       fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
     }
