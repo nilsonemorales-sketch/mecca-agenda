@@ -5528,9 +5528,9 @@ async function generarPDF(opts){
         await new Promise(function(res){_lgEl.onload=res;_lgEl.onerror=res;setTimeout(res,2000);});
       }
       if(_lgEl.complete&&_lgEl.naturalWidth>0){
-        // Crop: show icon + BRIDEX text (top ~74% of the original logo)
-        var _showH=Math.round(_lgEl.naturalHeight*0.74);
-        var _hMM=17, _wMM=_hMM*(_lgEl.naturalWidth/_showH);
+        // Crop: show icon + BRIDEX text only (top ~62% → excludes Arq. name and services line)
+        var _showH=Math.round(_lgEl.naturalHeight*0.62);
+        var _hMM=14, _wMM=_hMM*(_lgEl.naturalWidth/_showH);
         var _lc=document.createElement('canvas');
         var _ldpi=4;
         _lc.width=Math.round(_wMM*_ldpi);_lc.height=Math.round(_hMM*_ldpi);
@@ -5611,7 +5611,7 @@ async function generarPDF(opts){
           LGRAY=[246,247,250], LGRAY2=[240,242,248],
           GRN_BG=[235,245,235], PUR_BG=[245,235,248];
 
-    const ESTADO_C={'completado':GRN,'en-progreso':ACC,'pendiente':MUT,'pausada':AMB,'retrasada':RED};
+    const ESTADO_C={'completado':GRN,'en-progreso':BDX_PUR,'pendiente':MUT,'pausada':AMB,'retrasada':RED};
     const ESTADO_L={'completado':'COMPLETADO','en-progreso':'EN PROGRESO','pendiente':'PENDIENTE','pausada':'PAUSADA','retrasada':'RETRASADA'};
 
     // Build report title dynamically from active sections + filters
@@ -5660,7 +5660,7 @@ async function generarPDF(opts){
         tc(BDX_GRN);doc.setFontSize(7);doc.setFont('helvetica','normal');
         doc.text('SRL',M+17+bxW+2,12.3);
         tc(BDX_PUR);doc.setFontSize(6);doc.setFont('helvetica','italic');
-        doc.text('Martha M. Reyes Cabrera, Arq.',M+17,17);
+        doc.text('Nilson E. Morales Reyes, Ing.',M+17,17);
         tc(BDX_PUR);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
         doc.text('ARQUITECTURA • URBANISMO • CONSTRUCCION • SERVICIOS',M+17,20.5);
       }
@@ -6641,29 +6641,55 @@ function exportarHistorialPDF(uid_){
     const GRN=[47,158,68],ACC=[26,86,219],AMB=[224,138,0],RED=[224,49,49];
     const WHT=[255,255,255],BOR=[222,226,230],TXT=[33,37,41],MUT=[108,117,125];
     const ESTADO_L={'completado':'COMPLETADO','en-progreso':'EN PROGRESO','pendiente':'PENDIENTE','pausada':'PAUSADA'};
-    const ESTADO_C={'completado':GRN,'en-progreso':ACC,'pendiente':MUT,'pausada':AMB};
+    const ESTADO_C={'completado':GRN,'en-progreso':BDX_PUR,'pendiente':MUT,'pausada':AMB};
 
     const per=S.histFecha&&S.histFechaFin?fmtF(S.histFecha)+' al '+fmtF(S.histFechaFin):S.histFecha?'Desde '+fmtF(S.histFecha):'Todos los registros';
 
     function drawHeader(){
-      fc(DARK);doc.rect(0,0,W,17,'F');
-      fc(BDX_PUR);doc.rect(0,0,3,17,'F');
-      tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');
-      doc.text('BRIDEX SRL',M,7);
-      tc([180,180,200]);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
-      doc.text('Arquitectura  Urbanismo  Construccion',M,11);
-      tc([200,215,255]);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
-      doc.text('PROYECTO: MECCA RESIDENCE 2026',M,15);
-      tc([160,180,220]);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-      doc.text('HISTORIAL DE INGENIERO',W-M,7,{align:'right'});
-      doc.text(per,W-M,11,{align:'right'});
-      tc([120,140,180]);doc.setFontSize(5.5);
-      doc.text('Pag. '+doc.internal.getCurrentPageInfo().pageNumber,W-M,15,{align:'right'});
-      fc(BDX_GRN);doc.rect(0,17,W,1.2,'F');
+      fc(WHT);doc.rect(0,0,W,22,'F');
+      fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');
+      fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
+      // Logo / brand
+      var _lgEl2=document.getElementById('bdx-logo-img');
+      var _drew2=false;
+      if(_lgEl2&&_lgEl2.complete&&_lgEl2.naturalWidth>0){
+        try{
+          var _sh2=Math.round(_lgEl2.naturalHeight*0.62);
+          var _hm2=14,_wm2=_hm2*(_lgEl2.naturalWidth/_sh2);
+          var _lc2=document.createElement('canvas');
+          var _dp2=4;_lc2.width=Math.round(_wm2*_dp2);_lc2.height=Math.round(_hm2*_dp2);
+          var _lx2=_lc2.getContext('2d');
+          _lx2.fillStyle='#fff';_lx2.fillRect(0,0,_lc2.width,_lc2.height);
+          _lx2.drawImage(_lgEl2,0,0,_lgEl2.naturalWidth,_sh2,0,0,_lc2.width,_lc2.height);
+          doc.addImage(_lc2.toDataURL('image/png'),'PNG',M,2.5,_wm2,_hm2);
+          _drew2=true;
+        }catch(e){}
+      }
+      if(!_drew2){
+        fc(BDX_PUR);doc.roundedRect(M,3.5,14,14,2.5,2.5,'F');
+        tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('B',M+4.5,13.5);
+        tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('BRIDEX',M+17,13);
+        var bxW2=doc.getTextWidth('BRIDEX');
+        tc(BDX_GRN);doc.setFontSize(7);doc.setFont('helvetica','normal');doc.text('SRL',M+17+bxW2+2,12.3);
+        tc(BDX_PUR);doc.setFontSize(6);doc.setFont('helvetica','italic');
+        doc.text('Nilson E. Morales Reyes, Ing.',M+17,17);
+        tc(BDX_PUR);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+        doc.text('ARQUITECTURA • URBANISMO • CONSTRUCCION • SERVICIOS',M+17,20.5);
+      }
+      dc([200,185,210]);doc.setLineWidth(0.25);doc.line(M+96,4,M+96,20.5);
+      var pg2=doc.internal.getCurrentPageInfo().pageNumber;
+      tc(TXT);doc.setFontSize(10);doc.setFont('helvetica','bold');
+      doc.text('HISTORIAL DE INGENIERO',W-M,9.5,{align:'right'});
+      tc(BDX_GRN);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
+      doc.text(per,W-M,15,{align:'right'});
+      tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+      doc.text('Pag. '+pg2,W-M,19.5,{align:'right'});
+      fc(BDX_GRN);doc.rect(0,22,W,1,'F');
+      fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
     }
     function chk(h){if(y+h>284){doc.addPage();drawHeader();y=26;}}
 
-    drawHeader();y=24;
+    drawHeader();y=26;
 
     const myActs=(S.histActs||[]).filter(a=>a.ingeniero_id===uid_);
     const myPens=(S.histPens||[]).filter(p=>p.personal_nombre===u.nombre);
