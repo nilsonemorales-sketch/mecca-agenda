@@ -7542,6 +7542,21 @@ function buildActCardObra(a){
 
   var k = regAct(id);
 
+  var avanceChips='';
+  if(a.estado!=='completado'&&canEdit()){
+    var _cv=[25,50,75,100];
+    avanceChips='<div style="display:flex;align-items:center;gap:4px;margin:6px 0 2px">'+
+      '<span style="font-size:11px;font-weight:700;color:'+ec+';min-width:34px">'+pct+'%</span>'+
+      _cv.map(function(v){
+        var active=pct===v;
+        return '<button onclick="setAvanceRapido(\''+id+'\','+v+')" '+
+          'style="flex:1;padding:6px 0;border-radius:8px;border:1.5px solid '+(active?ec:'#dee2e6')+';'+
+          'background:'+(active?ec:'#fff')+';color:'+(active?'#fff':ec)+';'+
+          'font-size:11px;font-weight:600;cursor:pointer;min-height:34px;touch-action:manipulation">'+v+'%</button>';
+      }).join('')+
+    '</div>';
+  }
+
   var btns = '';
   if(canEdit()){
     if(a.estado==='pendiente'){
@@ -7608,6 +7623,7 @@ function buildActCardObra(a){
       '<span style="opacity:.4">·</span><span>📅 '+a.fecha+'</span>'+
     '</div>'+
     (pct>0?'<div style="height:3px;background:#e9ecef;border-radius:2px;overflow:hidden;margin:4px 0"><div style="height:100%;width:'+Math.min(100,pct)+'%;background:'+ec+';border-radius:2px"></div></div>':'')+
+    avanceChips+
     (a.notas?'<div style="font-size:11px;color:var(--text3);margin-top:4px;padding:4px 8px;background:#f8f9fa;border-radius:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.notas)+'</div>':'')+
     (tieneFoto(a)?'<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:5px">'+fotoUrls(a.fotos).map(function(f){return'<img src="'+f+'" style="width:44px;height:44px;object-fit:cover;border-radius:5px;cursor:pointer;border:1px solid #dee2e6" onclick="verFotoInfo(\''+f+'\',\''+esc(a.descripcion)+'\',\''+a.fecha+'\',\''+esc(a.area||'')+'\',\'\',\'\',\''+id+'\')" loading="lazy">';}).join('')+'</div>':'')+
   btns+
@@ -7637,6 +7653,34 @@ function pausarDesdeObra(k){
   mostrarPausaObra(id, a ? (a.descripcion||'') : '');
 }
 
+
+// Avance rápido desde tarjeta En Obra
+async function setAvanceRapido(actId,newPct){
+  var act=(S.acts||[]).find(function(a){return a.id===actId;})||
+           (S.actsActivas||[]).find(function(a){return a.id===actId;});
+  if(!act) return;
+  var prevPct=act.porcentaje||0,prevEst=act.estado;
+  var newEst=(newPct>0&&prevEst==='pendiente')?'en-progreso':prevEst;
+  function _sync(p,e){
+    [S.acts,S.actsActivas].forEach(function(arr){
+      if(!arr) return;
+      var i=arr.findIndex(function(a){return a.id===actId;});
+      if(i>=0){arr[i].porcentaje=p;arr[i].estado=e;}
+    });
+  }
+  act.porcentaje=newPct;act.estado=newEst;_sync(newPct,newEst);
+  renderActs();renderEnObra();
+  var body={porcentaje:newPct};
+  if(newEst!==prevEst) body.estado=newEst;
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
+    setSS('ok','✓ '+newPct+'% guardado');
+  }catch(e){
+    act.porcentaje=prevPct;act.estado=prevEst;_sync(prevPct,prevEst);
+    renderActs();renderEnObra();
+    setSS('err','No se pudo guardar');
+  }
+}
 
 // Actions for activities in En Obra
 async function accionActObra(id, accion){
