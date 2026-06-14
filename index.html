@@ -1418,7 +1418,17 @@ async function handleFotoFile(inp){
     URL.revokeObjectURL(localUrl);
     syncArrays(act.fotos);
     renderActs(); renderEnObra();
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:act.fotos})});
+    var _patchBody={fotos:act.fotos};
+    if(act.foto_pendiente){
+      act.foto_pendiente=false;
+      [S.acts,S.actsActivas].forEach(function(arr){
+        if(!arr) return;
+        var i=arr.findIndex(function(a){return a.id===actId;});
+        if(i>=0) arr[i].foto_pendiente=false;
+      });
+      _patchBody.foto_pendiente=false;
+    }
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(_patchBody)});
     setSS('ok','📸 Guardada');
   }catch(e){
     act.fotos=prevFotos;
@@ -7542,16 +7552,22 @@ function buildActCardObra(a){
         '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
         '</div>';
     } else if(a.estado==='en-progreso'){
+      var _fotoReq=a.foto_pendiente&&parseFotos(a.fotos).length===0;
       btns = '<div class="tarea-acciones">'+
         btn('amarillo','k_pausa_'+k,     '⏸ Interrumpir', "pausarDesdeObra('"+k+"')")+
-        btn('verde',   'k_comp_'+k,      '✓ Completar',   "accionActObra(window._OA['"+k+"'],'completar')")+
+        (_fotoReq
+          ?'<button class="tarea-btn" disabled style="opacity:.5;cursor:not-allowed" title="Suba una foto primero">🔒 Falta foto</button>'
+          :btn('verde','k_comp_'+k,'✓ Completar',"accionActObra(window._OA['"+k+"'],'completar')"))+
         btn('',        'k_edit2_'+k,     '✏️ Editar',     "goObraEdit('"+k+"')")+
         '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
         '</div>';
     } else if(a.estado==='pausada'){
+      var _fotoReq2=a.foto_pendiente&&parseFotos(a.fotos).length===0;
       btns = '<div class="tarea-acciones">'+
         btn('accent',  'k_ret_'+k,       '↺ Retomar',    "accionActObra(window._OA['"+k+"'],'retomar')")+
-        btn('verde',   'k_comp2_'+k,     '✓ Completar',  "accionActObra(window._OA['"+k+"'],'completar')")+
+        (_fotoReq2
+          ?'<button class="tarea-btn" disabled style="opacity:.5;cursor:not-allowed" title="Suba una foto primero">🔒 Falta foto</button>'
+          :btn('verde','k_comp2_'+k,'✓ Completar',"accionActObra(window._OA['"+k+"'],'completar')"))+
         btn('',        'k_edit3_'+k,     '✏️ Editar',    "goObraEdit('"+k+"')")+
         '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
         '</div>';
