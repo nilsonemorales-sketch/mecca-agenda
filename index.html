@@ -9335,12 +9335,7 @@ function generarPDFUrgentesPend(){
 
 // ── REPORTE POR APARTAMENTO ── carga completa + doble agrupamiento ──
 async function generarPDFPorApto(){
-  // ── CAMBIAR AQUÍ para nueva fecha límite ──────────────────────────
-  var FECHA_LIM='2026-10-10';
-  // ─────────────────────────────────────────────────────────────────
-  var _meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  var _fp=FECHA_LIM.split('-');
-  var FECHA_LIM_DISPLAY=parseInt(_fp[2])+' de '+(_meses[parseInt(_fp[1])-1]||_fp[1])+' '+_fp[0];
+  var _mesesCorto=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
   setSS('syncing','Cargando actividades...');
   var allActs=[];
@@ -9348,6 +9343,8 @@ async function generarPDFPorApto(){
   catch(e){ setSS('err','Error al cargar actividades'); return; }
 
   var hoy=today();
+  var _hp=hoy.split('-');
+  var _hoyLabel=parseInt(_hp[2])+'-'+(_mesesCorto[parseInt(_hp[1])-1]||_hp[1])+'-'+_hp[0];
   var d7=new Date(hoy+'T12:00:00'); d7.setDate(d7.getDate()-7);
   var hace7=d7.toISOString().slice(0,10);
 
@@ -9361,7 +9358,6 @@ async function generarPDFPorApto(){
     var m=area.match(/N(\d+)/i); return m?'N'+m[1]:'';
   }
 
-  // Build sorted apt groups
   var aptoMap={};
   allActs.forEach(function(a){
     if(!a.area) return;
@@ -9392,7 +9388,11 @@ async function generarPDFPorApto(){
     function _tc(c){doc.setTextColor.apply(doc,c);}
     function _s(s){return(s||'').replace(/[^\x00-\x7F]/g,function(ch){try{return ch;}catch(e){return '';}});}
 
-    function drawPH(){
+    // Context for overflow page redraws
+    var _ctx={apto:null,contrat:'',ing:'',numTareas:0,done:0,total:0};
+
+    function drawFullHeader(){
+      // Bridex brand header
       _fc(WHT);doc.rect(0,0,W,22,'F');
       _fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');
       _fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
@@ -9411,37 +9411,51 @@ async function generarPDFPorApto(){
       doc.text(hoy,ix,17.5,{align:'right'});
       _fc(BDX_GRN);doc.rect(0,22,W,1,'F');
       _fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
+      y=26;
+      if(!_ctx.apto) return;
+      // Apt banner: "MECCA RESIDENCE 2026 · 2A · N2"
+      var _aptLabel='MECCA RESIDENCE 2026  \xB7  APTO '+_s(_ctx.apto.id)+(_ctx.apto.nivel?'  \xB7  '+_s(_ctx.apto.nivel):'');
+      _fc(BDX_GRN);doc.rect(M,y,RW,10,'F');
+      _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');
+      doc.text(_aptLabel,M+4,y+7);
+      _tc([180,255,180]);doc.setFontSize(6);doc.setFont('helvetica','normal');
+      doc.text(_ctx.done+'/'+_ctx.total+' completadas',W-M-3,y+7,{align:'right'});
+      y+=11;
+      // Contractor header with engineer + fecha generacion
+      var _hH=_ctx.ing?10:8;
+      _fc([235,228,248]);doc.rect(M,y,RW,_hH,'F');
+      _fc(BDX_PUR);doc.rect(M,y,3,_hH,'F');
+      _tc(BDX_PUR);doc.setFontSize(8);doc.setFont('helvetica','bold');
+      doc.text(_s(_ctx.contrat),M+6,y+5.5);
+      _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+      doc.text('generado '+_hoyLabel,W-M-2,y+4,{align:'right'});
+      doc.text(_ctx.numTareas+' tarea'+(_ctx.numTareas!==1?'s':''),W-M-2,y+_hH-1,{align:'right'});
+      if(_ctx.ing){
+        _tc([100,50,140]);doc.setFontSize(6);doc.setFont('helvetica','italic');
+        doc.text('Ing. '+_s(_ctx.ing),M+6,y+_hH-1);
+      }
+      y+=_hH+2;
+      // Column headers
+      _fc([228,225,240]);doc.rect(M,y,RW,5.5,'F');
+      _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','bold');
+      doc.text('FECHA FIN',M+2,y+4);doc.text('TAREA',M+24,y+4);
+      doc.text('ESTADO',M+98,y+4);doc.text('AVANCE',M+122,y+4);
+      y+=6;
     }
-    function chkY(h){if(y+h>275){doc.addPage();drawPH();y=28;}}
+
+    function chkY(h){if(y+h>275){doc.addPage();drawFullHeader();}}
 
     var firstPage=true;
     aptos.forEach(function(aptoObj){
       var aptoActs=filterActs(aptoObj.acts);
       if(!aptoActs.length) return;
-      if(!firstPage) doc.addPage();
-      firstPage=false;
-      drawPH(); y=28;
 
-      // Apt banner (green)
-      var done=aptoActs.filter(function(a){return a.estado==='completado';}).length;
-      _fc(BDX_GRN);doc.rect(M,y,RW,12,'F');
-      _tc(WHT);doc.setFontSize(13);doc.setFont('helvetica','bold');
-      doc.text('APARTAMENTO '+_s(aptoObj.id)+(aptoObj.nivel?' \xB7 '+_s(aptoObj.nivel):''),M+5,y+8.5);
-      _tc([180,255,180]);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-      doc.text(done+'/'+aptoActs.length+' completadas',W-M-3,y+8.5,{align:'right'});
-      y+=13;
+      var aptDone=aptoActs.filter(function(a){return a.estado==='completado';}).length;
 
-      // Fecha límite band (amber)
-      _fc([255,243,205]);doc.rect(M,y,RW,8,'F');
-      _fc([230,150,0]);doc.rect(M,y,3,8,'F');
-      _tc([110,65,0]);doc.setFontSize(8);doc.setFont('helvetica','bold');
-      doc.text('FECHA L\xCDMITE DE ENTREGA: '+_s(FECHA_LIM_DISPLAY.toUpperCase()),M+6,y+5.5);
-      y+=11;
-
-      // Group by contractor
+      // Group by contractor — tipo==='propio' → "Personal de casa"
       var byContrat={};var contratOrder=[];
       aptoActs.forEach(function(a){
-        var c=a.personal_nombre||'Sin asignar';
+        var c=(a.tipo==='propio')?'Personal de casa':(a.personal_nombre||'Sin asignar');
         if(!byContrat[c]){byContrat[c]=[];contratOrder.push(c);}
         byContrat[c].push(a);
       });
@@ -9452,52 +9466,29 @@ async function generarPDFPorApto(){
           if(b.estado==='completado'&&a.estado!=='completado') return -1;
           return (a.fecha_fin||a.fecha||'').localeCompare(b.fecha_fin||b.fecha||'');
         });
-        // Ajuste 3: find dominant engineer for this contractor group
+        // Dominant engineer
         var _ingFreq={};
         cActs.forEach(function(a){if(a.ingeniero_nombre)_ingFreq[a.ingeniero_nombre]=(_ingFreq[a.ingeniero_nombre]||0)+1;});
         var _ingPrinc=Object.keys(_ingFreq).sort(function(a,b){return _ingFreq[b]-_ingFreq[a];})[0]||'';
-        var _hH=_ingPrinc?9:7;
-        // Ajuste 4: keep header with first rows — if header+colhdrs+5rows don't fit, new page first
-        if(y+_hH+6+Math.min(5,cActs.length)*8>275){doc.addPage();drawPH();y=28;}
-        // Contractor header
-        _fc([235,228,248]);doc.rect(M,y,RW,_hH,'F');
-        _fc(BDX_PUR);doc.rect(M,y,3,_hH,'F');
-        _tc(BDX_PUR);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
-        doc.text(_s(contrat),M+6,y+5);
-        if(_ingPrinc){
-          _tc([100,50,140]);doc.setFontSize(6);doc.setFont('helvetica','italic');
-          doc.text('Ing. '+_s(_ingPrinc),M+6,y+8);
-          _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-          doc.text(cActs.length+' tarea'+(cActs.length!==1?'s':''),W-M-2,y+8,{align:'right'});
-        }else{
-          _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-          doc.text(cActs.length+' tarea'+(cActs.length!==1?'s':''),W-M-2,y+5,{align:'right'});
-        }
-        y+=_hH+1;
-        // Column headers (Ajuste 2: added ESTADO and AVANCE columns)
-        chkY(6);
-        _fc([228,225,240]);doc.rect(M,y,RW,5.5,'F');
-        _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','bold');
-        doc.text('FECHA FIN',M+2,y+4);doc.text('TAREA',M+24,y+4);
-        doc.text('ESTADO',M+98,y+4);doc.text('AVANCE',M+122,y+4);
-        y+=6;
-        // Rows (Ajuste 2: bar + reduced tarea width + estado column)
+        // Set context so overflow pages know what to redraw
+        _ctx={apto:aptoObj,contrat:contrat,ing:_ingPrinc,numTareas:cActs.length,done:aptDone,total:aptoActs.length};
+        // Each contractor starts on its own page
+        if(!firstPage) doc.addPage();
+        firstPage=false;
+        drawFullHeader();
+        // Task rows
         cActs.forEach(function(a,i){
           var isComp=a.estado==='completado';
           var ec=ECOLS[a.estado]||COL_PEND;
           chkY(8);
           _fc(isComp?[248,248,248]:(i%2===0?WHT:LGRAY));doc.rect(M,y,RW,8,'F');
           _fc(ec);doc.rect(M,y,2,8,'F');
-          // Fecha fin
           _tc(isComp?COL_COMP:MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
           doc.text(_s(a.fecha_fin||a.fecha||'—'),M+4,y+5.5);
-          // Tarea (72mm, reduced to make room for bar)
           _tc(isComp?COL_COMP:TXT);doc.setFontSize(6.5);doc.setFont('helvetica',isComp?'normal':'bold');
           doc.text(doc.splitTextToSize(_s(a.descripcion||''),72)[0],M+24,y+5.5);
-          // Estado
           _tc(ec);doc.setFontSize(6);doc.setFont('helvetica','bold');
           doc.text(_s(ELABS[a.estado]||a.estado),M+98,y+5.5);
-          // Avance bar
           var _pct=a.porcentaje||0;
           var _bx=M+122,_bw=46;
           _fc([215,215,215]);doc.rect(_bx,y+3,_bw,2,'F');
@@ -9509,7 +9500,6 @@ async function generarPDFPorApto(){
           doc.text(_pct+'%',_bx+_bw+2,y+5.5);
           y+=8;
         });
-        y+=3;
       });
     });
 
