@@ -7636,14 +7636,16 @@ function btn(cls, id, label, oc){
 
 function editActById(id){
   var ai=S.acts.findIndex(function(x){return x.id===id;});
+  if(ai<0){
+    var a=(S.actsActivas||[]).find(function(x){return x.id===id;});
+    if(a){ S.acts.unshift(a); ai=0; }
+  }
   if(ai>=0) showAddAct(ai);
 }
 function goObraEdit(k){
   var id = window._OA[k];
   if(!id) return;
-  S.obraVista='todas'; // switch to list view for editing
-  goTab('obra');
-  setTimeout(function(){ editActById(id); }, 50);
+  editActById(id);
 }
 
 function pausarDesdeObra(k){
