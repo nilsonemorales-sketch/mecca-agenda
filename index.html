@@ -9369,6 +9369,7 @@ async function generarPDFPorApto(){
 
   function filterActs(acts){
     return acts.filter(function(a){
+      if(a.tipo_personal==='propio') return false;
       if(a.estado!=='completado') return true;
       return (a.fecha_fin||a.fecha||'')>=hace7;
     });
@@ -9388,11 +9389,9 @@ async function generarPDFPorApto(){
     function _tc(c){doc.setTextColor.apply(doc,c);}
     function _s(s){return(s||'').replace(/[^\x00-\x7F]/g,function(ch){try{return ch;}catch(e){return '';}});}
 
-    // Context for overflow page redraws
     var _ctx={apto:null,contrat:'',ing:'',numTareas:0,done:0,total:0};
 
-    function drawFullHeader(){
-      // Bridex brand header
+    function drawPageTop(){
       _fc(WHT);doc.rect(0,0,W,22,'F');
       _fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');
       _fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
@@ -9413,7 +9412,6 @@ async function generarPDFPorApto(){
       _fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
       y=26;
       if(!_ctx.apto) return;
-      // Apt banner: "MECCA RESIDENCE 2026 · 2A · N2"
       var _aptLabel='MECCA RESIDENCE 2026  \xB7  APTO '+_s(_ctx.apto.id)+(_ctx.apto.nivel?'  \xB7  '+_s(_ctx.apto.nivel):'');
       _fc(BDX_GRN);doc.rect(M,y,RW,10,'F');
       _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');
@@ -9421,7 +9419,9 @@ async function generarPDFPorApto(){
       _tc([180,255,180]);doc.setFontSize(6);doc.setFont('helvetica','normal');
       doc.text(_ctx.done+'/'+_ctx.total+' completadas',W-M-3,y+7,{align:'right'});
       y+=11;
-      // Contractor header with engineer + fecha generacion
+    }
+
+    function drawContractorHeader(){
       var _hH=_ctx.ing?10:8;
       _fc([235,228,248]);doc.rect(M,y,RW,_hH,'F');
       _fc(BDX_PUR);doc.rect(M,y,3,_hH,'F');
@@ -9435,7 +9435,6 @@ async function generarPDFPorApto(){
         doc.text('Ing. '+_s(_ctx.ing),M+6,y+_hH-1);
       }
       y+=_hH+2;
-      // Column headers
       _fc([228,225,240]);doc.rect(M,y,RW,5.5,'F');
       _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','bold');
       doc.text('FECHA FIN',M+2,y+4);doc.text('TAREA',M+24,y+4);
@@ -9443,7 +9442,14 @@ async function generarPDFPorApto(){
       y+=6;
     }
 
-    function chkY(h){if(y+h>275){doc.addPage();drawFullHeader();}}
+    // On mid-row overflow: redraw page top + contractor header to show continuation
+    function chkY(h){
+      if(y+h>275){
+        doc.addPage();
+        drawPageTop();
+        drawContractorHeader();
+      }
+    }
 
     var firstPage=true;
     aptos.forEach(function(aptoObj){
@@ -9452,13 +9458,19 @@ async function generarPDFPorApto(){
 
       var aptDone=aptoActs.filter(function(a){return a.estado==='completado';}).length;
 
-      // Group by contractor — tipo==='propio' → "Personal de casa"
       var byContrat={};var contratOrder=[];
       aptoActs.forEach(function(a){
-        var c=(a.tipo==='propio')?'Personal de casa':(a.personal_nombre||'Sin asignar');
+        var c=a.personal_nombre||'Sin asignar';
         if(!byContrat[c]){byContrat[c]=[];contratOrder.push(c);}
         byContrat[c].push(a);
       });
+      if(!contratOrder.length) return;
+
+      // Each apt starts on its own page; contractors are packed within it
+      _ctx.apto=aptoObj; _ctx.done=aptDone; _ctx.total=aptoActs.length;
+      if(!firstPage) doc.addPage();
+      firstPage=false;
+      drawPageTop();
 
       contratOrder.forEach(function(contrat){
         var cActs=byContrat[contrat].slice().sort(function(a,b){
@@ -9466,17 +9478,23 @@ async function generarPDFPorApto(){
           if(b.estado==='completado'&&a.estado!=='completado') return -1;
           return (a.fecha_fin||a.fecha||'').localeCompare(b.fecha_fin||b.fecha||'');
         });
-        // Dominant engineer
+
         var _ingFreq={};
         cActs.forEach(function(a){if(a.ingeniero_nombre)_ingFreq[a.ingeniero_nombre]=(_ingFreq[a.ingeniero_nombre]||0)+1;});
         var _ingPrinc=Object.keys(_ingFreq).sort(function(a,b){return _ingFreq[b]-_ingFreq[a];})[0]||'';
-        // Set context so overflow pages know what to redraw
-        _ctx={apto:aptoObj,contrat:contrat,ing:_ingPrinc,numTareas:cActs.length,done:aptDone,total:aptoActs.length};
-        // Each contractor starts on its own page
-        if(!firstPage) doc.addPage();
-        firstPage=false;
-        drawFullHeader();
-        // Task rows
+
+        _ctx.contrat=contrat; _ctx.ing=_ingPrinc; _ctx.numTareas=cActs.length;
+
+        // Keep-together: if contractor header + col headers + first 3 rows don't fit, new page
+        var _hH=_ingPrinc?10:8;
+        var _blockH=_hH+2+5.5+6+Math.min(3,cActs.length)*8;
+        if(y+_blockH>275){
+          doc.addPage();
+          drawPageTop();
+        }
+
+        drawContractorHeader();
+
         cActs.forEach(function(a,i){
           var isComp=a.estado==='completado';
           var ec=ECOLS[a.estado]||COL_PEND;
@@ -9500,6 +9518,7 @@ async function generarPDFPorApto(){
           doc.text(_pct+'%',_bx+_bw+2,y+5.5);
           y+=8;
         });
+        y+=4;
       });
     });
 
