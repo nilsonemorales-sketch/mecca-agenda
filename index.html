@@ -3456,7 +3456,9 @@ async function logEvento(tipo, descripcion, ingId){
 }
 
 async function doMarcarCompletada(actId){
-  var a=S.acts.find(function(x){return x.id===actId;}); if(!a) return;
+  var a=S.acts.find(function(x){return x.id===actId;});
+  if(!a){ a=(S.actsActivas||[]).find(function(x){return x.id===actId;}); if(a) S.acts.unshift(a); }
+  if(!a) return;
   closeModal();
   var prevEstado=a.estado; var prevPct=a.porcentaje;
   var prevHoraI=a.hora_inicio; var prevHoraF=a.hora_fin;
@@ -5925,7 +5927,7 @@ async function generarPDF(opts){
       }
       // mainH increased: badge (4.5mm) + gap (1mm) + bar (1.5mm) = 7mm minimum
       // single-line: 10mm, two-line: 13mm — gives comfortable spacing
-      var mainH=dLines.length>1?13:10;
+      var mainH=(dLines.length>1||a.porcentaje>0)?13:10;
       var rowH=mainH+(nLines.length>0?nLines.length*4+2:0);
       chk(rowH+1);
       // Row background: alternating
@@ -6027,10 +6029,10 @@ async function generarPDF(opts){
             fc(barC3a);doc.rect(W-M-52,y+11,Math.max(1,52*grpPct2/100),2.5,'F');
             // Period / project
             tc([160,160,180]);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-            doc.text('Mecca Residence 2026  |  '+periodo,M+11,y+16.5);
+            doc.text('Mecca Residence 2026  |  '+periodo,M+11,y+19.5);
             // Purple accent line at bottom of banner
             fc(BDX_PUR);doc.rect(M,y+18,RW,0.8,'F');
-            y+=22;
+            y+=23;
           } else {
             chk(13);
             var grpBg=grpColor2===BDX_GRN?GRN_BG:PUR_BG;
