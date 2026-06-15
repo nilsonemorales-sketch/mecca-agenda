@@ -3806,11 +3806,14 @@ function showAddAct(ai){
   openModal();
 }
 
-// editAct accepts an activity ID string (robust against S.acts index changes from auto-refresh)
+// editAct accepts an activity ID string; fallback to S.actsActivas if not in S.acts
 function editAct(id){
   var ai=S.acts.findIndex(function(x){return x.id===id;});
-  if(ai<0) return;
-  showAddAct(ai);
+  if(ai<0){
+    var _a=(S.actsActivas||[]).find(function(x){return x.id===id;});
+    if(_a){ S.acts.unshift(_a); ai=0; }
+  }
+  if(ai>=0) showAddAct(ai);
 }
 
 // ── FORM PERSONAL X LA CASA ──────────────────────────────
@@ -7563,7 +7566,7 @@ function buildActCardObra(a){
       btns = '<div class="tarea-acciones">'+
         btn('verde',   'k_iniciar_'+k,   '▶ Iniciar',    "accionActObra(window._OA['"+k+"'],'iniciar')")+
         btn('',        'k_urgente_'+k,   a.prioridad==='urgente'?'↓ Normal':'🔴 Urgente', "accionActObra(window._OA['"+k+"'],'urgente')")+
-        btn('',        'k_edit_'+k,      '✏️ Editar',    "goObraEdit('"+k+"')")+
+        btn('',        'k_edit_'+k,      '✏️ Editar',    "editAct('"+id+"')")+
         '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
         '</div>';
     } else if(a.estado==='en-progreso'){
@@ -7573,7 +7576,7 @@ function buildActCardObra(a){
         (_fotoReq
           ?'<button class="tarea-btn" disabled style="opacity:.5;cursor:not-allowed" title="Suba una foto primero">🔒 Falta foto</button>'
           :btn('verde','k_comp_'+k,'✓ Completar',"accionActObra(window._OA['"+k+"'],'completar')"))+
-        btn('',        'k_edit2_'+k,     '✏️ Editar',     "goObraEdit('"+k+"')")+
+        btn('',        'k_edit2_'+k,     '✏️ Editar',     "editAct('"+id+"')")+
         '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
         '</div>';
     } else if(a.estado==='pausada'){
@@ -7583,12 +7586,12 @@ function buildActCardObra(a){
         (_fotoReq2
           ?'<button class="tarea-btn" disabled style="opacity:.5;cursor:not-allowed" title="Suba una foto primero">🔒 Falta foto</button>'
           :btn('verde','k_comp2_'+k,'✓ Completar',"accionActObra(window._OA['"+k+"'],'completar')"))+
-        btn('',        'k_edit3_'+k,     '✏️ Editar',    "goObraEdit('"+k+"')")+
+        btn('',        'k_edit3_'+k,     '✏️ Editar',    "editAct('"+id+"')")+
         '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
         '</div>';
     } else if(a.estado==='completado'){
       btns = '<div class="tarea-acciones">'+
-        btn('',        'k_edit4_'+k,     '✏️ Editar',    "goObraEdit('"+k+"')")+
+        btn('',        'k_edit4_'+k,     '✏️ Editar',    "editAct('"+id+"')")+
         '<button onclick="abrirFotoUpload(\''+id+'\')" class="tarea-btn" style="flex:0 0 auto;min-width:44px">📸</button>'+
         '</div>';
     }
@@ -7634,18 +7637,10 @@ function btn(cls, id, label, oc){
   return '<button id="'+id+'" class="tarea-btn '+cls+'" onclick="'+oc+'">'+label+'</button>';
 }
 
-function editActById(id){
-  var ai=S.acts.findIndex(function(x){return x.id===id;});
-  if(ai<0){
-    var a=(S.actsActivas||[]).find(function(x){return x.id===id;});
-    if(a){ S.acts.unshift(a); ai=0; }
-  }
-  if(ai>=0) showAddAct(ai);
-}
+function editActById(id){ editAct(id); }
 function goObraEdit(k){
-  var id = window._OA[k];
-  if(!id) return;
-  editActById(id);
+  var id=window._OA[k];
+  if(id) editAct(id);
 }
 
 function pausarDesdeObra(k){
