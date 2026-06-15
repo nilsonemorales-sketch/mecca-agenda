@@ -564,6 +564,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <div id="c-urgentes-rep" style="display:none"></div>
       <div id="c-rep-custom" style="display:none"></div>
       <div id="c-cambios" style="display:none"></div>
+      <div id="c-cierre-dia" style="display:none"></div>
     </div>
 
     <div class="view" id="view-fotos"><div id="c-fotos"></div></div>
@@ -2211,8 +2212,18 @@ function renderHoy(){
     '</div>';
   }
 
+  var _hourNow=new Date().getHours();
+  var _cierreHecho=false;try{_cierreHecho=localStorage.getItem('mecca_cierre_'+hoy)==='1';}catch(e){}
+  var _cierreBanner=(_hourNow>=17&&!_cierreHecho)?
+    '<div style="background:#f3f0ff;border:1.5px solid #7048e8;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">'+
+      '<div style="font-size:12px;font-weight:600;color:#7048e8">📅 Son las '+_hourNow+'h — ¿Ya generaste el cierre del día?</div>'+
+      '<button onclick="goTab(\'reportes\');S.reportesVista=\'cierre\';renderReportesHub()" style="padding:6px 14px;background:#7048e8;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">Ir al cierre →</button>'+
+    '</div>':
+    '';
+
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
+    ${_cierreBanner}
 
     <!-- Attendance strip -->
     <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:10px">
@@ -2234,6 +2245,14 @@ function renderHoy(){
         <div class="v" style="color:${retrasadas.length>0?'#e03131':'var(--text3)'}">${retrasadas.length}</div>
         <div class="l" style="color:${retrasadas.length>0?'#e03131':''}">Retrasadas</div>
       </div>
+    </div>
+
+    <!-- Cierre del día shortcut -->
+    <div style="margin-bottom:10px">
+      <button onclick="goTab('reportes');S.reportesVista='cierre';renderReportesHub()" style="width:100%;padding:10px 14px;background:#f3f0ff;border:1.5px solid #7048e8;border-radius:10px;font-size:13px;font-weight:700;color:#7048e8;cursor:pointer;font-family:var(--font);text-align:left;display:flex;align-items:center;justify-content:space-between">
+        <span>📅 Cierre del día</span>
+        <span style="font-size:11px;font-weight:600;opacity:.7">Ver reporte →</span>
+      </button>
     </div>
 
     <!-- Personal x la Casa — Rendimiento hoy -->
@@ -8930,6 +8949,11 @@ function renderReporteUrgentes(){
   if(!S.urgRepAgrup) S.urgRepAgrup='persona';
 
   var urgentes=(S.acts||[]).filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
+  urgentes.sort(function(a,b){
+    var aV=isRetrasada(a),bV=isRetrasada(b);
+    if(aV&&!bV) return -1; if(!aV&&bV) return 1;
+    return (fechaVenc(a)||'9999').localeCompare(fechaVenc(b)||'9999');
+  });
   var total=urgentes.length;
   var propios=urgentes.filter(function(a){return a.tipo_personal==='propio';});
   var contratistas=urgentes.filter(function(a){return a.tipo_personal==='contratista';});
@@ -8955,7 +8979,8 @@ function renderReporteUrgentes(){
   function actRow(a){
     var ec=isRetrasada(a)?'#c92a2a':(EC[a.estado]||'#868e96');
     var el_=isRetrasada(a)?('⏰ Retrasada'):((EL[a.estado]||a.estado));
-    var dias=isRetrasada(a)?Math.round((new Date(today())-new Date(a.fecha))/(1000*60*60*24)):0;
+    var _fv=fechaVenc(a);
+    var dias=isRetrasada(a)?Math.round((new Date(today()+'T12:00:00')-new Date(_fv+'T12:00:00'))/(1000*60*60*24)):0;
     return '<div style="padding:10px 12px;border-left:3px solid '+ec+';border-bottom:1px solid var(--border2);background:#fff">'+
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
         '<div style="flex:1;min-width:0">'+
@@ -8964,7 +8989,7 @@ function renderReporteUrgentes(){
             (a.area?'<span style="background:#e8f0fe;color:var(--accent);border-radius:5px;padding:1px 7px;font-weight:600">📍 '+esc(a.area)+'</span>':'')+
             (a.personal_nombre?'<span>👷 '+esc(a.personal_nombre)+'</span>':'')+
             (a.ingeniero_nombre?'<span>👤 '+esc(a.ingeniero_nombre)+'</span>':'')+
-            '<span>📅 '+a.fecha+'</span>'+
+            (_fv?'<span style="color:'+(isRetrasada(a)?'#c92a2a':'var(--text3)')+'">📅 fin: '+_fv+'</span>':'')+
           '</div>'+
         '</div>'+
         '<span style="flex-shrink:0;font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;background:'+(isRetrasada(a)?'#ffe3e3':'#f8f9fa')+';color:'+ec+';border:1px solid '+ec+'33">'+el_+(dias>0?' '+dias+'d':'')+'</span>'+
@@ -8979,6 +9004,7 @@ function renderReporteUrgentes(){
   h+=[ {v:total,l:'Urgentes',c:'#e03131'}, {v:retrasadas.length,l:'Retrasadas',c:retrasadas.length?'#c92a2a':'var(--text3)'}, {v:contratistas.length,l:'Contratistas',c:'#7048e8'}, {v:propios.length,l:'Propios',c:'#1c7ed6'} ]
     .map(function(s){return'<div class="scard"><div class="v" style="color:'+s.c+';font-size:20px">'+s.v+'</div><div class="l">'+s.l+'</div></div>';}).join('');
   h+='</div>';
+  h+='<button onclick="generarPDFUrgentesPend()" style="width:100%;padding:9px;background:#e03131;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);margin-bottom:14px">📄 Generar PDF urgentes</button>';
 
   // Grouping toggle
   h+='<div style="display:flex;gap:6px;margin-bottom:14px">';
@@ -9008,6 +9034,304 @@ function renderReporteUrgentes(){
   el.innerHTML=h;
 }
 
+// ── CIERRE DEL DÍA ────────────────────────────────────
+async function renderCierreDia(fechaTarget){
+  var el=document.getElementById('c-cierre-dia'); if(!el) return;
+  var fecha=fechaTarget||S._cierreFecha||today();
+  S._cierreFecha=fecha;
+  el.innerHTML='<div class="empty"><div class="spinner"></div><br>Cargando cierre...</div>';
+  var cambios=[];
+  try{ cambios=await sb('obra_cambios?fecha=eq.'+fecha+'&order=hora.asc&limit=500'); }
+  catch(e){ el.innerHTML='<div class="empty">Error al cargar datos</div>'; return; }
+  var completadas=cambios.filter(function(c){return c.accion==='completado';});
+  var editadas=cambios.filter(function(c){return c.accion==='editado';});
+  var creadas=cambios.filter(function(c){return c.accion==='creado';});
+  var byUser={};
+  cambios.forEach(function(c){
+    var u=c.usuario_nombre||'Sistema';
+    if(!byUser[u]) byUser[u]=[];
+    byUser[u].push(c);
+  });
+  var userList=Object.keys(byUser).sort(function(a,b){return byUser[b].length-byUser[a].length;});
+  var tab=S._cierreTab||'completadas';
+  var secciones=[
+    {key:'completadas',label:'✓ Completadas ('+completadas.length+')',items:completadas,color:'#2f9e44'},
+    {key:'editadas',   label:'✏ Avance ('+editadas.length+')',       items:editadas,   color:'#1a56db'},
+    {key:'creadas',    label:'+ Nuevas ('+creadas.length+')',         items:creadas,    color:'#7048e8'}
+  ];
+  var ACOLOR={completado:'#2f9e44',editado:'#1a56db',creado:'#7048e8',eliminado:'#e03131'};
+  function cambioRow(c,color){
+    return '<div style="padding:8px 12px;border-left:3px solid '+color+';border-bottom:1px solid var(--border2);background:#fff">'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(c.entidad_nombre||'')+'</div>'+
+          (c.detalle?'<div style="font-size:10px;color:var(--text3);margin-top:2px">'+esc(c.detalle)+'</div>':'')+
+        '</div>'+
+        '<div style="text-align:right;flex-shrink:0">'+
+          '<div style="font-size:10px;font-weight:700;color:'+color+'">'+esc(c.hora||'')+'</div>'+
+          '<div style="font-size:10px;color:var(--text3)">'+esc(c.usuario_nombre||'')+'</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }
+  var h='<div style="padding:12px 14px">';
+  // Date selector + PDF button
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'+
+    '<input type="date" value="'+fecha+'" onchange="renderCierreDia(this.value)" style="padding:6px 10px;border-radius:8px;border:1.5px solid var(--border2);font-size:13px;font-family:var(--font);color:var(--text)">'+
+    '<button onclick="generarPDFCierre(S._cierreFecha)" style="margin-left:auto;padding:8px 16px;background:#7048e8;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">📄 PDF cierre</button>'+
+  '</div>';
+  // Stats chips
+  h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">';
+  h+=[{v:completadas.length,l:'Completadas',c:'#2f9e44',bg:'#d3f9d8'},{v:editadas.length,l:'Avance/Edición',c:'#1a56db',bg:'#dbe4ff'},{v:creadas.length,l:'Nuevas tareas',c:'#7048e8',bg:'#f3d9fa'}]
+    .map(function(s){return'<div class="scard" style="background:'+s.bg+';border:1px solid '+s.c+'33"><div class="v" style="color:'+s.c+'">'+s.v+'</div><div class="l">'+s.l+'</div></div>';}).join('');
+  h+='</div>';
+  if(!cambios.length){
+    h+='<div class="empty"><div style="font-size:32px;margin-bottom:10px">📭</div><div style="font-size:14px;font-weight:600;color:var(--text2)">Sin actividad registrada para '+fecha+'</div></div></div>';
+    el.innerHTML=h; return;
+  }
+  // Section A tabs
+  h+='<div style="font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:8px">A — AVANCE DEL DÍA</div>';
+  var activeS=secciones.find(function(s){return s.key===tab;})||secciones[0];
+  h+='<div style="display:flex;gap:4px;margin-bottom:0">';
+  secciones.forEach(function(s){
+    var on=tab===s.key;
+    h+='<button onclick="S._cierreTab=\''+s.key+'\';renderCierreDia(S._cierreFecha)" style="flex:1;padding:7px 4px;border-radius:8px 8px 0 0;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font);border:1.5px solid '+(on?s.color:'var(--border2)')+';border-bottom:none;background:'+(on?s.color:'var(--bg2)')+';color:'+(on?'#fff':'var(--text3)')+'">'+s.label+'</button>';
+  });
+  h+='</div>';
+  h+='<div style="border:1.5px solid '+activeS.color+';border-radius:0 0 10px 10px;overflow:hidden;margin-bottom:18px">';
+  if(!activeS.items.length){
+    h+='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">Sin registros</div>';
+  } else {
+    activeS.items.forEach(function(c){h+=cambioRow(c,activeS.color);});
+  }
+  h+='</div>';
+  // Section B: Ingenieros activos
+  h+='<div style="font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:8px">B — INGENIEROS ACTIVOS</div>';
+  userList.forEach(function(uName){
+    var uCambios=byUser[uName];
+    var uComp=uCambios.filter(function(c){return c.accion==='completado';}).length;
+    var uEdit=uCambios.filter(function(c){return c.accion==='editado';}).length;
+    var uCrea=uCambios.filter(function(c){return c.accion==='creado';}).length;
+    h+='<div style="border:1.5px solid var(--border2);border-radius:10px;overflow:hidden;margin-bottom:10px">';
+    h+='<div style="background:var(--bg2);padding:8px 12px;display:flex;align-items:center;justify-content:space-between">';
+    h+='<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc(uName)+'</div>';
+    h+='<div style="display:flex;gap:6px;align-items:center">';
+    if(uComp) h+='<span style="font-size:10px;font-weight:700;color:#2f9e44;background:#d3f9d8;border-radius:5px;padding:2px 6px">✓'+uComp+'</span>';
+    if(uEdit) h+='<span style="font-size:10px;font-weight:700;color:#1a56db;background:#dbe4ff;border-radius:5px;padding:2px 6px">✏'+uEdit+'</span>';
+    if(uCrea) h+='<span style="font-size:10px;font-weight:700;color:#7048e8;background:#f3d9fa;border-radius:5px;padding:2px 6px">+'+uCrea+'</span>';
+    h+='<span style="font-size:10px;color:var(--text3)">'+uCambios.length+' acc.</span>';
+    h+='</div></div>';
+    uCambios.forEach(function(c){
+      var cc=ACOLOR[c.accion]||'#868e96';
+      h+='<div style="padding:6px 12px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:8px">'+
+        '<span style="font-size:10px;color:var(--text3);font-family:var(--mono);flex-shrink:0;min-width:36px">'+esc(c.hora||'')+'</span>'+
+        '<span style="font-size:10px;font-weight:700;color:'+cc+';background:'+cc+'22;border-radius:4px;padding:1px 5px;flex-shrink:0">'+esc(c.accion||'')+'</span>'+
+        '<span style="font-size:11px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.entidad_nombre||'')+'</span>'+
+      '</div>';
+    });
+    h+='</div>';
+  });
+  h+='<div style="height:80px"></div></div>';
+  el.innerHTML=h;
+}
+
+async function generarPDFCierre(fecha){
+  fecha=fecha||today();
+  setSS('syncing','Generando PDF cierre...');
+  var cambios=[];
+  try{ cambios=await sb('obra_cambios?fecha=eq.'+fecha+'&order=hora.asc&limit=500'); }
+  catch(e){ setSS('err','Error al cargar datos'); return; }
+  var completadas=cambios.filter(function(c){return c.accion==='completado';});
+  var editadas=cambios.filter(function(c){return c.accion==='editado';});
+  var creadas=cambios.filter(function(c){return c.accion==='creado';});
+  var byUser={};
+  cambios.forEach(function(c){var u=c.usuario_nombre||'Sistema';if(!byUser[u])byUser[u]=[];byUser[u].push(c);});
+  var userList=Object.keys(byUser).sort(function(a,b){return byUser[b].length-byUser[a].length;});
+  try{
+    var jsPDFc=window.jspdf.jsPDF;
+    var doc=new jsPDFc({orientation:'portrait',unit:'mm',format:'a4'});
+    var W=210,M=14,RW=W-2*M;
+    var y=0;
+    var BDX_PUR=[152,32,164],BDX_GRN=[41,101,41],PUR2=[112,72,232];
+    var TXT=[30,30,30],MUT=[100,100,100],WHT=[255,255,255],LGRAY=[245,246,248];
+    function _fc(c){doc.setFillColor.apply(doc,c);}
+    function _tc(c){doc.setTextColor.apply(doc,c);}
+    function _safe(s){return (s||'').replace(/[^\x00-\x7F]/g,function(ch){try{return ch;}catch(e){return '';}});}
+    function drawCH(){
+      _fc(WHT);doc.rect(0,0,W,22,'F');
+      _fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');
+      _fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
+      _fc(BDX_PUR);doc.roundedRect(M,3.5,14,14,2.5,2.5,'F');
+      _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('B',M+4.5,13.5);
+      _tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('BRIDEX',M+17,13);
+      _tc(BDX_PUR);doc.setFontSize(6);doc.setFont('helvetica','italic');
+      doc.text('Nilson E. Morales Reyes, Ing.',M+17,17);
+      var ix=W-M;
+      _tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');doc.text('CIERRE DEL D\xCDA',ix,8,{align:'right'});
+      _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('MECCA RESIDENCE 2026',ix,13,{align:'right'});
+      _tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(fecha,ix,17.5,{align:'right'});
+      _fc(BDX_GRN);doc.rect(0,22,W,1,'F');_fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
+    }
+    function chkY(h){if(y+h>275){doc.addPage();drawCH();y=28;}}
+    drawCH();y=28;
+    // Summary stats band
+    _fc([240,238,255]);doc.rect(M,y,RW,13,'F');
+    _fc(BDX_PUR);doc.rect(M,y,RW,0.5,'F');
+    [[completadas.length,'Completadas',[41,101,41]],[editadas.length,'Avance/Edici\xF3n',[26,86,219]],[creadas.length,'Nuevas',[112,72,232]]].forEach(function(s,i){
+      var sx=M+i*(RW/3)+RW/6;
+      _tc(s[2]);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(''+s[0],sx,y+8.5,{align:'center'});
+      _tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(s[1],sx,y+12,{align:'center'});
+    });
+    y+=16;
+    // Section A
+    _fc(BDX_PUR);doc.rect(M,y,RW,7,'F');
+    _tc(WHT);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('A — AVANCE DEL D\xCDA',M+4,y+5);
+    y+=9;
+    function drawCambioSection(items,accionLabel,color){
+      if(!items.length) return;
+      chkY(8);
+      _tc(color);doc.setFontSize(7);doc.setFont('helvetica','bold');
+      doc.text(accionLabel.toUpperCase()+' ('+items.length+')',M,y+4);
+      y+=6;
+      items.forEach(function(c){
+        var rH=c.detalle?11:7;
+        chkY(rH);
+        _fc(LGRAY);doc.rect(M,y,RW,rH,'F');
+        _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+        doc.text(_safe(c.hora||'--:--'),M+2,y+4.5);
+        _tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+        doc.text(doc.splitTextToSize(_safe(c.entidad_nombre||''),85)[0],M+15,y+4.5);
+        _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+        doc.text(_safe(c.usuario_nombre||''),W-M-2,y+4.5,{align:'right'});
+        if(c.detalle){
+          _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','italic');
+          doc.text(doc.splitTextToSize(_safe(c.detalle),130)[0],M+15,y+8.5);
+        }
+        y+=rH;
+      });
+      y+=3;
+    }
+    drawCambioSection(completadas,'completadas',BDX_GRN);
+    drawCambioSection(editadas,'avance/edici\xF3n',BDX_PUR);
+    drawCambioSection(creadas,'nuevas',PUR2);
+    y+=3;
+    // Section B
+    chkY(10);
+    _fc(BDX_GRN);doc.rect(M,y,RW,7,'F');
+    _tc(WHT);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('B — INGENIEROS ACTIVOS',M+4,y+5);
+    y+=9;
+    var ACMAP={completado:BDX_GRN,editado:[26,86,219],creado:PUR2,eliminado:[201,42,42]};
+    userList.forEach(function(uName){
+      var uCambios=byUser[uName];
+      var uComp=uCambios.filter(function(c){return c.accion==='completado';}).length;
+      var uEdit=uCambios.filter(function(c){return c.accion==='editado';}).length;
+      var uCrea=uCambios.filter(function(c){return c.accion==='creado';}).length;
+      chkY(9);
+      _fc([235,235,252]);doc.rect(M,y,RW,8,'F');
+      _tc(BDX_PUR);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text(_safe(uName),M+4,y+5.5);
+      _tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text(uCambios.length+' acciones  ✓'+uComp+'  ✏'+uEdit+'  +'+uCrea,W-M-2,y+5.5,{align:'right'});
+      y+=9;
+      uCambios.forEach(function(c){
+        chkY(6);
+        _fc(WHT);doc.rect(M,y,RW,6,'F');
+        _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text(_safe(c.hora||''),M+4,y+4);
+        var cc=ACMAP[c.accion]||[134,142,150];
+        _tc(cc);doc.setFontSize(6);doc.setFont('helvetica','bold');doc.text(_safe(c.accion||''),M+18,y+4);
+        _tc(TXT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+        doc.text(doc.splitTextToSize(_safe(c.entidad_nombre||''),110)[0],M+38,y+4);
+        y+=6;
+      });
+      y+=2;
+    });
+    doc.save('cierre-dia-'+fecha+'.pdf');
+    setSS('ok','✓ PDF cierre generado');
+    try{localStorage.setItem('mecca_cierre_'+fecha,'1');}catch(e){}
+  }catch(e){console.error(e);setSS('err','Error al generar PDF');}
+}
+
+function generarPDFUrgentesPend(){
+  setSS('syncing','Generando PDF urgentes...');
+  var hoy=today();
+  var urgentes=(S.acts||[]).filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
+  urgentes.sort(function(a,b){
+    var aVenc=isRetrasada(a),bVenc=isRetrasada(b);
+    if(aVenc&&!bVenc) return -1;
+    if(!aVenc&&bVenc) return 1;
+    return (fechaVenc(a)||'9999').localeCompare(fechaVenc(b)||'9999');
+  });
+  var vencidas=urgentes.filter(function(a){return isRetrasada(a);});
+  try{
+    var jsPDFu=window.jspdf.jsPDF;
+    var doc=new jsPDFu({orientation:'portrait',unit:'mm',format:'a4'});
+    var W=210,M=14,RW=W-2*M;
+    var y=0;
+    var BDX_PUR=[152,32,164],BDX_GRN=[41,101,41],RED=[201,42,42];
+    var TXT=[30,30,30],MUT=[100,100,100],WHT=[255,255,255],LGRAY=[245,246,248];
+    function _fc(c){doc.setFillColor.apply(doc,c);}
+    function _tc(c){doc.setTextColor.apply(doc,c);}
+    function _s(s){return(s||'').replace(/[^\x00-\x7F]/g,function(ch){try{return ch;}catch(e){return '';}});}
+    function chkY(h){if(y+h>275){doc.addPage();drawUH();y=28;}}
+    function drawUH(){
+      _fc(WHT);doc.rect(0,0,W,22,'F');
+      _fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');
+      _fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
+      _fc(BDX_PUR);doc.roundedRect(M,3.5,14,14,2.5,2.5,'F');
+      _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('B',M+4.5,13.5);
+      _tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('BRIDEX',M+17,13);
+      _tc(BDX_PUR);doc.setFontSize(6);doc.setFont('helvetica','italic');
+      doc.text('Nilson E. Morales Reyes, Ing.',M+17,17);
+      var ix=W-M;
+      _tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');doc.text('URGENTES PENDIENTES',ix,8,{align:'right'});
+      _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('MECCA RESIDENCE 2026',ix,13,{align:'right'});
+      _tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(hoy,ix,17.5,{align:'right'});
+      _fc(BDX_GRN);doc.rect(0,22,W,1,'F');_fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
+    }
+    drawUH();y=28;
+    // Stats
+    _fc([255,240,240]);doc.rect(M,y,RW,13,'F');
+    _fc(RED);doc.rect(M,y,RW,0.5,'F');
+    _tc(RED);doc.setFontSize(20);doc.setFont('helvetica','bold');
+    doc.text(''+urgentes.length,M+RW*0.25,y+8.5,{align:'center'});
+    _tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+    doc.text('Total urgentes',M+RW*0.25,y+12,{align:'center'});
+    _tc(vencidas.length?RED:MUT);doc.setFontSize(20);doc.setFont('helvetica','bold');
+    doc.text(''+vencidas.length,M+RW*0.75,y+8.5,{align:'center'});
+    _tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+    doc.text('Vencidas',M+RW*0.75,y+12,{align:'center'});
+    y+=16;
+    // Column definitions
+    var dW=72,aW=28,rW=28,iW=24,fW=18,diaW=12;
+    var cX=[M,M+dW,M+dW+aW,M+dW+aW+rW,M+dW+aW+rW+iW,M+dW+aW+rW+iW+fW];
+    var hdrs=['TAREA','ÁREA','RESPONSABLE','INGENIERO','FECHA FIN','DÍAS'];
+    _fc(BDX_PUR);doc.rect(M,y,RW,6,'F');
+    _tc(WHT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+    hdrs.forEach(function(h,i){doc.text(h,cX[i]+2,y+4);});
+    y+=7;
+    urgentes.forEach(function(a,i){
+      chkY(9);
+      var fv=fechaVenc(a);
+      var venc=isRetrasada(a);
+      var dias=venc?Math.round((new Date(hoy+'T12:00:00')-new Date(fv+'T12:00:00'))/(1000*60*60*24)):0;
+      var rH=9;
+      if(venc){_fc([255,228,228]);doc.rect(M,y,RW,rH,'F');_fc(RED);doc.rect(M,y,2,rH,'F');}
+      else{_fc(i%2===0?LGRAY:WHT);doc.rect(M,y,RW,rH,'F');_fc(BDX_PUR);doc.rect(M,y,2,rH,'F');}
+      _tc(venc?RED:TXT);doc.setFontSize(6.5);doc.setFont('helvetica',venc?'bold':'normal');
+      doc.text(doc.splitTextToSize(_s(a.descripcion||''),dW-4)[0],M+4,y+5.5);
+      _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+      doc.text(doc.splitTextToSize(_s(a.area||'—'),aW-3)[0],cX[1]+2,y+5.5);
+      doc.text(doc.splitTextToSize(_s(a.personal_nombre||'—'),rW-3)[0],cX[2]+2,y+5.5);
+      doc.text(doc.splitTextToSize(_s(a.ingeniero_nombre||'—'),iW-3)[0],cX[3]+2,y+5.5);
+      _tc(venc?RED:MUT);doc.setFontSize(6.5);doc.setFont('helvetica',venc?'bold':'normal');
+      doc.text(_s(fv||'—'),cX[4]+2,y+5.5);
+      if(dias>0){_tc(RED);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('+'+dias+'d',cX[5]+2,y+5.5);}
+      y+=rH;
+    });
+    doc.save('urgentes-pendientes-'+hoy+'.pdf');
+    setSS('ok','✓ PDF urgentes generado');
+  }catch(e){console.error(e);setSS('err','Error al generar PDF');}
+}
+
 function renderReportesHub(){
   var subnav = document.getElementById('c-rep-subnav');
   if(subnav){
@@ -9020,7 +9344,8 @@ function renderReportesHub(){
       subNavBtn('📅 Semana',      S.reportesVista==='semana',      "S.reportesVista='semana';renderReportesHub()")+
       subNavBtn('🔴 Urgentes',    S.reportesVista==='urgentes',    "S.reportesVista='urgentes';renderReportesHub()")+
       subNavBtn('📜 Historial',   S.reportesVista==='historial',   "S.reportesVista='historial';renderReportesHub()")+
-      subNavBtn('🔄 Modificaciones', S.reportesVista==='cambios', "S.reportesVista='cambios';renderReportesHub()");
+      subNavBtn('🔄 Modificaciones', S.reportesVista==='cambios', "S.reportesVista='cambios';renderReportesHub()")+
+      subNavBtn('📅 Cierre', S.reportesVista==='cierre', "S.reportesVista='cierre';renderReportesHub()");
   }
   var rep  = document.getElementById('c-rep');
   var proy = document.getElementById('c-proy');
@@ -9030,8 +9355,9 @@ function renderReportesHub(){
   var urg  = document.getElementById('c-urgentes-rep');
   var cust = document.getElementById('c-rep-custom');
   var camb = document.getElementById('c-cambios');
+  var cierreD = document.getElementById('c-cierre-dia');
   function hideAll(){
-    [rep,proy,apto,sem,hist,urg,cust,camb].forEach(function(e){if(e)e.style.display='none';});
+    [rep,proy,apto,sem,hist,urg,cust,camb,cierreD].forEach(function(e){if(e)e.style.display='none';});
   }
   if(S.reportesVista==='proyeccion'){
     hideAll(); if(proy) proy.style.display='block';
@@ -9054,6 +9380,9 @@ function renderReportesHub(){
   } else if(S.reportesVista==='cambios'){
     hideAll(); if(camb) camb.style.display='block';
     loadCambios();
+  } else if(S.reportesVista==='cierre'){
+    hideAll(); if(cierreD) cierreD.style.display='block';
+    renderCierreDia(S._cierreFecha);
   } else {
     hideAll(); if(rep) rep.style.display='block';
     renderReportes();
