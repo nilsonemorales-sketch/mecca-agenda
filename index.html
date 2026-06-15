@@ -2247,12 +2247,11 @@ function renderHoy(){
       </div>
     </div>
 
-    <!-- Cierre del día shortcut -->
-    <div style="margin-bottom:10px">
-      <button onclick="goTab('reportes');S.reportesVista='cierre';renderReportesHub()" style="width:100%;padding:10px 14px;background:#f3f0ff;border:1.5px solid #7048e8;border-radius:10px;font-size:13px;font-weight:700;color:#7048e8;cursor:pointer;font-family:var(--font);text-align:left;display:flex;align-items:center;justify-content:space-between">
-        <span>📅 Cierre del día</span>
-        <span style="font-size:11px;font-weight:600;opacity:.7">Ver reporte →</span>
-      </button>
+    <!-- Reportes rápidos -->
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button onclick="goTab('reportes');S.reportesVista='cierre';renderReportesHub()" style="flex:1;padding:10px 12px;background:#f3f0ff;border:1.5px solid #7048e8;border-radius:10px;font-size:12px;font-weight:700;color:#7048e8;cursor:pointer;font-family:var(--font);text-align:left">📅 Cierre del día</button>
+      <button onclick="generarPDFCierre(today())" style="flex:0 0 auto;padding:10px 14px;background:#7048e8;border:none;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:var(--font)" title="Generar PDF del cierre de hoy">📄</button>
+      <button onclick="generarPDFPorApto()" style="flex:0 0 auto;padding:10px 12px;background:#f0fdf4;border:1.5px solid #2f9e44;border-radius:10px;font-size:12px;font-weight:700;color:#2f9e44;cursor:pointer;font-family:var(--font)" title="Reporte por apartamento">🏠 Por Apto</button>
     </div>
 
     <!-- Personal x la Casa — Rendimiento hoy -->
@@ -5331,6 +5330,8 @@ function exportarPDF(){
       '<button class="ibtn" onclick="pdfPreset(\'contratistas\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:600">Contrat.</button>'+
       '<button class="ibtn" onclick="pdfPreset(\'asistencia\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:600">Asistenc.</button>'+
       '<button class="ibtn" onclick="pdfPreset(\'urgentes\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:700;border-color:#e03131;color:#e03131">Urgentes</button>'+
+      '<button class="ibtn" onclick="closeModal();generarPDFCierre(today())" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:700;border-color:#7048e8;color:#7048e8">Cierre hoy</button>'+
+      '<button class="ibtn" onclick="closeModal();generarPDFPorApto()" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:700;border-color:#2f9e44;color:#2f9e44">Por Apto</button>'+
     '</div>'+
 
     '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:6px">PERIODO</div>'+
@@ -9329,6 +9330,163 @@ function generarPDFUrgentesPend(){
     });
     doc.save('urgentes-pendientes-'+hoy+'.pdf');
     setSS('ok','✓ PDF urgentes generado');
+  }catch(e){console.error(e);setSS('err','Error al generar PDF');}
+}
+
+// ── REPORTE POR APARTAMENTO ── carga completa + doble agrupamiento ──
+async function generarPDFPorApto(){
+  // ── CAMBIAR AQUÍ para nueva fecha límite ──────────────────────────
+  var FECHA_LIM='2026-10-10';
+  // ─────────────────────────────────────────────────────────────────
+  var _meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var _fp=FECHA_LIM.split('-');
+  var FECHA_LIM_DISPLAY=parseInt(_fp[2])+' de '+(_meses[parseInt(_fp[1])-1]||_fp[1])+' '+_fp[0];
+
+  setSS('syncing','Cargando actividades...');
+  var allActs=[];
+  try{ allActs=await sb('obra_actividades?order=fecha.asc&limit=3000'); }
+  catch(e){ setSS('err','Error al cargar actividades'); return; }
+
+  var hoy=today();
+  var d7=new Date(hoy+'T12:00:00'); d7.setDate(d7.getDate()-7);
+  var hace7=d7.toISOString().slice(0,10);
+
+  function extractAptoId(area){
+    if(!area) return null;
+    var m=area.match(/Apto\s+([\w-]+)/i)||area.match(/([A-Z]\d*-\d+[A-Z]?)/)||area.match(/^(N\d+)/);
+    return m?m[1]:(area.split(' ')[0]||area);
+  }
+  function extractNivel(area){
+    if(!area) return '';
+    var m=area.match(/N(\d+)/i); return m?'N'+m[1]:'';
+  }
+
+  // Build sorted apt groups
+  var aptoMap={};
+  allActs.forEach(function(a){
+    if(!a.area) return;
+    var id=extractAptoId(a.area); if(!id) return;
+    if(!aptoMap[id]) aptoMap[id]={id:id,nivel:extractNivel(a.area),acts:[]};
+    aptoMap[id].acts.push(a);
+  });
+  var aptos=Object.values(aptoMap).sort(function(a,b){return a.id.localeCompare(b.id);});
+
+  function filterActs(acts){
+    return acts.filter(function(a){
+      if(a.estado!=='completado') return true;
+      return (a.fecha_fin||a.fecha||'')>=hace7;
+    });
+  }
+
+  setSS('syncing','Generando PDF...');
+  try{
+    var jsPDFa=window.jspdf.jsPDF;
+    var doc=new jsPDFa({orientation:'portrait',unit:'mm',format:'a4'});
+    var W=210,M=14,RW=W-2*M; var y=0;
+    var BDX_PUR=[152,32,164],BDX_GRN=[41,101,41];
+    var TXT=[30,30,30],MUT=[100,100,100],WHT=[255,255,255],LGRAY=[245,246,248];
+    var COL_PROG=[26,86,219],COL_PAUSA=[230,103,0],COL_COMP=[150,150,150],COL_PEND=[134,142,150];
+    var ECOLS={'en-progreso':COL_PROG,'pausada':COL_PAUSA,'completado':COL_COMP,'pendiente':COL_PEND};
+    var ELABS={'en-progreso':'En progreso','pausada':'Pausada','completado':'Completado','pendiente':'Pendiente'};
+    function _fc(c){doc.setFillColor.apply(doc,c);}
+    function _tc(c){doc.setTextColor.apply(doc,c);}
+    function _s(s){return(s||'').replace(/[^\x00-\x7F]/g,function(ch){try{return ch;}catch(e){return '';}});}
+
+    function drawPH(){
+      _fc(WHT);doc.rect(0,0,W,22,'F');
+      _fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');
+      _fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
+      _fc(BDX_PUR);doc.roundedRect(M,3.5,14,14,2.5,2.5,'F');
+      _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('B',M+4.5,13.5);
+      _tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('BRIDEX',M+17,13);
+      _tc(BDX_PUR);doc.setFontSize(6);doc.setFont('helvetica','italic');
+      doc.text('Nilson E. Morales Reyes, Ing.',M+17,17);
+      var ix=W-M;
+      _tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');
+      doc.text('REPORTE POR APARTAMENTO',ix,8,{align:'right'});
+      _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+      doc.text('MECCA RESIDENCE 2026',ix,13,{align:'right'});
+      _tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text(hoy,ix,17.5,{align:'right'});
+      _fc(BDX_GRN);doc.rect(0,22,W,1,'F');
+      _fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
+    }
+    function chkY(h){if(y+h>275){doc.addPage();drawPH();y=28;}}
+
+    var firstPage=true;
+    aptos.forEach(function(aptoObj){
+      var aptoActs=filterActs(aptoObj.acts);
+      if(!aptoActs.length) return;
+      if(!firstPage) doc.addPage();
+      firstPage=false;
+      drawPH(); y=28;
+
+      // Apt banner (green)
+      var done=aptoActs.filter(function(a){return a.estado==='completado';}).length;
+      _fc(BDX_GRN);doc.rect(M,y,RW,12,'F');
+      _tc(WHT);doc.setFontSize(13);doc.setFont('helvetica','bold');
+      doc.text('APARTAMENTO '+_s(aptoObj.id)+(aptoObj.nivel?' \xB7 '+_s(aptoObj.nivel):''),M+5,y+8.5);
+      _tc([180,255,180]);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text(done+'/'+aptoActs.length+' completadas',W-M-3,y+8.5,{align:'right'});
+      y+=13;
+
+      // Fecha límite band (amber)
+      _fc([255,243,205]);doc.rect(M,y,RW,8,'F');
+      _fc([230,150,0]);doc.rect(M,y,3,8,'F');
+      _tc([110,65,0]);doc.setFontSize(8);doc.setFont('helvetica','bold');
+      doc.text('FECHA L\xCDMITE DE ENTREGA: '+_s(FECHA_LIM_DISPLAY.toUpperCase()),M+6,y+5.5);
+      y+=11;
+
+      // Group by contractor
+      var byContrat={};var contratOrder=[];
+      aptoActs.forEach(function(a){
+        var c=a.personal_nombre||'Sin asignar';
+        if(!byContrat[c]){byContrat[c]=[];contratOrder.push(c);}
+        byContrat[c].push(a);
+      });
+
+      contratOrder.forEach(function(contrat){
+        var cActs=byContrat[contrat].slice().sort(function(a,b){
+          if(a.estado==='completado'&&b.estado!=='completado') return 1;
+          if(b.estado==='completado'&&a.estado!=='completado') return -1;
+          return (a.fecha_fin||a.fecha||'').localeCompare(b.fecha_fin||b.fecha||'');
+        });
+        // Contractor header
+        chkY(8);
+        _fc([235,228,248]);doc.rect(M,y,RW,7,'F');
+        _fc(BDX_PUR);doc.rect(M,y,3,7,'F');
+        _tc(BDX_PUR);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
+        doc.text(_s(contrat),M+6,y+5);
+        _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+        doc.text(cActs.length+' tarea'+(cActs.length!==1?'s':''),W-M-2,y+5,{align:'right'});
+        y+=8;
+        // Column headers
+        chkY(6);
+        _fc([228,225,240]);doc.rect(M,y,RW,5.5,'F');
+        _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','bold');
+        doc.text('FECHA FIN',M+2,y+4);doc.text('TAREA',M+24,y+4);doc.text('ESTADO',W-M-2,y+4,{align:'right'});
+        y+=6;
+        // Rows
+        cActs.forEach(function(a,i){
+          var isComp=a.estado==='completado';
+          var ec=ECOLS[a.estado]||COL_PEND;
+          chkY(8);
+          _fc(isComp?[248,248,248]:(i%2===0?WHT:LGRAY));doc.rect(M,y,RW,8,'F');
+          _fc(ec);doc.rect(M,y,2,8,'F');
+          _tc(isComp?COL_COMP:MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+          doc.text(_s(a.fecha_fin||a.fecha||'—'),M+4,y+5.5);
+          _tc(isComp?COL_COMP:TXT);doc.setFontSize(6.5);doc.setFont('helvetica',isComp?'normal':'bold');
+          doc.text(doc.splitTextToSize(_s(a.descripcion||''),110)[0],M+24,y+5.5);
+          _tc(ec);doc.setFontSize(6);doc.setFont('helvetica','bold');
+          doc.text(_s(ELABS[a.estado]||a.estado),W-M-2,y+5.5,{align:'right'});
+          y+=8;
+        });
+        y+=3;
+      });
+    });
+
+    doc.save('reporte-por-apto-'+hoy+'.pdf');
+    setSS('ok','✓ PDF por apto generado ('+aptos.length+' aptos)');
   }catch(e){console.error(e);setSS('err','Error al generar PDF');}
 }
 
