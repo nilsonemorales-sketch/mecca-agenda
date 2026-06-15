@@ -3526,6 +3526,11 @@ function reRenderActs(){
   if(S.currentTab==='reportes') renderReportesHub();
 }
 
+function renderAll(){
+  try{ if(typeof updateUserUI==='function') updateUserUI(); }catch(e){}
+  try{ reRenderActs(); }catch(e){ console.warn('renderAll:',e); }
+}
+
 function marcarActCompletada(id){
   doMarcarCompletada(id);
 }
@@ -7662,10 +7667,18 @@ function btn(cls, id, label, oc){
   return '<button id="'+id+'" class="tarea-btn '+cls+'" onclick="'+oc+'">'+label+'</button>';
 }
 
-function editActById(id){ editAct(id); }
+function editActById(id){
+  var ai=S.acts.findIndex(function(x){return x.id===id;});
+  if(ai<0){
+    var a=(S.actsActivas||[]).find(function(x){return x.id===id;});
+    if(a){ S.acts.unshift(a); ai=0; }
+  }
+  if(ai>=0) showAddAct(ai);
+}
 function goObraEdit(k){
   var id=window._OA[k];
-  if(id) editAct(id);
+  if(!id) return;
+  editActById(id);
 }
 
 function pausarDesdeObra(k){
