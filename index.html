@@ -9412,8 +9412,9 @@ async function generarPDFPorApto(){
       _fc(BDX_PUR);doc.roundedRect(M,3.5,14,14,2.5,2.5,'F');
       _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('B',M+4.5,13.5);
       _tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('BRIDEX',M+17,13);
-      _tc(BDX_PUR);doc.setFontSize(6);doc.setFont('helvetica','italic');
-      doc.text('Nilson E. Morales Reyes, Ing.',M+17,17);
+      _tc(BDX_PUR);doc.setFontSize(5.5);doc.setFont('helvetica','italic');
+      doc.text('Martha M. Reyes Cabrera, Arq.',M+17,15.5);
+      doc.text('Nilson E. Morales Reyes, Ing.',M+17,19);
       var ix=W-M;
       _tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');
       doc.text('REPORTE POR APARTAMENTO',ix,8,{align:'right'});
@@ -9464,34 +9465,61 @@ async function generarPDFPorApto(){
           if(b.estado==='completado'&&a.estado!=='completado') return -1;
           return (a.fecha_fin||a.fecha||'').localeCompare(b.fecha_fin||b.fecha||'');
         });
+        // Ajuste 3: find dominant engineer for this contractor group
+        var _ingFreq={};
+        cActs.forEach(function(a){if(a.ingeniero_nombre)_ingFreq[a.ingeniero_nombre]=(_ingFreq[a.ingeniero_nombre]||0)+1;});
+        var _ingPrinc=Object.keys(_ingFreq).sort(function(a,b){return _ingFreq[b]-_ingFreq[a];})[0]||'';
+        var _hH=_ingPrinc?9:7;
+        // Ajuste 4: keep header with first rows — if header+colhdrs+5rows don't fit, new page first
+        if(y+_hH+6+Math.min(5,cActs.length)*8>275){doc.addPage();drawPH();y=28;}
         // Contractor header
-        chkY(8);
-        _fc([235,228,248]);doc.rect(M,y,RW,7,'F');
-        _fc(BDX_PUR);doc.rect(M,y,3,7,'F');
+        _fc([235,228,248]);doc.rect(M,y,RW,_hH,'F');
+        _fc(BDX_PUR);doc.rect(M,y,3,_hH,'F');
         _tc(BDX_PUR);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
         doc.text(_s(contrat),M+6,y+5);
-        _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-        doc.text(cActs.length+' tarea'+(cActs.length!==1?'s':''),W-M-2,y+5,{align:'right'});
-        y+=8;
-        // Column headers
+        if(_ingPrinc){
+          _tc([100,50,140]);doc.setFontSize(6);doc.setFont('helvetica','italic');
+          doc.text('Ing. '+_s(_ingPrinc),M+6,y+8);
+          _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+          doc.text(cActs.length+' tarea'+(cActs.length!==1?'s':''),W-M-2,y+8,{align:'right'});
+        }else{
+          _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+          doc.text(cActs.length+' tarea'+(cActs.length!==1?'s':''),W-M-2,y+5,{align:'right'});
+        }
+        y+=_hH+1;
+        // Column headers (Ajuste 2: added ESTADO and AVANCE columns)
         chkY(6);
         _fc([228,225,240]);doc.rect(M,y,RW,5.5,'F');
         _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','bold');
-        doc.text('FECHA FIN',M+2,y+4);doc.text('TAREA',M+24,y+4);doc.text('ESTADO',W-M-2,y+4,{align:'right'});
+        doc.text('FECHA FIN',M+2,y+4);doc.text('TAREA',M+24,y+4);
+        doc.text('ESTADO',M+98,y+4);doc.text('AVANCE',M+122,y+4);
         y+=6;
-        // Rows
+        // Rows (Ajuste 2: bar + reduced tarea width + estado column)
         cActs.forEach(function(a,i){
           var isComp=a.estado==='completado';
           var ec=ECOLS[a.estado]||COL_PEND;
           chkY(8);
           _fc(isComp?[248,248,248]:(i%2===0?WHT:LGRAY));doc.rect(M,y,RW,8,'F');
           _fc(ec);doc.rect(M,y,2,8,'F');
+          // Fecha fin
           _tc(isComp?COL_COMP:MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
           doc.text(_s(a.fecha_fin||a.fecha||'—'),M+4,y+5.5);
+          // Tarea (72mm, reduced to make room for bar)
           _tc(isComp?COL_COMP:TXT);doc.setFontSize(6.5);doc.setFont('helvetica',isComp?'normal':'bold');
-          doc.text(doc.splitTextToSize(_s(a.descripcion||''),110)[0],M+24,y+5.5);
+          doc.text(doc.splitTextToSize(_s(a.descripcion||''),72)[0],M+24,y+5.5);
+          // Estado
           _tc(ec);doc.setFontSize(6);doc.setFont('helvetica','bold');
-          doc.text(_s(ELABS[a.estado]||a.estado),W-M-2,y+5.5,{align:'right'});
+          doc.text(_s(ELABS[a.estado]||a.estado),M+98,y+5.5);
+          // Avance bar
+          var _pct=a.porcentaje||0;
+          var _bx=M+122,_bw=46;
+          _fc([215,215,215]);doc.rect(_bx,y+3,_bw,2,'F');
+          if(_pct>0){
+            var _bc=_pct<50?COL_PAUSA:_pct<100?COL_PROG:BDX_GRN;
+            _fc(_bc);doc.rect(_bx,y+3,Math.max(1,_bw*_pct/100),2,'F');
+          }
+          _tc(isComp?COL_COMP:[60,60,60]);doc.setFontSize(5.5);doc.setFont('helvetica','bold');
+          doc.text(_pct+'%',_bx+_bw+2,y+5.5);
           y+=8;
         });
         y+=3;
