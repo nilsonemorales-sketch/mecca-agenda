@@ -9361,24 +9361,32 @@ async function generarPDFPorApto(){
   var d7=new Date(hoy+'T12:00:00'); d7.setDate(d7.getDate()-7);
   var hace7=d7.toISOString().slice(0,10);
 
-  function extractAptoId(area){
-    if(!area) return null;
-    var m=area.match(/Apto\s+([\w-]+)/i)||area.match(/([A-Z]\d*-\d+[A-Z]?)/)||area.match(/^(N\d+)/);
-    return m?m[1]:(area.split(' ')[0]||area);
-  }
-  function extractNivel(area){
+  function areaLabel(area){
     if(!area) return '';
-    var m=area.match(/N(\d+)/i); return m?'N'+m[1]:'';
+    var mApt=area.match(/Apto\s+([\w-]+)/i);
+    if(mApt){
+      var aptId=mApt[1];
+      var mNiv=area.match(/N(\d+)/i);
+      return 'Apto '+aptId+(mNiv?' \xB7 N'+mNiv[1]:'');
+    }
+    if(/^toda\s+la\s+obra$/i.test(area.trim())) return 'General';
+    if(/^parqueo/i.test(area.trim())) return 'N1 Parqueo';
+    return area;
   }
 
-  var aptoMap={};
+  var areaMap={};
   allActs.forEach(function(a){
     if(!a.area) return;
-    var id=extractAptoId(a.area); if(!id) return;
-    if(!aptoMap[id]) aptoMap[id]={id:id,nivel:extractNivel(a.area),acts:[]};
-    aptoMap[id].acts.push(a);
+    var k=a.area;
+    if(!areaMap[k]) areaMap[k]={area:k,label:areaLabel(k),acts:[]};
+    areaMap[k].acts.push(a);
   });
-  var aptos=Object.values(aptoMap).sort(function(a,b){return a.id.localeCompare(b.id);});
+  // Apartments first, then other areas alphabetically
+  var areas=Object.values(areaMap).sort(function(a,b){
+    var aA=/Apto/i.test(a.area),bA=/Apto/i.test(b.area);
+    if(aA&&!bA) return -1; if(!aA&&bA) return 1;
+    return a.area.localeCompare(b.area);
+  });
 
   function filterActs(acts){
     return acts.filter(function(a){
@@ -9402,7 +9410,7 @@ async function generarPDFPorApto(){
     function _tc(c){doc.setTextColor.apply(doc,c);}
     function _s(s){return(s||'').replace(/[^\x00-\x7F]/g,function(ch){try{return ch;}catch(e){return '';}});}
 
-    var _ctx={apto:null,contrat:'',ing:'',numTareas:0,done:0,total:0};
+    var _ctx={area:null,label:'',contrat:'',ing:'',numTareas:0,done:0,total:0};
 
     function drawPageTop(){
       _fc(WHT);doc.rect(0,0,W,22,'F');
@@ -9424,11 +9432,10 @@ async function generarPDFPorApto(){
       _fc(BDX_GRN);doc.rect(0,22,W,1,'F');
       _fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
       y=26;
-      if(!_ctx.apto) return;
-      var _aptLabel='MECCA RESIDENCE 2026  \xB7  APTO '+_s(_ctx.apto.id)+(_ctx.apto.nivel?'  \xB7  '+_s(_ctx.apto.nivel):'');
+      if(!_ctx.area) return;
       _fc(BDX_GRN);doc.rect(M,y,RW,10,'F');
       _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');
-      doc.text(_aptLabel,M+4,y+7);
+      doc.text('MECCA RESIDENCE 2026  \xB7  '+_s(_ctx.label),M+4,y+7);
       _tc([180,255,180]);doc.setFontSize(6);doc.setFont('helvetica','normal');
       doc.text(_ctx.done+'/'+_ctx.total+' completadas',W-M-3,y+7,{align:'right'});
       y+=11;
@@ -9465,22 +9472,22 @@ async function generarPDFPorApto(){
     }
 
     var firstPage=true;
-    aptos.forEach(function(aptoObj){
-      var aptoActs=filterActs(aptoObj.acts);
-      if(!aptoActs.length) return;
+    areas.forEach(function(areaObj){
+      var areaActs=filterActs(areaObj.acts);
+      if(!areaActs.length) return;
 
-      var aptDone=aptoActs.filter(function(a){return a.estado==='completado';}).length;
+      var areaDone=areaActs.filter(function(a){return a.estado==='completado';}).length;
 
       var byContrat={};var contratOrder=[];
-      aptoActs.forEach(function(a){
+      areaActs.forEach(function(a){
         var c=a.personal_nombre||'Sin asignar';
         if(!byContrat[c]){byContrat[c]=[];contratOrder.push(c);}
         byContrat[c].push(a);
       });
       if(!contratOrder.length) return;
 
-      // Each apt starts on its own page; contractors are packed within it
-      _ctx.apto=aptoObj; _ctx.done=aptDone; _ctx.total=aptoActs.length;
+      // Each area starts on its own page; contractors are packed within it
+      _ctx.area=areaObj.area; _ctx.label=areaObj.label; _ctx.done=areaDone; _ctx.total=areaActs.length;
       if(!firstPage) doc.addPage();
       firstPage=false;
       drawPageTop();
@@ -9536,7 +9543,7 @@ async function generarPDFPorApto(){
     });
 
     doc.save('reporte-por-apto-'+hoy+'.pdf');
-    setSS('ok','✓ PDF por apto generado ('+aptos.length+' aptos)');
+    setSS('ok','✓ PDF por apto generado ('+areas.length+' secciones)');
   }catch(e){console.error(e);setSS('err','Error al generar PDF');}
 }
 
