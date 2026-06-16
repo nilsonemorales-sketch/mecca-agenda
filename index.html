@@ -9396,6 +9396,16 @@ async function generarPDFPorApto(){
     function _fc(c){doc.setFillColor.apply(doc,c);}
     function _tc(c){doc.setTextColor.apply(doc,c);}
     function _s(s){return(s||'').replace(/[^\x00-\x7F]/g,function(ch){try{return ch;}catch(e){return '';}});}
+    function _hexRgb(h){h=(h||'#888').replace('#','');return[parseInt(h.slice(0,2),16)||128,parseInt(h.slice(2,4),16)||128,parseInt(h.slice(4,6),16)||128];}
+    var _ingColors={};Object.values(USERS).forEach(function(u){_ingColors[u.nombre]=_hexRgb(u.color);});
+    var _cPal=[[0,119,182],[3,138,116],[155,89,182],[211,84,0],[39,125,161],[46,134,171],[178,24,43],[33,150,83],[96,60,20],[24,100,170]];
+    function _cColor(n){if(!n)return[130,130,130];var h=0;for(var i=0;i<n.length;i++)h=(h*31+n.charCodeAt(i))>>>0;return _cPal[h%_cPal.length];}
+    function _pill(x,y,maxW,color,text,fs){
+      fs=fs||8;doc.setFontSize(fs);doc.setFont('helvetica','bold');
+      var tw=Math.min(doc.getTextWidth(_s(text)),maxW-5);var pw=tw+5;
+      _fc(color);doc.roundedRect(x,y,pw,5.5,1,1,'F');
+      _tc(WHT);doc.text(_s(text),x+pw/2,y+4,{align:'center'});
+    }
 
     var _ctx={area:null,label:'',contrat:'',ing:'',numTareas:0,done:0,total:0};
 
@@ -9474,18 +9484,19 @@ async function generarPDFPorApto(){
       areaActs.forEach(function(a,i){
         var isComp=a.estado==='completado';
         var ec=ECOLS[a.estado]||COL_PEND;
+        var _isVenc=!isComp&&!!(a.fecha_fin||a.fecha)&&(a.fecha_fin||a.fecha)<hoy;
+        var _ec2=_isVenc?[192,32,51]:ec;
+        var _elabel=_isVenc?'Vencida':(ELABS[a.estado]||a.estado);
         chkY(10);
         _fc(isComp?[248,248,248]:(i%2===0?WHT:LGRAY));doc.rect(M,y,RW,10,'F');
-        _fc(ec);doc.rect(M,y,2,10,'F');
+        _fc(_ec2);doc.rect(M,y,2,10,'F');
         _tc(isComp?COL_COMP:MUT);doc.setFontSize(9);doc.setFont('helvetica','normal');
         doc.text(_s(a.fecha_fin||a.fecha||'—'),M+4,y+7);
         _tc(isComp?COL_COMP:TXT);doc.setFontSize(10);doc.setFont('helvetica',isComp?'normal':'bold');
         doc.text(doc.splitTextToSize(_s(a.descripcion||''),88)[0],M+26,y+7);
-        _tc(isComp?COL_COMP:TXT);doc.setFontSize(9);doc.setFont('helvetica','normal');
-        doc.text(doc.splitTextToSize(_s(a.personal_nombre||'—'),40)[0],M+118,y+7);
-        doc.text(doc.splitTextToSize(_s(a.ingeniero_nombre||'—'),36)[0],M+162,y+7);
-        _tc(ec);doc.setFontSize(9);doc.setFont('helvetica','bold');
-        doc.text(_s(ELABS[a.estado]||a.estado),M+202,y+7);
+        _pill(M+118,y+2,38,_cColor(a.personal_nombre),a.personal_nombre||'—');
+        _pill(M+162,y+2,34,_ingColors[a.ingeniero_nombre]||[120,120,120],a.ingeniero_nombre||'—');
+        _pill(M+202,y+2,24,_ec2,_elabel);
         var _pct=a.porcentaje||0;
         var _bx=M+226,_bw=30;
         _fc([215,215,215]);doc.rect(_bx,y+4,_bw,2.5,'F');
