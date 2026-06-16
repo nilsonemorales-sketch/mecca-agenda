@@ -2251,7 +2251,7 @@ function renderHoy(){
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <button onclick="goTab('reportes');S.reportesVista='cierre';renderReportesHub()" style="flex:1;padding:10px 12px;background:#f3f0ff;border:1.5px solid #7048e8;border-radius:10px;font-size:12px;font-weight:700;color:#7048e8;cursor:pointer;font-family:var(--font);text-align:left">📅 Cierre del día</button>
       <button onclick="generarPDFCierre(today())" style="flex:0 0 auto;padding:10px 14px;background:#7048e8;border:none;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:var(--font)" title="Generar PDF del cierre de hoy">📄</button>
-      <button onclick="generarPDFPorApto()" style="flex:0 0 auto;padding:10px 12px;background:#f0fdf4;border:1.5px solid #2f9e44;border-radius:10px;font-size:12px;font-weight:700;color:#2f9e44;cursor:pointer;font-family:var(--font)" title="Reporte por apartamento">🏠 Por Apto</button>
+      <button onclick="abrirSelectorUbicaciones()" style="flex:0 0 auto;padding:10px 12px;background:#f0fdf4;border:1.5px solid #2f9e44;border-radius:10px;font-size:12px;font-weight:700;color:#2f9e44;cursor:pointer;font-family:var(--font)" title="Reporte por apartamento">🏠 Por Apto</button>
     </div>
 
     <!-- Personal x la Casa — Rendimiento hoy -->
@@ -5336,7 +5336,7 @@ function exportarPDF(){
       '<button class="ibtn" onclick="pdfPreset(\'asistencia\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:600">Asistenc.</button>'+
       '<button class="ibtn" onclick="pdfPreset(\'urgentes\')" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:700;border-color:#e03131;color:#e03131">Urgentes</button>'+
       '<button class="ibtn" onclick="closeModal();generarPDFCierre(today())" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:700;border-color:#7048e8;color:#7048e8">Cierre hoy</button>'+
-      '<button class="ibtn" onclick="closeModal();generarPDFPorApto()" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:700;border-color:#2f9e44;color:#2f9e44">Por Apto</button>'+
+      '<button class="ibtn" onclick="closeModal();abrirSelectorUbicaciones()" style="flex:1;min-width:56px;padding:8px 4px;font-size:11px;font-weight:700;border-color:#2f9e44;color:#2f9e44">Por Apto</button>'+
     '</div>'+
 
     '<div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.05em;margin-bottom:6px">PERIODO</div>'+
@@ -9347,7 +9347,94 @@ function generarPDFUrgentesPend(){
 }
 
 // ── REPORTE POR APARTAMENTO ── carga completa + doble agrupamiento ──
-async function generarPDFPorApto(){
+async function abrirSelectorUbicaciones(){
+  setSS('syncing','Cargando ubicaciones...');
+  var allActs=[];
+  try{ allActs=await sb('obra_actividades?order=fecha.asc&limit=3000'); }
+  catch(e){ setSS('err','Error al cargar actividades'); return; }
+  setSS('ok','');
+
+  var hoy=today();
+  var d7=new Date(hoy+'T12:00:00'); d7.setDate(d7.getDate()-7);
+  var hace7=d7.toISOString().slice(0,10);
+
+  function _lbl(area){
+    if(!area) return '';
+    var mA=area.match(/Apto\s+([\w-]+)/i);
+    if(mA){ var mN=area.match(/N(\d+)/i); return 'Apto '+mA[1]+(mN?' \xB7 N'+mN[1]:''); }
+    if(/^toda\s+la\s+obra$/i.test(area.trim())) return 'General';
+    if(/^parqueo/i.test(area.trim())) return 'N1 Parqueo';
+    return area;
+  }
+  function _flt(acts){
+    return acts.filter(function(a){
+      if(a.tipo_personal==='propio') return false;
+      if(a.estado!=='completado') return true;
+      return (a.fecha_fin||a.fecha||'')>=hace7;
+    });
+  }
+
+  var areaMap={};
+  allActs.forEach(function(a){
+    if(!a.area) return;
+    if(!areaMap[a.area]) areaMap[a.area]={area:a.area,label:_lbl(a.area),acts:[]};
+    areaMap[a.area].acts.push(a);
+  });
+  var areas=Object.values(areaMap).sort(function(a,b){
+    var aA=/Apto/i.test(a.area),bA=/Apto/i.test(b.area);
+    if(aA&&!bA) return -1; if(!aA&&bA) return 1;
+    return a.area.localeCompare(b.area);
+  }).filter(function(a){ return _flt(a.acts).length>0; });
+
+  if(!areas.length){ setSS('ok','Sin ubicaciones con actividades'); return; }
+
+  var rows='';
+  areas.forEach(function(a,i){
+    var cnt=_flt(a.acts).length;
+    rows+='<label style="display:flex;align-items:center;gap:10px;padding:9px 10px;'+
+      'background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--r);'+
+      'cursor:pointer;font-size:13px;font-weight:500;user-select:none">'+
+      '<input type="checkbox" id="ub'+i+'" data-area="'+esc(a.area)+'" checked '+
+        'style="width:16px;height:16px;cursor:pointer;accent-color:#2f9e44">'+
+      '<span style="flex:1">'+esc(a.label)+'</span>'+
+      '<span style="font-size:11px;color:var(--text3);font-weight:400">'+cnt+' act.</span>'+
+    '</label>';
+  });
+
+  document.getElementById('mcontent').innerHTML=
+    '<div class="mhandle"></div>'+
+    '<h3 style="margin-bottom:4px">🏠 Reporte Por Apartamento</h3>'+
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Selecciona las ubicaciones a incluir</div>'+
+    '<div style="display:flex;gap:8px;margin-bottom:10px">'+
+      '<button onclick="_ubSelTodas(true)" style="flex:1;padding:7px;border-radius:var(--r);'+
+        'border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);'+
+        'font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Seleccionar todas</button>'+
+      '<button onclick="_ubSelTodas(false)" style="flex:1;padding:7px;border-radius:var(--r);'+
+        'border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);'+
+        'font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Ninguna</button>'+
+    '</div>'+
+    '<div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;margin-bottom:14px">'+rows+'</div>'+
+    '<div class="mactions">'+
+      '<button class="btn" onclick="closeModal()">Cancelar</button>'+
+      '<button class="btn primary" style="background:#2f9e44;border-color:#2f9e44" onclick="_ubGenerar()">Generar PDF</button>'+
+    '</div>';
+  openModal();
+}
+
+function _ubSelTodas(v){
+  document.querySelectorAll('#mcontent input[type=checkbox]').forEach(function(c){c.checked=v;});
+}
+
+function _ubGenerar(){
+  var sel=[];
+  document.querySelectorAll('#mcontent input[type=checkbox]').forEach(function(c){
+    if(c.checked) sel.push(c.dataset.area);
+  });
+  closeModal();
+  generarPDFPorApto(sel.length?sel:null);
+}
+
+async function generarPDFPorApto(selectedAreas){
   var _mesesCorto=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
   setSS('syncing','Cargando actividades...');
@@ -9387,6 +9474,7 @@ async function generarPDFPorApto(){
     if(aA&&!bA) return -1; if(!aA&&bA) return 1;
     return a.area.localeCompare(b.area);
   });
+  if(selectedAreas&&selectedAreas.length) areas=areas.filter(function(a){return selectedAreas.indexOf(a.area)>=0;});
 
   function filterActs(acts){
     return acts.filter(function(a){
