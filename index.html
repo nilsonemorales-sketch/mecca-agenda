@@ -2138,6 +2138,12 @@ function renderHoy(){
   const actDone=completadasHoy.length;
   const retrasadas=(S.actsActivas&&S.actsActivas.length?S.actsActivas:S.acts).filter(a=>isRetrasada(a));
   const pct=propios.length?Math.round(pres/propios.length*100):0;
+  // Stagnant: in-progress contractor activities with ≤5% progress overdue by 7+ days
+  var _estancadasCutoff=new Date(today()+'T12:00:00');_estancadasCutoff.setDate(_estancadasCutoff.getDate()-7);
+  var _estancadasCutoffStr=_estancadasCutoff.toISOString().slice(0,10);
+  const estancadas=S.acts.filter(function(a){
+    return a.estado==='en-progreso'&&a.tipo_personal!=='propio'&&(parseInt(a.porcentaje)||0)<=5&&fechaVenc(a)&&fechaVenc(a)<_estancadasCutoffStr;
+  });
   const isDesktop=window.innerWidth>600;
 
   // Apply Hoy filters
@@ -2315,6 +2321,28 @@ function renderHoy(){
       </div>
     </div>`:
     `<div style="background:#d3f9d8;border:1px solid #8ce99a;border-radius:var(--r2);padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#2f9e44;text-align:center">✅ Sin actividades retrasadas</div>`}
+
+    <!-- ESTANCADAS — in-progress contractor acts with ≤5% progress, overdue 7+ days -->
+    ${estancadas.length>0?`
+    <div style="background:#fff8f0;border:1.5px solid #fd7e14;border-radius:var(--r2);margin-bottom:10px;overflow:hidden">
+      <div style="background:#ffe8cc;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #fd7e14">
+        <span style="font-size:13px;font-weight:800;color:#c05c00">⚠️ ${estancadas.length} sin actualizar</span>
+        <span style="font-size:10.5px;color:#c05c00;font-weight:600">En progreso · sin avance · +7 días vencidas</span>
+      </div>
+      <div style="padding:0 12px">
+        ${estancadas.slice(0,5).map(a=>{
+          const dias=Math.round((new Date(today()+'T12:00:00')-new Date((fechaVenc(a)||today())+'T12:00:00'))/864e5);
+          const pctA=parseInt(a.porcentaje)||0;
+          return`<div style="padding:8px 0;border-bottom:1px solid #ffd8b0;display:flex;align-items:center;gap:8px" onclick="showQuickActSheet('${a.id}')">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:600;color:#c05c00;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.descripcion)}</div>
+              <div style="font-size:10.5px;color:#e8790a;margin-top:1px">${dias}d vencida · ${a.area?esc(a.area):'Sin área'}${a.personal_nombre?' · '+esc(a.personal_nombre.split(' ')[0]):''} · ${pctA}%</div>
+            </div>
+            <button onclick="event.stopPropagation();showPctPopover('${a.id}',this)" style="background:#ffe8cc;color:#c05c00;border:1px solid #fd7e14;border-radius:8px;padding:5px 9px;font-size:10px;font-weight:800;cursor:pointer;font-family:var(--font);white-space:nowrap">${pctA}% ▸</button>
+          </div>`;}).join('')}
+        ${estancadas.length>5?`<div style="padding:8px 0;font-size:11px;color:#e8790a;font-weight:600;text-align:center">+${estancadas.length-5} más</div>`:''}
+      </div>
+    </div>`:``}
 
     <!-- Activities section -->
     <div class="card">
