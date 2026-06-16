@@ -9443,32 +9443,21 @@ async function generarPDFPorApto(){
       y+=18;
     }
 
-    function drawContractorHeader(){
-      var _hH=_ctx.ing?13:10;
-      _fc([235,228,248]);doc.rect(M,y,RW,_hH,'F');
-      _fc(BDX_PUR);doc.rect(M,y,3,_hH,'F');
-      _tc(BDX_PUR);doc.setFontSize(11);doc.setFont('helvetica','bold');
-      doc.text(_s(_ctx.contrat),M+6,y+7);
-      _tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','normal');
-      doc.text(_ctx.numTareas+' tarea'+(_ctx.numTareas!==1?'s':''),W-M-2,y+4,{align:'right'});
-      if(_ctx.ing){
-        _tc([100,50,140]);doc.setFontSize(8);doc.setFont('helvetica','italic');
-        doc.text(_s(_ctx.ing),M+6,y+11);
-      }
-      y+=_hH+2;
+    function drawColHeaders(){
       _fc([228,225,240]);doc.rect(M,y,RW,9,'F');
       _tc(MUT);doc.setFontSize(10);doc.setFont('helvetica','bold');
       doc.text('FECHA FIN',M+2,y+6.5);doc.text('TAREA',M+26,y+6.5);
-      doc.text('ESTADO',M+178,y+6.5);doc.text('AVANCE',M+210,y+6.5);
+      doc.text('CONTRATISTA',M+118,y+6.5);doc.text('RESPONSABLE',M+162,y+6.5);
+      doc.text('ESTADO',M+202,y+6.5);doc.text('AVANCE',M+226,y+6.5);
       y+=10;
     }
 
-    // On mid-row overflow: redraw page top + contractor header to show continuation
+    // On mid-row overflow: redraw page top + col headers to show continuation
     function chkY(h){
       if(y+h>195){
         doc.addPage();
         drawPageTop();
-        drawContractorHeader();
+        drawColHeaders();
       }
     }
 
@@ -9479,67 +9468,47 @@ async function generarPDFPorApto(){
 
       var areaDone=areaActs.filter(function(a){return a.estado==='completado';}).length;
 
-      var byContrat={};var contratOrder=[];
-      areaActs.forEach(function(a){
-        var c=a.personal_nombre||'Sin asignar';
-        if(!byContrat[c]){byContrat[c]=[];contratOrder.push(c);}
-        byContrat[c].push(a);
+      // Sort by contractor, completados last within each contractor, then by fecha_fin
+      areaActs.sort(function(a,b){
+        var ca=a.personal_nombre||'',cb=b.personal_nombre||'';
+        if(ca!==cb) return ca.localeCompare(cb);
+        if(a.estado==='completado'&&b.estado!=='completado') return 1;
+        if(b.estado==='completado'&&a.estado!=='completado') return -1;
+        return (a.fecha_fin||a.fecha||'').localeCompare(b.fecha_fin||b.fecha||'');
       });
-      if(!contratOrder.length) return;
 
-      // Each area starts on its own page; contractors are packed within it
+      // Each area starts on its own page
       _ctx.area=areaObj.area; _ctx.label=areaObj.label; _ctx.done=areaDone; _ctx.total=areaActs.length;
       if(!firstPage) doc.addPage();
       firstPage=false;
       drawPageTop();
+      drawColHeaders();
 
-      contratOrder.forEach(function(contrat){
-        var cActs=byContrat[contrat].slice().sort(function(a,b){
-          if(a.estado==='completado'&&b.estado!=='completado') return 1;
-          if(b.estado==='completado'&&a.estado!=='completado') return -1;
-          return (a.fecha_fin||a.fecha||'').localeCompare(b.fecha_fin||b.fecha||'');
-        });
-
-        var _ingFreq={};
-        cActs.forEach(function(a){if(a.ingeniero_nombre)_ingFreq[a.ingeniero_nombre]=(_ingFreq[a.ingeniero_nombre]||0)+1;});
-        var _ingPrinc=Object.keys(_ingFreq).sort(function(a,b){return _ingFreq[b]-_ingFreq[a];})[0]||'';
-
-        _ctx.contrat=contrat; _ctx.ing=_ingPrinc; _ctx.numTareas=cActs.length;
-
-        // Keep-together: if contractor header + col headers + first 3 rows don't fit, new page
-        var _hH=_ingPrinc?13:10;
-        var _blockH=_hH+2+10+Math.min(3,cActs.length)*10;
-        if(y+_blockH>195){
-          doc.addPage();
-          drawPageTop();
+      areaActs.forEach(function(a,i){
+        var isComp=a.estado==='completado';
+        var ec=ECOLS[a.estado]||COL_PEND;
+        chkY(10);
+        _fc(isComp?[248,248,248]:(i%2===0?WHT:LGRAY));doc.rect(M,y,RW,10,'F');
+        _fc(ec);doc.rect(M,y,2,10,'F');
+        _tc(isComp?COL_COMP:MUT);doc.setFontSize(9);doc.setFont('helvetica','normal');
+        doc.text(_s(a.fecha_fin||a.fecha||'—'),M+4,y+7);
+        _tc(isComp?COL_COMP:TXT);doc.setFontSize(10);doc.setFont('helvetica',isComp?'normal':'bold');
+        doc.text(doc.splitTextToSize(_s(a.descripcion||''),88)[0],M+26,y+7);
+        _tc(isComp?COL_COMP:TXT);doc.setFontSize(9);doc.setFont('helvetica','normal');
+        doc.text(doc.splitTextToSize(_s(a.personal_nombre||'—'),40)[0],M+118,y+7);
+        doc.text(doc.splitTextToSize(_s(a.ingeniero_nombre||'—'),36)[0],M+162,y+7);
+        _tc(ec);doc.setFontSize(9);doc.setFont('helvetica','bold');
+        doc.text(_s(ELABS[a.estado]||a.estado),M+202,y+7);
+        var _pct=a.porcentaje||0;
+        var _bx=M+226,_bw=30;
+        _fc([215,215,215]);doc.rect(_bx,y+4,_bw,2.5,'F');
+        if(_pct>0){
+          var _bc=_pct<50?COL_PAUSA:_pct<100?COL_PROG:BDX_GRN;
+          _fc(_bc);doc.rect(_bx,y+4,Math.max(1,_bw*_pct/100),2.5,'F');
         }
-
-        drawContractorHeader();
-
-        cActs.forEach(function(a,i){
-          var isComp=a.estado==='completado';
-          var ec=ECOLS[a.estado]||COL_PEND;
-          chkY(10);
-          _fc(isComp?[248,248,248]:(i%2===0?WHT:LGRAY));doc.rect(M,y,RW,10,'F');
-          _fc(ec);doc.rect(M,y,2,10,'F');
-          _tc(isComp?COL_COMP:MUT);doc.setFontSize(9);doc.setFont('helvetica','normal');
-          doc.text(_s(a.fecha_fin||a.fecha||'—'),M+4,y+7);
-          _tc(isComp?COL_COMP:TXT);doc.setFontSize(11);doc.setFont('helvetica',isComp?'normal':'bold');
-          doc.text(doc.splitTextToSize(_s(a.descripcion||''),150)[0],M+26,y+7);
-          _tc(ec);doc.setFontSize(9);doc.setFont('helvetica','bold');
-          doc.text(_s(ELABS[a.estado]||a.estado),M+178,y+7);
-          var _pct=a.porcentaje||0;
-          var _bx=M+210,_bw=46;
-          _fc([215,215,215]);doc.rect(_bx,y+4,_bw,2.5,'F');
-          if(_pct>0){
-            var _bc=_pct<50?COL_PAUSA:_pct<100?COL_PROG:BDX_GRN;
-            _fc(_bc);doc.rect(_bx,y+4,Math.max(1,_bw*_pct/100),2.5,'F');
-          }
-          _tc(isComp?COL_COMP:[60,60,60]);doc.setFontSize(10);doc.setFont('helvetica','bold');
-          doc.text(_pct+'%',_bx+_bw+1,y+7);
-          y+=10;
-        });
-        y+=5;
+        _tc(isComp?COL_COMP:[60,60,60]);doc.setFontSize(9);doc.setFont('helvetica','bold');
+        doc.text(_pct+'%',_bx+_bw+1,y+7);
+        y+=10;
       });
     });
 
