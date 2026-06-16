@@ -565,6 +565,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <div id="c-rep-custom" style="display:none"></div>
       <div id="c-cambios" style="display:none"></div>
       <div id="c-cierre-dia" style="display:none"></div>
+      <div id="c-notif" style="display:none"></div>
     </div>
 
     <div class="view" id="view-fotos"><div id="c-fotos"></div></div>
@@ -9783,7 +9784,8 @@ function renderReportesHub(){
       subNavBtn('🔴 Urgentes',    S.reportesVista==='urgentes',    "S.reportesVista='urgentes';renderReportesHub()")+
       subNavBtn('📜 Historial',   S.reportesVista==='historial',   "S.reportesVista='historial';renderReportesHub()")+
       subNavBtn('🔄 Modificaciones', S.reportesVista==='cambios', "S.reportesVista='cambios';renderReportesHub()")+
-      subNavBtn('📅 Cierre', S.reportesVista==='cierre', "S.reportesVista='cierre';renderReportesHub()");
+      subNavBtn('📅 Cierre', S.reportesVista==='cierre', "S.reportesVista='cierre';renderReportesHub()")+
+      subNavBtn('📬 Novedades', S.reportesVista==='notif', "S.reportesVista='notif';renderReportesHub()");
   }
   var rep  = document.getElementById('c-rep');
   var proy = document.getElementById('c-proy');
@@ -9794,8 +9796,9 @@ function renderReportesHub(){
   var cust = document.getElementById('c-rep-custom');
   var camb = document.getElementById('c-cambios');
   var cierreD = document.getElementById('c-cierre-dia');
+  var notif = document.getElementById('c-notif');
   function hideAll(){
-    [rep,proy,apto,sem,hist,urg,cust,camb,cierreD].forEach(function(e){if(e)e.style.display='none';});
+    [rep,proy,apto,sem,hist,urg,cust,camb,cierreD,notif].forEach(function(e){if(e)e.style.display='none';});
   }
   if(S.reportesVista==='proyeccion'){
     hideAll(); if(proy) proy.style.display='block';
@@ -9821,14 +9824,144 @@ function renderReportesHub(){
   } else if(S.reportesVista==='cierre'){
     hideAll(); if(cierreD) cierreD.style.display='block';
     renderCierreDia(S._cierreFecha);
+  } else if(S.reportesVista==='notif'){
+    hideAll(); if(notif) notif.style.display='block';
+    renderCentroNotif();
   } else {
     hideAll(); if(rep) rep.style.display='block';
     renderReportes();
   }
 }
 
+// ── CENTRO DE NOTIFICACIONES ─────────────────────────
+async function renderCentroNotif(){
+  var el=document.getElementById('c-notif');if(!el)return;
+  el.innerHTML='<div class="empty"><div class="spinner"></div><br>Cargando novedades...</div>';
 
+  // State defaults
+  if(!S._notifDias)S._notifDias=14;
+  if(!S._notifUser)S._notifUser='todos';
+  if(!S._notifAccion)S._notifAccion='todos';
 
+  var fromDate=new Date(today()+'T12:00:00');
+  fromDate.setDate(fromDate.getDate()-(S._notifDias-1));
+  var dFrom=fromDate.toISOString().slice(0,10);
+
+  var cambios=[];
+  try{
+    cambios=await sb('obra_cambios?fecha=gte.'+dFrom+'&order=created_at.desc&limit=500');
+  }catch(e){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">Error al cargar novedades</div>';
+    return;
+  }
+  if(!Array.isArray(cambios))cambios=[];
+
+  // Apply filters
+  var filtered=cambios.slice();
+  if(S._notifUser!=='todos')filtered=filtered.filter(function(c){return c.usuario_id===S._notifUser;});
+  if(S._notifAccion!=='todos')filtered=filtered.filter(function(c){return c.accion===S._notifAccion;});
+
+  // Per-user summary
+  var userCounts={};
+  cambios.forEach(function(c){
+    var k=c.usuario_id||'?';
+    if(!userCounts[k])userCounts[k]={total:0,completado:0,creado:0,editado:0};
+    userCounts[k].total++;
+    if(c.accion==='completado')userCounts[k].completado++;
+    else if(c.accion==='creado')userCounts[k].creado++;
+    else if(c.accion==='editado')userCounts[k].editado++;
+  });
+
+  var accionIcon={creado:'➕',editado:'✏️',eliminado:'🗑️',completado:'✅',fecha:'📅',enlace:'🔗',estado:'🔄',avance:'📊',bandeja:'📅'};
+  var accionClr={creado:'#059669',editado:'#2563EB',eliminado:'#DC2626',completado:'#059669',fecha:'#7C3AED',enlace:'#0891B2',estado:'#D97706',avance:'#6D28D9',bandeja:'#7C3AED'};
+
+  // Summary cards per user
+  var cards='';
+  Object.entries(USERS).forEach(function(e){
+    var k=e[0],u=e[1];
+    var cnt=userCounts[k]||{total:0,completado:0,creado:0,editado:0};
+    var sel=S._notifUser===k;
+    cards+='<div onclick="S._notifUser=\''+(sel?'todos':k)+'\';renderCentroNotif()" style="cursor:pointer;flex:1;min-width:120px;border-radius:12px;border:2px solid '+(sel?u.color:'var(--border2)')+';background:'+(sel?u.color+'18':'var(--bg2)')+';padding:11px 12px;transition:border .15s">'+
+      '<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">'+
+        '<div style="width:10px;height:10px;border-radius:50%;background:'+u.color+'"></div>'+
+        '<span style="font-size:12px;font-weight:700;color:'+u.color+'">'+esc(u.nombre.replace('Ing. ',''))+'</span>'+
+      '</div>'+
+      '<div style="font-size:22px;font-weight:800;color:var(--text);line-height:1">'+cnt.total+'</div>'+
+      '<div style="font-size:10px;color:var(--text3);margin-top:2px">acciones en '+S._notifDias+' días</div>'+
+      '<div style="display:flex;gap:5px;margin-top:7px;flex-wrap:wrap">'+
+        (cnt.completado?'<span style="font-size:9.5px;font-weight:700;color:#059669;background:#05966918;border-radius:5px;padding:1px 6px">✅ '+cnt.completado+'</span>':'')+
+        (cnt.creado?'<span style="font-size:9.5px;font-weight:700;color:#2563EB;background:#2563EB18;border-radius:5px;padding:1px 6px">➕ '+cnt.creado+'</span>':'')+
+        (cnt.editado?'<span style="font-size:9.5px;font-weight:700;color:#D97706;background:#D9770618;border-radius:5px;padding:1px 6px">✏️ '+cnt.editado+'</span>':'')+
+      '</div>'+
+    '</div>';
+  });
+
+  // Accion filter chips
+  var acciones=['todos','creado','editado','completado','avance','estado','fecha','eliminado'];
+  var accionChips=acciones.map(function(a){
+    var sel=S._notifAccion===a;
+    var clr=a==='todos'?'var(--accent)':(accionClr[a]||'var(--text2)');
+    var icon=a==='todos'?'📋':(accionIcon[a]||'•');
+    var lbl=a==='todos'?'Todas':a.charAt(0).toUpperCase()+a.slice(1);
+    return '<button onclick="S._notifAccion=\''+a+'\';renderCentroNotif()" style="padding:4px 11px;border-radius:16px;border:1px solid '+(sel?clr:'var(--border2)')+';background:'+(sel?clr+'22':'var(--bg3)')+';color:'+(sel?clr:'var(--text2)')+';font-size:11px;font-family:var(--mono);cursor:pointer">'+icon+' '+esc(lbl)+'</button>';
+  }).join('');
+
+  // Days filter
+  var daysChips=[7,14,30].map(function(d){
+    var sel=S._notifDias===d;
+    return '<button onclick="S._notifDias='+d+';renderCentroNotif()" style="padding:4px 10px;border-radius:16px;border:1px solid '+(sel?'var(--accent)':'var(--border2)')+';background:'+(sel?'rgba(200,240,96,.12)':'var(--bg3)')+';color:'+(sel?'var(--accent)':'var(--text2)')+';font-size:11px;font-family:var(--mono);cursor:pointer">'+d+'d</button>';
+  }).join('');
+
+  // Feed grouped by day
+  var byDate={};
+  filtered.forEach(function(c){
+    var d=(c.fecha||(c.created_at||'').slice(0,10))||'Sin fecha';
+    if(!byDate[d])byDate[d]=[];byDate[d].push(c);
+  });
+  var dates=Object.keys(byDate).sort(function(a,b){return b.localeCompare(a);});
+  var t=today();
+  var yd=new Date(t+'T12:00:00');yd.setDate(yd.getDate()-1);yd=yd.toISOString().slice(0,10);
+  function dlbl(d){return d===t?'Hoy':d===yd?'Ayer':d;}
+
+  var rows=dates.map(function(d){
+    var items=byDate[d];
+    return '<div>'+
+      '<div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.07em;text-transform:uppercase;padding:5px 12px;background:var(--bg3);border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1">'+esc(dlbl(d))+' · '+items.length+' acción'+(items.length!==1?'es':'')+'</div>'+
+      items.map(function(c){
+        var icon=accionIcon[c.accion]||'•';
+        var clr=accionClr[c.accion]||'var(--text3)';
+        var u=USERS[c.usuario_id];var uC=u?u.color:'var(--text3)';var uN=c.usuario_nombre||c.usuario_id||'?';
+        return '<div style="display:flex;align-items:flex-start;gap:9px;padding:8px 12px;border-bottom:1px solid var(--border)">'+
+          '<div style="width:26px;height:26px;border-radius:50%;background:'+clr+'1a;color:'+clr+';display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;margin-top:1px">'+icon+'</div>'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:13px;font-weight:500;color:var(--text)">'+esc(c.entidad_nombre||'—')+'</div>'+
+            '<div style="font-size:11.5px;color:var(--text2);margin-top:1px">'+esc(c.detalle||c.accion)+'</div>'+
+            '<div style="display:flex;gap:5px;margin-top:3px;align-items:center">'+
+              '<span style="font-size:10px;font-weight:700;color:'+uC+';background:'+uC+'18;border-radius:5px;padding:1px 6px">'+esc(shortName(uN))+'</span>'+
+              '<span style="font-size:10px;color:var(--text3)">'+(c.hora||(c.created_at||'').slice(11,16)||'')+'</span>'+
+            '</div>'+
+          '</div>'+
+          '<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:'+clr+';background:'+clr+'1a;border-radius:5px;padding:2px 6px;flex-shrink:0;margin-top:2px">'+esc(c.accion||'')+'</span>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }).join('');
+  if(!filtered.length)rows='<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">Sin novedades para este período</div>';
+
+  el.innerHTML=
+    '<div style="padding:12px;background:var(--bg2);border-bottom:1px solid var(--border)">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+        '<span style="font-size:14px;font-weight:700;color:var(--text)">📬 Centro de Novedades</span>'+
+        '<div style="display:flex;gap:4px">'+daysChips+
+          '<button onclick="renderCentroNotif()" style="padding:4px 9px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:11px;font-family:var(--font);cursor:pointer">↺</button>'+
+        '</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+cards+'</div>'+
+      '<div style="display:flex;gap:4px;flex-wrap:wrap">'+accionChips+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:7px">'+filtered.length+' registro'+(filtered.length!==1?'s':'')+' · últimos '+S._notifDias+' días</div>'+
+    '</div>'+
+    '<div style="overflow-y:auto;max-height:calc(100vh - 280px)">'+rows+'</div>';
+}
 
 
 // ── REPORTE POR APARTAMENTO ───────────────────────────
