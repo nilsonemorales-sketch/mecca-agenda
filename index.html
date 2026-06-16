@@ -9161,6 +9161,46 @@ async function generarPDFCierre(fecha){
   var byUser={};
   cambios.forEach(function(c){var u=c.usuario_nombre||'Sistema';if(!byUser[u])byUser[u]=[];byUser[u].push(c);});
   var userList=Object.keys(byUser).sort(function(a,b){return byUser[b].length-byUser[a].length;});
+  // Preload photos for completadas + editadas
+  var fotoMap={};
+  var _fotoIds=[].concat(completadas,editadas).map(function(c){return c.entidad_id;}).filter(Boolean);
+  var _seen={};_fotoIds=_fotoIds.filter(function(id){if(_seen[id])return false;_seen[id]=true;return true;});
+  if(_fotoIds.length){
+    try{
+      setSS('syncing','Cargando fotos...');
+      var _ldImg=function(url){
+        return new Promise(function(res){
+          var t=setTimeout(function(){res(null);},6000);
+          var img=new Image();img.crossOrigin='anonymous';
+          img.onload=function(){
+            clearTimeout(t);
+            try{
+              var cv=document.createElement('canvas');
+              var mx=600,rt=Math.min(mx/img.width,mx/img.height,1);
+              cv.width=Math.round(img.width*rt);cv.height=Math.round(img.height*rt);
+              cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+              res(cv.toDataURL('image/jpeg',0.65));
+            }catch(e){res(null);}
+          };
+          img.onerror=function(){clearTimeout(t);res(null);};
+          img.src=url;
+        });
+      };
+      var _actsF=await sb('obra_actividades?id=in.('+_fotoIds.join(',')+')'+'&select=id,fotos');
+      await Promise.all(_actsF.map(async function(act){
+        if(!act.fotos) return;
+        var urls=act.fotos.split('||').map(function(s){return s.split('::')[0].trim();})
+          .filter(function(s){return s&&s.startsWith('http');}).slice(0,3);
+        var loaded=(await Promise.all(urls.map(_ldImg))).filter(Boolean);
+        if(loaded.length) fotoMap[act.id]=loaded;
+      }));
+    }catch(e){/* fotos: continuar sin ellas */}
+  }
+  // Avance general de la obra (usa S.acts ya cargadas en la app)
+  var _actsAll=S.acts||[];
+  var _compAll=_actsAll.filter(function(a){return a.estado==='completado';}).length;
+  var _pctGen=_actsAll.length?Math.round(_compAll/_actsAll.length*100):0;
+  setSS('syncing','Generando PDF...');
   try{
     var jsPDFc=window.jspdf.jsPDF;
     var doc=new jsPDFc({orientation:'portrait',unit:'mm',format:'a4'});
@@ -9188,15 +9228,21 @@ async function generarPDFCierre(fecha){
     }
     function chkY(h){if(y+h>275){doc.addPage();drawCH();y=28;}}
     drawCH();y=28;
-    // Summary stats band
-    _fc([240,238,255]);doc.rect(M,y,RW,13,'F');
+    // Summary stats band — 4 stats + progress bar
+    var _bandH=25;
+    _fc([240,238,255]);doc.rect(M,y,RW,_bandH,'F');
     _fc(BDX_PUR);doc.rect(M,y,RW,0.5,'F');
-    [[completadas.length,'Completadas',[41,101,41]],[editadas.length,'Avance/Edici\xF3n',[26,86,219]],[creadas.length,'Nuevas',[112,72,232]]].forEach(function(s,i){
-      var sx=M+i*(RW/3)+RW/6;
-      _tc(s[2]);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(''+s[0],sx,y+8.5,{align:'center'});
-      _tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(s[1],sx,y+12,{align:'center'});
+    [[completadas.length,'Completadas',[41,101,41]],[editadas.length,'Avanzadas',[26,86,219]],[creadas.length,'Nuevas',[112,72,232]],[_pctGen+'%','Avance obra',[41,101,41]]].forEach(function(s,i){
+      var sx=M+i*(RW/4)+RW/8;
+      _tc(s[2]);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text(''+s[0],sx,y+8,{align:'center'});
+      _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text(s[1],sx,y+11.5,{align:'center'});
     });
-    y+=16;
+    var _bx=M+4,_bw=RW-8,_by=y+14.5;
+    _fc([210,210,228]);doc.rect(_bx,_by,_bw,3,'F');
+    if(_pctGen>0){_fc(_pctGen>=100?BDX_GRN:[26,86,219]);doc.rect(_bx,_by,Math.max(2,_bw*_pctGen/100),3,'F');}
+    _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+    doc.text(_compAll+'/'+_actsAll.length+' actividades completadas',_bx,y+21);
+    y+=_bandH+3;
     // Section A
     _fc(BDX_PUR);doc.rect(M,y,RW,7,'F');
     _tc(WHT);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('A — AVANCE DEL D\xCDA',M+4,y+5);
@@ -9222,6 +9268,16 @@ async function generarPDFCierre(fecha){
           doc.text(doc.splitTextToSize(_safe(c.detalle),130)[0],M+15,y+8.5);
         }
         y+=rH;
+        var _imgs=fotoMap[c.entidad_id];
+        if(_imgs&&_imgs.length){
+          var _pH=22,_pW=22,_pGap=3,_stripH=_pH+5;
+          chkY(_stripH);
+          _fc([250,248,255]);doc.rect(M,y,RW,_stripH,'F');
+          _imgs.forEach(function(d,pi){
+            try{doc.addImage(d,'JPEG',M+4+pi*(_pW+_pGap),y+1.5,_pW,_pH);}catch(imgE){}
+          });
+          y+=_stripH;
+        }
       });
       y+=3;
     }
