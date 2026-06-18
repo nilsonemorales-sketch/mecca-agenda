@@ -9281,121 +9281,164 @@ async function generarPDFCierre(fecha){
   var hoy=fecha;
   setSS('syncing','Cargando datos...');
 
+  // ── 1. CARGAR CAMBIOS DEL DÍA ─────────────────────────────────
   var cambios=[];
   try{cambios=await sb('obra_cambios?fecha=eq.'+fecha+'&order=hora.asc&limit=500');}
   catch(e){setSS('err','Error al cargar datos');return;}
+  if(!Array.isArray(cambios))cambios=[];
 
-  var completadas=cambios.filter(function(c){return c.accion==='completado';});
-  var editadas=cambios.filter(function(c){return c.accion==='editado';});
-  var creadas=cambios.filter(function(c){return c.accion==='creado';});
-  var byUser={};
-  cambios.forEach(function(c){var u=c.usuario_nombre||'Sistema';if(!byUser[u])byUser[u]=[];byUser[u].push(c);});
-  var userList=Object.keys(byUser).sort(function(a,b){return byUser[b].length-byUser[a].length;});
+  var _cambComp=cambios.filter(function(c){return c.accion==='completado';});
+  var _cambEdit=cambios.filter(function(c){return c.accion==='editado';});
+  var _cambCrea=cambios.filter(function(c){return c.accion==='creado';});
+  var _cambVerif=cambios.filter(function(c){return c.accion==='verificado';});
+  var _cambAvan=cambios.filter(function(c){return c.accion==='avance';});
 
-  // Actividades del día: área, fotos, %, fecha_fin, contratista (una sola query)
+  // ── 2. CARGAR TODAS LAS ACTIVIDADES ───────────────────────────
+  setSS('syncing','Cargando actividades...');
+  var allActs=[];
+  try{
+    allActs=await sb('obra_actividades?limit=3000&select=id,area,fotos,porcentaje,fecha_fin,descripcion,estado,personal_nombre,ingeniero_nombre,tipo_personal');
+    if(!Array.isArray(allActs))allActs=[];
+  }catch(e){allActs=S.acts||[];}
+  var _isValidDate=function(d){return typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d);};
+
+  // Map de id→actividad para lookups rápidos
   var actMap={};
-  var _allIds=[];var _seenId={};
-  cambios.forEach(function(c){if(c.entidad_id&&!_seenId[c.entidad_id]){_allIds.push(c.entidad_id);_seenId[c.entidad_id]=1;}});
-  if(_allIds.length){
+  allActs.forEach(function(a){actMap[a.id]=a;});
+  // También agregar IDs de cambios que no estén en la carga general
+  var _extraIds=[];var _seen={};
+  cambios.forEach(function(c){if(c.entidad_id&&!actMap[c.entidad_id]&&!_seen[c.entidad_id]){_extraIds.push(c.entidad_id);_seen[c.entidad_id]=1;}});
+  if(_extraIds.length){
     try{
-      var _al=await sb('obra_actividades?id=in.('+_allIds.join(',')+')'+'&select=id,area,fotos,porcentaje,fecha_fin,personal_nombre,descripcion,estado');
-      _al.forEach(function(a){actMap[a.id]=a;});
+      var _extra=await sb('obra_actividades?id=in.('+_extraIds.join(',')+')'+'&select=id,area,fotos,porcentaje,fecha_fin,descripcion,estado,personal_nombre,ingeniero_nombre,tipo_personal');
+      (_extra||[]).forEach(function(a){actMap[a.id]=a;allActs.push(a);});
     }catch(e){}
   }
 
-  // Precargar fotos (completadas + editadas, paralelo, CORS-safe)
-  var fotoMap={};
-  var _fotoActs=[];var _sf={};
-  [].concat(completadas,editadas).forEach(function(c){
-    var act=actMap[c.entidad_id];
-    if(act&&act.fotos&&!_sf[act.id]){_fotoActs.push(act);_sf[act.id]=1;}
+  // ── 3. ESTADÍSTICAS GLOBALES ───────────────────────────────────
+  var _pctSum=0;
+  allActs.forEach(function(a){_pctSum+=(a.estado==='completado'?100:(parseInt(a.porcentaje)||0));});
+  var avanceGlobal=allActs.length?Math.round(_pctSum/allActs.length):0;
+  var activasCount=allActs.filter(function(a){return a.estado!=='completado';}).length;
+  var vencidasList=allActs.filter(function(a){
+    return a.estado!=='completado'&&_isValidDate(a.fecha_fin)&&a.fecha_fin<hoy;
   });
-  if(_fotoActs.length){
-    try{
-      setSS('syncing','Cargando fotos...');
-      var _ldImg=function(url){
-        return new Promise(function(res){
-          var t=setTimeout(function(){res(null);},6000);
-          var img=new Image();img.crossOrigin='anonymous';
-          img.onload=function(){
-            clearTimeout(t);
-            try{
-              var cv=document.createElement('canvas');
-              var mx=600,rt=Math.min(mx/img.width,mx/img.height,1);
-              cv.width=Math.round(img.width*rt);cv.height=Math.round(img.height*rt);
-              cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-              res(cv.toDataURL('image/jpeg',0.65));
-            }catch(e){res(null);}
-          };
-          img.onerror=function(){clearTimeout(t);res(null);};
-          img.src=url;
-        });
+  var vencidasCount=vencidasList.length;
+
+  // Fotos del día: actividades con fotos que tuvieron movimiento hoy
+  var _actIdsHoy={};cambios.forEach(function(c){if(c.entidad_id)_actIdsHoy[c.entidad_id]=1;});
+  var _fotoActsHoy=allActs.filter(function(a){return _actIdsHoy[a.id]&&a.fotos&&a.fotos.trim();});
+  var fotosHoyCount=_fotoActsHoy.length;
+
+  // ── 4. CARGAR FOTOS (async, CORS-safe) ────────────────────────
+  setSS('syncing','Cargando fotos...');
+  var _ldImg=function(url){
+    return new Promise(function(res){
+      var t=setTimeout(function(){res(null);},6000);
+      var img=new Image();img.crossOrigin='anonymous';
+      img.onload=function(){
+        clearTimeout(t);
+        try{
+          var cv=document.createElement('canvas');
+          var mx=480,rt=Math.min(mx/img.width,mx/img.height,1);
+          cv.width=Math.round(img.width*rt);cv.height=Math.round(img.height*rt);
+          cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+          res(cv.toDataURL('image/jpeg',0.60));
+        }catch(e){res(null);}
       };
-      await Promise.all(_fotoActs.map(async function(act){
-        var urls=act.fotos.split('||').map(function(s){return s.split('::')[0].trim();})
-          .filter(function(s){return s&&s.startsWith('http');}).slice(0,3);
+      img.onerror=function(){clearTimeout(t);res(null);};
+      img.src=url;
+    });
+  };
+  var fotoMap={};
+  if(_fotoActsHoy.length){
+    try{
+      await Promise.all(_fotoActsHoy.slice(0,12).map(async function(act){
+        var urls=(act.fotos||'').split('||').map(function(s){return s.split('::')[0].trim();})
+          .filter(function(s){return s&&s.startsWith('http');}).slice(0,4);
         var loaded=(await Promise.all(urls.map(_ldImg))).filter(Boolean);
         if(loaded.length)fotoMap[act.id]=loaded;
       }));
     }catch(e){}
   }
 
-  // Stats globales (S.acts, excluye propio)
-  var _actsAll=(S.acts||[]).filter(function(a){return a.tipo_personal!=='propio';});
-  var _compAll=_actsAll.filter(function(a){return a.estado==='completado';}).length;
-  var _totalAll=_actsAll.length;
-  var _pctGen=_totalAll?Math.round(_compAll/_totalAll*100):0;
-  var _pctInc=_totalAll?Math.round(completadas.length/_totalAll*100):0;
-  var _vencidas=_actsAll.filter(function(a){return a.fecha_fin&&a.fecha_fin<hoy&&a.estado!=='completado';}).length;
-
-  // Stats por área — gráfico de barras (menor % primero)
+  // ── 5. ÁREA STATS para gráfico ────────────────────────────────
   function _albl(area){
     if(!area)return '';
     var mA=area.match(/Apto\s+([\w-]+)/i);
-    if(mA){var mN=area.match(/N(\d+)/i);return 'Apto '+mA[1]+(mN?' \xB7 N'+mN[1]:'');}
+    if(mA){var mN=area.match(/N(\d+)/i);return (mN?'N'+mN[1]+' \xB7 ':'')+mA[1];}
     if(/^toda\s+la\s+obra$/i.test(area.trim()))return 'General';
-    if(/^parqueo/i.test(area.trim()))return 'N1 Parqueo';
-    return area;
+    if(/^parqueo/i.test(area.trim()))return 'Parqueo';
+    if(/^fachada/i.test(area.trim()))return area.replace(/^fachada\s*/i,'Fach. ').slice(0,14);
+    return area.length>16?area.slice(0,15)+'.':area;
   }
   var _asm={};
-  _actsAll.forEach(function(a){
+  allActs.forEach(function(a){
     if(!a.area)return;
-    if(!_asm[a.area])_asm[a.area]={label:_albl(a.area),total:0,comp:0};
+    if(!_asm[a.area])_asm[a.area]={label:_albl(a.area),total:0,pctSum:0};
     _asm[a.area].total++;
-    if(a.estado==='completado')_asm[a.area].comp++;
+    _asm[a.area].pctSum+=(a.estado==='completado'?100:(parseInt(a.porcentaje)||0));
   });
-  var _areaStats=Object.values(_asm).map(function(s){
-    return{label:s.label,total:s.total,comp:s.comp,pct:s.total?Math.round(s.comp/s.total*100):0};
-  }).sort(function(a,b){return a.pct-b.pct;});
+  var _areaStats=Object.values(_asm)
+    .filter(function(s){return s.total>=3;})
+    .map(function(s){return{label:s.label,total:s.total,pct:Math.round(s.pctSum/s.total)};})
+    .sort(function(a,b){return a.label.localeCompare(b.label);});
 
-  // Agrupar cambios (comp+edit) por área para sección de actividades
-  var _bam={};
-  [].concat(completadas,editadas).forEach(function(c){
-    var act=actMap[c.entidad_id];
-    var ak=(act&&act.area)||'_sin';
-    if(!_bam[ak])_bam[ak]={label:_albl((act&&act.area)||''),items:[]};
-    _bam[ak].items.push({cambio:c,act:act||{}});
-  });
-  var _bal=Object.values(_bam).sort(function(a,b){
-    var aA=/Apto/i.test(a.label),bA=/Apto/i.test(b.label);
-    if(aA&&!bA)return -1;if(!aA&&bA)return 1;
-    return a.label.localeCompare(b.label);
-  });
+  // ── 6. VENCIDAS CRÍTICAS (top 5) ──────────────────────────────
+  var _criticas=vencidasList.slice().sort(function(a,b){return a.fecha_fin.localeCompare(b.fecha_fin);}).slice(0,5);
 
+  // ── 7. RESUMEN POR INGENIERO ───────────────────────────────────
+  var _byUser={};
+  cambios.forEach(function(c){
+    var u=c.usuario_nombre||'Sistema';
+    if(!_byUser[u])_byUser[u]={total:0,completado:0,editado:0,creado:0,avance:0,otros:0};
+    _byUser[u].total++;
+    var ac=c.accion||'';
+    if(ac==='completado')_byUser[u].completado++;
+    else if(ac==='editado')_byUser[u].editado++;
+    else if(ac==='creado')_byUser[u].creado++;
+    else if(ac==='avance')_byUser[u].avance++;
+    else _byUser[u].otros++;
+  });
+  var _userList=Object.keys(_byUser).sort(function(a,b){return _byUser[b].total-_byUser[a].total;});
+  function _hexRgbC(h){h=(h||'#888').replace('#','');return[parseInt(h.slice(0,2),16)||128,parseInt(h.slice(2,4),16)||128,parseInt(h.slice(4,6),16)||128];}
+  function _userColor(uName){
+    var found=Object.values(USERS).find(function(u){
+      var sn=u.nombre.replace(/^Ing\.\s*/i,'').toLowerCase();
+      var un=(uName||'').toLowerCase();
+      return un.indexOf(sn)>=0||sn.indexOf(un.split(' ')[0])>=0;
+    });
+    return found?_hexRgbC(found.color):[100,100,100];
+  }
+
+  // ── 8. GENERAR PDF ────────────────────────────────────────────
   setSS('syncing','Generando PDF...');
+  // Fecha larga en español
+  var _meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var _dias=['domingo','lunes','martes','mi\xE9rcoles','jueves','viernes','s\xE1bado'];
+  var _fd=new Date(fecha+'T12:00:00');
+  var _fechaLarga=_dias[_fd.getDay()]+' '+_fd.getDate()+' de '+_meses[_fd.getMonth()]+' de '+_fd.getFullYear();
+
   try{
     var jsPDFc=window.jspdf.jsPDF;
     var doc=new jsPDFc({orientation:'portrait',unit:'mm',format:'a4'});
     var W=210,M=14,RW=W-2*M;
     var y=0;
-    var BDX_PUR=[152,32,164],BDX_GRN=[41,101,41],PUR2=[112,72,232],RED=[192,32,51];
-    var TXT=[30,30,30],MUT=[100,100,100],WHT=[255,255,255],LGRAY=[245,246,248];
-    var COL_PROG=[26,86,219],COL_PAUSA=[230,103,0],COL_COMP=[150,150,150],COL_PEND=[134,142,150];
-    var ECOLS={'en-progreso':COL_PROG,'pausada':COL_PAUSA,'completado':COL_COMP,'pendiente':COL_PEND};
-    var ELABS={'en-progreso':'En progreso','pausada':'Pausada','completado':'Completado','pendiente':'Pendiente'};
+    var BDX_PUR=[152,32,164],BDX_GRN=[41,101,41];
+    var RED=[192,32,51],RED_L=[255,235,235],GRN=[15,110,86],GRN_L=[232,249,244];
+    var BLU=[24,95,165],BLU_L=[232,241,252],AMB=[133,79,11],AMB_L=[255,244,220];
+    var TXT=[30,30,30],MUT=[110,110,120],WHT=[255,255,255],LGRAY=[246,247,249];
+    var COL_PROG=[26,86,219];
     function _fc(c){doc.setFillColor.apply(doc,c);}
     function _tc(c){doc.setTextColor.apply(doc,c);}
     function _safe(s){return(s||'').replace(/[^\x00-\x7F]/g,function(ch){try{return ch;}catch(e){return '';}});}
+    function _sectionHdr(label,color){
+      chkY(10);
+      _fc(color||BDX_GRN);doc.rect(M,y,RW,7,'F');
+      _tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
+      doc.text(_safe(label),M+4,y+5);
+      y+=9;
+    }
 
     function drawCH(){
       _fc(WHT);doc.rect(0,0,W,22,'F');
@@ -9409,135 +9452,190 @@ async function generarPDFCierre(fecha){
       var ix=W-M;
       _tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');doc.text('CIERRE DEL D\xCDA',ix,8,{align:'right'});
       _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('MECCA RESIDENCE 2026',ix,13,{align:'right'});
-      _tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(fecha,ix,17.5,{align:'right'});
+      _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text(_safe(_fechaLarga),ix,17.5,{align:'right'});
       _fc(BDX_GRN);doc.rect(0,22,W,1,'F');_fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
     }
     function chkY(h){if(y+h>275){doc.addPage();drawCH();y=28;}}
 
     drawCH();y=28;
 
-    // ── TARJETAS DE MÉTRICAS ──────────────────────────────────────
-    var _cH=22,_cw=RW/4;
-    _fc([245,243,255]);doc.rect(M,y,RW,_cH,'F');
-    if(_vencidas>0){_fc(RED);doc.rect(M+3*_cw,y,_cw,_cH,'F');}
-    _fc(BDX_PUR);doc.rect(M,y,RW,0.5,'F');
-    [[_pctGen+'%','Avance obra',_pctInc>0?'+'+_pctInc+'% hoy':'',BDX_GRN],
-     [completadas.length,'Completadas hoy','',BDX_GRN],
-     [editadas.length,'Avanzadas hoy','',COL_PROG],
-     [_vencidas,'Vencidas',_vencidas>0?'⚠ ATENCI\xD3N':'',RED]
-    ].forEach(function(card,i){
-      var cx=M+i*_cw+_cw/2,isV=(i===3);
-      _tc(isV&&_vencidas>0?WHT:card[3]);
-      doc.setFontSize(17);doc.setFont('helvetica','bold');
-      doc.text(_safe(''+card[0]),cx,y+9.5,{align:'center'});
-      _tc(isV&&_vencidas>0?[255,200,200]:MUT);
-      doc.setFontSize(5.5);doc.setFont('helvetica','normal');
-      doc.text(_safe(card[1]),cx,y+13,{align:'center'});
-      if(card[2]){
-        _tc(isV&&_vencidas>0?[255,180,180]:[26,86,219]);
-        doc.setFontSize(5.5);doc.setFont('helvetica','bold');
-        doc.text(_safe(card[2]),cx,y+17,{align:'center'});
-      }
+    // ── SECCIÓN 1: 5 TARJETAS DE MÉTRICAS ─────────────────────────
+    var _cH=24,_cw=RW/5;
+    var _cards=[
+      {v:avanceGlobal+'%', l:'Avance global',    bg:[240,248,242], border:BDX_GRN,  vc:BDX_GRN},
+      {v:activasCount,     l:'Activas',           bg:LGRAY,         border:MUT,      vc:TXT},
+      {v:_cambComp.length, l:'Completadas hoy',   bg:GRN_L,         border:GRN,      vc:GRN},
+      {v:vencidasCount,    l:'Vencidas',          bg:vencidasCount>0?RED_L:LGRAY, border:vencidasCount>0?RED:MUT, vc:vencidasCount>0?RED:TXT},
+      {v:fotosHoyCount,    l:'Fotos del d\xEDa',  bg:BLU_L,         border:BLU,      vc:BLU},
+    ];
+    _cards.forEach(function(card,i){
+      var cx=M+i*_cw;
+      _fc(card.bg);doc.rect(cx,y,_cw,_cH,'F');
+      _fc(card.border);doc.rect(cx,y,_cw,0.5,'F');doc.rect(cx,y+_cH-0.5,_cw,0.5,'F');
+      if(i>0){_fc([220,220,228]);doc.rect(cx,y,0.4,_cH,'F');}
+      _tc(card.vc);doc.setFontSize(16);doc.setFont('helvetica','bold');
+      doc.text(_safe(''+card.v),cx+_cw/2,y+12,{align:'center'});
+      _tc(MUT);doc.setFontSize(5);doc.setFont('helvetica','normal');
+      doc.text(_safe(card.l),cx+_cw/2,y+17,{align:'center'});
     });
-    y+=_cH+3;
+    y+=_cH+4;
 
-    // ── BARRA GRANDE DE AVANCE ────────────────────────────────────
-    var _bbh=5.5;
-    _fc([210,210,228]);doc.rect(M,y,RW,_bbh,'F');
-    if(_pctGen>0){_fc(_pctGen>=100?BDX_GRN:COL_PROG);doc.rect(M,y,Math.max(2,RW*_pctGen/100),_bbh,'F');}
-    _tc(_pctGen>45?WHT:MUT);doc.setFontSize(5.5);doc.setFont('helvetica','bold');
-    doc.text(_safe(_compAll+'/'+_totalAll+' actividades completadas   '+_pctGen+'% avance general'),M+2,y+4);
-    y+=_bbh+6;
-
-    // ── GRÁFICO DE BARRAS: % POR UBICACIÓN ───────────────────────
-    chkY(12);
-    _fc(BDX_GRN);doc.rect(M,y,RW,7,'F');
-    _tc(WHT);doc.setFontSize(8);doc.setFont('helvetica','bold');
-    doc.text('AVANCE POR UBICACI\xD3N',M+4,y+5);
-    y+=8;
-    var _cnW=55,_cbW=RW-_cnW-18,_crH=6;
-    _areaStats.forEach(function(s,i){
-      chkY(_crH);
-      _fc(i%2===0?LGRAY:WHT);doc.rect(M,y,RW,_crH,'F');
-      var _bc=s.pct<33?COL_PAUSA:s.pct<66?COL_PROG:BDX_GRN;
-      _tc(TXT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-      doc.text(doc.splitTextToSize(_safe(s.label),_cnW-3)[0],M+2,y+4.2);
-      var _bx2=M+_cnW;
-      _fc([220,220,232]);doc.rect(_bx2,y+1.8,_cbW,2.5,'F');
-      if(s.pct>0){_fc(_bc);doc.rect(_bx2,y+1.8,Math.max(1.5,_cbW*s.pct/100),2.5,'F');}
-      _tc(_bc);doc.setFontSize(6);doc.setFont('helvetica','bold');
-      doc.text(s.pct+'%',_bx2+_cbW+2,y+4.2);
-      _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
-      doc.text(s.comp+'/'+s.total,W-M-2,y+4.2,{align:'right'});
-      y+=_crH;
-    });
-    y+=6;
-
-    // ── ACTIVIDADES DEL DÍA POR UBICACIÓN ────────────────────────
-    if(_bal.length){
-      chkY(12);
-      _fc(BDX_PUR);doc.rect(M,y,RW,7,'F');
-      _tc(WHT);doc.setFontSize(8);doc.setFont('helvetica','bold');
-      doc.text('ACTIVIDADES DEL D\xCDA POR UBICACI\xD3N',M+4,y+5);
-      y+=9;
-      _bal.forEach(function(grp){
-        chkY(12);
-        _fc(BDX_GRN);doc.rect(M,y,RW,8,'F');
-        _tc(WHT);doc.setFontSize(9);doc.setFont('helvetica','bold');
-        doc.text(_safe(grp.label||'Sin \xE1rea'),M+4,y+5.5);
-        _tc([180,255,180]);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
-        doc.text(grp.items.length+(grp.items.length===1?' tarea':' tareas'),W-M-3,y+5.5,{align:'right'});
-        y+=9;
-        grp.items.forEach(function(item){
-          var c=item.cambio,act=item.act;
-          var isComp=c.accion==='completado';
-          var isVenc=!isComp&&act.fecha_fin&&act.fecha_fin<hoy;
-          var _ec2=isVenc?RED:(ECOLS[act.estado]||COL_PEND);
-          var _elbl=isVenc?'Vencida':(ELABS[act.estado]||act.estado||c.accion||'');
-          var rH=9;
-          chkY(rH);
-          _fc(isVenc?[255,238,238]:(isComp?[242,252,242]:LGRAY));doc.rect(M,y,RW,rH,'F');
-          _fc(_ec2);doc.rect(M,y,2,rH,'F');
-          _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-          doc.text(_safe(c.hora||''),M+3,y+5.8);
-          _tc(isVenc?RED:TXT);doc.setFontSize(7);doc.setFont('helvetica',isComp?'normal':'bold');
-          doc.text(doc.splitTextToSize(_safe(act.descripcion||c.entidad_nombre||''),76)[0],M+16,y+5.8);
-          _tc(_ec2);doc.setFontSize(6);doc.setFont('helvetica','bold');
-          doc.text(_safe(_elbl),M+94,y+5.8);
-          _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-          doc.text((act.porcentaje||0)+'%',M+122,y+5.8);
-          doc.text(doc.splitTextToSize(_safe(act.personal_nombre||c.usuario_nombre||''),50)[0],M+134,y+5.8);
-          y+=rH;
-          var _imgs=fotoMap[act.id];
-          if(_imgs&&_imgs.length){
-            var _pH=24,_pW=24,_pGap=3,_sH=_pH+6;
-            chkY(_sH);
-            _fc([248,246,255]);doc.rect(M,y,RW,_sH,'F');
-            _imgs.forEach(function(d,pi){
-              try{doc.addImage(d,'JPEG',M+4+pi*(_pW+_pGap),y+2,_pW,_pH);}catch(ie){}
-            });
-            y+=_sH;
-          }
-        });
-        y+=3;
+    // ── SECCIÓN 2: PÍLDORAS MOVIMIENTO DE HOY ─────────────────────
+    var _pills=[
+      {count:_cambCrea.length,  label:'nuevas',      bg:[209,244,215], tc:[15,110,54]},
+      {count:_cambEdit.length+_cambAvan.length, label:'avances/edic.', bg:[219,234,254], tc:[29,78,216]},
+      {count:_cambComp.length,  label:'completadas', bg:[209,244,215], tc:[6,95,70]},
+      {count:_cambVerif.length, label:'verificadas', bg:[254,243,199], tc:[120,53,15]},
+    ].filter(function(p){return p.count>0;});
+    if(_pills.length){
+      chkY(10);
+      var _px=M,_py=y,_ph=8,_pgap=4;
+      _pills.forEach(function(p){
+        var lbl=_safe(''+p.count+' '+p.label);
+        doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+        var tw=doc.getTextWidth(lbl)+6;
+        _fc(p.bg);doc.roundedRect(_px,_py,tw,_ph,2,2,'F');
+        _tc(p.tc);doc.text(lbl,_px+tw/2,_py+5.5,{align:'center'});
+        _px+=tw+_pgap;
       });
+      y+=_ph+6;
     }
 
-    // ── INGENIEROS ACTIVOS (compacto) ─────────────────────────────
-    chkY(14);y+=3;
-    _fc(BDX_GRN);doc.rect(M,y,RW,7,'F');
-    _tc(WHT);doc.setFontSize(8);doc.setFont('helvetica','bold');
-    doc.text('INGENIEROS ACTIVOS',M+4,y+5);
-    y+=9;
-    userList.forEach(function(uName){
-      var uC=byUser[uName];
-      chkY(8);
-      _fc([235,235,252]);doc.rect(M,y,RW,7,'F');
-      _tc(BDX_PUR);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text(_safe(uName),M+4,y+4.8);
-      _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-      doc.text(uC.length+' acciones  ✓'+uC.filter(function(c){return c.accion==='completado';}).length+'  ✏'+uC.filter(function(c){return c.accion==='editado';}).length+'  +'+uC.filter(function(c){return c.accion==='creado';}).length,W-M-2,y+4.8,{align:'right'});
-      y+=8;
-    });
+    // ── SECCIÓN 3: AVANCE POR UBICACIÓN ───────────────────────────
+    if(_areaStats.length){
+      _sectionHdr('AVANCE POR UBICACI\xD3N',BDX_GRN);
+      var _lbW=52,_barW=RW-_lbW-22,_rH=6.5;
+      _areaStats.forEach(function(s,i){
+        chkY(_rH);
+        _fc(i%2===0?LGRAY:WHT);doc.rect(M,y,RW,_rH,'F');
+        var _bc=s.pct>=60?GRN:s.pct>=40?BLU:s.pct>=20?AMB:RED;
+        _tc(TXT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+        doc.text(_safe(s.label),M+2,y+4.4);
+        var _bx=M+_lbW;
+        _fc([220,222,228]);doc.rect(_bx,y+2,_barW,2.5,'F');
+        if(s.pct>0){_fc(_bc);doc.rect(_bx,y+2,Math.max(1.5,_barW*s.pct/100),2.5,'F');}
+        _tc(_bc);doc.setFontSize(6);doc.setFont('helvetica','bold');
+        doc.text(s.pct+'%',_bx+_barW+2.5,y+4.4);
+        _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+        doc.text(s.total+'',W-M-2,y+4.4,{align:'right'});
+        y+=_rH;
+      });
+      y+=5;
+    }
+
+    // ── SECCIÓN 4: VENCIDAS CRÍTICAS (top 5) ─────────────────────
+    if(_criticas.length){
+      _sectionHdr('VENCIDAS CR\xCDTICAS — TOP 5 M\xC1S ATRASADAS',RED);
+      var _vRH=10;
+      _criticas.forEach(function(a,i){
+        chkY(_vRH);
+        _fc(i%2===0?RED_L:WHT);doc.rect(M,y,RW,_vRH,'F');
+        _fc(RED);doc.rect(M,y,2.5,_vRH,'F');
+        var dias=Math.round((new Date(hoy+'T12:00:00')-new Date(a.fecha_fin+'T12:00:00'))/864e5);
+        // Badge días
+        var _bdge=_safe(dias+'d');
+        doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+        var _bdW=doc.getTextWidth(_bdge)+5;
+        _fc(RED);doc.roundedRect(W-M-_bdW-1,y+2,_bdW,5.5,1.5,1.5,'F');
+        _tc(WHT);doc.text(_bdge,W-M-_bdW/2-1,y+5.8,{align:'center'});
+        // Descripción
+        _tc(TXT);doc.setFontSize(7);doc.setFont('helvetica','bold');
+        doc.text(doc.splitTextToSize(_safe(a.descripcion||''),RW-_bdW-18)[0],M+4,y+5);
+        // Área + ingeniero
+        _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+        var _sub=[(a.area||''), (a.ingeniero_nombre||a.personal_nombre||'')].filter(Boolean).join(' \xB7 ');
+        if(_sub) doc.text(_safe(_sub)+' \xB7 plan: '+a.fecha_fin,M+4,y+8.5);
+        y+=_vRH;
+      });
+      y+=5;
+    }
+
+    // ── SECCIÓN 5: COMPLETADAS HOY ─────────────────────────────────
+    if(_cambComp.length){
+      _sectionHdr('COMPLETADAS HOY',GRN);
+      var _cRH=8;
+      // Header row
+      _fc([220,240,228]);doc.rect(M,y,RW,6,'F');
+      _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','bold');
+      doc.text('TAREA',M+2,y+4.2);
+      doc.text('RESPONSABLE',M+115,y+4.2);
+      doc.text('HORA',W-M-2,y+4.2,{align:'right'});
+      y+=6;
+      _cambComp.forEach(function(c,i){
+        chkY(_cRH);
+        _fc(i%2===0?GRN_L:WHT);doc.rect(M,y,RW,_cRH,'F');
+        _fc(GRN);doc.rect(M,y,2,_cRH,'F');
+        _tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+        doc.text(doc.splitTextToSize(_safe(c.entidad_nombre||''),100)[0],M+4,y+5.3);
+        _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+        doc.text(_safe(c.usuario_nombre||''),M+115,y+5.3);
+        doc.text(_safe(c.hora||''),W-M-2,y+5.3,{align:'right'});
+        y+=_cRH;
+      });
+      y+=5;
+    }
+
+    // ── SECCIÓN 6: ACTIVIDAD POR INGENIERO ────────────────────────
+    if(_userList.length){
+      _sectionHdr('ACTIVIDAD POR INGENIERO',BDX_PUR);
+      _userList.forEach(function(uName){
+        var ud=_byUser[uName];
+        var uClr=_userColor(uName);
+        var _uH=13;
+        chkY(_uH);
+        _fc(LGRAY);doc.rect(M,y,RW,_uH,'F');
+        _fc(uClr);doc.rect(M,y,3,_uH,'F');
+        _tc(uClr);doc.setFontSize(7.5);doc.setFont('helvetica','bold');
+        doc.text(_safe(uName),M+5,y+5.5);
+        _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','bold');
+        doc.text(_safe(ud.total+' acciones'),M+5,y+10);
+        // Desglose inline
+        var _desg=[];
+        if(ud.creado)_desg.push(ud.creado+' cre\xF3');
+        if(ud.editado)_desg.push(ud.editado+' edit\xF3');
+        if(ud.avance)_desg.push(ud.avance+' avanc\xF3');
+        if(ud.completado)_desg.push(ud.completado+' complet\xF3');
+        if(ud.otros)_desg.push(ud.otros+' otros');
+        if(_desg.length){
+          _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+          doc.text(_safe(_desg.join(' \xB7 ')),W-M-2,y+10,{align:'right'});
+        }
+        y+=_uH+2;
+      });
+      y+=3;
+    }
+
+    // ── SECCIÓN 7: FOTOS DEL DÍA ──────────────────────────────────
+    var _fotoEntries=Object.keys(fotoMap);
+    if(_fotoEntries.length){
+      _sectionHdr('FOTOS DEL D\xCDA',BDX_PUR);
+      var _fW=40,_fH=32,_fGap=3,_fCols=Math.floor(RW/(_fW+_fGap)),_fRow=0;
+      var _fX=M,_fY=y;
+      var _shownFotos=0,_maxFotos=16;
+      _fotoEntries.forEach(function(actId){
+        var act=actMap[actId];
+        var imgs=fotoMap[actId]||[];
+        imgs.forEach(function(dataUrl){
+          if(_shownFotos>=_maxFotos)return;
+          if(_fRow===_fCols){
+            _fRow=0;_fX=M;_fY+=_fH+_fGap+4;chkY(_fH+_fGap+4);
+          }
+          try{doc.addImage(dataUrl,'JPEG',_fX,_fY,_fW,_fH);}catch(ie){}
+          // Caption
+          _tc(MUT);doc.setFontSize(5);doc.setFont('helvetica','normal');
+          var _cap=(act&&act.area)?_safe(_albl(act.area)):'';
+          if(_cap)doc.text(_cap,_fX,_fY+_fH+3,{maxWidth:_fW});
+          _fX+=_fW+_fGap;_fRow++;_shownFotos++;
+        });
+      });
+      y=_fY+_fH+10;
+      var _totalFotos=_fotoEntries.reduce(function(s,id){return s+(fotoMap[id]||[]).length;},0);
+      if(_totalFotos>_maxFotos){
+        chkY(8);_tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','italic');
+        doc.text(_safe('+ '+(_totalFotos-_maxFotos)+' foto(s) adicionales no mostradas'),M+2,y);
+        y+=6;
+      }
+    }
 
     doc.save('cierre-dia-'+fecha+'.pdf');
     setSS('ok','✓ PDF cierre generado');
