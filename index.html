@@ -1376,8 +1376,8 @@ function abrirFotoUpload(actId){
     '<div class="mhandle"></div>'+
     '<h3 style="margin-bottom:16px">📸 Agregar foto</h3>'+
     '<div style="display:grid;gap:10px;margin-bottom:12px">'+
-      '<button onclick="closeModal();setTimeout(function(){_clickFotoInput(\''+safeId+'\',\'camera\')},80)" style="padding:18px;border-radius:14px;border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:16px;font-weight:700;cursor:pointer;font-family:var(--font)">📷 Tomar foto</button>'+
-      '<button onclick="closeModal();setTimeout(function(){_clickFotoInput(\''+safeId+'\',\'galeria\')},80)" style="padding:16px;border-radius:14px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">🖼 Elegir de galería</button>'+
+      '<button onclick="_clickFotoInput(\''+safeId+'\',\'camera\');closeModal()" style="padding:18px;border-radius:14px;border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:16px;font-weight:700;cursor:pointer;font-family:var(--font)">📷 Tomar foto</button>'+
+      '<button onclick="_clickFotoInput(\''+safeId+'\',\'galeria\');closeModal()" style="padding:16px;border-radius:14px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">🖼 Elegir de galería</button>'+
     '</div>'+
     '<button onclick="closeModal()" style="width:100%;padding:12px;border-radius:14px;border:1.5px solid var(--border2);background:none;color:var(--text3);font-size:13px;cursor:pointer;font-family:var(--font)">Cancelar</button>';
   openModal();
