@@ -10072,7 +10072,7 @@ async function renderCentroNotif(){
   el.innerHTML='<div class="empty"><div class="spinner"></div><br>Cargando novedades...</div>';
 
   // State defaults
-  if(!S._notifDias)S._notifDias=14;
+  if(S._notifDias===undefined||S._notifDias===null)S._notifDias=14;
   if(!S._notifUser)S._notifUser='todos';
   if(!S._notifAccion)S._notifAccion='todos';
 
