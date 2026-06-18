@@ -1058,6 +1058,7 @@ async function autoPenalidadInactividad(){
 // Multi-location selection state
 let _ubicacionesSeleccionadas = [];
 let _actSaving = false; // guard: prevents double-submit while a network save is in flight
+let _dupConfirmed = false; // set to true when user explicitly confirms a duplicate activity
 
 function initMultiUbicacion(){
   // Button-based addition instead of auto-change
@@ -3967,7 +3968,7 @@ function showAddActContratista(ai, preContratista, ctx){
           ${Object.values(USERS).map(u=>`<option value="${u.nombre}" ${a.ingeniero_nombre===u.nombre?'selected':''}>${u.nombre}</option>`).join('')}
         </select></div>
       <div class="fw"><label class="fl">Contratista asignado</label>
-        <select id="a-pers" class="sel">
+        <select id="a-pers" class="sel" onchange="autoAsignarIng(this.value)">
           <option value="">Sin asignar</option>
           ${a.personal_nombre&&!S.personal.find(p=>p.nombre===a.personal_nombre)?`<option value="${a.personal_nombre}" selected>${esc(a.personal_nombre)} (no registrado)</option>`:''}
           ${S.personal.filter(p=>p.tipo==='contratista').map(p=>`<option value="${p.nombre}" ${a.personal_nombre===p.nombre?'selected':''}>${esc(p.nombre)}${p.oficio?' · '+p.oficio:''}</option>`).join('')}
@@ -4243,6 +4244,34 @@ function calcPct(){
   }
 }
 
+function autoAsignarIng(contratistaNombre){
+  if(!contratistaNombre)return;
+  var ingSelect=document.getElementById('a-ing');
+  if(!ingSelect||ingSelect.value)return; // skip if engineer already set
+  // Build map from existing activities: contractor → most-used engineer
+  var contMap={};
+  (S.acts||[]).forEach(function(a){
+    if(a.tipo_personal==='contratista'&&a.personal_nombre&&a.ingeniero_nombre){
+      if(!contMap[a.personal_nombre])contMap[a.personal_nombre]={};
+      contMap[a.personal_nombre][a.ingeniero_nombre]=(contMap[a.personal_nombre][a.ingeniero_nombre]||0)+1;
+    }
+  });
+  // Try dynamic lookup first
+  if(contMap[contratistaNombre]){
+    var best='';var bestCnt=0;
+    Object.entries(contMap[contratistaNombre]).forEach(function(e){if(e[1]>bestCnt){bestCnt=e[1];best=e[0];}});
+    if(best){ingSelect.value=best;return;}
+  }
+  // Static fallback table
+  var edgarConts=['Daniel Espinal','Felix y Jefrey','Eddy','Orlando Martin','Hormigones Cibao','Paneldom','Olivin Summers','Jose Lantigua','Retro Pala','Alejandro'];
+  var moisesConts=['Yelson Jimenez','Secre','Alexander Ramos','Dimedes Estebez','Jordy','William','Juan Carlos ORS','Ramon'];
+  var ingEdgar=Object.values(USERS).find(function(u){return u.nombre.toLowerCase().indexOf('edgar')>=0;});
+  var ingMoises=Object.values(USERS).find(function(u){return u.nombre.toLowerCase().indexOf('moises')>=0;});
+  var norm=contratistaNombre.toLowerCase();
+  if(ingEdgar&&edgarConts.some(function(n){return norm.indexOf(n.toLowerCase())>=0||n.toLowerCase().indexOf(norm)>=0;})){ingSelect.value=ingEdgar.nombre;return;}
+  if(ingMoises&&moisesConts.some(function(n){return norm.indexOf(n.toLowerCase())>=0||n.toLowerCase().indexOf(norm)>=0;})){ingSelect.value=ingMoises.nombre;return;}
+}
+
 async function saveAct(ai){
   if(_actSaving) return;
   const desc=document.getElementById('a-d').value.trim();if(!desc)return;
@@ -4297,6 +4326,55 @@ async function saveAct(ai){
   // Auto-stamp times when saving with an active state and no manual times set
   if((a.estado==='en-progreso'||a.estado==='completado')&&!a.hora_inicio){a.hora_inicio=nowHHMM();}
   if(a.estado==='completado'&&!a.hora_fin){a.hora_fin=nowHHMM();}
+  // ── FECHA VALIDATION (non-propio only) ─────────────────
+  if(a.tipo_personal!=='propio'){
+    var _errFecha=document.getElementById('a-fecha-err');
+    if(!_errFecha){
+      _errFecha=document.createElement('div');_errFecha.id='a-fecha-err';
+      _errFecha.style.cssText='color:#e03131;font-size:11px;font-weight:600;margin:6px 0 0;padding:6px 10px;background:#fff5f5;border:1px solid #ffa8a8;border-radius:8px';
+      var _fiEl=document.getElementById('a-fi');
+      if(_fiEl&&_fiEl.parentNode)_fiEl.parentNode.parentNode.insertBefore(_errFecha,_fiEl.parentNode.parentNode.children[_fiEl.parentNode.parentNode.children.length-1]);
+    }
+    if(!a.fecha_inicio||!a.fecha_fin){
+      _errFecha.textContent='⚠️ Las actividades de contratista requieren fecha de inicio y fecha fin';
+      _errFecha.style.display='block';
+      document.getElementById('a-fi')&&!a.fecha_inicio&&(document.getElementById('a-fi').style.border='2px solid #e03131');
+      document.getElementById('a-ff')&&!a.fecha_fin&&(document.getElementById('a-ff').style.border='2px solid #e03131');
+      return;
+    }
+    if(a.fecha_fin<a.fecha_inicio){
+      _errFecha.textContent='⚠️ La fecha fin no puede ser anterior a la fecha inicio';
+      _errFecha.style.display='block';
+      document.getElementById('a-ff').style.border='2px solid #e03131';
+      return;
+    }
+    if(_errFecha)_errFecha.style.display='none';
+  }
+  // ── DUPLICATE DETECTION ─────────────────────────────────
+  if(!_dupConfirmed&&!editId){
+    var _descNorm=(desc||'').toLowerCase().trim();
+    var _dupCand=S.acts.filter(function(x){
+      return x.estado!=='completado'&&(x.descripcion||'').toLowerCase().trim()===_descNorm&&(x.area||'')===(a.area||'');
+    });
+    if(_dupCand.length){
+      var _dupEl=document.getElementById('a-dup-warn');
+      if(!_dupEl){
+        _dupEl=document.createElement('div');_dupEl.id='a-dup-warn';
+        _dupEl.style.cssText='background:#fff8f0;border:1.5px solid #fd7e14;border-radius:10px;padding:10px 12px;margin:6px 0;font-size:12px;font-family:var(--font)';
+        var _dBtn=document.getElementById('a-d');
+        if(_dBtn&&_dBtn.parentNode)_dBtn.parentNode.insertBefore(_dupEl,_dBtn.nextSibling);
+      }
+      _dupEl.innerHTML='<div style="font-weight:700;color:#c05c00;margin-bottom:6px">⚠️ Ya existe una actividad similar sin completar en esta área</div>'+
+        '<div style="color:#888;font-size:11px;margin-bottom:8px">«'+esc(desc)+'» · '+esc(a.area||'Sin área')+'</div>'+
+        '<div style="display:flex;gap:8px">'+
+          '<button onclick="_dupConfirmed=true;saveAct('+ai+')" style="padding:5px 14px;border-radius:8px;border:none;background:#fd7e14;color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:var(--font)">Guardar igual</button>'+
+          '<button onclick="document.getElementById(\'a-dup-warn\').style.display=\'none\'" style="padding:5px 12px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>'+
+        '</div>';
+      _dupEl.style.display='block';
+      return;
+    }
+  }
+  _dupConfirmed=false;
   closeModal();setSS('syncing','Guardando...');
   _actSaving = true;
   const _createdActs=[];
