@@ -1341,33 +1341,46 @@ function compressImagen(file){
 }
 
 async function uploadFoto(file, actId){
+  var url=localStorage.getItem('mecca_drive_url')||S.driveUrl||'';
+  if(!url) throw new Error('DRIVE_NOT_CONFIGURED');
   var act=(S.acts||[]).find(function(a){return a.id===actId;})||
           (S.actsActivas||[]).find(function(a){return a.id===actId;})||{};
-  var folder=(act.area||'Sin_ubicacion').replace(/[^\w\-]+/g,'_');
+  var folder=act.area||'Sin ubicacion';
   var ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-  var path=folder+'/foto_'+ts+'_'+Math.random().toString(36).slice(2,7)+'.jpg';
+  var fileName='foto_'+ts+'.jpg';
   var dataUrl=await compressImagen(file);
-  var blob=await (await fetch(dataUrl)).blob();
   var controller=new AbortController();
   var timer=setTimeout(function(){controller.abort();},30000);
   try{
-    var resp=await fetch(SB+'/storage/v1/object/obra-fotos/'+encodeURI(path),{
+    var resp=await fetch(url,{
       method:'POST',
       signal:controller.signal,
-      headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'image/jpeg','x-upsert':'true'},
-      body:blob
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({image:dataUrl,fileName:fileName,folder:folder,actId:actId})
     });
     clearTimeout(timer);
-    if(!resp.ok) throw new Error('Storage '+resp.status+': '+(await resp.text()));
-    return STORAGE+encodeURI(path);
+    var txt=await resp.text();
+    var json;
+    try{json=JSON.parse(txt);}
+    catch(e){throw new Error('Drive no respondi\xF3 JSON (posible login/permisos). Revisa el Web App.');}
+    if(!json.success) throw new Error(json.error||'Error subiendo foto a Drive');
+    var resultUrl=json.thumbUrl||json.url||'';
+    if(!resultUrl||resultUrl==='undefined') throw new Error('Drive no devolvi\xF3 URL v\xE1lida');
+    return resultUrl;
   }catch(e){
     clearTimeout(timer);
-    if(e.name==='AbortError') throw new Error('La subida tard\xF3 demasiado, reintenta');
+    if(e.name==='AbortError') throw new Error('La subida a Drive tard\xF3 demasiado, reintenta');
     throw e;
   }
 }
 
 function abrirFotoUpload(actId){
+  var driveUrl=localStorage.getItem('mecca_drive_url')||S.driveUrl;
+  if(!driveUrl){
+    if(isAdmin()) driveConfigModal();
+    else showToast('El administrador debe configurar Google Drive primero','warn',6000);
+    return;
+  }
   var safeId=actId.replace(/'/g,"\\'");
   document.getElementById('mcontent').innerHTML=
     '<div class="mhandle"></div>'+
@@ -1412,8 +1425,8 @@ async function handleFotoFile(inp){
   renderActs(); renderEnObra();
   setSS('syncing','Subiendo...');
   try{
-    var photoUrl=await uploadFoto(file,actId);
-    var entry=photoUrl+(userName?'::'+userName:'');
+    var driveUrl=await uploadFoto(file,actId);
+    var entry=driveUrl+(userName?'::'+userName:'');
     act.fotos=act.fotos.replace(tempEntry,entry);
     URL.revokeObjectURL(localUrl);
     syncArrays(act.fotos);
@@ -1435,7 +1448,9 @@ async function handleFotoFile(inp){
     URL.revokeObjectURL(localUrl);
     syncArrays(prevFotos);
     renderActs(); renderEnObra();
-    {
+    if(e.message==='DRIVE_NOT_CONFIGURED'){
+      driveConfigModal();
+    } else {
       setSS('err','No se pudo subir');
       var isFetch=e.message==='Failed to fetch'||e.message.indexOf('fetch')>=0||e.message.indexOf('network')>=0||e.message.indexOf('NetworkError')>=0;
       document.getElementById('mcontent').innerHTML=
