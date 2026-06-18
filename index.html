@@ -10076,9 +10076,14 @@ async function renderCentroNotif(){
   if(!S._notifUser)S._notifUser='todos';
   if(!S._notifAccion)S._notifAccion='todos';
 
-  var fromDate=new Date(today()+'T12:00:00');
-  fromDate.setDate(fromDate.getDate()-(S._notifDias-1));
-  var dFrom=fromDate.toISOString().slice(0,10);
+  var dFrom;
+  if(S._notifDias===0){
+    dFrom=today();
+  }else{
+    var _fd=new Date(today()+'T12:00:00');
+    _fd.setDate(_fd.getDate()-(S._notifDias-1));
+    dFrom=_fd.toISOString().slice(0,10);
+  }
 
   var cambios=[];
   try{
@@ -10120,7 +10125,7 @@ async function renderCentroNotif(){
         '<span style="font-size:12px;font-weight:700;color:'+u.color+'">'+esc(u.nombre.replace('Ing. ',''))+'</span>'+
       '</div>'+
       '<div style="font-size:22px;font-weight:800;color:var(--text);line-height:1">'+cnt.total+'</div>'+
-      '<div style="font-size:10px;color:var(--text3);margin-top:2px">acciones en '+S._notifDias+' días</div>'+
+      '<div style="font-size:10px;color:var(--text3);margin-top:2px">acciones '+(S._notifDias===0?'hoy':'en '+S._notifDias+' d\xEDas')+'</div>'+
       '<div style="display:flex;gap:5px;margin-top:7px;flex-wrap:wrap">'+
         (cnt.completado?'<span style="font-size:9.5px;font-weight:700;color:#059669;background:#05966918;border-radius:5px;padding:1px 6px">✅ '+cnt.completado+'</span>':'')+
         (cnt.creado?'<span style="font-size:9.5px;font-weight:700;color:#2563EB;background:#2563EB18;border-radius:5px;padding:1px 6px">➕ '+cnt.creado+'</span>':'')+
@@ -10139,8 +10144,10 @@ async function renderCentroNotif(){
     return '<button onclick="S._notifAccion=\''+a+'\';renderCentroNotif()" style="padding:4px 11px;border-radius:16px;border:1px solid '+(sel?clr:'var(--border2)')+';background:'+(sel?clr+'22':'var(--bg3)')+';color:'+(sel?clr:'var(--text2)')+';font-size:11px;font-family:var(--mono);cursor:pointer">'+icon+' '+esc(lbl)+'</button>';
   }).join('');
 
-  // Days filter
-  var daysChips=[7,14,30].map(function(d){
+  // Days filter (0 = Hoy)
+  var _selHoy=S._notifDias===0;
+  var daysChips='<button onclick="S._notifDias=0;renderCentroNotif()" style="padding:4px 10px;border-radius:16px;border:1px solid '+(_selHoy?'var(--accent)':'var(--border2)')+';background:'+(_selHoy?'rgba(200,240,96,.12)':'var(--bg3)')+';color:'+(_selHoy?'var(--accent)':'var(--text2)')+';font-size:11px;font-family:var(--mono);cursor:pointer">Hoy</button>'+
+  [7,14,30].map(function(d){
     var sel=S._notifDias===d;
     return '<button onclick="S._notifDias='+d+';renderCentroNotif()" style="padding:4px 10px;border-radius:16px;border:1px solid '+(sel?'var(--accent)':'var(--border2)')+';background:'+(sel?'rgba(200,240,96,.12)':'var(--bg3)')+';color:'+(sel?'var(--accent)':'var(--text2)')+';font-size:11px;font-family:var(--mono);cursor:pointer">'+d+'d</button>';
   }).join('');
@@ -10191,7 +10198,7 @@ async function renderCentroNotif(){
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+cards+'</div>'+
       '<div style="display:flex;gap:4px;flex-wrap:wrap">'+accionChips+'</div>'+
-      '<div style="font-size:11px;color:var(--text3);margin-top:7px">'+filtered.length+' registro'+(filtered.length!==1?'s':'')+' · últimos '+S._notifDias+' días</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:7px">'+filtered.length+' registro'+(filtered.length!==1?'s':'')+' \xB7 '+(S._notifDias===0?'hoy':'\'ultimos '+S._notifDias+' d\xEDas')+'</div>'+
     '</div>'+
     '<div style="overflow-y:auto;max-height:calc(100vh - 280px)">'+rows+'</div>';
 }
