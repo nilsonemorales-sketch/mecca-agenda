@@ -4248,7 +4248,10 @@ function autoAsignarIng(contratistaNombre){
   if(!contratistaNombre)return;
   var ingSelect=document.getElementById('a-ing');
   if(!ingSelect||ingSelect.value)return; // skip if engineer already set
-  // Build map from existing activities: contractor → most-used engineer
+  // Primary: read ingeniero_asignado from obra_personal
+  var p=S.personal.find(function(x){return x.nombre===contratistaNombre&&x.tipo==='contratista';});
+  if(p&&p.ingeniero_asignado){ingSelect.value=p.ingeniero_asignado;return;}
+  // Fallback: most-used engineer from S.acts history
   var contMap={};
   (S.acts||[]).forEach(function(a){
     if(a.tipo_personal==='contratista'&&a.personal_nombre&&a.ingeniero_nombre){
@@ -4256,20 +4259,11 @@ function autoAsignarIng(contratistaNombre){
       contMap[a.personal_nombre][a.ingeniero_nombre]=(contMap[a.personal_nombre][a.ingeniero_nombre]||0)+1;
     }
   });
-  // Try dynamic lookup first
   if(contMap[contratistaNombre]){
     var best='';var bestCnt=0;
     Object.entries(contMap[contratistaNombre]).forEach(function(e){if(e[1]>bestCnt){bestCnt=e[1];best=e[0];}});
     if(best){ingSelect.value=best;return;}
   }
-  // Static fallback table
-  var edgarConts=['Daniel Espinal','Felix y Jefrey','Eddy','Orlando Martin','Hormigones Cibao','Paneldom','Olivin Summers','Jose Lantigua','Retro Pala','Alejandro'];
-  var moisesConts=['Yelson Jimenez','Secre','Alexander Ramos','Dimedes Estebez','Jordy','William','Juan Carlos ORS','Ramon'];
-  var ingEdgar=Object.values(USERS).find(function(u){return u.nombre.toLowerCase().indexOf('edgar')>=0;});
-  var ingMoises=Object.values(USERS).find(function(u){return u.nombre.toLowerCase().indexOf('moises')>=0;});
-  var norm=contratistaNombre.toLowerCase();
-  if(ingEdgar&&edgarConts.some(function(n){return norm.indexOf(n.toLowerCase())>=0||n.toLowerCase().indexOf(norm)>=0;})){ingSelect.value=ingEdgar.nombre;return;}
-  if(ingMoises&&moisesConts.some(function(n){return norm.indexOf(n.toLowerCase())>=0||n.toLowerCase().indexOf(norm)>=0;})){ingSelect.value=ingMoises.nombre;return;}
 }
 
 async function saveAct(ai){
@@ -8216,6 +8210,26 @@ function renderObra(){
 
 // ── RENDER EQUIPO (Asistencia + Personal + Penalidades) ──
 // ── ASISTENCIA CONTRATISTAS ───────────────────────────
+
+async function actualizarIngAsignado(pid, ingAnterior, ingNuevo){
+  if(!canEdit()) return;
+  var p=S.personal.find(function(x){return x.id===pid;});
+  if(!p) return;
+  var prev=p.ingeniero_asignado||'';
+  p.ingeniero_asignado=ingNuevo||null;
+  renderAsistContratistas();
+  setSS('syncing','Guardando...');
+  try{
+    await sb('obra_personal?id=eq.'+pid,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({ingeniero_asignado:ingNuevo||null})});
+    logCambio('editado','personal',pid,p.nombre,'Responsable: '+(ingAnterior||'Sin asignar')+' → '+(ingNuevo||'Sin asignar'));
+    setSS('ok','✓ Actualizado');
+  }catch(e){
+    p.ingeniero_asignado=prev;
+    renderAsistContratistas();
+    setSS('err','Error al guardar');
+  }
+}
+
 function renderAsistContratistas(){
   var el=document.getElementById('c-cont');
   if(!el) return;
@@ -8239,6 +8253,23 @@ function renderAsistContratistas(){
     h+='<div style="flex:1;text-align:center"><div style="font-size:24px;font-weight:800;color:var(--accent)">'+totalTrab+'</div><div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Trabajadores en obra</div></div>';
     h+='</div>';
 
+    // ── RESUMEN DE ASIGNACIONES ──────────────────────────
+    var _ingCount={};Object.keys(USERS).forEach(function(k){_ingCount[k]=0;});var _sinAsignar=0;
+    conts.forEach(function(p){
+      var ia=p.ingeniero_asignado||'';
+      var found=false;
+      Object.entries(USERS).forEach(function(e){if(ia===e[1].nombre){_ingCount[e[0]]++;found=true;}});
+      if(!found)_sinAsignar++;
+    });
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 0 12px;align-items:center">';
+    h+='<span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Responsables</span>';
+    Object.entries(USERS).forEach(function(e){
+      var k=e[0],u=e[1];
+      h+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;background:'+u.color+'18;border:1.5px solid '+u.color+'44;font-size:11px;font-weight:700;color:'+u.color+'">'+esc(shortName(u.nombre))+' <span style="font-size:13px;font-weight:800">'+_ingCount[k]+'</span></span>';
+    });
+    if(_sinAsignar>0)h+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;background:#f1f3f5;border:1.5px solid #ced4da;font-size:11px;font-weight:700;color:#868e96">Sin asignar <span style="font-size:13px;font-weight:800">'+_sinAsignar+'</span></span>';
+    h+='</div>';
+
     if(!conts.length){
       h+='<div class="empty">No hay contratistas registrados.<br>Agrega en la pestaña Personal.</div>';
     } else {
@@ -8246,14 +8277,31 @@ function renderAsistContratistas(){
         var p=x.p; var a=x.a;
         var cant=parseInt(a.horas_extra)||0;
         var estadoOk=a.estado==='presente'||a.estado==='medio día';
+        var iaVal=p.ingeniero_asignado||'';
+        var ingUser=iaVal?Object.entries(USERS).find(function(e){return e[1].nombre===iaVal;}):null;
+        var ingColor=ingUser?ingUser[1].color:'#868e96';
         h+='<div class="card">';
         h+='<div class="card-hdr">';
         h+='<div style="display:flex;align-items:center;gap:8px">';
         h+='<div class="p-av" style="width:36px;height:36px;font-size:12px;background:'+avColor(p.nombre)+'22;color:'+avColor(p.nombre)+'">'+initials(p.nombre)+'</div>';
-        h+='<div><div style="font-size:13px;font-weight:600">'+esc(p.nombre)+'</div><div style="font-size:11px;color:var(--text3)">'+esc(p.oficio||'—')+'</div></div>';
-        h+='</div>';
+        h+='<div>';
+        h+='<div style="font-size:13px;font-weight:600">'+esc(p.nombre)+'</div>';
+        h+='<div style="font-size:11px;color:var(--text3)">'+esc(p.oficio||'—')+'</div>';
+        h+='</div></div>';
         if(a.estado) h+='<span class="pill '+a.estado.replace(' ','-')+'">'+esc(a.estado)+'</span>';
         else h+='<span style="font-size:11px;color:var(--text3)">Sin registrar</span>';
+        h+='</div>';
+        // ── Responsable row ──────────────────────────────
+        h+='<div style="padding:6px 12px 2px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)">';
+        h+='<span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">Responsable</span>';
+        if(isAdmin()){
+          h+='<select onchange="actualizarIngAsignado(\''+p.id+'\',\''+esc(iaVal)+'\',this.value)" style="flex:1;font-size:12px;font-weight:600;color:'+ingColor+';border:1.5px solid '+ingColor+'44;border-radius:8px;padding:3px 8px;background:'+ingColor+'10;font-family:var(--font);cursor:pointer">';
+          h+='<option value="">— Sin asignar</option>';
+          Object.entries(USERS).forEach(function(e){h+='<option value="'+esc(e[1].nombre)+'"'+(iaVal===e[1].nombre?' selected':'')+'>'+esc(shortName(e[1].nombre))+'</option>';});
+          h+='</select>';
+        } else {
+          h+='<span style="font-size:12px;font-weight:600;color:'+ingColor+';background:'+ingColor+'10;border:1px solid '+ingColor+'33;border-radius:8px;padding:2px 10px">'+(iaVal?esc(shortName(iaVal)):'Sin asignar')+'</span>';
+        }
         h+='</div>';
         h+='<div class="card-body">';
         if(canEdit()){
