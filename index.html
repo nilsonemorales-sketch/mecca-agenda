@@ -670,7 +670,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 <input type="file" id="foto-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleFotoFile(this)">
-<input type="file" id="plano-file-input" accept="image/*" style="display:none" onchange="_handlePlanoFile(this)">
+<input type="file" id="plano-file-input" accept="image/*,application/pdf" style="display:none" onchange="_handlePlanoFile(this)">
 
 <script>
 const APP_VERSION='20260609_6';
@@ -7201,13 +7201,13 @@ function _compressPlano(file){
   });
 }
 
-async function uploadPlanoImagen(file,area){
+// Sube un dataUrl ya preparado a Google Drive y devuelve la URL pública
+async function _uploadPlanoDataUrl(dataUrl,nivel){
   var driveUrl=localStorage.getItem('mecca_drive_url')||S.driveUrl||'';
   if(!driveUrl) throw new Error('DRIVE_NOT_CONFIGURED');
   var ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,16);
-  var safeArea=(area||'').replace(/[^\w\-]/g,'_').slice(0,30);
-  var fileName='plano_'+safeArea+'_'+ts+'.jpg';
-  var dataUrl=await _compressPlano(file);
+  var safeNivel=(nivel||'').replace(/[^\w\-]/g,'_').slice(0,30);
+  var fileName='plano_'+safeNivel+'_'+ts+'.jpg';
   var controller=new AbortController();
   var timer=setTimeout(function(){controller.abort();},90000);
   try{
@@ -7225,6 +7225,71 @@ async function uploadPlanoImagen(file,area){
   }catch(e){clearTimeout(timer);if(e.name==='AbortError')throw new Error('La subida tardó demasiado (90s), reintenta');throw e;}
 }
 
+// Carga pdf.js desde CDN la primera vez que se necesita (lazy)
+function _loadPdfjs(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return new Promise(function(resolve,reject){
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=function(){
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc=
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      resolve(window.pdfjsLib);
+    };
+    s.onerror=function(){reject(new Error('No se pudo cargar pdf.js. Verifica tu conexión.'));};
+    document.head.appendChild(s);
+  });
+}
+
+// Renderiza una página del PDF a dataUrl JPEG
+async function _renderPdfPage(pdfDoc,pageNum){
+  var page=await pdfDoc.getPage(pageNum);
+  var base=page.getViewport({scale:1});
+  var scale=Math.min(2,1800/base.width);
+  var vp=page.getViewport({scale:scale});
+  var cv=document.createElement('canvas');
+  cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);
+  await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+  return cv.toDataURL('image/jpeg',0.85);
+}
+
+// Modal para elegir página cuando el PDF tiene varias; resuelve con número o null (cancelado)
+function _pickPdfPage(numPages){
+  return new Promise(function(resolve){
+    var mc=document.getElementById('mcontent');
+    if(!mc){resolve(1);return;}
+    mc.innerHTML='<div class="mhandle"></div>'
+      +'<h3 style="margin-bottom:8px">📄 Elegir página del PDF</h3>'
+      +'<div style="font-size:13px;color:var(--text2);margin-bottom:16px">El PDF tiene <strong>'+numPages+'</strong> páginas.<br>¿Cuál página usar como imagen del plano?</div>'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">'
+      +'<label style="font-size:13px;color:var(--text2)">Página:</label>'
+      +'<input type="number" id="pdf-page-inp" min="1" max="'+numPages+'" value="1" class="inp" style="width:80px;text-align:center">'
+      +'<span style="font-size:12px;color:var(--text3)">de '+numPages+'</span>'
+      +'</div>'
+      +'<div class="mactions">'
+      +'<button class="btn" onclick="window._pdfPageResolve&&(window._pdfPageResolve(null),window._pdfPageResolve=null);closeModal()">Cancelar</button>'
+      +'<button class="btn primary" onclick="var v=parseInt((document.getElementById(\'pdf-page-inp\')||{}).value||\'1\');'
+        +'v=Math.max(1,Math.min('+numPages+',isNaN(v)?1:v));'
+        +'window._pdfPageResolve&&(window._pdfPageResolve(v),window._pdfPageResolve=null);closeModal()">Usar esta página</button>'
+      +'</div>';
+    window._pdfPageResolve=resolve;
+    openModal();
+  });
+}
+
+// Convierte un File PDF a dataUrl JPEG (renderizando la página elegida)
+async function _pdfPageToDataUrl(file){
+  var lib=await _loadPdfjs();
+  var buf=await file.arrayBuffer();
+  var pdfDoc=await lib.getDocument({data:buf}).promise;
+  var numPages=pdfDoc.numPages;
+  if(!numPages) throw new Error('PDF sin páginas');
+  var pageNum=1;
+  if(numPages>1) pageNum=await _pickPdfPage(numPages);
+  if(!pageNum) throw new Error('Cancelado');
+  return await _renderPdfPage(pdfDoc,pageNum);
+}
+
 async function _handlePlanoFile(inp){
   var nivel=inp.dataset.area||'';
   if(!nivel||!inp.files||!inp.files[0]) return;
@@ -7236,9 +7301,12 @@ async function _handlePlanoFile(inp){
     else showToast('El administrador debe configurar Google Drive primero','warn',6000);
     return;
   }
-  setSS('syncing','Subiendo plano...');
+  var isPdf=file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf');
+  setSS('syncing',isPdf?'Procesando PDF...':'Subiendo plano...');
   try{
-    var url=await uploadPlanoImagen(file,nivel);
+    var dataUrl=isPdf?await _pdfPageToDataUrl(file):await _compressPlano(file);
+    setSS('syncing','Subiendo plano...');
+    var url=await _uploadPlanoDataUrl(dataUrl,nivel);
     var now=new Date().toISOString();
     await sb('obra_planos_mapa',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
       body:JSON.stringify({nivel:nivel,url:url,subido_por:S.user?.nombre||'',created_at:now,updated_at:now})
@@ -7246,7 +7314,11 @@ async function _handlePlanoFile(inp){
     S.planosMapas[nivel]={nivel:nivel,url:url,subido_por:S.user?.nombre||''};
     setSS('ok','✓ Plano subido');showToast('✅ Plano subido','ok');
     renderPlanosMapa();
-  }catch(e){setSS('err','Error');showToast('❌ '+e.message,'err',8000);}
+  }catch(e){
+    setSS('err','Error');
+    if(e.message!=='Cancelado') showToast('❌ '+e.message,'err',8000);
+    else{setSS('ok',hhmm());renderPlanosMapa();}
+  }
 }
 
 function _planoImgClick(e,nivel){
