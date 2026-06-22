@@ -7081,15 +7081,19 @@ function renderPlanosMapa(){
     }
     html+='</div>';
   } else {
-    html+='<div style="display:flex;gap:10px;margin-bottom:10px;font-size:11px;color:var(--text3)">'
-      +'<span>📍 '+actsConPinCount+' marcada'+(actsConPinCount!==1?'s':'')+'</span>'
-      +'<span>· '+actsSinPin.length+' sin marcar</span>'
-      +'</div>';
-
     var escId=_escAreaId(nivel);
-    html+='<div id="plano-wrap-'+escId+'" style="position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border2);cursor:'+(canEdit()?'crosshair':'default')+'"'
+    // Fila: stats + botones zoom
+    html+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">';
+    html+='<span style="font-size:11px;color:var(--text3);flex:1">📍 '+actsConPinCount+' marcada'+(actsConPinCount!==1?'s':'')+' · '+actsSinPin.length+' sin marcar</span>';
+    html+='<button onclick="_planoZoomOut(\''+escId+'\')" title="Alejar" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;width:30px;height:30px;font-size:17px;font-weight:700;line-height:1;cursor:pointer;color:var(--text2);flex-shrink:0">−</button>';
+    html+='<button onclick="_planoZoomIn(\''+escId+'\')" title="Acercar" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;width:30px;height:30px;font-size:17px;font-weight:700;line-height:1;cursor:pointer;color:var(--text2);flex-shrink:0">+</button>';
+    html+='</div>';
+
+    // Contenedor scrollable (zoom por width del wrap interno)
+    html+='<div id="plano-scroll-'+escId+'" style="overflow:auto;border-radius:12px;border:1px solid var(--border2);max-height:68vh">';
+    html+='<div id="plano-wrap-'+escId+'" data-zoom="1" style="position:relative;width:100%;cursor:'+(canEdit()?'crosshair':'default')+'"'
       +(canEdit()?' onclick="_planoImgClick(event,\''+nivel+'\')"':'')+'>';
-    html+='<img id="plano-img-'+escId+'" src="'+esc(plano.url)+'" style="width:100%;height:auto;display:block;user-select:none;pointer-events:none">';
+    html+='<img id="plano-img-'+escId+'" src="'+esc(_planoDisplayUrl(plano.url))+'" style="width:100%;height:auto;display:block;user-select:none;pointer-events:none">';
 
     actsConPin.forEach(function(a){
       var color='#9ca3af';
@@ -7104,7 +7108,7 @@ function renderPlanosMapa(){
         +'width:18px;height:18px;border-radius:50%;background:'+color+';border:2.5px solid #fff;'
         +'box-shadow:0 2px 6px rgba(0,0,0,.45);cursor:pointer;z-index:10"></div>';
     });
-    html+='</div>';
+    html+='</div></div>';
 
     html+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--text3)">';
     [{c:'#9ca3af',l:'Pendiente'},{c:'#1a56db',l:'En progreso'},{c:'#d97706',l:'Pausada'},{c:'#059669',l:'Completada'},{c:'#dc2626',l:'Vencida'}]
@@ -7112,7 +7116,7 @@ function renderPlanosMapa(){
     html+='</div>';
 
     if(canEdit()){
-      html+='<div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">Toca un punto vacío del plano para marcar una actividad</div>';
+      html+='<div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">Toca un punto vacío del plano para marcar una actividad · + / − para acercar</div>';
     }
   }
 
@@ -7174,6 +7178,20 @@ async function deletePlano(id){
 
 // ─── PLANOS INTERACTIVOS — helpers ───────────────────
 function _escAreaId(area){return(area||'').replace(/[^a-zA-Z0-9]/g,'_');}
+function _planoDisplayUrl(url){return(url||'').replace(/sz=w\d+/,'sz=w2400');}
+
+function _planoZoomIn(escId){
+  var w=document.getElementById('plano-wrap-'+escId);if(!w) return;
+  var z=Math.round(parseFloat(w.dataset.zoom||'1')*10)/10;
+  var nxt=Math.min(4,z+0.5);
+  w.dataset.zoom=nxt;w.style.width=(nxt*100)+'%';
+}
+function _planoZoomOut(escId){
+  var w=document.getElementById('plano-wrap-'+escId);if(!w) return;
+  var z=Math.round(parseFloat(w.dataset.zoom||'1')*10)/10;
+  var nxt=Math.max(1,z-0.5);
+  w.dataset.zoom=nxt;w.style.width=(nxt*100)+'%';
+}
 
 function _clickPlanoInput(nivel){
   var inp=document.getElementById('plano-file-input');
@@ -7245,12 +7263,12 @@ function _loadPdfjs(){
 async function _renderPdfPage(pdfDoc,pageNum){
   var page=await pdfDoc.getPage(pageNum);
   var base=page.getViewport({scale:1});
-  var scale=Math.min(2,1800/base.width);
+  var scale=Math.min(4,3000/base.width);
   var vp=page.getViewport({scale:scale});
   var cv=document.createElement('canvas');
   cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);
   await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-  return cv.toDataURL('image/jpeg',0.85);
+  return cv.toDataURL('image/jpeg',0.90);
 }
 
 // Modal para elegir página cuando el PDF tiene varias; resuelve con número o null (cancelado)
