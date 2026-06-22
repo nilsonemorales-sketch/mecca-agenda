@@ -6937,11 +6937,15 @@ async function loadPlanos(){
   el.innerHTML='<div class="empty"><div class="spinner"></div><br>Cargando planos...</div>';
   setSS('syncing','Cargando planos...');
   try{
+    // Documentos: tabla original obra_planos (schema con id, nombre, categoria…)
     var data=await sb('obra_planos?order=created_at.desc&limit=200');
     S.planos=Array.isArray(data)?data:[];
-    // Poblar mapa interactivo: area → {url, subido_por, ...}
+    // Mapas interactivos: tabla separada obra_planos_mapa (schema area PK, url…)
     S.planosMapas={};
-    S.planos.forEach(function(p){if(p.area&&p.url)S.planosMapas[p.area]=p;});
+    try{
+      var mdata=await sb('obra_planos_mapa?select=area,url,subido_por,created_at,updated_at');
+      (Array.isArray(mdata)?mdata:[]).forEach(function(p){if(p.area&&p.url)S.planosMapas[p.area]=p;});
+    }catch(me){console.warn('obra_planos_mapa:',me.message);}
     setSS('ok','✓ '+hhmm());
     renderPlanos();
   }catch(e){
@@ -7240,13 +7244,10 @@ async function _handlePlanoFile(inp){
   try{
     var url=await uploadPlanoImagen(file,area);
     var now=new Date().toISOString();
-    await sb('obra_planos',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+    await sb('obra_planos_mapa',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
       body:JSON.stringify({area:area,url:url,subido_por:S.user?.nombre||'',created_at:now,updated_at:now})
     });
     S.planosMapas[area]={area:area,url:url,subido_por:S.user?.nombre||''};
-    // Also sync S.planos for docs tab
-    var ex=S.planos.findIndex(function(p){return p.area===area;});
-    if(ex>=0) S.planos[ex].url=url; else S.planos.unshift({area:area,url:url,subido_por:S.user?.nombre||''});
     setSS('ok','✓ Plano subido');showToast('✅ Plano subido','ok');
     renderPlanosMapa();
   }catch(e){setSS('err','Error');showToast('❌ '+e.message,'err',8000);}
