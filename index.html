@@ -670,6 +670,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 </div>
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 <input type="file" id="foto-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleFotoFile(this)">
+<input type="file" id="plano-file-input" accept="image/*" style="display:none" onchange="_handlePlanoFile(this)">
 
 <script>
 const APP_VERSION='20260609_6';
@@ -1227,6 +1228,7 @@ let S={
   bonifMes:'',
   fotosFiltroIng:'todos', fotosFiltroUbic:'', fotosFecha:'', fotosFechaFin:'', fotosData:[],
   planos:[], planosFiltro:'',
+  planosMapas:{}, planosVista:'mapa', planosAreaSel:'', _planoPendingPin:null,
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
@@ -6920,8 +6922,15 @@ async function loadPlanos(){
   el.innerHTML='<div class="empty"><div class="spinner"></div><br>Cargando planos...</div>';
   setSS('syncing','Cargando planos...');
   try{
+    // Documentos: tabla original obra_planos (schema con id, nombre, categoria…)
     var data=await sb('obra_planos?order=created_at.desc&limit=200');
-    S.planos=data;
+    S.planos=Array.isArray(data)?data:[];
+    // Mapas interactivos: tabla separada obra_planos_mapa (schema area PK, url…)
+    S.planosMapas={};
+    try{
+      var mdata=await sb('obra_planos_mapa?select=area,url,subido_por,created_at,updated_at');
+      (Array.isArray(mdata)?mdata:[]).forEach(function(p){if(p.area&&p.url)S.planosMapas[p.area]=p;});
+    }catch(me){console.warn('obra_planos_mapa:',me.message);}
     setSS('ok','✓ '+hhmm());
     renderPlanos();
   }catch(e){
@@ -6933,45 +6942,51 @@ async function loadPlanos(){
 function renderPlanos(){
   var el=document.getElementById('c-planos');
   if(!el) return;
+  var v=S.planosVista||'mapa';
+  var snSt='padding:7px 18px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;font-family:var(--font)';
+  el.innerHTML='<div style="padding:10px 12px 0;border-bottom:1px solid var(--border2);margin-bottom:0">'
+    +'<div style="display:flex;gap:6px;margin-bottom:10px">'
+    +'<button onclick="S.planosVista=\'mapa\';S.planosAreaSel=\'\';renderPlanos()" style="'+snSt+';background:'+(v==='mapa'?'var(--accent)':'var(--bg3)')+';color:'+(v==='mapa'?'#fff':'var(--text2)')+'">🗺️ Interactivo</button>'
+    +'<button onclick="S.planosVista=\'docs\';renderPlanos()" style="'+snSt+';background:'+(v==='docs'?'var(--accent)':'var(--bg3)')+';color:'+(v==='docs'?'#fff':'var(--text2)')+'">📄 Documentos</button>'
+    +'</div></div>'
+    +'<div id="c-planos-body"></div>';
+  if(v==='mapa') renderPlanosMapa();
+  else renderPlanosDocumentos();
+}
+
+function renderPlanosDocumentos(){
+  var el=document.getElementById('c-planos-body');
+  if(!el) return;
   var filtro=S.planosFiltro||'';
   var lista=S.planos.filter(function(p){
     if(!filtro) return true;
     return (p.categoria||'')===(filtro);
   });
-
   var cats=CATS_PLANOS;
   var counts={};
-  cats.forEach(function(c){ counts[c]=S.planos.filter(function(p){return (p.categoria||'General')===c;}).length; });
-
+  cats.forEach(function(c){counts[c]=S.planos.filter(function(p){return (p.categoria||'General')===c;}).length;});
   var html='<div style="padding:12px">';
-
-  // Header + filtro por categoría
   html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
-    +'<div style="font-size:11px;font-family:var(--mono);color:var(--text3)">PLANOS · '+S.planos.length+' documento'+(S.planos.length!==1?'s':'')+'</div>'
+    +'<div style="font-size:11px;font-family:var(--mono);color:var(--text3)">DOCUMENTOS · '+S.planos.length+(S.planos.length!==1?' docs':' doc')+'</div>'
     +(canEdit()?'<button onclick="showAddPlano()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">+ Agregar</button>':'')
     +'</div>';
-
-  // Filtros categoría
   html+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'
-    +'<button onclick="S.planosFiltro=\'\';renderPlanos()" style="padding:5px 11px;border-radius:14px;border:1px solid '+(!filtro?'var(--accent)':'var(--border2)')+';background:'+(!filtro?'rgba(200,240,96,.12)':'var(--bg3)')+';color:'+(!filtro?'var(--accent)':'var(--text2)')+';font-size:11px;font-family:var(--mono);cursor:pointer">Todos ('+S.planos.length+')</button>';
+    +'<button onclick="S.planosFiltro=\'\';renderPlanosDocumentos()" style="padding:5px 11px;border-radius:14px;border:1px solid '+(!filtro?'var(--accent)':'var(--border2)')+';background:'+(!filtro?'rgba(200,240,96,.12)':'var(--bg3)')+';color:'+(!filtro?'var(--accent)':'var(--text2)')+';font-size:11px;font-family:var(--mono);cursor:pointer">Todos ('+S.planos.length+')</button>';
   cats.forEach(function(c){
     if(!counts[c]) return;
     var sel=filtro===c;
-    html+='<button onclick="S.planosFiltro=\''+c+'\';renderPlanos()" style="padding:5px 11px;border-radius:14px;border:1px solid '+(sel?'var(--accent)':'var(--border2)')+';background:'+(sel?'rgba(200,240,96,.12)':'var(--bg3)')+';color:'+(sel?'var(--accent)':'var(--text2)')+';font-size:11px;font-family:var(--mono);cursor:pointer">'+c+' ('+counts[c]+')</button>';
+    html+='<button onclick="S.planosFiltro=\''+c+'\';renderPlanosDocumentos()" style="padding:5px 11px;border-radius:14px;border:1px solid '+(sel?'var(--accent)':'var(--border2)')+';background:'+(sel?'rgba(200,240,96,.12)':'var(--bg3)')+';color:'+(sel?'var(--accent)':'var(--text2)')+';font-size:11px;font-family:var(--mono);cursor:pointer">'+c+' ('+counts[c]+')</button>';
   });
   html+='</div>';
-
   if(!lista.length){
     html+='<div class="empty" style="padding:48px 20px">'
       +'<div style="font-size:40px;margin-bottom:12px">📐</div>'
-      +'<div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:6px">Sin planos'+(filtro?' en esta categoría':'')+'</div>'
+      +'<div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:6px">Sin documentos'+(filtro?' en esta categoría':'')+'</div>'
       +(canEdit()?'<button class="ibtn primary" onclick="showAddPlano()" style="margin:12px auto 0">+ Agregar plano o PDF</button>':'')
       +'</div>';
     el.innerHTML=html+'</div>';
     return;
   }
-
-  // Grid de cards
   html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">';
   lista.forEach(function(p){
     var isGDrive=p.url&&(p.url.includes('drive.google.com')||p.url.includes('docs.google.com'));
@@ -6983,7 +6998,7 @@ function renderPlanos(){
       +'<div style="position:absolute;top:8px;right:8px;background:'+catColor+';color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;font-family:var(--mono)">'+esc(p.categoria||'General')+'</div>'
       +'</div>'
       +'<div style="padding:10px 12px;flex:1;display:flex;flex-direction:column;gap:4px">'
-      +'<div style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">'+esc(p.nombre)+'</div>'
+      +'<div style="font-weight:700;font-size:13px;color:var(--text);line-height:1.3">'+esc(p.nombre||p.area||'')+'</div>'
       +(p.descripcion?'<div style="font-size:11px;color:var(--text3);line-height:1.4">'+esc(p.descripcion)+'</div>':'')
       +'<div style="font-size:10px;color:var(--text3);margin-top:auto;padding-top:4px">'+esc(p.fecha||p.created_at?.slice(0,10)||'')+(p.subido_por?' · '+esc(p.subido_por):'')+'</div>'
       +'</div>'
@@ -6995,6 +7010,102 @@ function renderPlanos(){
       +'</div>';
   });
   html+='</div></div>';
+  el.innerHTML=html;
+}
+
+function renderPlanosMapa(){
+  var el=document.getElementById('c-planos-body');
+  if(!el) return;
+  var area=S.planosAreaSel||'';
+  if(!area){
+    // Selector de área
+    var html='<div style="padding:10px 12px 16px">';
+    html+='<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:12px">SELECCIONA UN ÁREA</div>';
+    UBICACIONES.forEach(function(g){
+      html+='<div style="margin-bottom:12px">';
+      html+='<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">'+esc(g.grupo)+'</div>';
+      html+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
+      g.opciones.forEach(function(opc){
+        var tiene=!!S.planosMapas[opc];
+        var nPin=(S.acts||[]).filter(function(a){return a.area===opc&&a.plano_x!=null;}).length;
+        html+='<button onclick="S.planosAreaSel='+JSON.stringify(opc)+';renderPlanosMapa()" style="display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:9px;border:1px solid '+(tiene?'var(--accent)':'var(--border2)')+';background:'+(tiene?'rgba(200,240,96,.08)':'var(--bg3)')+';color:'+(tiene?'var(--accent)':'var(--text2)')+';font-size:11px;font-weight:'+(tiene?700:400)+';cursor:pointer;font-family:var(--font)">'
+          +(tiene?'🗺️':'📐')+' '+esc(opc)+(nPin?' <span style="font-size:9px;background:'+(tiene?'var(--accent)':'var(--border2)')+';color:'+(tiene?'#fff':'var(--text3)')+';border-radius:8px;padding:1px 5px">'+nPin+'</span>':'')
+          +'</button>';
+      });
+      html+='</div></div>';
+    });
+    html+='</div>';
+    el.innerHTML=html;
+    return;
+  }
+
+  // Área seleccionada
+  var plano=S.planosMapas[area]||null;
+  var actsArea=(S.acts||[]).filter(function(a){return a.area===area;});
+  var actsConPin=actsArea.filter(function(a){return a.plano_x!=null&&a.plano_y!=null;});
+  var actsConPinCount=actsConPin.length;
+  var actsSinPin=actsArea.filter(function(a){return a.plano_x==null||a.plano_y==null;});
+  var hoy=today();
+
+  var html='<div style="padding:10px 12px">';
+  // Header
+  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
+  html+='<button onclick="S.planosAreaSel=\'\';renderPlanosMapa()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;color:var(--text2);flex-shrink:0">← Volver</button>';
+  html+='<div style="font-size:14px;font-weight:700;color:var(--text);flex:1">'+esc(area)+'</div>';
+  if(canEdit()&&plano){
+    html+='<button onclick="_clickPlanoInput('+JSON.stringify(area)+')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;color:var(--text2)">🔄 Reemplazar</button>';
+  }
+  html+='</div>';
+
+  if(!plano){
+    html+='<div style="border:2px dashed var(--border2);border-radius:14px;padding:48px 20px;text-align:center">';
+    html+='<div style="font-size:40px;margin-bottom:10px">📐</div>';
+    html+='<div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:6px">Sin plano para esta área</div>';
+    if(canEdit()){
+      html+='<div style="font-size:12px;color:var(--text3);margin-bottom:16px">Sube la imagen del plano (JPG, PNG)</div>';
+      html+='<button onclick="_clickPlanoInput('+JSON.stringify(area)+')" style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 28px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📤 Subir plano</button>';
+    }
+    html+='</div>';
+  } else {
+    // Stats
+    html+='<div style="display:flex;gap:10px;margin-bottom:10px;font-size:11px;color:var(--text3)">'
+      +'<span>📍 '+actsConPinCount+' marcada'+(actsConPinCount!==1?'s':'')+'</span>'
+      +'<span>· '+actsSinPin.length+' sin marcar</span>'
+      +'</div>';
+
+    // Imagen con pines
+    var escId=_escAreaId(area);
+    html+='<div id="plano-wrap-'+escId+'" style="position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border2);cursor:'+(canEdit()?'crosshair':'default')+'"'
+      +(canEdit()?' onclick="_planoImgClick(event,'+JSON.stringify(area)+')"':'')+'>';
+    html+='<img id="plano-img-'+escId+'" src="'+esc(plano.url)+'" style="width:100%;height:auto;display:block;user-select:none;pointer-events:none">';
+
+    // Pines
+    actsConPin.forEach(function(a){
+      var color='#9ca3af';
+      if(a.estado==='completado') color='#059669';
+      else if(a.estado==='pausada') color='#d97706';
+      else if(a.estado==='en-progreso'){
+        color=(a.fecha_fin&&/^\d{4}-\d{2}-\d{2}$/.test(a.fecha_fin)&&a.fecha_fin<hoy)?'#dc2626':'#1a56db';
+      } else if(a.fecha_fin&&/^\d{4}-\d{2}-\d{2}$/.test(a.fecha_fin)&&a.fecha_fin<hoy) color='#dc2626';
+      html+='<div onclick="_abrirInfoPin(\''+a.id+'\');event.stopPropagation()" title="'+esc((a.descripcion||'').slice(0,60))+'"'
+        +' style="position:absolute;left:'+a.plano_x+'%;top:'+a.plano_y+'%;transform:translate(-50%,-50%);'
+        +'width:18px;height:18px;border-radius:50%;background:'+color+';border:2.5px solid #fff;'
+        +'box-shadow:0 2px 6px rgba(0,0,0,.45);cursor:pointer;z-index:10"></div>';
+    });
+    html+='</div>';
+
+    // Leyenda
+    html+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--text3)">';
+    [{c:'#9ca3af',l:'Pendiente'},{c:'#1a56db',l:'En progreso'},{c:'#d97706',l:'Pausada'},{c:'#059669',l:'Completada'},{c:'#dc2626',l:'Vencida'}]
+      .forEach(function(s){html+='<span style="display:flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:50%;background:'+s.c+';display:inline-block"></span>'+s.l+'</span>';});
+    html+='</div>';
+
+    if(canEdit()){
+      html+='<div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">Toca un punto vacío del plano para marcar una actividad</div>';
+    }
+  }
+
+  html+='</div>';
   el.innerHTML=html;
 }
 
@@ -7048,6 +7159,245 @@ async function deletePlano(id){
   renderPlanos();
   try{await sb('obra_planos?id=eq.'+id,{method:'DELETE',prefer:'return=minimal'});}
   catch(e){showToast('❌ Error al eliminar','err');}
+}
+
+// ─── PLANOS INTERACTIVOS — helpers ───────────────────
+function _escAreaId(area){return(area||'').replace(/[^a-zA-Z0-9]/g,'_');}
+
+function _clickPlanoInput(area){
+  var inp=document.getElementById('plano-file-input');
+  if(!inp) return;
+  inp.dataset.area=area;
+  inp.value='';
+  inp.click();
+}
+
+function _compressPlano(file){
+  return new Promise(function(res,rej){
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var img=new Image();
+      img.onload=function(){
+        var cv=document.createElement('canvas');
+        var maxW=1800,maxH=2400,rt=Math.min(maxW/img.width,maxH/img.height,1);
+        cv.width=Math.round(img.width*rt);cv.height=Math.round(img.height*rt);
+        cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+        res(cv.toDataURL('image/jpeg',0.85));
+      };
+      img.onerror=rej;img.src=ev.target.result;
+    };
+    reader.onerror=rej;reader.readAsDataURL(file);
+  });
+}
+
+async function uploadPlanoImagen(file,area){
+  var driveUrl=localStorage.getItem('mecca_drive_url')||S.driveUrl||'';
+  if(!driveUrl) throw new Error('DRIVE_NOT_CONFIGURED');
+  var ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,16);
+  var safeArea=(area||'').replace(/[^\w\-]/g,'_').slice(0,30);
+  var fileName='plano_'+safeArea+'_'+ts+'.jpg';
+  var dataUrl=await _compressPlano(file);
+  var controller=new AbortController();
+  var timer=setTimeout(function(){controller.abort();},90000);
+  try{
+    var resp=await fetch(driveUrl,{method:'POST',signal:controller.signal,
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({image:dataUrl,fileName:fileName,folder:'Planos',actId:'plano'})
+    });
+    clearTimeout(timer);
+    var txt=await resp.text();
+    var json;try{json=JSON.parse(txt);}catch(e){throw new Error('Drive no respondió JSON. Revisa el Web App.');}
+    if(!json.success) throw new Error(json.error||'Error subiendo plano');
+    var url=json.thumbUrl||json.url||'';
+    if(!url) throw new Error('Drive no devolvió URL válida');
+    return url;
+  }catch(e){clearTimeout(timer);if(e.name==='AbortError')throw new Error('La subida tardó demasiado (90s), reintenta');throw e;}
+}
+
+async function _handlePlanoFile(inp){
+  var area=inp.dataset.area||'';
+  if(!area||!inp.files||!inp.files[0]) return;
+  var file=inp.files[0];inp.value='';
+  if(!canEdit()){showToast('Sin permisos','warn');return;}
+  var driveUrl=localStorage.getItem('mecca_drive_url')||S.driveUrl||'';
+  if(!driveUrl){
+    if(isAdmin()) driveConfigModal();
+    else showToast('El administrador debe configurar Google Drive primero','warn',6000);
+    return;
+  }
+  setSS('syncing','Subiendo plano...');
+  try{
+    var url=await uploadPlanoImagen(file,area);
+    var now=new Date().toISOString();
+    await sb('obra_planos_mapa',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+      body:JSON.stringify({area:area,url:url,subido_por:S.user?.nombre||'',created_at:now,updated_at:now})
+    });
+    S.planosMapas[area]={area:area,url:url,subido_por:S.user?.nombre||''};
+    setSS('ok','✓ Plano subido');showToast('✅ Plano subido','ok');
+    renderPlanosMapa();
+  }catch(e){setSS('err','Error');showToast('❌ '+e.message,'err',8000);}
+}
+
+function _planoImgClick(e,area){
+  if(!canEdit()) return;
+  var img=document.getElementById('plano-img-'+_escAreaId(area));
+  if(!img) return;
+  var rect=img.getBoundingClientRect();
+  var cx=e.touches?e.touches[0].clientX:e.clientX;
+  var cy=e.touches?e.touches[0].clientY:e.clientY;
+  var xPct=Math.round(Math.max(0,Math.min(100,(cx-rect.left)/rect.width*100))*10)/10;
+  var yPct=Math.round(Math.max(0,Math.min(100,(cy-rect.top)/rect.height*100))*10)/10;
+  _abrirAccionPlano(area,xPct,yPct);
+}
+
+function _abrirAccionPlano(area,xPct,yPct){
+  var sinPin=(S.acts||[]).filter(function(a){return a.area===area&&(a.plano_x==null||a.plano_y==null);});
+  var mc=document.getElementById('mcontent');if(!mc) return;
+  var bst='width:100%;border-radius:10px;padding:10px 14px;font-size:13px;cursor:pointer;font-family:var(--font);border:1px solid var(--border2);text-align:left;';
+  var html='<div class="mhandle"></div>'
+    +'<h3 style="margin-bottom:4px">📍 Punto en el plano</h3>'
+    +'<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:14px">'+area+' · '+xPct+'%, '+yPct+'%</div>';
+  if(sinPin.length){
+    html+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:7px">🔗 Vincular actividad existente:</div>';
+    html+='<div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;margin-bottom:12px">';
+    var stCol={'pendiente':'#9ca3af','en-progreso':'#1a56db','pausada':'#d97706','completado':'#059669'};
+    sinPin.slice(0,20).forEach(function(a){
+      html+='<button onclick="vincularActPin(\''+a.id+'\','+xPct+','+yPct+');closeModal()" style="'+bst+'background:var(--bg3);color:var(--text)">'
+        +'<span style="font-size:9px;color:'+(stCol[a.estado]||'#9ca3af')+';margin-right:5px">●</span>'
+        +esc((a.descripcion||'').slice(0,60))+'</button>';
+    });
+    html+='</div>';
+  }else{
+    html+='<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Todas las actividades de esta área ya tienen pin.</div>';
+  }
+  html+='<button onclick="closeModal();_showQuickActForPlano('+JSON.stringify(area)+','+xPct+','+yPct+')" style="'+bst+'background:var(--accent);color:#fff;font-weight:700;border-color:var(--accent);margin-bottom:8px">➕ Crear actividad nueva aquí</button>';
+  html+='<button onclick="closeModal()" style="'+bst+'background:transparent;color:var(--text3)">Cancelar</button>';
+  mc.innerHTML=html;openModal();
+}
+
+function _showQuickActForPlano(area,xPct,yPct){
+  var mc=document.getElementById('mcontent');if(!mc) return;
+  var contrOpts=(S.personal||[]).filter(function(p){return p.tipo==='contratista';})
+    .map(function(p){return '<option value="'+esc(p.nombre)+'">'+esc(p.nombre)+'</option>';}).join('');
+  var ingOpts=Object.values(USERS).map(function(u){return '<option value="'+esc(u.nombre)+'">'+esc(u.nombre)+'</option>';}).join('');
+  mc.innerHTML='<div class="mhandle"></div>'
+    +'<h3 style="font-size:15px;margin-bottom:2px">📍 Nueva actividad</h3>'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:12px">'+esc(area)+' · punto ('+xPct+'%, '+yPct+'%)</div>'
+    +'<div class="fw"><label class="fl">Descripción *</label><input id="qpa-desc" class="inp" placeholder="Descripción de la actividad"></div>'
+    +'<div class="fw"><label class="fl">Tipo</label><select id="qpa-tipo" class="sel" onchange="_qpaToggle()">'
+    +'<option value="contratista">Contratista</option><option value="propio">Personal propio</option><option value="ingeniero">Admin / Ing</option></select></div>'
+    +'<div id="qpa-row-cont" class="fw"><label class="fl">Contratista</label><select id="qpa-pers" class="sel"><option value="">— elegir —</option>'+contrOpts+'</select></div>'
+    +'<div id="qpa-row-ing" class="fw" style="display:none"><label class="fl">Responsable</label><select id="qpa-pers-ing" class="sel"><option value="">— elegir —</option>'+ingOpts+'</select></div>'
+    +'<div class="fw"><label class="fl">Ing. a cargo</label><select id="qpa-ing2" class="sel"><option value="">— elegir —</option>'+ingOpts+'</select></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<div class="fw"><label class="fl">Inicio *</label><input type="date" id="qpa-fi" class="inp" value="'+today()+'"></div>'
+    +'<div class="fw"><label class="fl">Fin *</label><input type="date" id="qpa-ff" class="inp"></div>'
+    +'</div>'
+    +'<div class="mactions">'
+    +'<button class="btn" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn primary" onclick="_saveQuickActPlano('+JSON.stringify(area)+','+xPct+','+yPct+')">📍 Crear y marcar</button>'
+    +'</div>';
+  openModal();
+}
+
+function _qpaToggle(){
+  var tipo=(document.getElementById('qpa-tipo')||{}).value||'contratista';
+  var rc=document.getElementById('qpa-row-cont');
+  var ri=document.getElementById('qpa-row-ing');
+  if(rc) rc.style.display=tipo==='propio'?'none':'flex';
+  if(ri) ri.style.display=tipo==='ingeniero'?'flex':'none';
+}
+
+async function _saveQuickActPlano(area,xPct,yPct){
+  var desc=((document.getElementById('qpa-desc')||{}).value||'').trim();
+  if(!desc){showToast('Escribe una descripción','warn');return;}
+  var tipo=(document.getElementById('qpa-tipo')||{}).value||'contratista';
+  var fi=(document.getElementById('qpa-fi')||{}).value||today();
+  var ff=(document.getElementById('qpa-ff')||{}).value||'';
+  if(!ff){showToast('Fecha fin requerida','warn');return;}
+  if(ff<fi){showToast('Fecha fin debe ser ≥ inicio','warn');return;}
+  var pers='';
+  if(tipo==='contratista') pers=(document.getElementById('qpa-pers')||{}).value||'';
+  else if(tipo==='ingeniero') pers=(document.getElementById('qpa-pers-ing')||{}).value||'';
+  var ingNom=(document.getElementById('qpa-ing2')||{}).value||'';
+  closeModal();
+  setSS('syncing','Creando actividad...');
+  var act={id:uid(),descripcion:desc,area:area,estado:'pendiente',tipo_personal:tipo,
+    personal_nombre:pers,ingeniero_nombre:ingNom,porcentaje:0,
+    fecha:today(),fecha_inicio:fi,fecha_fin:ff,fotos:'',foto_pendiente:false,
+    plano_x:xPct,plano_y:yPct,created_at:new Date().toISOString()};
+  S.acts.push(act);
+  try{
+    await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(act)});
+    logCambio('creado','actividad',act.id,desc,'Nueva actividad en '+area+' (desde plano)');
+    setSS('ok','✓ Actividad creada');showToast('✅ Actividad creada con pin','ok');
+    renderPlanosMapa();
+  }catch(e){
+    setSS('err','Error');S.acts.splice(S.acts.indexOf(act),1);
+    showToast('❌ '+e.message,'err',8000);
+  }
+}
+
+function _abrirInfoPin(actId){
+  var a=(S.acts||[]).find(function(x){return x.id===actId;});
+  if(!a) return;
+  var hoy=today();
+  var isVencida=a.estado!=='completado'&&a.fecha_fin&&/^\d{4}-\d{2}-\d{2}$/.test(a.fecha_fin)&&a.fecha_fin<hoy;
+  var stColors={'pendiente':'#9ca3af','en-progreso':'#1a56db','pausada':'#d97706','completado':'#059669'};
+  var color=isVencida?'#dc2626':(stColors[a.estado]||'#9ca3af');
+  var estadoLbl=isVencida?'Vencida':(a.estado||'pendiente');
+  var ai=S.acts.indexOf(a);
+  var mc=document.getElementById('mcontent');if(!mc) return;
+  var rowSt='display:contents';
+  mc.innerHTML='<div class="mhandle"></div>'
+    +'<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:12px">'
+    +'<div style="width:12px;height:12px;border-radius:50%;background:'+color+';flex-shrink:0;margin-top:3px"></div>'
+    +'<div style="font-size:13px;font-weight:700;color:var(--text);line-height:1.35">'+esc(a.descripcion||'')+'</div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:11px;margin-bottom:16px;color:var(--text2)">'
+    +'<span style="color:var(--text3)">Estado</span><span style="color:'+color+';font-weight:600">'+esc(estadoLbl)+(a.porcentaje?' · '+a.porcentaje+'%':'')+'</span>'
+    +(a.personal_nombre?'<span style="color:var(--text3)">Responsable</span><span>'+esc(a.personal_nombre)+'</span>':'')
+    +(a.ingeniero_nombre?'<span style="color:var(--text3)">Ingeniero</span><span>'+esc(a.ingeniero_nombre)+'</span>':'')
+    +(a.fecha_fin?'<span style="color:var(--text3)">Fecha fin</span><span style="color:'+(isVencida?'#dc2626':'var(--text2)')+'">'+esc(a.fecha_fin)+'</span>':'')
+    +'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +(ai>=0?'<button onclick="closeModal();showAddAct('+ai+')" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:10px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">✏️ Abrir actividad</button>':'')
+    +(canEdit()?'<button onclick="quitarPinActividad(\''+actId+'\')" style="background:transparent;color:#dc2626;border:1px solid #dc262640;border-radius:10px;padding:9px;font-size:12px;cursor:pointer;font-family:var(--font)">🗑 Quitar pin del plano</button>':'')
+    +'<button onclick="closeModal()" style="background:transparent;color:var(--text3);border:1px solid var(--border2);border-radius:10px;padding:9px;font-size:12px;cursor:pointer;font-family:var(--font)">Cerrar</button>'
+    +'</div>';
+  openModal();
+}
+
+async function vincularActPin(actId,xPct,yPct){
+  var a=(S.acts||[]).find(function(x){return x.id===actId;});
+  if(!a) return;
+  a.plano_x=xPct;a.plano_y=yPct;
+  setSS('syncing','Guardando pin...');
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({plano_x:xPct,plano_y:yPct})});
+    setSS('ok','✓ Pin guardado');showToast('📍 Pin marcado','ok');
+    renderPlanosMapa();
+  }catch(e){
+    a.plano_x=null;a.plano_y=null;
+    setSS('err','Error');showToast('❌ '+e.message,'err',6000);
+  }
+}
+
+async function quitarPinActividad(actId){
+  var a=(S.acts||[]).find(function(x){return x.id===actId;});
+  if(!a) return;
+  var px=a.plano_x,py=a.plano_y;
+  a.plano_x=null;a.plano_y=null;
+  closeModal();setSS('syncing','Quitando pin...');
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({plano_x:null,plano_y:null})});
+    setSS('ok','✓ Pin quitado');showToast('Pin quitado','ok');
+    renderPlanosMapa();
+  }catch(e){
+    a.plano_x=px;a.plano_y=py;
+    setSS('err','Error');showToast('❌ '+e.message,'err',6000);
+    renderPlanosMapa();
+  }
 }
 
 // ─── MÓDULO DE FOTOS ─────────────────────────────────
