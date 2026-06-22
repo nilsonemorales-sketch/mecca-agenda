@@ -7043,7 +7043,7 @@ function renderPlanosMapa(){
       g.niveles.forEach(function(niv){
         var tiene=!!S.planosMapas[niv];
         var nPin=(S.acts||[]).filter(function(a){return nivelDeArea(a.area)===niv&&a.plano_x!=null;}).length;
-        html+='<button onclick="S.planosNivelSel='+JSON.stringify(niv)+';renderPlanosMapa()" style="display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:9px;border:1px solid '+(tiene?'var(--accent)':'var(--border2)')+';background:'+(tiene?'rgba(200,240,96,.08)':'var(--bg3)')+';color:'+(tiene?'var(--accent)':'var(--text2)')+';font-size:11px;font-weight:'+(tiene?700:400)+';cursor:pointer;font-family:var(--font)">'
+        html+='<button onclick="S.planosNivelSel=\''+niv+'\';renderPlanosMapa()" style="display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:9px;border:1px solid '+(tiene?'var(--accent)':'var(--border2)')+';background:'+(tiene?'rgba(200,240,96,.08)':'var(--bg3)')+';color:'+(tiene?'var(--accent)':'var(--text2)')+';font-size:11px;font-weight:'+(tiene?700:400)+';cursor:pointer;font-family:var(--font)">'
           +(tiene?'🗺️':'📐')+' '+esc(niv)+(nPin?' <span style="font-size:9px;background:'+(tiene?'var(--accent)':'var(--border2)')+';color:'+(tiene?'#fff':'var(--text3)')+';border-radius:8px;padding:1px 5px">'+nPin+'</span>':'')
           +'</button>';
       });
@@ -7067,7 +7067,7 @@ function renderPlanosMapa(){
   html+='<button onclick="S.planosNivelSel=\'\';renderPlanosMapa()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;color:var(--text2);flex-shrink:0">← Volver</button>';
   html+='<div style="font-size:14px;font-weight:700;color:var(--text);flex:1">'+esc(nivel)+'</div>';
   if(canEdit()&&plano){
-    html+='<button onclick="_clickPlanoInput('+JSON.stringify(nivel)+')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;color:var(--text2)">🔄 Reemplazar</button>';
+    html+='<button onclick="_clickPlanoInput(\''+nivel+'\')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;color:var(--text2)">🔄 Reemplazar</button>';
   }
   html+='</div>';
 
@@ -7077,7 +7077,7 @@ function renderPlanosMapa(){
     html+='<div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:6px">Sin plano para '+esc(nivel)+'</div>';
     if(canEdit()){
       html+='<div style="font-size:12px;color:var(--text3);margin-bottom:16px">Sube la imagen del plano (JPG, PNG)</div>';
-      html+='<button onclick="_clickPlanoInput('+JSON.stringify(nivel)+')" style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 28px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📤 Subir plano</button>';
+      html+='<button onclick="_clickPlanoInput(\''+nivel+'\')" style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 28px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📤 Subir plano</button>';
     }
     html+='</div>';
   } else {
@@ -7088,7 +7088,7 @@ function renderPlanosMapa(){
 
     var escId=_escAreaId(nivel);
     html+='<div id="plano-wrap-'+escId+'" style="position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border2);cursor:'+(canEdit()?'crosshair':'default')+'"'
-      +(canEdit()?' onclick="_planoImgClick(event,'+JSON.stringify(nivel)+')"':'')+'>';
+      +(canEdit()?' onclick="_planoImgClick(event,\''+nivel+'\')"':'')+'>';
     html+='<img id="plano-img-'+escId+'" src="'+esc(plano.url)+'" style="width:100%;height:auto;display:block;user-select:none;pointer-events:none">';
 
     actsConPin.forEach(function(a){
@@ -7283,7 +7283,7 @@ function _abrirAccionPlano(nivel,xPct,yPct){
   }else{
     html+='<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Todas las actividades de este nivel ya tienen pin.</div>';
   }
-  html+='<button onclick="closeModal();_showQuickActForPlano('+JSON.stringify(nivel)+','+xPct+','+yPct+')" style="'+bst+'background:var(--accent);color:#fff;font-weight:700;border-color:var(--accent);margin-bottom:8px">➕ Crear actividad nueva aquí</button>';
+  html+='<button onclick="closeModal();_showQuickActForPlano(\''+nivel+'\','+xPct+','+yPct+')" style="'+bst+'background:var(--accent);color:#fff;font-weight:700;border-color:var(--accent);margin-bottom:8px">➕ Crear actividad nueva aquí</button>';
   html+='<button onclick="closeModal()" style="'+bst+'background:transparent;color:var(--text3)">Cancelar</button>';
   mc.innerHTML=html;openModal();
 }
