@@ -1228,7 +1228,7 @@ let S={
   bonifMes:'',
   fotosFiltroIng:'todos', fotosFiltroUbic:'', fotosFecha:'', fotosFechaFin:'', fotosData:[],
   planos:[], planosFiltro:'',
-  planosMapas:{}, planosVista:'mapa', planosAreaSel:'', _planoPendingPin:null,
+  planosMapas:{}, planosVista:'mapa', planosNivelSel:'', _planoPendingPin:null,
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
@@ -6925,11 +6925,11 @@ async function loadPlanos(){
     // Documentos: tabla original obra_planos (schema con id, nombre, categoria…)
     var data=await sb('obra_planos?order=created_at.desc&limit=200');
     S.planos=Array.isArray(data)?data:[];
-    // Mapas interactivos: tabla separada obra_planos_mapa (schema area PK, url…)
+    // Mapas interactivos: tabla separada obra_planos_mapa (PK=nivel)
     S.planosMapas={};
     try{
-      var mdata=await sb('obra_planos_mapa?select=area,url,subido_por,created_at,updated_at');
-      (Array.isArray(mdata)?mdata:[]).forEach(function(p){if(p.area&&p.url)S.planosMapas[p.area]=p;});
+      var mdata=await sb('obra_planos_mapa?select=nivel,url,subido_por,created_at,updated_at');
+      (Array.isArray(mdata)?mdata:[]).forEach(function(p){if(p.nivel&&p.url)S.planosMapas[p.nivel]=p;});
     }catch(me){console.warn('obra_planos_mapa:',me.message);}
     setSS('ok','✓ '+hhmm());
     renderPlanos();
@@ -6946,7 +6946,7 @@ function renderPlanos(){
   var snSt='padding:7px 18px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;font-family:var(--font)';
   el.innerHTML='<div style="padding:10px 12px 0;border-bottom:1px solid var(--border2);margin-bottom:0">'
     +'<div style="display:flex;gap:6px;margin-bottom:10px">'
-    +'<button onclick="S.planosVista=\'mapa\';S.planosAreaSel=\'\';renderPlanos()" style="'+snSt+';background:'+(v==='mapa'?'var(--accent)':'var(--bg3)')+';color:'+(v==='mapa'?'#fff':'var(--text2)')+'">🗺️ Interactivo</button>'
+    +'<button onclick="S.planosVista=\'mapa\';S.planosNivelSel=\'\';renderPlanos()" style="'+snSt+';background:'+(v==='mapa'?'var(--accent)':'var(--bg3)')+';color:'+(v==='mapa'?'#fff':'var(--text2)')+'">🗺️ Interactivo</button>'
     +'<button onclick="S.planosVista=\'docs\';renderPlanos()" style="'+snSt+';background:'+(v==='docs'?'var(--accent)':'var(--bg3)')+';color:'+(v==='docs'?'#fff':'var(--text2)')+'">📄 Documentos</button>'
     +'</div></div>'
     +'<div id="c-planos-body"></div>';
@@ -7013,23 +7013,38 @@ function renderPlanosDocumentos(){
   el.innerHTML=html;
 }
 
+function nivelDeArea(area){
+  var i=(area||'').indexOf('—');
+  return (i>=0?area.slice(0,i):area).trim();
+}
+
 function renderPlanosMapa(){
   var el=document.getElementById('c-planos-body');
   if(!el) return;
-  var area=S.planosAreaSel||'';
-  if(!area){
-    // Selector de área
-    var html='<div style="padding:10px 12px 16px">';
-    html+='<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:12px">SELECCIONA UN ÁREA</div>';
+  var nivel=S.planosNivelSel||'';
+  if(!nivel){
+    // Selector de nivel: derivar niveles únicos desde UBICACIONES
+    var seen={};
+    var groups=[];
     UBICACIONES.forEach(function(g){
+      var nivelGroup=[];
+      g.opciones.forEach(function(opc){
+        var niv=nivelDeArea(opc);
+        if(!seen[niv]){seen[niv]=true;nivelGroup.push(niv);}
+      });
+      if(nivelGroup.length) groups.push({grupo:g.grupo,niveles:nivelGroup});
+    });
+    var html='<div style="padding:10px 12px 16px">';
+    html+='<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:12px">SELECCIONA UN NIVEL</div>';
+    groups.forEach(function(g){
       html+='<div style="margin-bottom:12px">';
       html+='<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">'+esc(g.grupo)+'</div>';
       html+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
-      g.opciones.forEach(function(opc){
-        var tiene=!!S.planosMapas[opc];
-        var nPin=(S.acts||[]).filter(function(a){return a.area===opc&&a.plano_x!=null;}).length;
-        html+='<button onclick="S.planosAreaSel='+JSON.stringify(opc)+';renderPlanosMapa()" style="display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:9px;border:1px solid '+(tiene?'var(--accent)':'var(--border2)')+';background:'+(tiene?'rgba(200,240,96,.08)':'var(--bg3)')+';color:'+(tiene?'var(--accent)':'var(--text2)')+';font-size:11px;font-weight:'+(tiene?700:400)+';cursor:pointer;font-family:var(--font)">'
-          +(tiene?'🗺️':'📐')+' '+esc(opc)+(nPin?' <span style="font-size:9px;background:'+(tiene?'var(--accent)':'var(--border2)')+';color:'+(tiene?'#fff':'var(--text3)')+';border-radius:8px;padding:1px 5px">'+nPin+'</span>':'')
+      g.niveles.forEach(function(niv){
+        var tiene=!!S.planosMapas[niv];
+        var nPin=(S.acts||[]).filter(function(a){return nivelDeArea(a.area)===niv&&a.plano_x!=null;}).length;
+        html+='<button onclick="S.planosNivelSel='+JSON.stringify(niv)+';renderPlanosMapa()" style="display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:9px;border:1px solid '+(tiene?'var(--accent)':'var(--border2)')+';background:'+(tiene?'rgba(200,240,96,.08)':'var(--bg3)')+';color:'+(tiene?'var(--accent)':'var(--text2)')+';font-size:11px;font-weight:'+(tiene?700:400)+';cursor:pointer;font-family:var(--font)">'
+          +(tiene?'🗺️':'📐')+' '+esc(niv)+(nPin?' <span style="font-size:9px;background:'+(tiene?'var(--accent)':'var(--border2)')+';color:'+(tiene?'#fff':'var(--text3)')+';border-radius:8px;padding:1px 5px">'+nPin+'</span>':'')
           +'</button>';
       });
       html+='</div></div>';
@@ -7039,47 +7054,43 @@ function renderPlanosMapa(){
     return;
   }
 
-  // Área seleccionada
-  var plano=S.planosMapas[area]||null;
-  var actsArea=(S.acts||[]).filter(function(a){return a.area===area;});
-  var actsConPin=actsArea.filter(function(a){return a.plano_x!=null&&a.plano_y!=null;});
+  // Nivel seleccionado — muestra plano con pines de TODAS las áreas del nivel
+  var plano=S.planosMapas[nivel]||null;
+  var actsNivel=(S.acts||[]).filter(function(a){return nivelDeArea(a.area)===nivel;});
+  var actsConPin=actsNivel.filter(function(a){return a.plano_x!=null&&a.plano_y!=null;});
   var actsConPinCount=actsConPin.length;
-  var actsSinPin=actsArea.filter(function(a){return a.plano_x==null||a.plano_y==null;});
+  var actsSinPin=actsNivel.filter(function(a){return a.plano_x==null||a.plano_y==null;});
   var hoy=today();
 
   var html='<div style="padding:10px 12px">';
-  // Header
   html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
-  html+='<button onclick="S.planosAreaSel=\'\';renderPlanosMapa()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;color:var(--text2);flex-shrink:0">← Volver</button>';
-  html+='<div style="font-size:14px;font-weight:700;color:var(--text);flex:1">'+esc(area)+'</div>';
+  html+='<button onclick="S.planosNivelSel=\'\';renderPlanosMapa()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;color:var(--text2);flex-shrink:0">← Volver</button>';
+  html+='<div style="font-size:14px;font-weight:700;color:var(--text);flex:1">'+esc(nivel)+'</div>';
   if(canEdit()&&plano){
-    html+='<button onclick="_clickPlanoInput('+JSON.stringify(area)+')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;color:var(--text2)">🔄 Reemplazar</button>';
+    html+='<button onclick="_clickPlanoInput('+JSON.stringify(nivel)+')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;color:var(--text2)">🔄 Reemplazar</button>';
   }
   html+='</div>';
 
   if(!plano){
     html+='<div style="border:2px dashed var(--border2);border-radius:14px;padding:48px 20px;text-align:center">';
     html+='<div style="font-size:40px;margin-bottom:10px">📐</div>';
-    html+='<div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:6px">Sin plano para esta área</div>';
+    html+='<div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:6px">Sin plano para '+esc(nivel)+'</div>';
     if(canEdit()){
       html+='<div style="font-size:12px;color:var(--text3);margin-bottom:16px">Sube la imagen del plano (JPG, PNG)</div>';
-      html+='<button onclick="_clickPlanoInput('+JSON.stringify(area)+')" style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 28px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📤 Subir plano</button>';
+      html+='<button onclick="_clickPlanoInput('+JSON.stringify(nivel)+')" style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 28px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📤 Subir plano</button>';
     }
     html+='</div>';
   } else {
-    // Stats
     html+='<div style="display:flex;gap:10px;margin-bottom:10px;font-size:11px;color:var(--text3)">'
       +'<span>📍 '+actsConPinCount+' marcada'+(actsConPinCount!==1?'s':'')+'</span>'
       +'<span>· '+actsSinPin.length+' sin marcar</span>'
       +'</div>';
 
-    // Imagen con pines
-    var escId=_escAreaId(area);
+    var escId=_escAreaId(nivel);
     html+='<div id="plano-wrap-'+escId+'" style="position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border2);cursor:'+(canEdit()?'crosshair':'default')+'"'
-      +(canEdit()?' onclick="_planoImgClick(event,'+JSON.stringify(area)+')"':'')+'>';
+      +(canEdit()?' onclick="_planoImgClick(event,'+JSON.stringify(nivel)+')"':'')+'>';
     html+='<img id="plano-img-'+escId+'" src="'+esc(plano.url)+'" style="width:100%;height:auto;display:block;user-select:none;pointer-events:none">';
 
-    // Pines
     actsConPin.forEach(function(a){
       var color='#9ca3af';
       if(a.estado==='completado') color='#059669';
@@ -7087,14 +7098,14 @@ function renderPlanosMapa(){
       else if(a.estado==='en-progreso'){
         color=(a.fecha_fin&&/^\d{4}-\d{2}-\d{2}$/.test(a.fecha_fin)&&a.fecha_fin<hoy)?'#dc2626':'#1a56db';
       } else if(a.fecha_fin&&/^\d{4}-\d{2}-\d{2}$/.test(a.fecha_fin)&&a.fecha_fin<hoy) color='#dc2626';
-      html+='<div onclick="_abrirInfoPin(\''+a.id+'\');event.stopPropagation()" title="'+esc((a.descripcion||'').slice(0,60))+'"'
+      var areaLabel=(a.area||'').split('—')[1]?.trim()||(a.area||'');
+      html+='<div onclick="_abrirInfoPin(\''+a.id+'\');event.stopPropagation()" title="'+esc(areaLabel+': '+(a.descripcion||'').slice(0,55))+'"'
         +' style="position:absolute;left:'+a.plano_x+'%;top:'+a.plano_y+'%;transform:translate(-50%,-50%);'
         +'width:18px;height:18px;border-radius:50%;background:'+color+';border:2.5px solid #fff;'
         +'box-shadow:0 2px 6px rgba(0,0,0,.45);cursor:pointer;z-index:10"></div>';
     });
     html+='</div>';
 
-    // Leyenda
     html+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--text3)">';
     [{c:'#9ca3af',l:'Pendiente'},{c:'#1a56db',l:'En progreso'},{c:'#d97706',l:'Pausada'},{c:'#059669',l:'Completada'},{c:'#dc2626',l:'Vencida'}]
       .forEach(function(s){html+='<span style="display:flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:50%;background:'+s.c+';display:inline-block"></span>'+s.l+'</span>';});
@@ -7164,10 +7175,10 @@ async function deletePlano(id){
 // ─── PLANOS INTERACTIVOS — helpers ───────────────────
 function _escAreaId(area){return(area||'').replace(/[^a-zA-Z0-9]/g,'_');}
 
-function _clickPlanoInput(area){
+function _clickPlanoInput(nivel){
   var inp=document.getElementById('plano-file-input');
   if(!inp) return;
-  inp.dataset.area=area;
+  inp.dataset.area=nivel;
   inp.value='';
   inp.click();
 }
@@ -7215,8 +7226,8 @@ async function uploadPlanoImagen(file,area){
 }
 
 async function _handlePlanoFile(inp){
-  var area=inp.dataset.area||'';
-  if(!area||!inp.files||!inp.files[0]) return;
+  var nivel=inp.dataset.area||'';
+  if(!nivel||!inp.files||!inp.files[0]) return;
   var file=inp.files[0];inp.value='';
   if(!canEdit()){showToast('Sin permisos','warn');return;}
   var driveUrl=localStorage.getItem('mecca_drive_url')||S.driveUrl||'';
@@ -7227,62 +7238,73 @@ async function _handlePlanoFile(inp){
   }
   setSS('syncing','Subiendo plano...');
   try{
-    var url=await uploadPlanoImagen(file,area);
+    var url=await uploadPlanoImagen(file,nivel);
     var now=new Date().toISOString();
     await sb('obra_planos_mapa',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
-      body:JSON.stringify({area:area,url:url,subido_por:S.user?.nombre||'',created_at:now,updated_at:now})
+      body:JSON.stringify({nivel:nivel,url:url,subido_por:S.user?.nombre||'',created_at:now,updated_at:now})
     });
-    S.planosMapas[area]={area:area,url:url,subido_por:S.user?.nombre||''};
+    S.planosMapas[nivel]={nivel:nivel,url:url,subido_por:S.user?.nombre||''};
     setSS('ok','✓ Plano subido');showToast('✅ Plano subido','ok');
     renderPlanosMapa();
   }catch(e){setSS('err','Error');showToast('❌ '+e.message,'err',8000);}
 }
 
-function _planoImgClick(e,area){
+function _planoImgClick(e,nivel){
   if(!canEdit()) return;
-  var img=document.getElementById('plano-img-'+_escAreaId(area));
+  var img=document.getElementById('plano-img-'+_escAreaId(nivel));
   if(!img) return;
   var rect=img.getBoundingClientRect();
   var cx=e.touches?e.touches[0].clientX:e.clientX;
   var cy=e.touches?e.touches[0].clientY:e.clientY;
   var xPct=Math.round(Math.max(0,Math.min(100,(cx-rect.left)/rect.width*100))*10)/10;
   var yPct=Math.round(Math.max(0,Math.min(100,(cy-rect.top)/rect.height*100))*10)/10;
-  _abrirAccionPlano(area,xPct,yPct);
+  _abrirAccionPlano(nivel,xPct,yPct);
 }
 
-function _abrirAccionPlano(area,xPct,yPct){
-  var sinPin=(S.acts||[]).filter(function(a){return a.area===area&&(a.plano_x==null||a.plano_y==null);});
+function _abrirAccionPlano(nivel,xPct,yPct){
+  var sinPin=(S.acts||[]).filter(function(a){return nivelDeArea(a.area)===nivel&&(a.plano_x==null||a.plano_y==null);});
   var mc=document.getElementById('mcontent');if(!mc) return;
   var bst='width:100%;border-radius:10px;padding:10px 14px;font-size:13px;cursor:pointer;font-family:var(--font);border:1px solid var(--border2);text-align:left;';
   var html='<div class="mhandle"></div>'
     +'<h3 style="margin-bottom:4px">📍 Punto en el plano</h3>'
-    +'<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:14px">'+area+' · '+xPct+'%, '+yPct+'%</div>';
+    +'<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:14px">'+esc(nivel)+' · '+xPct+'%, '+yPct+'%</div>';
   if(sinPin.length){
     html+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:7px">🔗 Vincular actividad existente:</div>';
     html+='<div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;margin-bottom:12px">';
     var stCol={'pendiente':'#9ca3af','en-progreso':'#1a56db','pausada':'#d97706','completado':'#059669'};
     sinPin.slice(0,20).forEach(function(a){
+      var areaLabel=(a.area||'').split('—')[1]?.trim()||(a.area||'');
       html+='<button onclick="vincularActPin(\''+a.id+'\','+xPct+','+yPct+');closeModal()" style="'+bst+'background:var(--bg3);color:var(--text)">'
         +'<span style="font-size:9px;color:'+(stCol[a.estado]||'#9ca3af')+';margin-right:5px">●</span>'
-        +esc((a.descripcion||'').slice(0,60))+'</button>';
+        +'<span style="font-size:9px;color:var(--text3);margin-right:5px">'+esc(areaLabel)+'</span>'
+        +esc((a.descripcion||'').slice(0,55))+'</button>';
     });
     html+='</div>';
   }else{
-    html+='<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Todas las actividades de esta área ya tienen pin.</div>';
+    html+='<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Todas las actividades de este nivel ya tienen pin.</div>';
   }
-  html+='<button onclick="closeModal();_showQuickActForPlano('+JSON.stringify(area)+','+xPct+','+yPct+')" style="'+bst+'background:var(--accent);color:#fff;font-weight:700;border-color:var(--accent);margin-bottom:8px">➕ Crear actividad nueva aquí</button>';
+  html+='<button onclick="closeModal();_showQuickActForPlano('+JSON.stringify(nivel)+','+xPct+','+yPct+')" style="'+bst+'background:var(--accent);color:#fff;font-weight:700;border-color:var(--accent);margin-bottom:8px">➕ Crear actividad nueva aquí</button>';
   html+='<button onclick="closeModal()" style="'+bst+'background:transparent;color:var(--text3)">Cancelar</button>';
   mc.innerHTML=html;openModal();
 }
 
-function _showQuickActForPlano(area,xPct,yPct){
+function _showQuickActForPlano(nivel,xPct,yPct){
   var mc=document.getElementById('mcontent');if(!mc) return;
+  var areasDeNivel=UBICACIONES.reduce(function(acc,g){
+    return acc.concat(g.opciones.filter(function(opc){return nivelDeArea(opc)===nivel;}));
+  },[]);
+  var areaSelectHtml=areasDeNivel.length===1
+    ?'<input type="hidden" id="qpa-area" value="'+esc(areasDeNivel[0]||nivel)+'">'
+    :'<div class="fw"><label class="fl">Área *</label><select id="qpa-area" class="sel"><option value="">— elegir —</option>'
+      +areasDeNivel.map(function(a){var lbl=(a||'').split('—')[1]?.trim()||a;return '<option value="'+esc(a)+'">'+esc(lbl)+'</option>';}).join('')
+      +'</select></div>';
   var contrOpts=(S.personal||[]).filter(function(p){return p.tipo==='contratista';})
     .map(function(p){return '<option value="'+esc(p.nombre)+'">'+esc(p.nombre)+'</option>';}).join('');
   var ingOpts=Object.values(USERS).map(function(u){return '<option value="'+esc(u.nombre)+'">'+esc(u.nombre)+'</option>';}).join('');
   mc.innerHTML='<div class="mhandle"></div>'
     +'<h3 style="font-size:15px;margin-bottom:2px">📍 Nueva actividad</h3>'
-    +'<div style="font-size:11px;color:var(--text3);margin-bottom:12px">'+esc(area)+' · punto ('+xPct+'%, '+yPct+'%)</div>'
+    +'<div style="font-size:11px;color:var(--text3);margin-bottom:12px">'+esc(nivel)+' · punto ('+xPct+'%, '+yPct+'%)</div>'
+    +areaSelectHtml
     +'<div class="fw"><label class="fl">Descripción *</label><input id="qpa-desc" class="inp" placeholder="Descripción de la actividad"></div>'
     +'<div class="fw"><label class="fl">Tipo</label><select id="qpa-tipo" class="sel" onchange="_qpaToggle()">'
     +'<option value="contratista">Contratista</option><option value="propio">Personal propio</option><option value="ingeniero">Admin / Ing</option></select></div>'
@@ -7295,7 +7317,7 @@ function _showQuickActForPlano(area,xPct,yPct){
     +'</div>'
     +'<div class="mactions">'
     +'<button class="btn" onclick="closeModal()">Cancelar</button>'
-    +'<button class="btn primary" onclick="_saveQuickActPlano('+JSON.stringify(area)+','+xPct+','+yPct+')">📍 Crear y marcar</button>'
+    +'<button class="btn primary" onclick="_saveQuickActPlano('+xPct+','+yPct+')">📍 Crear y marcar</button>'
     +'</div>';
   openModal();
 }
@@ -7308,7 +7330,9 @@ function _qpaToggle(){
   if(ri) ri.style.display=tipo==='ingeniero'?'flex':'none';
 }
 
-async function _saveQuickActPlano(area,xPct,yPct){
+async function _saveQuickActPlano(xPct,yPct){
+  var area=((document.getElementById('qpa-area')||{}).value||'').trim();
+  if(!area){showToast('Elige un área','warn');return;}
   var desc=((document.getElementById('qpa-desc')||{}).value||'').trim();
   if(!desc){showToast('Escribe una descripción','warn');return;}
   var tipo=(document.getElementById('qpa-tipo')||{}).value||'contratista';
@@ -7355,6 +7379,7 @@ function _abrirInfoPin(actId){
     +'<div style="font-size:13px;font-weight:700;color:var(--text);line-height:1.35">'+esc(a.descripcion||'')+'</div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:11px;margin-bottom:16px;color:var(--text2)">'
+    +'<span style="color:var(--text3)">Área</span><span>'+esc(a.area||'')+'</span>'
     +'<span style="color:var(--text3)">Estado</span><span style="color:'+color+';font-weight:600">'+esc(estadoLbl)+(a.porcentaje?' · '+a.porcentaje+'%':'')+'</span>'
     +(a.personal_nombre?'<span style="color:var(--text3)">Responsable</span><span>'+esc(a.personal_nombre)+'</span>':'')
     +(a.ingeniero_nombre?'<span style="color:var(--text3)">Ingeniero</span><span>'+esc(a.ingeniero_nombre)+'</span>':'')
