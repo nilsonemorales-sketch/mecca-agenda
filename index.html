@@ -517,6 +517,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="tab" data-tab="planos" onclick="goTab('planos')">📐 Planos</div>
     <div class="tab" data-tab="compras" onclick="goTab('compras')">🛒 Compras</div>
     <div class="tab" data-tab="plan" id="tab-plan" onclick="goTab('plan')" style="display:none">📅 Plan</div>
+    <div class="tab" data-tab="replan" id="tab-replan" onclick="goTab('replan')" style="display:none">🗓️ Replnf.</div>
   </div>
 
   <div class="body">
@@ -579,6 +580,11 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 
     <!-- PLAN: Gantt interactivo -->
     <div class="view" id="view-plan"><div id="c-plan" style="height:100%"></div></div>
+    <!-- REPLANIFICAR LOTE: admin-only -->
+    <div class="view" id="view-replan">
+      <div id="c-replan"></div>
+      <div id="rp-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:90;background:var(--bg2);border-top:1.5px solid var(--border2);padding:12px 16px;padding-bottom:calc(12px + var(--sb,0px));flex-direction:column;gap:6px;box-shadow:0 -4px 20px rgba(0,0,0,.12)"></div>
+    </div>
   </div>
 
   <!-- BOTTOM NAV (mobile) -->
@@ -1229,6 +1235,7 @@ let S={
   fotosFiltroIng:'todos', fotosFiltroUbic:'', fotosFecha:'', fotosFechaFin:'', fotosData:[],
   planos:[], planosFiltro:'',
   planosMapas:{}, planosVista:'mapa', planosNivelSel:'', _planoPendingPin:null,
+  replan:{area:'',contr:'',soloVencidas:true,sel:{},_groups:{}},
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
@@ -1916,9 +1923,11 @@ function updateUserUI(){
   }
   // Plan tabs: solo visibles para admin
   var tP=document.getElementById('tab-plan');
+  var tR=document.getElementById('tab-replan');
   var adminVal=isAdmin();
-  if(tP)   tP.style.display=adminVal?'':'none';
-  if(!adminVal&&S.currentTab==='plan') goTab('hoy');
+  if(tP) tP.style.display=adminVal?'':'none';
+  if(tR) tR.style.display=adminVal?'':'none';
+  if(!adminVal&&(S.currentTab==='plan'||S.currentTab==='replan')) goTab('hoy');
   // All tabs visible to all users (historial/penalidades accessible via sub-tabs)
   updateFAB();
 }
@@ -8370,7 +8379,7 @@ function goTab(tab){
     tab=legacyMap[tab];
   }
   S.currentTab=tab;
-  var VIEWS=['hoy','obra','equipo','reportes','fotos','planos','compras','plan'];
+  var VIEWS=['hoy','obra','equipo','reportes','fotos','planos','compras','plan','replan'];
   VIEWS.forEach(function(v){
     var el=document.getElementById('view-'+v);
     if(el) el.classList.toggle('active', v===tab);
@@ -8395,6 +8404,7 @@ function goTab(tab){
   else if(tab==='planos')   loadPlanos();
   else if(tab==='compras')  renderCompras();
   else if(tab==='plan')     renderPlan();
+  else if(tab==='replan')   renderReplan();
 }
 
 // ── DRAWER & NAV HELPERS ──────────────────────────
@@ -13558,6 +13568,222 @@ async function eliminarPlanAct(id){
   }catch(e){showToast('Error: '+e.message,'err');}
 }
 
+
+// ─── REPLANIFICADOR EN LOTE (admin only) ──────────────
+function renderReplan(){
+  if(!isAdmin()){goTab('hoy');return;}
+  var el=document.getElementById('c-replan');
+  if(!el) return;
+  var r=S.replan;
+  var hoy=today();
+  r._groups={};
+
+  // Filtrar actividades
+  var acts=(S.acts||[]).filter(function(a){
+    if(a.estado==='completado') return false;
+    if(r.soloVencidas&&!(a.fecha_fin&&a.fecha_fin<hoy)) return false;
+    if(r.area&&a.area!==r.area) return false;
+    if(r.contr&&a.personal_nombre!==r.contr) return false;
+    return true;
+  });
+
+  // Agrupar por contratista
+  var groupMap={};
+  acts.forEach(function(a){
+    var key=a.personal_nombre||'(Sin asignar)';
+    if(!groupMap[key]) groupMap[key]={contr:key,ing:a.ingeniero_nombre||'',acts:[]};
+    groupMap[key].acts.push(a);
+  });
+  var groupList=Object.values(groupMap).sort(function(a,b){return a.contr.localeCompare(b.contr);});
+  groupList.forEach(function(g){
+    var gId=g.contr.replace(/[^a-zA-Z0-9]/g,'_');
+    r._groups[gId]=g.acts.map(function(a){return a.id;});
+  });
+
+  // Contratistas únicos para filtro
+  var contrs=[...new Set((S.acts||[]).filter(function(a){return a.estado!=='completado'&&a.personal_nombre;}).map(function(a){return a.personal_nombre;}))].sort();
+
+  var html='<div style="padding:12px 12px 160px">';
+  html+='<div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:14px">🗓️ Replanificar</div>';
+
+  // Filtros
+  html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:14px;display:flex;flex-direction:column;gap:8px">';
+  var areaOpts='<option value="">— Todas las áreas —</option>';
+  UBICACIONES.forEach(function(g){g.opciones.forEach(function(opc){areaOpts+='<option value="'+esc(opc)+'"'+(r.area===opc?' selected':'')+'>'+esc(opc)+'</option>';});});
+  html+='<select onchange="S.replan.area=this.value;renderReplan()" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:9px;background:var(--bg3);color:var(--text);font-family:var(--font);font-size:13px">'+areaOpts+'</select>';
+  var contrOpts='<option value="">— Todos los contratistas —</option>';
+  contrs.forEach(function(c){contrOpts+='<option value="'+esc(c)+'"'+(r.contr===c?' selected':'')+'>'+esc(c)+'</option>';});
+  html+='<select onchange="S.replan.contr=this.value;renderReplan()" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:9px;background:var(--bg3);color:var(--text);font-family:var(--font);font-size:13px">'+contrOpts+'</select>';
+  html+='<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer">'
+    +'<input type="checkbox"'+(r.soloVencidas?' checked':'')+' onchange="S.replan.soloVencidas=this.checked;renderReplan()" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer">'
+    +'Solo vencidas</label>';
+  html+='</div>';
+
+  if(!acts.length){
+    html+='<div style="text-align:center;padding:48px 20px;color:var(--text3);font-size:13px">No hay actividades'+(r.soloVencidas?' vencidas':'')+' con este filtro.</div>';
+  } else {
+    groupList.forEach(function(g){
+      var vencidas=g.acts.filter(function(a){return a.fecha_fin&&a.fecha_fin<hoy;}).length;
+      var gId=g.contr.replace(/[^a-zA-Z0-9]/g,'_');
+      html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden">';
+      // Encabezado grupo
+      html+='<div style="padding:10px 12px;background:var(--bg3);border-bottom:1px solid var(--border)">';
+      html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:'+(g.ing?'4':'8')+'px">';
+      html+='<span style="font-size:13px;font-weight:700;color:var(--text);flex:1">🔨 '+esc(g.contr)+'</span>';
+      html+='<span style="font-size:11px;color:var(--text3)">'+g.acts.length+' tarea'+(g.acts.length!==1?'s':'');
+      if(vencidas) html+=' · <span style="color:#dc2626;font-weight:700">'+vencidas+'⚠️</span>';
+      html+='</span></div>';
+      if(g.ing) html+='<div style="font-size:10px;color:var(--text3);margin-bottom:8px">👤 '+esc(g.ing)+'</div>';
+      // Selector de fecha + aplicar grupo
+      html+='<div style="display:flex;gap:6px;align-items:center">';
+      html+='<input type="checkbox" onchange="_replanSelGroup(\''+gId+'\',this.checked)" title="Seleccionar todas" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">';
+      html+='<input type="date" id="rp-gf-'+gId+'" style="flex:1;padding:7px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--font);font-size:12px">';
+      html+='<button onclick="_replanAplicarGrupo(\''+gId+'\')" style="padding:8px 12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;flex-shrink:0">✓ Aplicar</button>';
+      html+='</div></div>';
+      // Lista de tareas
+      html+='<div>';
+      g.acts.forEach(function(a){
+        var isV=a.fecha_fin&&a.fecha_fin<hoy;
+        var sel=!!r.sel[a.id];
+        html+='<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;'+(sel?'background:rgba(124,58,237,.05)':'')+'">'+
+          '<input type="checkbox" id="rp-cb-'+a.id+'" value="'+a.id+'" onchange="_replanToggleSel(\''+a.id+'\',this.checked)"'+(sel?' checked':'')+' style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc((a.descripcion||'').slice(0,75))+'</div>'+
+            '<div style="font-size:10px;color:'+(isV?'#dc2626':'var(--text3)')+'">'+esc(a.area||'')+(a.fecha_fin?' · '+(isV?'⚠️ ':'')+a.fecha_fin:'')+(a.porcentaje?' · '+a.porcentaje+'%':'')+'</div>'+
+          '</div>'+
+          '</label>';
+      });
+      html+='</div></div>';
+    });
+  }
+  html+='</div>';
+  el.innerHTML=html;
+  _replanRenderBar();
+}
+
+function _replanToggleSel(id,checked){
+  if(checked) S.replan.sel[id]=true; else delete S.replan.sel[id];
+  _replanRenderBar();
+}
+
+function _replanSelGroup(gId,checked){
+  var ids=S.replan._groups&&S.replan._groups[gId]||[];
+  ids.forEach(function(id){
+    var cb=document.getElementById('rp-cb-'+id);
+    if(cb) cb.checked=checked;
+    if(checked) S.replan.sel[id]=true; else delete S.replan.sel[id];
+  });
+  _replanRenderBar();
+}
+
+function _replanRenderBar(){
+  var bar=document.getElementById('rp-bar');
+  if(!bar) return;
+  var ids=Object.keys(S.replan.sel);
+  if(!ids.length){bar.style.display='none';return;}
+  var n=ids.length;
+  bar.style.display='flex';
+  bar.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--text2);text-align:center">'+n+' tarea'+(n!==1?'s':'')+' seleccionada'+(n!==1?'s':'')+'</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="_replanModalAccion(\'fecha\')" style="flex:1;padding:10px 4px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">📅 Poner fecha</button>'
+    +'<button onclick="_replanModalAccion(\'dias\')" style="flex:1;padding:10px 4px;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">+N días</button>'
+    +'<button onclick="_replanModalAccion(\'resp\')" style="flex:1;padding:10px 4px;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">👤 Resp.</button>'
+    +'</div>';
+}
+
+function _replanModalAccion(tipo){
+  var ids=Object.keys(S.replan.sel);
+  if(!ids.length) return;
+  var mc=document.getElementById('mcontent');if(!mc) return;
+  var n=ids.length;
+  var html='<div class="mhandle"></div>';
+  if(tipo==='fecha'){
+    html+='<h3 style="margin-bottom:4px">📅 Poner fecha fin</h3>'
+      +'<div style="font-size:12px;color:var(--text3);margin-bottom:14px">'+n+' actividad'+(n!==1?'es':'')+' seleccionada'+(n!==1?'s':'')+'</div>'
+      +'<div class="fw"><label class="fl">Nueva fecha fin *</label><input type="date" id="rp-modal-val" class="inp" value="'+today()+'"></div>'
+      +'<div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="_replanAplicarFecha()">Aplicar</button></div>';
+  } else if(tipo==='dias'){
+    html+='<h3 style="margin-bottom:4px">📅 Empujar +N días</h3>'
+      +'<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Suma N días a la fecha fin de cada actividad seleccionada</div>'
+      +'<div class="fw"><label class="fl">Días *</label><input type="number" id="rp-modal-val" class="inp" value="7" min="1" max="365"></div>'
+      +'<div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="_replanAplicarDias()">Aplicar</button></div>';
+  } else {
+    var ingOpts=Object.entries(USERS).map(function(e){return '<option value="'+e[0]+'">'+esc(e[1].nombre)+'</option>';}).join('');
+    html+='<h3 style="margin-bottom:4px">👤 Cambiar responsable</h3>'
+      +'<div style="font-size:12px;color:var(--text3);margin-bottom:14px">'+n+' actividad'+(n!==1?'es':'')+' seleccionada'+(n!==1?'s':'')+'</div>'
+      +'<div class="fw"><label class="fl">Ingeniero responsable</label><select id="rp-modal-val" class="sel">'+ingOpts+'</select></div>'
+      +'<div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="_replanAplicarResp()">Aplicar</button></div>';
+  }
+  mc.innerHTML=html;openModal();
+}
+
+async function _replanAplicarGrupo(gId){
+  var fecha=(document.getElementById('rp-gf-'+gId)||{}).value||'';
+  if(!fecha){showToast('Elige una fecha para el grupo','warn');return;}
+  var ids=S.replan._groups&&S.replan._groups[gId]||[];
+  if(!ids.length) return;
+  await _replanBulkPatch(ids,{fecha_fin:fecha},'fecha_fin → '+fecha);
+  showToast('✅ '+ids.length+' tarea'+(ids.length!==1?'s':'')+' actualizadas','ok');
+  renderReplan();
+}
+
+async function _replanAplicarFecha(){
+  var fecha=(document.getElementById('rp-modal-val')||{}).value||'';
+  if(!fecha){showToast('Elige una fecha','warn');return;}
+  closeModal();
+  var ids=Object.keys(S.replan.sel);
+  await _replanBulkPatch(ids,{fecha_fin:fecha},'fecha_fin → '+fecha);
+  S.replan.sel={};
+  showToast('✅ '+ids.length+' tarea'+(ids.length!==1?'s':'')+' actualizadas','ok');
+  renderReplan();
+}
+
+async function _replanAplicarDias(){
+  var n=parseInt((document.getElementById('rp-modal-val')||{}).value||'0');
+  if(!n||n<1){showToast('Escribe un número de días válido','warn');return;}
+  closeModal();
+  var ids=Object.keys(S.replan.sel);
+  var hoy=today();
+  setSS('syncing','Guardando...');
+  var ok=0;
+  try{
+    for(var i=0;i<ids.length;i++){
+      var id=ids[i];
+      var a=(S.acts||[]).find(function(x){return x.id===id;});
+      var base=a&&a.fecha_fin&&/^\d{4}-\d{2}-\d{2}$/.test(a.fecha_fin)?a.fecha_fin:hoy;
+      var d=new Date(base+'T12:00:00');d.setDate(d.getDate()+n);
+      var nf=d.toISOString().slice(0,10);
+      await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fecha_fin:nf})});
+      if(a){a.fecha_fin=nf;logCambio('editado','actividad',a.id,a.descripcion,'fecha_fin +'+n+'d → '+nf);}
+      ok++;
+    }
+    setSS('ok','✓ '+hhmm());showToast('✅ '+ok+' tarea'+(ok!==1?'s':'')+' empujadas +'+n+'d','ok');
+  }catch(e){setSS('err','Error');showToast('❌ '+e.message,'err',8000);}
+  S.replan.sel={};renderReplan();
+}
+
+async function _replanAplicarResp(){
+  var ingKey=(document.getElementById('rp-modal-val')||{}).value||'';
+  var u=USERS[ingKey];if(!u){showToast('Elige un responsable','warn');return;}
+  closeModal();
+  var ids=Object.keys(S.replan.sel);
+  await _replanBulkPatch(ids,{ingeniero_nombre:u.nombre,ingeniero_id:ingKey},'responsable → '+u.nombre);
+  S.replan.sel={};showToast('✅ Responsable actualizado en '+ids.length+' tarea'+(ids.length!==1?'s':''),'ok');
+  renderReplan();
+}
+
+async function _replanBulkPatch(ids,patch,detalle){
+  if(!ids.length) return;
+  setSS('syncing','Guardando...');
+  try{
+    await sb('obra_actividades?id=in.('+ids.join(',')+')',{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(patch)});
+    ids.forEach(function(id){
+      var a=(S.acts||[]).find(function(x){return x.id===id;});
+      if(a){Object.assign(a,patch);logCambio('editado','actividad',a.id,a.descripcion,detalle);}
+    });
+    setSS('ok','✓ '+hhmm());
+  }catch(e){setSS('err','Error');showToast('❌ '+e.message,'err',8000);throw e;}
+}
 
 if('serviceWorker' in navigator){
   var _swReloaded=false;
