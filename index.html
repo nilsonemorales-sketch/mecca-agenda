@@ -518,6 +518,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="tab" data-tab="compras" onclick="goTab('compras')">🛒 Compras</div>
     <div class="tab" data-tab="plan" id="tab-plan" onclick="goTab('plan')" style="display:none">📅 Plan</div>
     <div class="tab" data-tab="replan" id="tab-replan" onclick="goTab('replan')" style="display:none">🗓️ Replnf.</div>
+    <div class="tab" data-tab="bitacora" id="tab-bitacora" onclick="goTab('bitacora')" style="display:none">📒 Bitácora</div>
   </div>
 
   <div class="body">
@@ -584,6 +585,10 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="view" id="view-replan">
       <div id="c-replan"></div>
       <div id="rp-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:90;background:var(--bg2);border-top:1.5px solid var(--border2);padding:12px 16px;padding-bottom:calc(12px + var(--sb,0px));flex-direction:column;gap:6px;box-shadow:0 -4px 20px rgba(0,0,0,.12)"></div>
+    </div>
+    <!-- BITÁCORA: Línea de tiempo de obra -->
+    <div class="view" id="view-bitacora">
+      <div id="c-bitacora"></div>
     </div>
   </div>
 
@@ -677,6 +682,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="foto-file-input" accept="image/*" style="display:none" onchange="handleFotoFile(this)">
 <input type="file" id="foto-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleFotoFile(this)">
 <input type="file" id="plano-file-input" accept="image/*,application/pdf" style="display:none" onchange="_handlePlanoFile(this)">
+<input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
 const APP_VERSION='20260609_6';
@@ -1236,6 +1242,7 @@ let S={
   planos:[], planosFiltro:'',
   planosMapas:{}, planosVista:'mapa', planosNivelSel:'', _planoPendingPin:null,
   replan:{area:'',contr:'',soloVencidas:true,sel:{},_groups:{}},
+  bitacora:{dias:14,cambios:[],notas:[],actsMap:{},_pendingFotos:[]},
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
@@ -1928,6 +1935,11 @@ function updateUserUI(){
   if(tP) tP.style.display=adminVal?'':'none';
   if(tR) tR.style.display=adminVal?'':'none';
   if(!adminVal&&(S.currentTab==='plan'||S.currentTab==='replan')) goTab('hoy');
+  // Bitácora: visible para admin e ingenieros (canEdit)
+  var tBit=document.getElementById('tab-bitacora');
+  var editVal=canEdit();
+  if(tBit) tBit.style.display=editVal?'':'none';
+  if(!editVal&&S.currentTab==='bitacora') goTab('hoy');
   // All tabs visible to all users (historial/penalidades accessible via sub-tabs)
   updateFAB();
 }
@@ -8379,7 +8391,7 @@ function goTab(tab){
     tab=legacyMap[tab];
   }
   S.currentTab=tab;
-  var VIEWS=['hoy','obra','equipo','reportes','fotos','planos','compras','plan','replan'];
+  var VIEWS=['hoy','obra','equipo','reportes','fotos','planos','compras','plan','replan','bitacora'];
   VIEWS.forEach(function(v){
     var el=document.getElementById('view-'+v);
     if(el) el.classList.toggle('active', v===tab);
@@ -8405,6 +8417,7 @@ function goTab(tab){
   else if(tab==='compras')  renderCompras();
   else if(tab==='plan')     renderPlan();
   else if(tab==='replan')   renderReplan();
+  else if(tab==='bitacora') loadBitacora();
 }
 
 // ── DRAWER & NAV HELPERS ──────────────────────────
@@ -13783,6 +13796,395 @@ async function _replanBulkPatch(ids,patch,detalle){
     });
     setSS('ok','✓ '+hhmm());
   }catch(e){setSS('err','Error');showToast('❌ '+e.message,'err',8000);throw e;}
+}
+
+// ── BITÁCORA DE OBRA ─────────────────────────────────────────────────
+async function loadBitacora(){
+  var dias=S.bitacora.dias||14;
+  var dFrom=new Date(Date.now()-dias*864e5).toISOString().slice(0,10);
+  setSS('syncing','Cargando bit\xE1cora...');
+  try{
+    var cambios=await sb('obra_cambios?fecha=gte.'+dFrom+'&order=created_at.desc&limit=500');
+    if(!Array.isArray(cambios))cambios=[];
+    S.bitacora.cambios=cambios;
+    var notas=await sb('obra_bitacora?fecha=gte.'+dFrom+'&order=fecha.desc&limit=200');
+    if(!Array.isArray(notas))notas=[];
+    S.bitacora.notas=notas;
+    var actIds={};
+    cambios.forEach(function(c){if(c.entidad_id)actIds[c.entidad_id]=1;});
+    var ids=Object.keys(actIds);
+    var actsMap={};
+    if(ids.length){
+      try{
+        var acts=await sb('obra_actividades?id=in.('+ids.slice(0,200).join(',')+')'+'&select=id,area,fotos,descripcion');
+        if(Array.isArray(acts))acts.forEach(function(a){actsMap[a.id]=a;});
+      }catch(e){}
+    }
+    S.bitacora.actsMap=actsMap;
+    setSS('ok','✓ '+hhmm());
+  }catch(e){setSS('err','Error');showToast('❌ Error cargando bit\xE1cora','err',6000);}
+  renderBitacora();
+}
+
+function renderBitacora(){
+  var el=document.getElementById('c-bitacora');
+  if(!el)return;
+  var dias=S.bitacora.dias||14;
+  var cambios=S.bitacora.cambios||[];
+  var notas=S.bitacora.notas||[];
+  var actsMap=S.bitacora.actsMap||{};
+
+  var byDate={};
+  function _gDay(d){if(!byDate[d])byDate[d]={cambios:[],notas:[],fotos:[],_fs:{}};return byDate[d];}
+  function _addF(d,url,by){var day=_gDay(d);if(!day._fs[url]){day._fs[url]=1;day.fotos.push({url:url,by:by});}}
+
+  cambios.forEach(function(c){
+    var d=(c.fecha||'').slice(0,10)||(c.created_at||'').slice(0,10);
+    if(!d)return;
+    _gDay(d).cambios.push(c);
+    if(c.entidad_id&&actsMap[c.entidad_id]){
+      var act=actsMap[c.entidad_id];
+      if(act.fotos)parseFotos(act.fotos).forEach(function(f){_addF(d,f.url,f.by);});
+    }
+  });
+  notas.forEach(function(n){
+    var d=(n.fecha||'').slice(0,10);
+    if(!d)return;
+    _gDay(d).notas.push(n);
+    if(n.fotos)parseFotos(n.fotos).forEach(function(f){_addF(d,f.url,f.by);});
+  });
+
+  var dates=Object.keys(byDate).sort(function(a,b){return b.localeCompare(a);});
+  var _mes=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var _dia=['Domingo','Lunes','Martes','Mi\xE9rcoles','Jueves','Viernes','S\xE1bado'];
+
+  var html='<div style="padding:12px 12px 80px">';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:14px">';
+  html+='<div style="font-size:17px;font-weight:700;color:var(--text1)">📒 Bit\xE1cora de Obra</div>';
+  html+='<div style="display:flex;gap:5px;flex-wrap:wrap">';
+  [7,14,30,60].forEach(function(d){
+    var sel=dias===d;
+    html+='<button onclick="_bitacoraDias('+d+')" style="padding:5px 10px;border-radius:20px;border:1.5px solid '+(sel?'var(--accent)':'var(--border2)')+';background:'+(sel?'var(--accent)':'var(--bg2)')+';color:'+(sel?'#fff':'var(--text1)')+';font-size:12px;font-weight:600;cursor:pointer">'+d+'d</button>';
+  });
+  html+='<button onclick="generarPDFBitacora()" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:12px;font-weight:600;cursor:pointer">📄 PDF</button>';
+  html+='</div></div>';
+
+  if(!dates.length){
+    html+='<div style="text-align:center;padding:48px 16px;color:var(--text3)">Sin actividad en los \xFAltimos '+dias+' d\xEDas</div></div>';
+    el.innerHTML=html;return;
+  }
+
+  dates.forEach(function(fecha){
+    var day=byDate[fecha];
+    var fd=new Date(fecha+'T12:00:00');
+    var isHoy=fecha===today();
+    var fechaStr=_dia[fd.getDay()]+', '+fd.getDate()+' de '+_mes[fd.getMonth()];
+    var comp=day.cambios.filter(function(c){return c.accion==='completado';}).length;
+    var avances=day.cambios.filter(function(c){return c.accion==='avance'||c.accion==='editado';}).length;
+    var nuevas=day.cambios.filter(function(c){return c.accion==='creado';}).length;
+
+    html+='<div>';
+    html+='<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">';
+    html+='<div style="width:3px;min-height:30px;background:'+(isHoy?'var(--accent)':'var(--border2)')+';border-radius:2px;flex-shrink:0;margin-top:2px"></div>';
+    html+='<div style="flex:1">';
+    html+='<div style="font-weight:700;font-size:14px;color:'+(isHoy?'var(--accent)':'var(--text1)')+'">'+esc(fechaStr);
+    if(isHoy) html+=' <span style="background:var(--accent);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;vertical-align:middle">HOY</span>';
+    html+='</div>';
+    html+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">';
+    if(comp) html+='<span style="background:#d1fae5;color:#065f46;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600">✓ '+comp+' compl.</span>';
+    if(avances) html+='<span style="background:#dbeafe;color:#1e40af;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600">⬆ '+avances+' avances</span>';
+    if(nuevas) html+='<span style="background:#ede9fe;color:#5b21b6;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600">+ '+nuevas+' nuevas</span>';
+    if(day.notas.length) html+='<span style="background:#fef3c7;color:#92400e;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600">📝 '+day.notas.length+'</span>';
+    html+='</div></div></div>';
+
+    if(day.fotos.length){
+      html+='<div style="display:flex;gap:5px;overflow-x:auto;padding:0 0 5px 11px;margin-bottom:6px">';
+      day.fotos.slice(0,8).forEach(function(f){
+        var su=f.url.replace(/'/g,'%27');
+        html+='<img src="'+esc(f.url)+'" onclick="verFoto(\''+su+'\')" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border2);flex-shrink:0;cursor:pointer">';
+      });
+      if(day.fotos.length>8) html+='<div style="width:70px;height:70px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text3);flex-shrink:0">+'+(day.fotos.length-8)+'</div>';
+      html+='</div>';
+    }
+
+    day.notas.forEach(function(n){
+      html+='<div style="margin:0 0 6px 11px;background:var(--bg2);border-left:3px solid #f59e0b;border-radius:0 8px 8px 0;padding:8px 10px">';
+      html+='<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px"><span style="font-size:12px">📝</span><span style="font-size:11px;color:var(--text3)">'+esc(n.autor||'')+'</span></div>';
+      html+='<div style="font-size:13px;color:var(--text1);white-space:pre-wrap">'+esc(n.nota||'')+'</div>';
+      if(n.fotos){
+        var nf=parseFotos(n.fotos);
+        if(nf.length){
+          html+='<div style="display:flex;gap:5px;margin-top:6px">';
+          nf.forEach(function(f){var su=f.url.replace(/'/g,'%27');html+='<img src="'+esc(f.url)+'" onclick="verFoto(\''+su+'\')" style="width:56px;height:56px;object-fit:cover;border-radius:6px;cursor:pointer">';});
+          html+='</div>';
+        }
+      }
+      html+='</div>';
+    });
+
+    if(day.cambios.length){
+      var byU={};
+      day.cambios.forEach(function(c){
+        var u=c.usuario_nombre||'Sistema';
+        if(!byU[u])byU[u]=[];
+        byU[u].push(c);
+      });
+      Object.keys(byU).forEach(function(u){
+        var ucs=byU[u];
+        var uObj=Object.values(USERS).find(function(x){
+          var sn=x.nombre.replace(/^Ing\.\s*/i,'').toLowerCase();
+          return (u||'').toLowerCase().indexOf(sn)>=0;
+        });
+        var uColor=uObj?uObj.color:'#9ca3af';
+        var icoMap={completado:'✅',avance:'⬆',editado:'✏',creado:'➕',verificado:'🔍'};
+        html+='<div style="margin:0 0 4px 11px">';
+        html+='<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">';
+        html+='<div style="width:7px;height:7px;border-radius:50%;background:'+esc(uColor)+';flex-shrink:0"></div>';
+        html+='<span style="font-size:11px;font-weight:700;color:var(--text2)">'+esc(u)+'</span>';
+        html+='<span style="font-size:11px;color:var(--text3)">\xB7 '+ucs.length+' acciones</span>';
+        html+='</div>';
+        ucs.slice(0,5).forEach(function(c){
+          var ico=icoMap[c.accion]||'\xB7';
+          html+='<div style="font-size:12px;color:var(--text2);padding-left:12px">'+ico+' <span style="color:var(--text3)">'+esc(c.entidad_nombre||c.detalle||c.accion||'')+(c.hora?' \xB7 '+esc(c.hora):'')+'</span></div>';
+        });
+        if(ucs.length>5) html+='<div style="font-size:11px;color:var(--text3);padding-left:12px">… y '+(ucs.length-5)+' m\xE1s</div>';
+        html+='</div>';
+      });
+    }
+
+    if(canEdit()){
+      html+='<div style="margin:5px 0 0 11px">';
+      html+='<button onclick="_bitacoraAddNota(\''+fecha+'\')" style="background:none;border:1.5px dashed var(--border2);border-radius:8px;padding:4px 12px;font-size:12px;color:var(--text3);cursor:pointer">➕ Nota</button>';
+      html+='</div>';
+    }
+
+    html+='</div>';
+    html+='<div style="height:1px;background:var(--border1);margin:12px 0 16px 11px"></div>';
+  });
+
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+function _bitacoraDias(d){
+  S.bitacora.dias=d;
+  S.bitacora.cambios=[];S.bitacora.notas=[];S.bitacora.actsMap={};
+  loadBitacora();
+}
+
+function _bitacoraAddNota(fecha){
+  if(!canEdit())return;
+  S.bitacora._pendingFotos=[];
+  document.getElementById('mcontent').innerHTML=
+    '<div class="mhandle"></div>'+
+    '<div style="font-weight:700;font-size:15px;margin-bottom:12px">📝 Nota — '+esc(fecha)+'</div>'+
+    '<textarea id="bit-nota-text" placeholder="Escribe una nota…" style="width:100%;min-height:90px;padding:10px;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:14px;resize:vertical;box-sizing:border-box;font-family:var(--font)"></textarea>'+
+    '<div id="bit-foto-preview" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px"></div>'+
+    '<div style="display:flex;gap:8px;margin-top:12px">'+
+      '<button onclick="_bitacoraFotoGaleria(\''+fecha+'\')" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:13px;cursor:pointer;font-family:var(--font)">📷 Foto</button>'+
+      '<button onclick="closeModal()" style="padding:10px 14px;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:13px;cursor:pointer;font-family:var(--font)">Cancelar</button>'+
+      '<button onclick="_bitacoraGuardarNota(\''+fecha+'\')" style="flex:2;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">Guardar</button>'+
+    '</div>';
+  openModal();
+  setTimeout(function(){var t=document.getElementById('bit-nota-text');if(t)t.focus();},100);
+}
+
+function _bitacoraFotoGaleria(fecha){
+  var inp=document.getElementById('bitac-file-input');
+  if(!inp)return;
+  inp.dataset.fecha=fecha;
+  inp.click();
+}
+
+async function _handleBitacFotoFile(inp){
+  if(!inp.files||!inp.files[0])return;
+  var file=inp.files[0];inp.value='';
+  var driveUrl=localStorage.getItem('mecca_drive_url')||S.driveUrl||'';
+  if(!driveUrl){if(isAdmin())driveConfigModal();else showToast('El administrador debe configurar Google Drive primero','warn',6000);return;}
+  setSS('syncing','Subiendo foto…');
+  try{
+    var dataUrl=await compressImagen(file);
+    var ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,16);
+    var controller=new AbortController();
+    var timer=setTimeout(function(){controller.abort();},30000);
+    var resp=await fetch(driveUrl,{method:'POST',signal:controller.signal,headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({image:dataUrl,fileName:'bitac_'+ts+'.jpg',folder:'Bitacora',actId:'bitacora'})
+    });
+    clearTimeout(timer);
+    var txt=await resp.text();
+    var json;try{json=JSON.parse(txt);}catch(e){throw new Error('Drive no respondi\xF3 JSON');}
+    if(!json.success)throw new Error(json.error||'Error subiendo foto');
+    var resultUrl=json.thumbUrl||json.url||'';
+    if(!resultUrl)throw new Error('Drive no devolvi\xF3 URL v\xE1lida');
+    var autor=S.user?.nombre||'';
+    if(!S.bitacora._pendingFotos)S.bitacora._pendingFotos=[];
+    S.bitacora._pendingFotos.push(resultUrl+(autor?'::'+autor:''));
+    setSS('ok','📸 Lista');
+    var prev=document.getElementById('bit-foto-preview');
+    if(prev) prev.innerHTML+='<img src="'+esc(resultUrl)+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border2)">';
+    showToast('✅ Foto lista','ok');
+  }catch(e){setSS('err','Error');showToast('❌ '+e.message,'err',6000);}
+}
+
+async function _bitacoraGuardarNota(fecha){
+  var txt=(document.getElementById('bit-nota-text')||{}).value||'';
+  var fotos=(S.bitacora._pendingFotos||[]).join('||');
+  if(!txt.trim()&&!fotos){showToast('Escribe algo para guardar','warn');return;}
+  closeModal();
+  setSS('syncing','Guardando nota…');
+  try{
+    var id=uid();
+    var autor=S.user?.nombre||'';
+    await sb('obra_bitacora',{method:'POST',prefer:'return=minimal',
+      body:JSON.stringify({id:id,fecha:fecha,nota:txt.trim(),autor:autor,fotos:fotos||null,created_at:new Date().toISOString()})
+    });
+    logCambio('creado','bitacora',id,'Nota '+fecha,(txt.trim()||'con foto').slice(0,80));
+    S.bitacora._pendingFotos=[];
+    setSS('ok','✓ '+hhmm());showToast('✅ Nota guardada','ok');
+    S.bitacora.cambios=[];S.bitacora.notas=[];S.bitacora.actsMap={};
+    loadBitacora();
+  }catch(e){setSS('err','Error');showToast('❌ '+e.message,'err',8000);}
+}
+
+async function generarPDFBitacora(){
+  var dias=S.bitacora.dias||14;
+  var cambios=S.bitacora.cambios||[];
+  var notas=S.bitacora.notas||[];
+  var actsMap=S.bitacora.actsMap||{};
+  if(!cambios.length&&!notas.length){showToast('Abre la bit\xE1cora primero','warn');return;}
+  setSS('syncing','Generando PDF…');
+
+  var byDate={};
+  function _gd(d){if(!byDate[d])byDate[d]={cambios:[],notas:[],fotos:[],_fs:{}};return byDate[d];}
+  function _af(d,url,by){var day=_gd(d);if(!day._fs[url]){day._fs[url]=1;day.fotos.push({url:url,by:by});}}
+  cambios.forEach(function(c){
+    var d=(c.fecha||'').slice(0,10)||(c.created_at||'').slice(0,10);
+    if(!d)return;
+    _gd(d).cambios.push(c);
+    if(c.entidad_id&&actsMap[c.entidad_id]){var act=actsMap[c.entidad_id];if(act.fotos)parseFotos(act.fotos).forEach(function(f){_af(d,f.url,f.by);});}
+  });
+  notas.forEach(function(n){
+    var d=(n.fecha||'').slice(0,10);
+    if(!d)return;
+    _gd(d).notas.push(n);
+    if(n.fotos)parseFotos(n.fotos).forEach(function(f){_af(d,f.url,f.by);});
+  });
+  var dates=Object.keys(byDate).sort(function(a,b){return b.localeCompare(a);});
+
+  var _ldI=function(url){
+    return new Promise(function(res){
+      var t=setTimeout(function(){res(null);},6000);
+      var img=new Image();img.crossOrigin='anonymous';
+      img.onload=function(){
+        clearTimeout(t);
+        try{var cv=document.createElement('canvas');var mx=480,rt=Math.min(mx/img.width,mx/img.height,1);cv.width=Math.round(img.width*rt);cv.height=Math.round(img.height*rt);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);res(cv.toDataURL('image/jpeg',0.60));}catch(e){res(null);}
+      };
+      img.onerror=function(){clearTimeout(t);res(null);};img.src=url;
+    });
+  };
+  var fB64={};
+  try{
+    for(var di=0;di<Math.min(dates.length,30);di++){
+      var d2=dates[di];var df=byDate[d2].fotos.slice(0,3);
+      if(df.length){var loaded=await Promise.all(df.map(function(f){return _ldI(f.url);}));var valid=loaded.filter(Boolean);if(valid.length)fB64[d2]=valid;}
+    }
+  }catch(e){}
+
+  try{
+    var jsPDFb=window.jspdf.jsPDF;
+    var doc=new jsPDFb({orientation:'portrait',unit:'mm',format:'a4'});
+    var W=210,M=14,RW=W-2*M,y=0;
+    var BDX_PUR=[152,32,164],BDX_GRN=[41,101,41];
+    var TXT=[30,30,30],MUT=[110,110,120],WHT=[255,255,255],LGRAY=[246,247,249];
+    var AMB=[133,79,11],AMB_L=[255,244,220];
+    function _fc(c){doc.setFillColor.apply(doc,c);}
+    function _tc(c){doc.setTextColor.apply(doc,c);}
+    function _s(s){return(s||'').replace(/[^\x00-\x7F]/g,function(ch){try{return ch;}catch(e){return '';}});}
+    var _mp=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    var _mL=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    var _dL=['Domingo','Lunes','Martes','Mi\xE9rcoles','Jueves','Viernes','S\xE1bado'];
+    var dFrom3=new Date(Date.now()-dias*864e5);var tNow=new Date();
+    function drawH(){
+      _fc(WHT);doc.rect(0,0,W,22,'F');
+      _fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');_fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
+      _fc(BDX_PUR);doc.roundedRect(M,3.5,14,14,2.5,2.5,'F');
+      _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('B',M+4.5,13.5);
+      _tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('BRIDEX',M+17,13);
+      _tc(BDX_PUR);doc.setFontSize(6);doc.setFont('helvetica','italic');doc.text('Nilson E. Morales Reyes, Ing.',M+17,17);
+      var ix=W-M;
+      _tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');doc.text('BIT\xC1CORA DE OBRA',ix,8,{align:'right'});
+      _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('MECCA RESIDENCE 2026',ix,13,{align:'right'});
+      _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+      doc.text('\xDAltimos '+dias+' d\xEDas \xB7 '+dFrom3.getDate()+' '+_mp[dFrom3.getMonth()]+' al '+tNow.getDate()+' '+_mp[tNow.getMonth()]+' '+tNow.getFullYear(),ix,17.5,{align:'right'});
+      _fc(BDX_GRN);doc.rect(0,22,W,1,'F');_fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
+    }
+    function chkY(h){if(y+h>275){doc.addPage();drawH();y=28;}}
+    drawH();y=28;
+
+    dates.forEach(function(fecha){
+      var day=byDate[fecha];
+      var fd=new Date(fecha+'T12:00:00');
+      var comp=day.cambios.filter(function(c){return c.accion==='completado';}).length;
+      var avances=day.cambios.filter(function(c){return c.accion==='avance';}).length;
+      chkY(12);
+      _fc(BDX_GRN);doc.rect(M,y,RW,9,'F');
+      _tc(WHT);doc.setFontSize(8);doc.setFont('helvetica','bold');
+      doc.text(_s(_dL[fd.getDay()]+' '+fd.getDate()+' de '+_mL[fd.getMonth()]+' de '+fd.getFullYear()),M+3,y+6);
+      var _ps=[];
+      if(comp)_ps.push(comp+' compl.');
+      if(avances)_ps.push(avances+' avan.');
+      if(day.notas.length)_ps.push(day.notas.length+' nota'+(day.notas.length>1?'s':''));
+      if(_ps.length){_tc([200,240,215]);doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text(_s(_ps.join(' \xB7 ')),W-M-3,y+6,{align:'right'});}
+      y+=11;
+
+      if(fB64[fecha]&&fB64[fecha].length){
+        var fbs=fB64[fecha];
+        var imgW=(RW-(fbs.length-1)*3)/Math.min(fbs.length,3);
+        var imgH=imgW*0.65;
+        chkY(imgH+5);
+        fbs.forEach(function(b64,fi){try{doc.addImage(b64,'JPEG',M+fi*(imgW+3),y,imgW,imgH);}catch(e){}});
+        y+=imgH+5;
+      }
+
+      day.notas.forEach(function(n){
+        if(!n.nota)return;
+        var lines=doc.splitTextToSize(_s(n.nota),RW-10);
+        chkY(lines.length*4.5+9);
+        _fc(AMB_L);doc.rect(M,y,RW,lines.length*4.5+8,'F');
+        _fc(AMB);doc.rect(M,y,2.5,lines.length*4.5+8,'F');
+        _tc(AMB);doc.setFontSize(5.5);doc.setFont('helvetica','bold');doc.text('NOTA',M+4,y+4.5);
+        if(n.autor){_tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');doc.text(_s(n.autor),M+14,y+4.5);}
+        _tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+        lines.forEach(function(ln,li){doc.text(_s(ln),M+5,y+8+li*4.5);});
+        y+=lines.length*4.5+11;
+      });
+
+      if(day.cambios.length){
+        var byU2={};
+        day.cambios.forEach(function(c){var u=c.usuario_nombre||'Sistema';if(!byU2[u])byU2[u]={cnt:0,items:[]};byU2[u].cnt++;if(byU2[u].items.length<3&&(c.entidad_nombre||c.detalle))byU2[u].items.push(c.entidad_nombre||c.detalle||'');});
+        Object.keys(byU2).forEach(function(u){
+          var ud=byU2[u];
+          chkY(8);
+          _fc(LGRAY);doc.rect(M,y,RW,7,'F');
+          _tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text(_s(u),M+3,y+4.8);
+          _tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');doc.text(ud.cnt+' acciones',W-M-3,y+4.8,{align:'right'});
+          y+=7;
+          ud.items.forEach(function(item){if(!item)return;chkY(5);_tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');doc.text('\xB7 '+_s(item),M+5,y+4);y+=4.5;});
+          y+=2;
+        });
+      }
+      y+=5;
+    });
+
+    var nP=doc.internal.getNumberOfPages();
+    for(var pi=1;pi<=nP;pi++){
+      doc.setPage(pi);_tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
+      doc.text('MECCA RESIDENCE 2026 \xB7 Bit\xE1cora de Obra \xB7 '+today(),M,290);
+      doc.text('P\xE1g. '+pi+'/'+nP,W-M,290,{align:'right'});
+    }
+    doc.save('Bitacora_MeccaResidence_'+today()+'.pdf');
+    setSS('ok','✓ PDF listo');
+  }catch(e){setSS('err','Error PDF');showToast('❌ '+e.message,'err',8000);}
 }
 
 if('serviceWorker' in navigator){
