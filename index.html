@@ -702,7 +702,8 @@ const APP_BUILD='mecca-v7';
 // intentos de acceso fallidos, borrados bloqueados). Si queda vacía, los
 // avisos del app legítimo igual usan la URL guardada en el dispositivo; pero
 // para detectar COPIAS en otros dominios SÍ debe estar pegada aquí.
-const ALERT_URL='';
+// (codificada en base64; es la misma URL del Web App que sube las fotos)
+const ALERT_URL=atob('aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J3UHdnZVVVdFNCMy14dDgwUklLOHF0R3N3NzVyX2xVcVdBOEVTSVItMkJXYVN0ZDNUMThjN01teW50X29JWjFMbGYvZXhlYw==');
 
 // ── CANDADO DE ORIGEN ───────────────────────────────
 // La app solo funciona en su dominio oficial. Si alguien copia este archivo
