@@ -696,9 +696,81 @@ const APP_BUILD='mecca-v7';
     if(m&&m[1]!==APP_BUILD)location.replace(location.pathname+'?_r='+Date.now());
   }).catch(function(){});
 })();
-const SB='https://qeurcozssghkqgezilfj.supabase.co';
-const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFldXJjb3pzc2doa3FnZXppbGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5ODIzMjcsImV4cCI6MjA5NTU1ODMyN30.y8ToEt8YvvbZYL5jei1dmjFRAcANeaNBKo-xHC7UKCA';
+// ── AVISOS DE SEGURIDAD ─────────────────────────────
+// URL de tu Apps Script (Web App) — la MISMA que usas para subir fotos.
+// Pégala aquí para activar los avisos por correo (copia detectada, errores,
+// intentos de acceso fallidos, borrados bloqueados). Si queda vacía, los
+// avisos del app legítimo igual usan la URL guardada en el dispositivo; pero
+// para detectar COPIAS en otros dominios SÍ debe estar pegada aquí.
+// (codificada en base64; es la misma URL del Web App que sube las fotos)
+const ALERT_URL=atob('aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J3UHdnZVVVdFNCMy14dDgwUklLOHF0R3N3NzVyX2xVcVdBOEVTSVItMkJXYVN0ZDNUMThjN01teW50X29JWjFMbGYvZXhlYw==');
+
+// ── CANDADO DE ORIGEN ───────────────────────────────
+// La app solo funciona en su dominio oficial. Si alguien copia este archivo
+// y lo publica en otro lado, no arranca: ni siquiera define la conexión a la
+// base de datos (las líneas de abajo nunca se ejecutan). Para agregar un
+// dominio propio en el futuro, añádelo a la lista ALLOWED.
+(function(){
+  var ALLOWED=['nilsonemorales-sketch.github.io','localhost','127.0.0.1'];
+  var h=(location.hostname||'').toLowerCase();
+  if(ALLOWED.indexOf(h)>=0) return;
+  // Avisar (una vez por sesión) que se abrió una copia en otro dominio
+  try{
+    if(ALERT_URL && !sessionStorage.getItem('_alert_copia')){
+      sessionStorage.setItem('_alert_copia','1');
+      var _p=JSON.stringify({action:'alerta',tipo:'copia',detalle:'Se abrió una copia del app',
+        dominio:h,url:location.href,ref:document.referrer||'',ua:navigator.userAgent,fecha:new Date().toISOString()});
+      navigator.sendBeacon(ALERT_URL,new Blob([_p],{type:'text/plain'}));
+    }
+  }catch(e){}
+  try{
+    document.documentElement.innerHTML='<head><meta name="viewport" content="width=device-width,initial-scale=1"></head>'+
+      '<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#12082a;color:#fff;font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:24px">'+
+      '<div><div style="font-size:48px;margin-bottom:16px">🔒</div>'+
+      '<div style="font-size:20px;font-weight:800;margin-bottom:8px">Acceso no autorizado</div>'+
+      '<div style="font-size:14px;color:#b9a9e0;max-width:340px;line-height:1.5">Esta aplicación solo puede usarse desde su sitio oficial.</div>'+
+      '<div style="font-size:12px;color:#6b5a92;margin-top:24px">BRIDEX SRL · Mecca Residence 2026</div></div></body>';
+  }catch(e){}
+  throw new Error('origen-no-autorizado');
+})();
+
+// Conexión (codificada en base64 — no aparece en texto plano a simple vista)
+const SB=atob('aHR0cHM6Ly9xZXVyY296c3NnaGtxZ2V6aWxmai5zdXBhYmFzZS5jbw==');
+const KEY=atob('ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW5GbGRYSmpiM3B6YzJkb2EzRm5aWHBwYkdacUlpd2ljbTlzWlNJNkltRnViMjRpTENKcFlYUWlPakUzTnprNU9ESXpNamNzSW1WNGNDSTZNakE1TlRVMU9ETXlOMzAueThUb0V0OFl2dmJaWUw1amVpMWRtakZSQWNBTmVhTkJLby14SEM3VUtDQQ==');
 const STORAGE=SB+'/storage/v1/object/public/obra-fotos/';
+
+// ── reportAlert: envía un aviso por correo vía Apps Script ──────────
+// Usa ALERT_URL si está pegada; si no, cae a la URL de Drive guardada en el
+// dispositivo (para el app legítimo). Fire-and-forget, nunca rompe la app.
+function reportAlert(tipo,detalle){
+  try{
+    var u=ALERT_URL||localStorage.getItem('mecca_drive_url')||'';
+    if(!u) return;
+    var usr='(sin sesión)';
+    try{ if(typeof S!=='undefined'&&S.user&&S.user.nombre) usr=S.user.nombre; }catch(e){}
+    var p=JSON.stringify({action:'alerta',tipo:tipo,detalle:(detalle||'').toString().slice(0,500),
+      usuario:usr,dominio:location.hostname,url:location.href,
+      ua:navigator.userAgent,fecha:new Date().toISOString()});
+    var blob;try{blob=new Blob([p],{type:'text/plain'});}catch(e){}
+    if(navigator.sendBeacon&&blob){navigator.sendBeacon(u,blob);}
+    else{fetch(u,{method:'POST',body:p,keepalive:true,mode:'no-cors',headers:{'Content-Type':'text/plain'}}).catch(function(){});}
+  }catch(e){}
+}
+
+// Errores graves / caídas (máx. 3 por sesión para no llenar el correo)
+(function(){
+  var _errSent=0;
+  function _sendErr(msg){ if(_errSent>=3) return; _errSent++; reportAlert('error',msg); }
+  window.addEventListener('error',function(ev){
+    if(!ev) return;
+    var m=(ev.message||'error')+' @ '+(ev.filename||'')+':'+(ev.lineno||0);
+    _sendErr(m);
+  });
+  window.addEventListener('unhandledrejection',function(ev){
+    var r=ev&&ev.reason;
+    _sendErr('Promesa no controlada: '+((r&&r.message)||r||''));
+  });
+})();
 
 const USERS={
   nilson:{nombre:'Ing. Nilson',rol:'admin',color:'#1a56db',pin:'5349'},
@@ -1291,6 +1363,7 @@ async function sb(path,opts={}){
       if(!path.includes('?')||!path.includes('eq.')){
         console.error('BLOCKED: Attempted full table delete on',table);
         setSS('err','⛔ Operación bloqueada por seguridad');
+        try{reportAlert('borrado_bloqueado','Intento de borrado masivo en tabla: '+table);}catch(e){}
         throw new Error('Full table delete blocked for safety');
       }
     }
@@ -1840,6 +1913,16 @@ function hideLockScreen(){
   if(el) el.style.display='none';
 }
 
+// Cuenta intentos de acceso fallidos; avisa por correo tras 3 seguidos
+var _loginFails=0;
+function _regLoginFail(uid_){
+  _loginFails++;
+  if(_loginFails>=3){
+    try{reportAlert('login_fallido','3+ intentos de acceso fallidos (usuario seleccionado: '+(uid_||'-')+')');}catch(e){}
+    _loginFails=0; // reiniciar para no enviar en cada intento
+  }
+}
+
 function doLockLogin(){
   var uid_=document.getElementById('lock-user').value;
   var pin=document.getElementById('lock-pin').value;
@@ -1850,8 +1933,10 @@ function doLockLogin(){
     errEl.textContent='Codigo incorrecto, intenta de nuevo';
     document.getElementById('lock-pin').value='';
     document.getElementById('lock-pin').focus();
+    _regLoginFail(uid_);
     return;
   }
+  _loginFails=0;
   S.user={...u,id:uid_};
   try{sessionStorage.setItem('mecca_user',JSON.stringify(S.user));}catch(e){}
   hideLockScreen();
@@ -1889,7 +1974,8 @@ function doLoginAndRun_cb(){
   const uid_=document.getElementById('lu').value;
   const pin=document.getElementById('lp').value;
   const u=USERS[uid_];
-  if(!u||pin!==u.pin){document.getElementById('lerr').style.display='block';document.getElementById('lp').value='';return;}
+  if(!u||pin!==u.pin){document.getElementById('lerr').style.display='block';document.getElementById('lp').value='';_regLoginFail(uid_);return;}
+  _loginFails=0;
   S.user={...u,id:uid_};closeModal();updateUserUI();renderAll();
   if(window._pendingAction){window._pendingAction();window._pendingAction=null;}
 }
