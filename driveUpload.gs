@@ -6,6 +6,9 @@
 // Nombre de la carpeta raíz en Drive
 var ROOT_FOLDER_NAME = "Mecca Residence 2026";
 
+// Correo donde llegan los avisos de seguridad del app
+var ALERT_EMAIL = "nilson.e.morales@gmail.com";
+
 // ------------------------------------------------------------
 // doGet — health check
 // Responde con un JSON simple para verificar que el servicio está activo.
@@ -29,6 +32,11 @@ function doPost(e) {
   try {
     // Parsear el cuerpo de la solicitud
     var body = JSON.parse(e.postData.contents);
+
+    // --- Avisos de seguridad (correo) ---
+    if (body.action === "alerta") {
+      return handleAlerta(body);
+    }
 
     var dataUrl   = body.image    || "";
     var fileName  = body.fileName || ("foto_" + Date.now() + ".jpg");
@@ -93,6 +101,50 @@ function doPost(e) {
         success: false,
         error:   err.toString()
       }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ------------------------------------------------------------
+// handleAlerta — recibe un aviso de seguridad del app y envía correo
+//
+// Body JSON esperado:
+//   action  — "alerta"
+//   tipo    — "copia" | "error" | "login_fallido" | "borrado_bloqueado" | ...
+//   detalle — texto descriptivo
+//   usuario, dominio, url, ref, ua, fecha — contexto
+// ------------------------------------------------------------
+function handleAlerta(body) {
+  try {
+    var tipo = body.tipo || "desconocido";
+    var titulos = {
+      copia:             "⚠️ Copia del app detectada",
+      error:             "🐞 Error grave en el app",
+      login_fallido:     "🔐 Intentos de acceso fallidos",
+      borrado_bloqueado: "🛑 Intento de borrado masivo bloqueado"
+    };
+    var asunto = (titulos[tipo] || ("Aviso del app: " + tipo)) + " — Mecca Residence 2026";
+    var cuerpo =
+      "Se registró un evento de seguridad en la app.\n\n" +
+      "Tipo:       " + tipo + "\n" +
+      "Detalle:    " + (body.detalle || "-") + "\n" +
+      "Usuario:    " + (body.usuario || "-") + "\n" +
+      "Dominio:    " + (body.dominio || "-") + "\n" +
+      "URL:        " + (body.url     || "-") + "\n" +
+      "Referido:   " + (body.ref     || "-") + "\n" +
+      "Navegador:  " + (body.ua      || "-") + "\n" +
+      "Fecha:      " + (body.fecha   || "-") + "\n";
+
+    MailApp.sendEmail(ALERT_EMAIL, asunto, cuerpo);
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    Logger.log("[Mecca Alerta] ERROR: %s", err.toString());
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
