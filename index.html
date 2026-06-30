@@ -11290,9 +11290,117 @@ function fmtMonto(n){
   return 'RD$'+Number(n).toLocaleString('es-DO',{minimumFractionDigits:0,maximumFractionDigits:0});
 }
 
+// ── Datos fijos del emisor / destino (plantilla Bridex) ──
+const OC_EMISOR={
+  nombre:'BRIDEX COMERCIAL SRL',
+  dir:'Calle C/1era, Edif. Reyca 3, Módulo C3, Las Dianas, Santiago',
+  tel:'809-971-1329', rnc:'131469566', email:'loiraresidencial@gmail.com'
+};
+const OC_ENVIAR_A={
+  nombre:'Proyecto Mecca (Construcción)',
+  dep:'Departamento de obra',
+  dir:'Esquina calle 4 y calle 1, Urb. Las Dianas, Santiago',
+  tel:'(829) 697-9959'
+};
+const OC_UNIDADES=['Ud','Saco','Funda','Caja','Galón','Lata','m','m²','m³','qq','Lb','Kg','Rollo','Lámina','Varilla','Juego','Par','Tanda','Viaje'];
+
+// Formato de dinero para órdenes (2 decimales)
+function ocNum(n){ return Number(n||0).toLocaleString('es-DO',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function ocMoney(n){ return 'RD$ '+ocNum(n); }
+
+// Lee los renglones del DOM al array de trabajo S.ocItems
+function _ocReadRows(){
+  const rows=document.querySelectorAll('#oc-rows [data-ocrow]');
+  S.ocItems=Array.from(rows).map(row=>({
+    descripcion: row.querySelector('.oc-desc').value,
+    cantidad:    parseFloat(row.querySelector('.oc-cant').value)||0,
+    unidad:      row.querySelector('.oc-unid').value,
+    precio:      parseFloat(row.querySelector('.oc-prec').value)||0,
+    verificado:  row.querySelector('.oc-verif').checked,
+  }));
+}
+
+// Calcula subtotal/itbis/total leyendo inputs de totales
+function _ocCalc(){
+  const items=S.ocItems||[];
+  const subtotal=items.reduce((s,r)=>s+((Number(r.cantidad)||0)*(Number(r.precio)||0)),0);
+  const g=id=>{const el=document.getElementById(id);return el?(parseFloat(el.value)||0):0;};
+  const descuento=g('oc-descuento');
+  const itbisPct=(g('oc-itbis')||0)/100;
+  const envio=g('oc-envio');
+  const otro=g('oc-otro');
+  const base=subtotal-descuento;
+  const itbis=base*itbisPct;
+  const total=base+itbis+envio+otro;
+  return {subtotal,descuento,itbisPct,itbis,envio,otro,total};
+}
+
+// Recalcula en vivo: total por renglón + bloque de totales
+function _ocRecalc(){
+  _ocReadRows();
+  document.querySelectorAll('#oc-rows [data-ocrow]').forEach((row,i)=>{
+    const r=S.ocItems[i]; if(!r) return;
+    const cell=row.querySelector('.oc-rowtot');
+    if(cell) cell.textContent=ocMoney((r.cantidad||0)*(r.precio||0));
+  });
+  const t=_ocCalc();
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  set('oc-t-sub',ocMoney(t.subtotal));
+  set('oc-t-itbis',ocMoney(t.itbis));
+  set('oc-t-total',ocMoney(t.total));
+}
+
+// Pinta la lista de renglones desde S.ocItems
+function _ocRenderRows(){
+  const cont=document.getElementById('oc-rows'); if(!cont) return;
+  const items=S.ocItems||[];
+  if(!items.length){
+    cont.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:10px 0">Sin renglones. Agrega el primero ↓</div>';
+    return;
+  }
+  cont.innerHTML=items.map((r,i)=>`
+    <div data-ocrow style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--bg2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:700;color:var(--text3)">Renglón ${i+1}</span>
+        <button onclick="_ocDelRow(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px" title="Quitar renglón">🗑️</button>
+      </div>
+      <input class="oc-desc" type="text" value="${esc(r.descripcion||'')}" placeholder="Descripción del artículo" oninput="_ocRecalc()" style="width:100%;margin-bottom:6px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:6px;margin-bottom:6px">
+        <div><label class="fl" style="font-size:10px">Cantidad</label>
+          <input class="oc-cant" type="number" min="0" step="any" value="${r.cantidad??1}" oninput="_ocRecalc()"></div>
+        <div><label class="fl" style="font-size:10px">Unidad</label>
+          <input class="oc-unid" list="oc-unidades" value="${esc(r.unidad||'Ud')}" oninput="_ocRecalc()"></div>
+        <div><label class="fl" style="font-size:10px">Precio/u (RD$)</label>
+          <input class="oc-prec" type="number" min="0" step="any" value="${r.precio??0}" oninput="_ocRecalc()"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
+          <input class="oc-verif" type="checkbox" ${r.verificado?'checked':''} onchange="_ocRecalc()"> ✓ Recibido
+        </label>
+        <span style="font-size:13px;font-weight:800;color:var(--text)">Total: <span class="oc-rowtot">${ocMoney((r.cantidad||0)*(r.precio||0))}</span></span>
+      </div>
+    </div>`).join('');
+}
+
+function _ocAddRow(){
+  _ocReadRows();
+  S.ocItems=S.ocItems||[];
+  S.ocItems.push({descripcion:'',cantidad:1,unidad:'Ud',precio:0,verificado:false});
+  _ocRenderRows(); _ocRecalc();
+}
+function _ocDelRow(i){
+  _ocReadRows();
+  (S.ocItems||[]).splice(i,1);
+  _ocRenderRows(); _ocRecalc();
+}
+
 function ordenHTML(o){
   const st=ocEstadoStyle(o.estado);
-  const diff=o.monto_real&&o.monto_estimado?Number(o.monto_real)-Number(o.monto_estimado):null;
+  const nItems=Array.isArray(o.items_json)?o.items_json.length:0;
+  const nRecib=Array.isArray(o.items_json)?o.items_json.filter(r=>r.verificado).length:0;
+  const totalNum=Number(o.total)||0;
+  const totalDisp=totalNum>0?ocMoney(totalNum):(o.monto_estimado?fmtMonto(o.monto_estimado):null);
+  const totalLbl=totalNum>0?'TOTAL':'ESTIMADO';
   return`<div style="background:#fff;border:1.5px solid var(--border);border-radius:var(--r2);margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow-xs)">
     <div style="padding:12px 14px;border-left:4px solid ${st.border}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">
@@ -11303,30 +11411,26 @@ function ordenHTML(o){
           </div>
           <div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.3">${esc(o.descripcion||'Sin descripción')}</div>
         </div>
-        ${canEdit()?`<div style="display:flex;gap:4px;flex-shrink:0">
-          <button onclick="showEditOrden('${o.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:4px" title="Editar">✏️</button>
-          <button onclick="confirmDeleteOrden('${o.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:4px" title="Eliminar">🗑️</button>
-        </div>`:''}
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button onclick="generarPDFOrden('${o.id}')" style="background:none;border:none;color:#7048e8;cursor:pointer;font-size:15px;padding:4px" title="Exportar PDF">📄</button>
+          ${canEdit()?`<button onclick="showEditOrden('${o.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:4px" title="Editar">✏️</button>
+          <button onclick="confirmDeleteOrden('${o.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:4px" title="Eliminar">🗑️</button>`:''}
+        </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--text2);margin-bottom:6px">
         ${o.proveedor?`<span>🏪 ${esc(o.proveedor)}</span>`:''}
+        ${o.ncf?`<span>🧾 NCF ${esc(o.ncf)}</span>`:''}
         ${o.fecha?`<span>📅 ${fmtF(o.fecha)}</span>`:''}
         ${o.ingeniero_nombre?`<span>👤 ${esc(o.ingeniero_nombre)}</span>`:''}
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-        ${o.monto_estimado?`<div style="background:var(--bg3);border-radius:8px;padding:4px 10px">
-          <div style="font-size:10px;color:var(--text3);font-weight:600">ESTIMADO</div>
-          <div style="font-size:14px;font-weight:800;color:var(--text)">${fmtMonto(o.monto_estimado)}</div>
+        ${totalDisp?`<div style="background:var(--bg3);border-radius:8px;padding:4px 10px">
+          <div style="font-size:10px;color:var(--text3);font-weight:600">${totalLbl}</div>
+          <div style="font-size:14px;font-weight:800;color:var(--text)">${totalDisp}</div>
         </div>`:''}
-        ${o.monto_real?`<div style="background:${diff<0?'#d3f9d8':diff>0?'#ffe3e3':'var(--bg3)'};border-radius:8px;padding:4px 10px">
-          <div style="font-size:10px;color:var(--text3);font-weight:600">REAL</div>
-          <div style="font-size:14px;font-weight:800;color:${diff<0?'#2f9e44':diff>0?'#e03131':'var(--text)'}">${fmtMonto(o.monto_real)}</div>
-        </div>`:''}
-        ${diff!==null?`<span style="font-size:11px;font-weight:600;color:${diff<0?'#2f9e44':diff>0?'#e03131':'var(--text3)'}">
-          ${diff<0?'▼ Ahorro '+fmtMonto(Math.abs(diff)):diff>0?'▲ Sobre '+fmtMonto(diff):'= Exacto'}
-        </span>`:''}
+        ${nItems?`<span style="font-size:11px;font-weight:600;color:var(--text3)">📦 ${nItems} ${nItems===1?'renglón':'renglones'}${nRecib?` · ${nRecib} recibido${nRecib===1?'':'s'}`:''}</span>`:''}
       </div>
-      ${o.items?`<div style="margin-top:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text2);white-space:pre-line;line-height:1.5">${esc(o.items)}</div>`:''}
+      ${(!nItems&&o.items)?`<div style="margin-top:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text2);white-space:pre-line;line-height:1.5">${esc(o.items)}</div>`:''}
       ${o.notas?`<div style="margin-top:6px;font-size:12px;color:var(--text3);font-style:italic">💬 ${esc(o.notas)}</div>`:''}
     </div>
     ${canEdit()&&o.estado!=='recibida'&&o.estado!=='cancelada'?`
@@ -11358,9 +11462,8 @@ function renderCompras(){
   const all=S.compras||[];
   const filtered=S.comprasEstadoFiltro?all.filter(o=>o.estado===S.comprasEstadoFiltro):all;
 
-  // Summary stats
-  const totalEst=all.reduce((s,o)=>s+(Number(o.monto_estimado)||0),0);
-  const totalReal=all.filter(o=>o.monto_real).reduce((s,o)=>s+(Number(o.monto_real)||0),0);
+  // Summary stats — usa total nuevo, con fallback a monto_estimado (órdenes viejas)
+  const totalAll=all.reduce((s,o)=>s+(Number(o.total)||Number(o.monto_estimado)||0),0);
   const counts={borrador:0,pendiente:0,aprobada:0,recibida:0,cancelada:0};
   all.forEach(o=>{if(counts[o.estado]!==undefined) counts[o.estado]++;});
 
@@ -11384,9 +11487,8 @@ function renderCompras(){
         </div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px 14px;box-shadow:var(--shadow-xs)">
-        <div style="font-size:16px;font-weight:800;color:var(--text)">${fmtMonto(totalEst)}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">Monto estimado</div>
-        ${totalReal?`<div style="font-size:13px;font-weight:700;color:#059669;margin-top:4px">${fmtMonto(totalReal)} real</div>`:''}
+        <div style="font-size:16px;font-weight:800;color:var(--text)">${fmtMonto(totalAll)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Monto total</div>
       </div>
     </div>
     ${setupMsg}
@@ -11400,29 +11502,75 @@ function showAddOrden(id){
   const edit=!!id;
   const o=edit?S.compras.find(x=>x.id===id):null;
   const nextNum='OC-'+(String((S.compras.length||0)+1).padStart(3,'0'));
+  // Cargar renglones de trabajo desde items_json
+  S.ocItems=(o&&Array.isArray(o.items_json))?o.items_json.map(r=>({
+    descripcion:r.descripcion||'',cantidad:Number(r.cantidad)||0,unidad:r.unidad||'Ud',
+    precio:Number(r.precio)||0,verificado:!!r.verificado
+  })):[];
+  const itbisPctDisp=(o&&o.itbis_pct!=null)?(o.itbis_pct*100):18;
   const mc=document.getElementById('mcontent');
   mc.innerHTML=`
     <div class="mhandle"></div>
     <h3>🛒 ${edit?'Editar Orden de Compra':'Nueva Orden de Compra'}</h3>
+    <datalist id="oc-unidades">${OC_UNIDADES.map(u=>`<option value="${u}">`).join('')}</datalist>
+
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div class="fw"><label class="fl">Nro. Orden</label>
-        <input type="text" id="oc-num" value="${esc(o?.numero_orden||nextNum)}" placeholder="OC-001" style="font-family:var(--mono)"></div>
+        <input type="text" id="oc-num" value="${esc(o?.numero_orden||nextNum)}" placeholder="ENERO-001" style="font-family:var(--mono)"></div>
       <div class="fw"><label class="fl">Fecha</label>
         <input type="date" id="oc-fecha" value="${o?.fecha||today()}"></div>
     </div>
     <div class="fw"><label class="fl">Descripción / Título *</label>
-      <input type="text" id="oc-desc" value="${esc(o?.descripcion||'')}" placeholder="Ej: Tuberías PVC para instalación sanitaria..."></div>
-    <div class="fw"><label class="fl">Proveedor</label>
-      <input type="text" id="oc-prov" value="${esc(o?.proveedor||'')}" placeholder="Nombre de la empresa o persona"></div>
-    <div class="fw"><label class="fl">Items / Materiales</label>
-      <textarea id="oc-items" class="ta" placeholder="Un ítem por línea, ej:&#10;10 sacos cemento Portland&#10;50 bloques #6&#10;5 galones pintura blanca">${esc(o?.items||'')}</textarea></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div class="fw"><label class="fl">Monto estimado (RD$)</label>
-        <input type="number" id="oc-est" value="${o?.monto_estimado||''}" placeholder="0.00" min="0" step="0.01"></div>
-      <div class="fw"><label class="fl">Monto real (RD$)</label>
-        <input type="number" id="oc-real" value="${o?.monto_real||''}" placeholder="0.00" min="0" step="0.01"></div>
+      <input type="text" id="oc-desc" value="${esc(o?.descripcion||'')}" placeholder="Ej: Materiales sanitarios nivel 3"></div>
+
+    <div style="font-size:11px;font-weight:800;color:var(--accent);margin:12px 0 4px;letter-spacing:.04em">FACTURAR A (suplidor)</div>
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:8px">
+      <div class="fw"><label class="fl">Proveedor</label>
+        <input type="text" id="oc-prov" value="${esc(o?.proveedor||'')}" placeholder="Ej: Ferretería Ochoa"></div>
+      <div class="fw"><label class="fl">NCF</label>
+        <input type="text" id="oc-ncf" value="${esc(o?.ncf||'')}" placeholder="B0100000001" style="font-family:var(--mono)"></div>
     </div>
+
+    <div style="font-size:11px;font-weight:800;color:var(--accent);margin:12px 0 4px;letter-spacing:.04em">LOGÍSTICA</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="fw"><label class="fl">Método de envío</label>
+        <input type="text" id="oc-metodo" value="${esc(o?.metodo_envio||'')}" placeholder="Ej: Pascual"></div>
+      <div class="fw"><label class="fl">Condiciones</label>
+        <input type="text" id="oc-cond" value="${esc(o?.condiciones_envio||'')}" placeholder="Ej: Envío"></div>
+      <div class="fw"><label class="fl">Enviar vía</label>
+        <input type="text" id="oc-via" value="${esc(o?.enviar_via||'')}" placeholder="Ej: Mecca Res."></div>
+      <div class="fw"><label class="fl">Pago</label>
+        <input type="text" id="oc-pago" value="${esc(o?.pago||'')}" placeholder="Ej: CRÉDITO / CONTADO"></div>
+    </div>
+    <div class="fw"><label class="fl">Fecha de entrega</label>
+      <input type="text" id="oc-entrega" value="${esc(o?.fecha_entrega||'')}" placeholder="Ej: 5 días / 30-ene-2026"></div>
+
+    <div style="font-size:11px;font-weight:800;color:var(--accent);margin:12px 0 4px;letter-spacing:.04em">RENGLONES</div>
+    <div id="oc-rows"></div>
+    <button onclick="_ocAddRow()" class="ibtn" style="width:100%;border-style:dashed;color:var(--accent);border-color:var(--accent);margin-bottom:6px">➕ Agregar renglón</button>
+
+    <div style="border-top:2px solid var(--border);margin-top:10px;padding-top:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px">
+        <span style="color:var(--text2)">Subtotal</span><span id="oc-t-sub" style="font-weight:800">RD$ 0.00</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px">
+        <span style="color:var(--text2)">Descuento (RD$)</span>
+        <input type="number" id="oc-descuento" min="0" step="any" value="${o?.descuento||0}" oninput="_ocRecalc()" style="width:130px;text-align:right"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px">
+        <span style="color:var(--text2)">ITBIS (%)</span>
+        <input type="number" id="oc-itbis" min="0" step="any" value="${itbisPctDisp}" oninput="_ocRecalc()" style="width:130px;text-align:right"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px">
+        <span style="color:var(--text3)">ITBIS monto</span><span id="oc-t-itbis" style="font-weight:700;color:var(--text2)">RD$ 0.00</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px">
+        <span style="color:var(--text2)">Envío (RD$)</span>
+        <input type="number" id="oc-envio" min="0" step="any" value="${o?.envio_monto||0}" oninput="_ocRecalc()" style="width:130px;text-align:right"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px">
+        <span style="color:var(--text2)">Otro (RD$)</span>
+        <input type="number" id="oc-otro" min="0" step="any" value="${o?.otro_monto||0}" oninput="_ocRecalc()" style="width:130px;text-align:right"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;border-top:1.5px solid var(--accent);padding-top:8px;font-size:17px">
+        <span style="font-weight:800;color:var(--accent)">TOTAL</span><span id="oc-t-total" style="font-weight:800;color:var(--accent)">RD$ 0.00</span></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
       <div class="fw"><label class="fl">Estado</label>
         <select id="oc-estado" class="sel">
           <option value="borrador" ${(o?.estado||'borrador')==='borrador'?'selected':''}>📝 Borrador</option>
@@ -11437,14 +11585,15 @@ function showAddOrden(id){
           ${Object.values(USERS).map(u=>`<option value="${u.nombre}" ${o?.ingeniero_nombre===u.nombre?'selected':''}>${u.nombre}</option>`).join('')}
         </select></div>
     </div>
-    <div class="fw"><label class="fl">Notas</label>
+    <div class="fw"><label class="fl">Observaciones / Instrucciones</label>
       <textarea id="oc-notas" class="ta" placeholder="Observaciones, condiciones de entrega...">${esc(o?.notas||'')}</textarea></div>
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       <button class="btn primary" onclick="saveOrden(${edit?`'${id}'`:'null'})">💾 Guardar</button>
     </div>`;
   openModal();
-  setTimeout(()=>document.getElementById('oc-desc').focus(),100);
+  if(!S.ocItems.length) _ocAddRow(); else { _ocRenderRows(); _ocRecalc(); }
+  setTimeout(()=>{const d=document.getElementById('oc-desc');if(d)d.focus();},100);
 }
 
 function showEditOrden(id){ showAddOrden(id); }
@@ -11452,16 +11601,41 @@ function showEditOrden(id){ showAddOrden(id); }
 async function saveOrden(id){
   const desc=document.getElementById('oc-desc').value.trim();
   if(!desc){document.getElementById('oc-desc').focus();return;}
+  _ocReadRows();
+  const items=(S.ocItems||[])
+    .filter(r=>(r.descripcion&&r.descripcion.trim())||r.cantidad||r.precio)
+    .map((r,i)=>({
+      no:i+1,
+      descripcion:(r.descripcion||'').trim(),
+      cantidad:Number(r.cantidad)||0,
+      unidad:r.unidad||'',
+      precio:Number(r.precio)||0,
+      total:(Number(r.cantidad)||0)*(Number(r.precio)||0),
+      verificado:!!r.verificado
+    }));
+  const t=_ocCalc();
   const ingNombre=document.getElementById('oc-ing').value;
   const ingObj=ingNombre?Object.entries(USERS).find(([k,u])=>u.nombre===ingNombre):null;
+  const gv=eid=>{const el=document.getElementById(eid);return el?el.value.trim():'';};
   const data={
-    numero_orden: document.getElementById('oc-num').value.trim()||'OC-???',
+    numero_orden: gv('oc-num')||'OC-???',
     fecha:        document.getElementById('oc-fecha').value,
     descripcion:  desc,
-    proveedor:    document.getElementById('oc-prov').value.trim(),
-    items:        document.getElementById('oc-items').value.trim(),
-    monto_estimado: parseFloat(document.getElementById('oc-est').value)||null,
-    monto_real:     parseFloat(document.getElementById('oc-real').value)||null,
+    proveedor:    gv('oc-prov'),
+    ncf:          gv('oc-ncf'),
+    metodo_envio: gv('oc-metodo'),
+    condiciones_envio: gv('oc-cond'),
+    enviar_via:   gv('oc-via'),
+    pago:         gv('oc-pago'),
+    fecha_entrega: gv('oc-entrega'),
+    items_json:   items,
+    items:        items.map(r=>`${r.cantidad} ${r.unidad} — ${r.descripcion}`).join('\n'),
+    descuento:    t.descuento,
+    itbis_pct:    t.itbisPct,
+    envio_monto:  t.envio,
+    otro_monto:   t.otro,
+    subtotal:     t.subtotal,
+    total:        t.total,
     estado:       document.getElementById('oc-estado').value,
     notas:        document.getElementById('oc-notas').value.trim(),
     ingeniero_nombre: ingNombre||null,
@@ -11482,6 +11656,150 @@ async function saveOrden(id){
     setSS('ok','✓ Guardado');
     renderCompras();
   }catch(e){setSS('err','Error guardando: '+e.message);}
+}
+
+// ── Exportar orden de compra a PDF (formato Bridex) ──
+function generarPDFOrden(id){
+  const o=S.compras.find(x=>x.id===id);
+  if(!o){setSS('err','Orden no encontrada');return;}
+  if(!window.jspdf||!window.jspdf.jsPDF){setSS('err','PDF no disponible');return;}
+  setSS('syncing','Generando PDF...');
+  try{
+    const jsPDFo=window.jspdf.jsPDF;
+    const doc=new jsPDFo({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=210, M=14, RW=W-2*M; let y=16;
+    const C=[26,86,219];
+
+    // ── Emisor ──
+    doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(C[0],C[1],C[2]);
+    doc.text(OC_EMISOR.nombre,M,y);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90);
+    y+=5; doc.text(OC_EMISOR.dir,M,y);
+    y+=4; doc.text('Tel '+OC_EMISOR.tel+'  ·  RNC '+OC_EMISOR.rnc+'  ·  '+OC_EMISOR.email,M,y);
+    // Título a la derecha
+    doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(30);
+    doc.text('ORDEN DE COMPRA',W-M,16,{align:'right'});
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(60);
+    doc.text('No. '+(o.numero_orden||'—'),W-M,22,{align:'right'});
+    doc.text('Fecha: '+(o.fecha?fmtF(o.fecha):'—'),W-M,27,{align:'right'});
+    y+=5; doc.setDrawColor(200);doc.line(M,y,W-M,y); y+=6;
+
+    // ── Facturar a / Enviar a ──
+    const colW=(RW-6)/2;
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(C[0],C[1],C[2]);
+    doc.text('FACTURAR A:',M,y);
+    doc.text('ENVIAR A:',M+colW+6,y);
+    y+=5; doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(45);
+    let ly=y, ry=y;
+    doc.text(o.proveedor||'—',M,ly); ly+=4;
+    if(o.ncf){doc.text('NCF: '+o.ncf,M,ly); ly+=4;}
+    const env=[OC_ENVIAR_A.nombre,OC_ENVIAR_A.dep,OC_ENVIAR_A.dir,'Tel '+OC_ENVIAR_A.tel];
+    env.forEach(t=>{const ls=doc.splitTextToSize(t,colW);doc.text(ls,M+colW+6,ry);ry+=ls.length*4;});
+    y=Math.max(ly,ry)+4;
+
+    // ── Logística ──
+    doc.setDrawColor(220);doc.setFillColor(247,248,250);
+    doc.roundedRect(M,y,RW,13,1.5,1.5,'FD');
+    const log=[['MÉTODO',o.metodo_envio],['CONDIC.',o.condiciones_envio],['VÍA',o.enviar_via],['PAGO',o.pago],['ENTREGA',o.fecha_entrega]];
+    const segW=RW/log.length;
+    log.forEach((p,i)=>{
+      const x=M+i*segW+2.5;
+      doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(120);
+      doc.text(p[0],x,y+4.5);
+      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(40);
+      doc.text(doc.splitTextToSize(String(p[1]||'—'),segW-4),x,y+9);
+    });
+    y+=18;
+
+    // ── Tabla de renglones ──
+    const cols=[
+      {k:'no',w:9,a:'center',h:'#'},
+      {k:'descripcion',w:77,a:'left',h:'Descripción'},
+      {k:'cantidad',w:16,a:'right',h:'Cant.'},
+      {k:'unidad',w:16,a:'center',h:'Unidad'},
+      {k:'precio',w:24,a:'right',h:'Precio'},
+      {k:'verif',w:14,a:'center',h:'Recib.'},
+      {k:'total',w:26,a:'right',h:'Total'},
+    ];
+    const drawHead=()=>{
+      doc.setFillColor(C[0],C[1],C[2]);doc.rect(M,y,RW,7,'F');
+      doc.setTextColor(255);doc.setFont('helvetica','bold');doc.setFontSize(8);
+      let cx=M;
+      cols.forEach(c=>{const tx=c.a==='right'?cx+c.w-2:c.a==='center'?cx+c.w/2:cx+2;doc.text(c.h,tx,y+4.8,{align:c.a});cx+=c.w;});
+      y+=7;
+    };
+    drawHead();
+    doc.setFont('helvetica','normal');doc.setTextColor(40);doc.setFontSize(8);
+    const items=Array.isArray(o.items_json)?o.items_json:[];
+    items.forEach((r,idx)=>{
+      const descLines=doc.splitTextToSize(r.descripcion||'',cols[1].w-3);
+      const rh=Math.max(6,descLines.length*4+2);
+      if(y+rh>275){doc.addPage();y=18;drawHead();doc.setFont('helvetica','normal');doc.setTextColor(40);doc.setFontSize(8);}
+      if(idx%2===1){doc.setFillColor(245,247,250);doc.rect(M,y,RW,rh,'F');}
+      let cx=M;
+      cols.forEach(c=>{
+        let val='';
+        if(c.k==='no') val=String(r.no||idx+1);
+        else if(c.k==='descripcion') val=descLines;
+        else if(c.k==='cantidad') val=String(r.cantidad||0);
+        else if(c.k==='unidad') val=r.unidad||'';
+        else if(c.k==='precio') val=ocNum(r.precio);
+        else if(c.k==='verif') val=r.verificado?'Si':'';
+        else if(c.k==='total') val=ocNum(r.total!=null?r.total:(Number(r.cantidad)||0)*(Number(r.precio)||0));
+        const tx=c.a==='right'?cx+c.w-2:c.a==='center'?cx+c.w/2:cx+2;
+        doc.text(val,tx,y+4.2,{align:c.a});
+        cx+=c.w;
+      });
+      doc.setDrawColor(225);doc.line(M,y+rh,W-M,y+rh);
+      y+=rh;
+    });
+    if(!items.length){doc.setTextColor(150);doc.text('(Sin renglones)',M+2,y+5);y+=8;}
+    y+=4;
+
+    // ── Totales ──
+    if(y>250){doc.addPage();y=20;}
+    const itbisPct=o.itbis_pct!=null?Number(o.itbis_pct):0.18;
+    const base=(Number(o.subtotal)||0)-(Number(o.descuento)||0);
+    const tx0=W-M-72, tx1=W-M;
+    const trows=[
+      ['Subtotal',Number(o.subtotal)||0],
+      ['Descuento',-(Number(o.descuento)||0)],
+      ['ITBIS ('+Math.round(itbisPct*100)+'%)',base*itbisPct],
+      ['Envío',Number(o.envio_monto)||0],
+      ['Otro',Number(o.otro_monto)||0],
+    ];
+    doc.setFontSize(9);
+    trows.forEach(tr=>{
+      doc.setFont('helvetica','normal');doc.setTextColor(90);
+      doc.text(tr[0],tx0,y);
+      doc.text(ocMoney(tr[1]),tx1,y,{align:'right'});
+      y+=5.5;
+    });
+    doc.setDrawColor(C[0],C[1],C[2]);doc.line(tx0,y-2,tx1,y-2);
+    doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(C[0],C[1],C[2]);
+    doc.text('TOTAL',tx0,y+5);
+    doc.text(ocMoney(Number(o.total)||0),tx1,y+5,{align:'right'});
+    y+=14;
+
+    // ── Observaciones ──
+    if(o.notas){
+      if(y>265){doc.addPage();y=20;}
+      doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(90);
+      doc.text('Observaciones / Instrucciones:',M,y); y+=4;
+      doc.setFont('helvetica','normal');doc.setTextColor(60);
+      const ns=doc.splitTextToSize(o.notas,RW);
+      doc.text(ns,M,y); y+=ns.length*4+4;
+    }
+
+    // ── Pie GRACIAS ──
+    doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(C[0],C[1],C[2]);
+    doc.text('¡GRACIAS!',W/2,285,{align:'center'});
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(150);
+    doc.text(OC_EMISOR.nombre+'  ·  RNC '+OC_EMISOR.rnc,W/2,290,{align:'center'});
+
+    doc.save('OC_'+String(o.numero_orden||'orden').replace(/[^\w-]/g,'_')+'.pdf');
+    setSS('ok','✓ PDF generado');
+  }catch(e){setSS('err','Error PDF: '+e.message);}
 }
 
 async function cambiarEstadoOrden(id,nuevoEstado){
