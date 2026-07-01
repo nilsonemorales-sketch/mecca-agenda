@@ -1750,7 +1750,7 @@ async function loadAll(){
       sbWithTimeout('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300', 10000),
     ]);
     clearTimeout(retryTimer);
-    S.personal=personal; S.asist=asist; S.acts=acts;
+    S.personal=personal; S.asist=asist; S.acts=acts; S.estancadas=undefined;
     fixActsConsistency();
     // Cache for instant reload
     try{sessionStorage.setItem('mecca_cache_'+S.fecha,JSON.stringify({personal,asist,acts}));}catch(e){}
@@ -1846,7 +1846,7 @@ async function loadFecha(){
       sb('obra_asistencia?fecha=eq.'+S.fecha),
       sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300'),
     ]);
-    S.asist=asist;S.acts=acts;
+    S.asist=asist;S.acts=acts;S.estancadas=undefined;
     fixActsConsistency();
     setSS('ok','✓ '+hhmm());
     renderHoy();renderAsist();renderActs();renderReportes();
@@ -2203,6 +2203,152 @@ function _swipeEnd(e){
   _swipeData=null;
 }
 
+// ══════════════════════════════════════════════════════════════
+// ACTIVIDADES ESTANCADAS (en-progreso sin cambios en 3+ días)
+// ══════════════════════════════════════════════════════════════
+function _dayStr(delta){var d=new Date(today()+'T12:00:00');d.setDate(d.getDate()+(delta||0));return d.toISOString().slice(0,10);}
+function _diasDesde(fechaStr){try{var a=new Date(today()+'T12:00:00'),b=new Date(fechaStr+'T12:00:00');return Math.max(0,Math.round((a-b)/864e5));}catch(e){return 0;}}
+function _estIngColor(nombre){var n=(nombre||'').toLowerCase();if(n.indexOf('nilson')>=0)return '#1a56db';if(n.indexOf('edgar')>=0)return '#228be6';if(n.indexOf('mois')>=0)return '#f08c00';return '#868e96';}
+
+// Calcula estancadas: en-progreso cuyo último cambio (obra_cambios) es > 3 días.
+async function loadEstancadas(){
+  try{
+    var d3=_dayStr(-3), d60=_dayStr(-60);
+    var rows=await sb('obra_cambios?fecha=gte.'+d60+'&entidad=eq.actividad&select=entidad_id,fecha&order=fecha.desc&limit=5000');
+    var last={};
+    (rows||[]).forEach(function(r){if(r.entidad_id&&!last[r.entidad_id])last[r.entidad_id]=r.fecha;});
+    var est=(S.acts||[]).filter(function(a){return a.estado==='en-progreso';}).map(function(a){
+      var lf=last[a.id]||null;
+      return {id:a.id,area:a.area,descripcion:a.descripcion,personal_nombre:a.personal_nombre,ingeniero_nombre:a.ingeniero_nombre,porcentaje:a.porcentaje||0,lastFecha:lf,dias:lf?_diasDesde(lf):61};
+    }).filter(function(x){return !x.lastFecha||x.lastFecha<d3;});
+    est.sort(function(a,b){return b.dias-a.dias;});
+    S.estancadas=est;
+  }catch(e){S.estancadas=S.estancadas||[];}
+}
+
+function estancadasHTML(){
+  var est=S.estancadas||[];
+  if(!est.length) return '';
+  if(S._estancOpen===undefined) S._estancOpen=true;
+  var h='<div style="margin-bottom:10px;border:1.5px solid #f59e0b;border-radius:12px;overflow:hidden;background:#fff">';
+  h+='<div onclick="S._estancOpen=!S._estancOpen;renderHoy()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#fff8eb">'+
+     '<span style="font-size:13px;font-weight:800;color:#b45309">⚠ Estancadas ('+est.length+')</span>'+
+     '<span style="font-size:13px;color:#b45309">'+(S._estancOpen?'▲':'▼')+'</span></div>';
+  if(S._estancOpen){
+    h+='<div>';
+    est.forEach(function(e){
+      var ic=_estIngColor(e.ingeniero_nombre);
+      h+='<div style="padding:9px 12px;border-top:1px solid var(--border2);border-left:4px solid '+ic+'">'+
+        '<div style="display:flex;align-items:flex-start;gap:8px">'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:12px;font-weight:700;color:var(--text)">'+esc(e.descripcion||'(sin descripción)')+'</div>'+
+            '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(e.area||'')+(e.personal_nombre?' · '+esc(e.personal_nombre):'')+(e.ingeniero_nombre?' · <span style="color:'+ic+';font-weight:700">'+esc(e.ingeniero_nombre.replace(/^Ing\.?\s*/i,''))+'</span>':'')+'</div>'+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0"><div style="font-size:14px;font-weight:800;color:#e03131">'+e.dias+'d</div><div style="font-size:9px;color:var(--text3)">sin tocar</div></div>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap">'+
+          '<span style="font-size:11px;color:var(--text3)">%</span>'+
+          '<input type="number" min="0" max="100" value="'+(e.porcentaje||0)+'" id="est-pct-'+e.id+'" style="width:54px;padding:4px 6px;border:1.5px solid var(--border2);border-radius:6px;font-size:12px">'+
+          '<button onclick="estancActualizarPct(\''+e.id+'\')" style="padding:4px 10px;border:none;border-radius:6px;background:#1a56db;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Guardar</button>'+
+          '<button onclick="estancCompletar(\''+e.id+'\')" style="padding:4px 10px;border:none;border-radius:6px;background:#2f9e44;color:#fff;font-size:11px;font-weight:700;cursor:pointer">✓ Completar</button>'+
+          '<button onclick="estancPausar(\''+e.id+'\')" style="padding:4px 10px;border:none;border-radius:6px;background:#e67700;color:#fff;font-size:11px;font-weight:700;cursor:pointer">⏸ Pausar</button>'+
+        '</div>'+
+      '</div>';
+    });
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+async function estancActualizarPct(id){
+  var el=document.getElementById('est-pct-'+id);
+  var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
+  var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:(n>=100?'completado':'en-progreso')})});
+    a.porcentaje=n; if(n>=100)a.estado='completado';
+    logCambio(n>=100?'completado':'avance','actividad',id,a.descripcion||'',n+'%');
+    S.estancadas=(S.estancadas||[]).filter(function(x){return x.id!==id;});
+    showToast('Avance guardado ✓'); renderHoy();
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+async function estancCompletar(id){
+  var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
+    a.estado='completado'; a.porcentaje=100;
+    logCambio('completado','actividad',id,a.descripcion||'','completada');
+    S.estancadas=(S.estancadas||[]).filter(function(x){return x.id!==id;});
+    showToast('Completada ✓'); renderHoy();
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+async function estancPausar(id){
+  var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'pausada'})});
+    a.estado='pausada';
+    logCambio('editado','actividad',id,a.descripcion||'','pausada');
+    S.estancadas=(S.estancadas||[]).filter(function(x){return x.id!==id;});
+    showToast('Pausada'); renderHoy();
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+
+// ══════════════════════════════════════════════════════════════
+// CIERRE DEL DÍA — paso para actualizar avances (antes del resumen)
+// ══════════════════════════════════════════════════════════════
+function cierreAvancesHTML(){
+  if(S._cierreAvOmit) return '';
+  var uNom=(S.user&&S.user.nombre)||'';
+  var enProg=(S.acts||[]).filter(function(a){return a.estado==='en-progreso';});
+  var admin=(!uNom)||uNom.toLowerCase().indexOf('nilson')>=0;
+  if(!admin){
+    var key=uNom.replace(/^ing\.?\s*/i,'').toLowerCase().split(' ')[0];
+    enProg=enProg.filter(function(a){return (a.ingeniero_nombre||'').toLowerCase().indexOf(key)>=0;});
+  }
+  if(!enProg.length) return '';
+  var h='<div style="margin-bottom:14px;border:1.5px solid #1a56db;border-radius:12px;overflow:hidden;background:#fff">';
+  h+='<div style="padding:10px 14px;background:#eef2ff;display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+     '<span style="font-size:13px;font-weight:800;color:#1a56db">📊 Actualizar avances ('+enProg.length+')</span>'+
+     '<button onclick="S._cierreAvOmit=true;renderCierreDia(S._cierreFecha)" style="padding:4px 12px;border:1.5px solid var(--border2);background:#fff;color:var(--text2);border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Omitir</button>'+
+     '</div><div>';
+  enProg.slice(0,60).forEach(function(a){
+    var p=a.porcentaje||0;
+    h+='<div id="cav-row-'+a.id+'" style="padding:9px 12px;border-top:1px solid var(--border2)">'+
+      '<div style="font-size:12px;font-weight:700;color:var(--text)">'+esc(a.descripcion||'')+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:1px">'+esc(a.area||'')+(a.personal_nombre?' · '+esc(a.personal_nombre):'')+'</div>'+
+      '<div style="display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap">'+
+        '<button onclick="cierreAvAdj(\''+a.id+'\',-5)" style="min-width:32px;height:28px;border:1.5px solid var(--border2);background:#fff;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">-5</button>'+
+        '<input type="number" min="0" max="100" value="'+p+'" id="cav-'+a.id+'" style="width:56px;padding:4px 6px;border:1.5px solid var(--border2);border-radius:6px;font-size:13px;text-align:center;font-family:var(--font)">'+
+        '<button onclick="cierreAvAdj(\''+a.id+'\',5)" style="min-width:32px;height:28px;border:1.5px solid var(--border2);background:#fff;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">+5</button>'+
+        '<button onclick="cierreAvAdj(\''+a.id+'\',10)" style="min-width:36px;height:28px;border:1.5px solid var(--border2);background:#fff;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">+10</button>'+
+        '<button onclick="cierreAvGuardar(\''+a.id+'\')" style="padding:5px 12px;border:none;border-radius:6px;background:#1a56db;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Guardar</button>'+
+        '<button onclick="cierreAvSinCambios(\''+a.id+'\')" style="padding:5px 10px;border:1.5px solid var(--border2);background:#fff;color:var(--text2);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Sin cambios hoy</button>'+
+      '</div>'+
+    '</div>';
+  });
+  h+='</div></div>';
+  return h;
+}
+function cierreAvAdj(id,delta){var el=document.getElementById('cav-'+id);if(!el)return;el.value=Math.min(100,Math.max(0,(parseInt(el.value)||0)+delta));}
+function _cavDone(id,txt){var r=document.getElementById('cav-row-'+id);if(r){r.style.opacity='0.55';r.innerHTML='<div style="font-size:12px;color:#2f9e44;font-weight:700;padding:2px 0">✓ '+txt+'</div>';}}
+async function cierreAvGuardar(id){
+  var el=document.getElementById('cav-'+id);
+  var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
+  var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:(n>=100?'completado':'en-progreso')})});
+    a.porcentaje=n; if(n>=100)a.estado='completado';
+    logCambio(n>=100?'completado':'avance','actividad',id,a.descripcion||'',n+'%');
+    _cavDone(id, n>=100?'Completada':('Avance '+n+'%'));
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+function cierreAvSinCambios(id){
+  var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
+  logCambio('editado','actividad',id,a.descripcion||'','sin avance hoy');
+  _cavDone(id,'Sin cambios hoy');
+}
+
 function renderHoy(){
   const propios=S.personal.filter(p=>p.tipo==='propio');
   const pres=S.asist.filter(a=>['presente','tarde','medio día'].includes(a.estado)).length;
@@ -2326,8 +2472,11 @@ function renderHoy(){
     '</div>':
     '';
 
+  if(S.estancadas===undefined && !S._estancLoading){S._estancLoading=true;loadEstancadas().then(function(){S._estancLoading=false;renderHoy();});}
+  var _estancadasHTML=estancadasHTML();
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
+    ${_estancadasHTML}
     ${_cierreBanner}
 
     <!-- Attendance strip -->
@@ -9824,6 +9973,8 @@ async function renderCierreDia(fechaTarget){
     '<input type="date" value="'+fecha+'" onchange="renderCierreDia(this.value)" style="padding:6px 10px;border-radius:8px;border:1.5px solid var(--border2);font-size:13px;font-family:var(--font);color:var(--text)">'+
     '<button onclick="generarPDFCierre(S._cierreFecha)" style="margin-left:auto;padding:8px 16px;background:#7048e8;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">📄 PDF cierre</button>'+
   '</div>';
+  // Paso: actualizar avances de en-progreso (antes del resumen; omitible)
+  if(fecha===today()) h+=cierreAvancesHTML();
   // Stats chips
   h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">';
   h+=[{v:completadas.length,l:'Completadas',c:'#2f9e44',bg:'#d3f9d8'},{v:editadas.length,l:'Avance/Edición',c:'#1a56db',bg:'#dbe4ff'},{v:creadas.length,l:'Nuevas tareas',c:'#7048e8',bg:'#f3d9fa'}]
