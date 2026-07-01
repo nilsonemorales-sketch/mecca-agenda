@@ -9899,6 +9899,11 @@ async function generarPDFCierre(fecha){
 
   // ── 4. CARGAR FOTOS (async, CORS-safe) ────────────────────────
   setSS('syncing','Cargando fotos...');
+  // Drive (drive.google.com/thumbnail) no envía cabecera CORS -> el canvas
+  // queda tainted y toDataURL() falla. Se transforma a lh3.googleusercontent
+  // /d/<id>=w1200, que sirve el binario con Access-Control-Allow-Origin.
+  function _driveId(u){var m=(u||'').match(/[?&]id=([^&]+)/)||(u||'').match(/\/d\/([^/=?&]+)/);return m?m[1]:null;}
+  function _hi(u){var id=_driveId(u);if(id)return 'https://lh3.googleusercontent.com/d/'+id+'=w1200';return (u||'').replace(/sz=w\d+/,'sz=w1200');}
   var _ldImg=function(url){
     return new Promise(function(res){
       var t=setTimeout(function(){res(null);},6000);
@@ -9914,7 +9919,7 @@ async function generarPDFCierre(fecha){
         }catch(e){res(null);}
       };
       img.onerror=function(){clearTimeout(t);res(null);};
-      img.src=url;
+      img.src=_hi(url);
     });
   };
   var fotoMap={};
