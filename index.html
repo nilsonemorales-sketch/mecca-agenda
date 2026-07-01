@@ -3523,6 +3523,42 @@ function parseFotos(s){
 }
 function fotoUrls(s){return parseFotos(s).map(function(f){return f.url;});}
 
+// ── Proxy de fotos para PDF (JSONP vía Apps Script) ──────────────
+// Drive/lh3 no exportan a <canvas> (CORS) -> toDataURL() falla y la foto no
+// entra al PDF. El proxy del Web App devuelve la imagen como data URL base64,
+// que NO tiñe el canvas, así que sí se puede exportar y pasar a jsPDF.
+function _driveFileId(u){var m=(u||'').match(/[?&]id=([^&]+)/)||(u||'').match(/\/d\/([^/=?&]+)/);return m?m[1]:null;}
+function cargarFotoProxy(fileId,timeoutMs){
+  timeoutMs=timeoutMs||15000;
+  return new Promise(function(resolve){
+    var base=localStorage.getItem('mecca_drive_url')||(typeof ALERT_URL!=='undefined'?ALERT_URL:'')||'';
+    if(!base||!fileId){resolve(null);return;}
+    var cb='__fotoCb'+Math.random().toString(36).slice(2)+Date.now();
+    var s=document.createElement('script');
+    var timer=setTimeout(function(){cleanup();resolve(null);},timeoutMs);
+    function cleanup(){clearTimeout(timer);try{delete window[cb];}catch(e){window[cb]=undefined;}if(s&&s.parentNode)s.parentNode.removeChild(s);}
+    window[cb]=function(dataUrl){cleanup();resolve(dataUrl||null);};
+    s.onerror=function(){cleanup();resolve(null);};
+    s.src=base+'?img='+encodeURIComponent(fileId)+'&callback='+cb;
+    document.head.appendChild(s);
+  });
+}
+// Descarga una foto de Drive vía proxy y la reescala (~900px, jpeg 0.75) para el PDF.
+// Devuelve un data URL exportable, o null si falla (el caller dibuja placeholder).
+function _fotoPdf(url){
+  return new Promise(function(resolve){
+    var id=_driveFileId(url);
+    if(!id){resolve(null);return;}
+    cargarFotoProxy(id).then(function(dataUrl){
+      if(!dataUrl||String(dataUrl).indexOf('data:image')!==0){resolve(null);return;}
+      var img=new Image();
+      img.onload=function(){try{var cv=document.createElement('canvas');var mx=900,rt=Math.min(mx/img.width,mx/img.height,1);cv.width=Math.round(img.width*rt);cv.height=Math.round(img.height*rt);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);resolve(cv.toDataURL('image/jpeg',0.75));}catch(e){resolve(dataUrl);}};
+      img.onerror=function(){resolve(dataUrl);};
+      img.src=dataUrl;
+    });
+  });
+}
+
 function syncEstadoPct(sel){
   var pct=document.getElementById('a-pct');
   var lbl=document.getElementById('a-pct-lbl');
@@ -9902,26 +9938,8 @@ async function generarPDFCierre(fecha){
   // Drive (drive.google.com/thumbnail) no envía cabecera CORS -> el canvas
   // queda tainted y toDataURL() falla. Se transforma a lh3.googleusercontent
   // /d/<id>=w1200, que sirve el binario con Access-Control-Allow-Origin.
-  function _driveId(u){var m=(u||'').match(/[?&]id=([^&]+)/)||(u||'').match(/\/d\/([^/=?&]+)/);return m?m[1]:null;}
-  function _hi(u){var id=_driveId(u);if(id)return 'https://lh3.googleusercontent.com/d/'+id+'=w1200';return (u||'').replace(/sz=w\d+/,'sz=w1200');}
-  var _ldImg=function(url){
-    return new Promise(function(res){
-      var t=setTimeout(function(){res(null);},6000);
-      var img=new Image();img.crossOrigin='anonymous';
-      img.onload=function(){
-        clearTimeout(t);
-        try{
-          var cv=document.createElement('canvas');
-          var mx=480,rt=Math.min(mx/img.width,mx/img.height,1);
-          cv.width=Math.round(img.width*rt);cv.height=Math.round(img.height*rt);
-          cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-          res(cv.toDataURL('image/jpeg',0.60));
-        }catch(e){res(null);}
-      };
-      img.onerror=function(){clearTimeout(t);res(null);};
-      img.src=_hi(url);
-    });
-  };
+  // Fotos vía proxy JSONP (data URL exportable a canvas). Ver _fotoPdf/cargarFotoProxy.
+  var _ldImg=function(url){ return _fotoPdf(url); };
   var fotoMap={};
   if(_fotoActsHoy.length){
     try{
@@ -14538,25 +14556,16 @@ async function generarPDFBitacora(opts){
   else if(soloHoy){var hy=today();dates=dates.filter(function(d){return d===hy;});if(!dates.length)dates=[hy];}
 
   // Cargar imágenes (lh3; el Bloque 1 lo cambia a proxy JSONP)
-  function _driveId(u){var m=(u||'').match(/[?&]id=([^&]+)/)||(u||'').match(/\/d\/([^/=?&]+)/);return m?m[1]:null;}
-  function _hi(u){var id=_driveId(u);if(id)return 'https://lh3.googleusercontent.com/d/'+id+'=w1200';return (u||'').replace(/sz=w\d+/,'sz=w1200');}
-  function _ldI(url){
-    return new Promise(function(res){
-      var t=setTimeout(function(){res(null);},7000);
-      var img=new Image();img.crossOrigin='anonymous';
-      img.onload=function(){clearTimeout(t);try{var cv=document.createElement('canvas');var mx=900,rt=Math.min(mx/img.width,mx/img.height,1);cv.width=Math.round(img.width*rt);cv.height=Math.round(img.height*rt);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);res(cv.toDataURL('image/jpeg',0.75));}catch(e){res(null);}};
-      img.onerror=function(){clearTimeout(t);res(null);};
-      img.src=_hi(url);
-    });
-  }
-  var fB64={};var budget=singleDay?6:40;
-  var totalFotos=0;dates.forEach(function(d){totalFotos+=(((byDate[d]&&byDate[d].fotos)||[]).slice(0,6)).length;});
-  var doneFotos=0;
-  for(var di=0;di<dates.length&&budget>0;di++){
-    var dd=dates[di];var df=((byDate[dd]&&byDate[dd].fotos)||[]).slice(0,6).slice(0,budget);
-    if(!df.length)continue;
-    var loaded=await Promise.all(df.map(function(f){return _ldI(f.url).then(function(b){doneFotos++;setSS('syncing','Cargando fotos '+doneFotos+'/'+totalFotos+'…');return {b64:b,cap:f};});}));
-    fB64[dd]=loaded;budget-=df.length;
+  // Cargar fotos vía proxy JSONP (data URL exportable), en lotes de 4 con progreso.
+  // Una foto que falle queda como null -> el grid dibuja placeholder "Foto no disponible".
+  var fB64={};var _cap=singleDay?6:40;
+  var _toLoad=[];
+  dates.forEach(function(d){((byDate[d]&&byDate[d].fotos)||[]).slice(0,6).forEach(function(f){if(_toLoad.length<_cap)_toLoad.push({d:d,f:f});});});
+  var _tot=_toLoad.length,_done=0;
+  for(var _bi=0;_bi<_toLoad.length;_bi+=4){
+    var _batch=_toLoad.slice(_bi,_bi+4);
+    var _loaded=await Promise.all(_batch.map(function(it){return _fotoPdf(it.f.url).then(function(b){_done++;setSS('syncing','Cargando fotos '+_done+'/'+_tot+'…');return {it:it,b64:b};});}));
+    _loaded.forEach(function(r){(fB64[r.it.d]=fB64[r.it.d]||[]).push({b64:r.b64,cap:r.it.f});});
   }
 
   // Dona de asistencia (dibujada en canvas -> imagen)
