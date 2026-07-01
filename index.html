@@ -14225,7 +14225,7 @@ async function loadBitacora(){
     var actsMap={};
     if(ids.length){
       try{
-        var acts=await sb('obra_actividades?id=in.('+ids.slice(0,200).join(',')+')'+'&select=id,area,fotos,descripcion,ingeniero_nombre,personal_nombre');
+        var acts=await sb('obra_actividades?id=in.('+ids.slice(0,200).join(',')+')'+'&select=id,area,fotos,descripcion,ingeniero_nombre,personal_nombre,estado,porcentaje,prioridad,tipo_personal');
         if(Array.isArray(acts))acts.forEach(function(a){actsMap[a.id]=a;});
       }catch(e){}
     }
@@ -14313,6 +14313,8 @@ function renderBitacora(){
   });
   html+='<button onclick="generarPDFBitacora({soloHoy:true})" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer">📄 PDF hoy</button>';
   html+='<button onclick="generarPDFBitacora()" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:12px;font-weight:600;cursor:pointer">📄 PDF rango</button>';
+  html+='<input type="date" id="bit-pdf-fecha" max="'+today()+'" style="padding:4px 8px;border-radius:12px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:12px">';
+  html+='<button onclick="var f=(document.getElementById(\'bit-pdf-fecha\')||{}).value; if(f){generarPDFBitacora({fecha:f});}else{showToast(\'Elige un día primero\',\'warn\');}" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:12px;font-weight:600;cursor:pointer">📄 PDF de un día</button>';
   html+='</div></div>';
 
   if(!dates.length){
@@ -14495,6 +14497,8 @@ async function _bitacoraGuardarNota(fecha){
 async function generarPDFBitacora(opts){
   opts=opts||{};
   var soloHoy=!!opts.soloHoy;
+  var fechaSel=opts.fecha||null;                 // 'YYYY-MM-DD' (selector de día)
+  var singleDay=soloHoy||!!fechaSel;
   var dias=S.bitacora.dias||14;
   var cambios=S.bitacora.cambios||[];
   var notas=S.bitacora.notas||[];
@@ -14503,13 +14507,13 @@ async function generarPDFBitacora(opts){
   var pMap=S.bitacora.personalMap||{};
   var pTipo=S.bitacora.personalTipo||{};
   var urgVenc=S.bitacora.urgVencidas||[];
-  if(!cambios.length&&!notas.length&&!asistAll.length&&!urgVenc.length){showToast('Abre la bitácora primero','warn');return;}
+  var urgSet={};urgVenc.forEach(function(a){if(a.id)urgSet[a.id]=1;});
+  if(!cambios.length&&!notas.length&&!asistAll.length&&!urgVenc.length&&!singleDay){showToast('Abre la bitácora primero','warn');return;}
   setSS('syncing','Generando PDF…');
 
-  // Presente = presente / tarde / medio día
   function present(a){var e=(a.estado||'').toLowerCase();return e==='presente'||e==='tarde'||e.indexOf('medio')===0;}
 
-  // Agrupar cambios/notas/fotos por día
+  // Agrupar por día (comparación por string 'YYYY-MM-DD', hora local, sin Date)
   var byDate={};
   function _gd(d){if(!byDate[d])byDate[d]={cambios:[],notas:[],fotos:[],_fs:{}};return byDate[d];}
   function _af(d,url,by,area,tarea){var day=_gd(d);if(!day._fs[url]){day._fs[url]=1;day.fotos.push({url:url,by:by||'',area:area||'',tarea:tarea||''});}}
@@ -14530,32 +14534,44 @@ async function generarPDFBitacora(opts){
   asistAll.forEach(function(a){var d=(a.fecha||'').slice(0,10);if(!d)return;(asistByDate[d]=asistByDate[d]||[]).push(a);});
   var dset={};Object.keys(byDate).forEach(function(d){dset[d]=1;});Object.keys(asistByDate).forEach(function(d){dset[d]=1;});
   var dates=Object.keys(dset).sort(function(a,b){return b.localeCompare(a);});
-  if(soloHoy){var hy=today();dates=dates.filter(function(d){return d===hy;});}
+  if(fechaSel){dates=dates.filter(function(d){return d===fechaSel;});if(!dates.length)dates=[fechaSel];}
+  else if(soloHoy){var hy=today();dates=dates.filter(function(d){return d===hy;});if(!dates.length)dates=[hy];}
 
-  // Cargar imágenes en alta resolución.
-  // Las URLs de Drive (drive.google.com/thumbnail?id=...) NO envían cabecera
-  // CORS, así que al dibujarlas en un canvas éste queda "tainted" y
-  // toDataURL() lanza SecurityError -> la foto no entra al PDF. Se transforman
-  // a lh3.googleusercontent.com/d/<id>=w1200, que sí sirve el binario con
-  // Access-Control-Allow-Origin y permite exportar el canvas.
+  // Cargar imágenes (lh3; el Bloque 1 lo cambia a proxy JSONP)
   function _driveId(u){var m=(u||'').match(/[?&]id=([^&]+)/)||(u||'').match(/\/d\/([^/=?&]+)/);return m?m[1]:null;}
   function _hi(u){var id=_driveId(u);if(id)return 'https://lh3.googleusercontent.com/d/'+id+'=w1200';return (u||'').replace(/sz=w\d+/,'sz=w1200');}
   function _ldI(url){
     return new Promise(function(res){
       var t=setTimeout(function(){res(null);},7000);
       var img=new Image();img.crossOrigin='anonymous';
-      img.onload=function(){clearTimeout(t);try{var cv=document.createElement('canvas');var mx=900,rt=Math.min(mx/img.width,mx/img.height,1);cv.width=Math.round(img.width*rt);cv.height=Math.round(img.height*rt);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);res(cv.toDataURL('image/jpeg',0.72));}catch(e){res(null);}};
+      img.onload=function(){clearTimeout(t);try{var cv=document.createElement('canvas');var mx=900,rt=Math.min(mx/img.width,mx/img.height,1);cv.width=Math.round(img.width*rt);cv.height=Math.round(img.height*rt);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);res(cv.toDataURL('image/jpeg',0.75));}catch(e){res(null);}};
       img.onerror=function(){clearTimeout(t);res(null);};
       img.src=_hi(url);
     });
   }
-  var fB64={};var budget=40;
+  var fB64={};var budget=singleDay?6:40;
+  var totalFotos=0;dates.forEach(function(d){totalFotos+=(((byDate[d]&&byDate[d].fotos)||[]).slice(0,6)).length;});
+  var doneFotos=0;
   for(var di=0;di<dates.length&&budget>0;di++){
-    var dd=dates[di];var df=((byDate[dd]&&byDate[dd].fotos)||[]).slice(0,8).slice(0,budget);
+    var dd=dates[di];var df=((byDate[dd]&&byDate[dd].fotos)||[]).slice(0,6).slice(0,budget);
     if(!df.length)continue;
-    var loaded=await Promise.all(df.map(function(f){return _ldI(f.url).then(function(b){return b?{b64:b,cap:f}:null;});}));
-    var valid=loaded.filter(Boolean);
-    if(valid.length){fB64[dd]=valid;budget-=valid.length;}
+    var loaded=await Promise.all(df.map(function(f){return _ldI(f.url).then(function(b){doneFotos++;setSS('syncing','Cargando fotos '+doneFotos+'/'+totalFotos+'…');return {b64:b,cap:f};});}));
+    fB64[dd]=loaded;budget-=df.length;
+  }
+
+  // Dona de asistencia (dibujada en canvas -> imagen)
+  function _donut(segs,centerTxt,sub){
+    try{
+      var sz=220,cv=document.createElement('canvas');cv.width=sz;cv.height=sz;var x=cv.getContext('2d');
+      var cx=sz/2,cy=sz/2,r=sz/2-6,ir=r*0.60;
+      var tot=segs.reduce(function(s,g){return s+g.v;},0);
+      if(tot<=0){x.beginPath();x.arc(cx,cy,r,0,7);x.fillStyle='#e2e8f0';x.fill();}
+      else{var a=-Math.PI/2;segs.forEach(function(g){if(g.v<=0)return;var ang=g.v/tot*Math.PI*2;x.beginPath();x.moveTo(cx,cy);x.arc(cx,cy,r,a,a+ang);x.closePath();x.fillStyle=g.color;x.fill();a+=ang;});}
+      x.globalCompositeOperation='destination-out';x.beginPath();x.arc(cx,cy,ir,0,Math.PI*2);x.fill();x.globalCompositeOperation='source-over';
+      x.fillStyle='#1e293b';x.textAlign='center';x.textBaseline='middle';x.font='bold 46px sans-serif';x.fillText(centerTxt,cx,cy-6);
+      if(sub){x.font='16px sans-serif';x.fillStyle='#64748b';x.fillText(sub,cx,cy+22);}
+      return cv.toDataURL('image/png');
+    }catch(e){return null;}
   }
 
   try{
@@ -14564,7 +14580,7 @@ async function generarPDFBitacora(opts){
     var W=210,M=14,RW=W-2*M,y=0;
     var BDX_PUR=[152,32,164],BDX_GRN=[41,101,41];
     var TXT=[30,30,30],MUT=[110,110,120],WHT=[255,255,255];
-    var DAY=[26,86,219],ASIST=[37,99,235],AVANCE=[5,150,105],NUEVA=[124,58,237],FOTO=[13,148,136],RED=[185,28,28],EXTRA=[133,79,11];
+    var DAY=[26,86,219],ASIST=[37,99,235],AVANCE=[5,150,105],NUEVA=[124,58,237],FOTO=[13,148,136],RED=[185,28,28],EXTRA=[133,79,11],BLUE=[37,99,235],GRAYB=[148,163,184],PAUSE=[217,119,6];
     var AMB=[133,79,11],AMB_L=[255,244,220];
     function _fc(c){doc.setFillColor.apply(doc,c);}
     function _tc(c){doc.setTextColor.apply(doc,c);}
@@ -14574,8 +14590,8 @@ async function generarPDFBitacora(opts){
     var _dL=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
     var dFrom3=new Date(Date.now()-dias*864e5);var tNow=new Date();
     var subTitle;
-    if(soloHoy){var th=new Date(today()+'T12:00:00');subTitle='Reporte del día · '+_dL[th.getDay()]+' '+th.getDate()+' '+_mp[th.getMonth()]+' '+th.getFullYear();}
-    else{subTitle='Últimos '+dias+' días · '+dFrom3.getDate()+' '+_mp[dFrom3.getMonth()]+' al '+tNow.getDate()+' '+_mp[tNow.getMonth()]+' '+tNow.getFullYear();}
+    if(singleDay){var sd=new Date((fechaSel||today())+'T12:00:00');subTitle='Reporte del día · '+_dL[sd.getDay()]+' '+sd.getDate()+' '+_mp[sd.getMonth()]+' '+sd.getFullYear();}
+    else subTitle='Últimos '+dias+' días · '+dFrom3.getDate()+' '+_mp[dFrom3.getMonth()]+' al '+tNow.getDate()+' '+_mp[tNow.getMonth()]+' '+tNow.getFullYear();
     function drawH(){
       _fc(WHT);doc.rect(0,0,W,22,'F');
       _fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');_fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
@@ -14584,8 +14600,8 @@ async function generarPDFBitacora(opts){
       _tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('BRIDEX',M+17,13);
       _tc(BDX_PUR);doc.setFontSize(6);doc.setFont('helvetica','italic');doc.text('Bitácora de obra',M+17,17);
       var ix=W-M;
-      _tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');doc.text('BITÁCORA DE OBRA',ix,8,{align:'right'});
-      _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('MECCA RESIDENCE 2026',ix,13,{align:'right'});
+      _tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');doc.text('MECCA RESIDENCE 2026',ix,8,{align:'right'});
+      _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('Bitácora de obra',ix,13,{align:'right'});
       _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text(_s(subTitle),ix,17.5,{align:'right'});
       _fc(BDX_GRN);doc.rect(0,22,W,1,'F');_fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
     }
@@ -14597,26 +14613,46 @@ async function generarPDFBitacora(opts){
       if(right){doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(_s(right),W-M-3,y+4.6,{align:'right'});}
       y+=8.5;
     }
-    function subT(title,rgb){chkY(5.5);doc.setFont('helvetica','bold');doc.setFontSize(7);_tc(rgb);doc.text(_s(title),M+2,y+3.6);y+=5;}
-    function bullet(text){
-      var lines=doc.splitTextToSize('- '+_s(text),RW-8);
-      chkY(lines.length*4+1.5);
-      doc.setFont('helvetica','normal');doc.setFontSize(7.5);_tc(TXT);
-      lines.forEach(function(ln){doc.text(ln,M+5,y+3.4);y+=4;});
-      y+=1;
+    function chip(txt,color,x,cy){
+      txt=_s(txt).toUpperCase().slice(0,14);
+      doc.setFont('helvetica','bold');doc.setFontSize(5.4);
+      var w=doc.getTextWidth(txt)+3;
+      _fc(color);doc.roundedRect(x,cy-2.5,w,3.7,0.8,0.8,'F');
+      _tc(WHT);doc.text(txt,x+1.5,cy+0.3);
+      return w;
+    }
+    function estadoColor(est,vencida){
+      est=(est||'').toLowerCase();
+      if(vencida)return RED;
+      if(est==='completado')return AVANCE;
+      if(est.indexOf('progreso')>=0)return BLUE;
+      if(est==='pausada')return PAUSE;
+      return GRAYB;
+    }
+    function barAct(name,pct,estado,vencida){
+      pct=Math.max(0,Math.min(100,Math.round(Number(pct)||0)));
+      var col=estadoColor(estado,vencida);
+      var lbl=vencida?'VENCIDA':(estado||'—');
+      chkY(6);var cy=y+3;
+      var cw=chip(lbl,col,M+2,cy);
+      var nameX=M+2+cw+2,nameW=(W-M-38)-nameX;
+      doc.setFont('helvetica','normal');doc.setFontSize(7);_tc(TXT);
+      doc.text(_s(doc.splitTextToSize(_s(name),nameW)[0]||''),nameX,cy+0.6);
+      var bx=W-M-34,bw=28;
+      doc.setFillColor(232,235,240);doc.roundedRect(bx,cy-1.5,bw,3.2,1,1,'F');
+      _fc(col);if(pct>0)doc.roundedRect(bx,cy-1.5,bw*pct/100,3.2,1,1,'F');
+      _tc(MUT);doc.setFontSize(6.3);doc.text(pct+'%',W-M-1,cy+0.8,{align:'right'});
+      y+=6;
     }
     function kpiRow(cards){
       var n=cards.length,cw=RW/n,h=13;
       chkY(h+3);
       cards.forEach(function(c,i){
         var x=M+i*cw;
-        _fc([249,250,252]);doc.rect(x+0.6,y,cw-1.2,h,'F');
-        doc.setDrawColor(228);doc.rect(x+0.6,y,cw-1.2,h);
+        _fc([249,250,252]);doc.rect(x+0.6,y,cw-1.2,h,'F');doc.setDrawColor(228);doc.rect(x+0.6,y,cw-1.2,h);
         _fc(c.color);doc.rect(x+0.6,y,cw-1.2,1.4,'F');
-        _tc(c.color);doc.setFont('helvetica','bold');doc.setFontSize(11);
-        doc.text(_s(String(c.num)),x+cw/2,y+7.4,{align:'center'});
-        _tc(MUT);doc.setFont('helvetica','normal');doc.setFontSize(5.2);
-        doc.text(_s(c.label),x+cw/2,y+11,{align:'center'});
+        _tc(c.color);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(_s(String(c.num)),x+cw/2,y+7.6,{align:'center'});
+        _tc(MUT);doc.setFont('helvetica','normal');doc.setFontSize(5.2);doc.text(_s(c.label),x+cw/2,y+11,{align:'center'});
       });
       y+=h+3;
     }
@@ -14645,7 +14681,7 @@ async function generarPDFBitacora(opts){
 
     drawH();y=28;
 
-    // Sección global: TAREAS URGENTES RETRASADAS (una vez, arriba)
+    // Sección global: TAREAS URGENTES RETRASADAS (una vez)
     if(urgVenc.length){
       var todayD=new Date(today()+'T12:00:00');
       var urg=urgVenc.slice();
@@ -14657,9 +14693,9 @@ async function generarPDFBitacora(opts){
       doc.text('Atraso',ux.d,y+3);doc.text('Área',ux.ar,y+3);doc.text('Tarea',ux.ta,y+3);doc.text('Asignado',ux.as,y+3);doc.text('Ingeniero',ux.in,y+3);doc.text('Estado',ux.es,y+3,{align:'right'});
       y+=4.2;doc.setDrawColor(225);doc.line(M,y,W-M,y);y+=1.2;
       var lim=Math.min(urg.length,40);
-      for(var ui=0;ui<lim;ui++){
-        var ua=urg[ui];chkY(5);
-        if(ui%2===1){_fc([250,246,246]);doc.rect(M,y,RW,5,'F');}
+      for(var uii=0;uii<lim;uii++){
+        var ua=urg[uii];chkY(5);
+        if(uii%2===1){_fc([250,246,246]);doc.rect(M,y,RW,5,'F');}
         var hot=ua._dias>14;
         doc.setFont('helvetica',hot?'bold':'normal');doc.setFontSize(6.6);_tc(hot?RED:TXT);
         doc.text(ua._dias+'d',ux.d,y+3.5);
@@ -14686,12 +14722,10 @@ async function generarPDFBitacora(opts){
       var casaDia=asistDia.filter(function(a){return (pTipo[a.personal_id]||'')==='propio';});
       var contrDia=asistDia.filter(function(a){return (pTipo[a.personal_id]||'')!=='propio';});
       var presCasa=casaDia.filter(present).length,presContr=contrDia.filter(present).length;
+      var totReg=casaDia.length+contrDia.length,totPres=presCasa+presContr;
       var hExtra=asistDia.reduce(function(s,a){return s+(parseFloat(a.horas_extra)||0);},0);
       var nFotos=(day.fotos||[]).length;
       var hasMov=completadas.length||avancesArr.length||nuevasArr.length||day.notas.length||nFotos||asistDia.length;
-      if(!hasMov)return;
-
-      day.cambios.forEach(function(c){var u=(c.usuario_nombre||'');Object.values(USERS).forEach(function(US){var sn=US.nombre.replace(/^Ing\.?\s*/i,'').toLowerCase();if(sn&&u.toLowerCase().indexOf(sn)>=0)engSet[US.nombre]=1;});});
 
       if(rendered>0){doc.addPage();drawH();y=28;}
       rendered++;
@@ -14703,12 +14737,30 @@ async function generarPDFBitacora(opts){
       _tc(WHT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');doc.text(_s(longDate),M+3,y+6.2);
       y+=12;
 
-      // 2) Resumen ejecutivo (KPIs)
+      if(!hasMov){
+        chkY(8);_tc(MUT);doc.setFont('helvetica','italic');doc.setFontSize(9);
+        doc.text('Sin actividad registrada.',M+2,y+5);y+=10;
+        return;
+      }
+
+      day.cambios.forEach(function(c){var u=(c.usuario_nombre||'');Object.values(USERS).forEach(function(US){var sn=US.nombre.replace(/^Ing\.?\s*/i,'').toLowerCase();if(sn&&u.toLowerCase().indexOf(sn)>=0)engSet[US.nombre]=1;});});
+
+      // 2) Resumen ejecutivo: dona + KPIs
+      if(totReg>0){
+        var durl=_donut([{v:presCasa,color:'#2563eb'},{v:presContr,color:'#0d9488'},{v:(totReg-totPres),color:'#cbd5e1'}],totPres+'/'+totReg,'presentes');
+        chkY(31);
+        if(durl){try{doc.addImage(durl,'PNG',M+1,y,28,28);}catch(e){}}
+        var lx=M+34;
+        _tc(TXT);doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.text('Asistencia del día',lx,y+5);
+        doc.setFont('helvetica','normal');doc.setFontSize(7.5);
+        _fc([37,99,235]);doc.circle(lx+1.5,y+9.6,1.3,'F');_tc(TXT);doc.text('Personal de casa: '+presCasa+' / '+casaDia.length,lx+5,y+10.3);
+        _fc([13,148,136]);doc.circle(lx+1.5,y+14.6,1.3,'F');_tc(TXT);doc.text('Contratistas: '+presContr+' / '+contrDia.length,lx+5,y+15.3);
+        _fc([203,213,225]);doc.circle(lx+1.5,y+19.6,1.3,'F');_tc(TXT);doc.text('Ausentes / sin marca: '+(totReg-totPres),lx+5,y+20.3);
+        y+=31;
+      }
       kpiRow([
-        {num:presCasa+'/'+casaDia.length,label:'CASA',color:ASIST},
-        {num:presContr+'/'+contrDia.length,label:'CONTRAT.',color:ASIST},
-        {num:completadas.length,label:'COMPL.',color:AVANCE},
-        {num:avancesArr.length,label:'AVANCES',color:AVANCE},
+        {num:completadas.length,label:'COMPLETADAS',color:AVANCE},
+        {num:avancesArr.length,label:'AVANCES',color:BLUE},
         {num:nuevasArr.length,label:'NUEVAS',color:NUEVA},
         {num:(Math.round(hExtra*10)/10)+'h',label:'H.EXTRA',color:EXTRA},
         {num:urgVenc.length,label:'URG.VENC',color:RED}
@@ -14718,59 +14770,52 @@ async function generarPDFBitacora(opts){
       asistTable('ASISTENCIA - PERSONAL DE CASA',casaDia);
       asistTable('ASISTENCIA - CONTRATISTAS',contrDia);
 
-      // 4) Avances del día
+      // 4) Avances del día (con barras + chips de estado)
       if(completadas.length||avancesArr.length){
         band('AVANCES DEL DÍA',AVANCE);
-        if(completadas.length){
-          subT('Completadas',AVANCE);
-          completadas.forEach(function(c){
-            var act=actsMap[c.entidad_id]||{};
-            var meta=[];if(act.area)meta.push(act.area);if(c.usuario_nombre)meta.push(c.usuario_nombre);if(c.hora)meta.push(c.hora);
-            bullet((c.entidad_nombre||'(tarea)')+(meta.length?'  ('+meta.join(' · ')+')':''));
-          });
-        }
-        if(avancesArr.length){
-          subT('Avances / ediciones',AVANCE);
-          avancesArr.forEach(function(c){
-            var meta=[];if(c.entidad_nombre)meta.push(c.entidad_nombre);if(c.hora)meta.push(c.hora);
-            bullet((c.detalle||'(edición)')+(meta.length?'  ('+meta.join(' · ')+')':''));
-          });
-        }
+        completadas.forEach(function(c){var act=actsMap[c.entidad_id]||{};barAct((c.entidad_nombre||'(tarea)')+(act.area?' · '+act.area:'')+(c.hora?' · '+c.hora:''),100,'completado',false);});
+        avancesArr.forEach(function(c){var act=actsMap[c.entidad_id]||{};var pct=act.porcentaje!=null?act.porcentaje:0;barAct((c.entidad_nombre||'(tarea)')+(c.detalle?' — '+c.detalle:''),pct,act.estado||'en progreso',!!urgSet[c.entidad_id]);});
         y+=2;
       }
 
-      // 5) Tareas nuevas (asignado = personal_nombre)
+      // 5) Tareas nuevas (chip de prioridad)
       if(nuevasArr.length){
         band('TAREAS NUEVAS',NUEVA);
         nuevasArr.forEach(function(c){
           var act=actsMap[c.entidad_id]||{};
-          var meta=[];
-          if(act.area)meta.push(act.area);
-          var asig=act.personal_nombre||c.usuario_nombre;if(asig)meta.push(asig);
-          if(act.ingeniero_nombre)meta.push('Ing. '+String(act.ingeniero_nombre).replace(/^Ing\.?\s*/i,''));
-          bullet((c.entidad_nombre||act.descripcion||'(tarea)')+(meta.length?'  ('+meta.join(' · ')+')':''));
+          chkY(6);var cy=y+3;
+          var prio=(act.prioridad||'').toLowerCase();
+          var pc=prio==='urgente'?RED:(prio==='alta'?PAUSE:NUEVA);
+          var cw=chip(act.prioridad||'nueva',pc,M+2,cy);
+          var meta=[];if(act.area)meta.push(act.area);var asig=act.personal_nombre||c.usuario_nombre;if(asig)meta.push(asig);if(act.ingeniero_nombre)meta.push('Ing. '+String(act.ingeniero_nombre).replace(/^Ing\.?\s*/i,''));
+          doc.setFont('helvetica','normal');doc.setFontSize(7);_tc(TXT);
+          var nm=doc.splitTextToSize(_s((c.entidad_nombre||act.descripcion||'(tarea)')+(meta.length?'  ('+meta.join(' · ')+')':'')),W-M-(M+2+cw+2))[0]||'';
+          doc.text(nm,M+2+cw+2,cy+0.6);
+          y+=6;
         });
         y+=2;
       }
 
-      // 6) Fotos del día (grid 2 columnas)
+      // 6) Fotos del día (grilla 3 columnas, máx 6)
       if(fB64[fecha]&&fB64[fecha].length){
-        band('IMÁGENES DEL DÍA ('+fB64[fecha].length+')',FOTO);
-        var imgs=fB64[fecha];var gap=6,colW=(RW-gap)/2,imgH=colW*0.72,cellH=imgH+9;
-        for(var i=0;i<imgs.length;i+=2){
+        var imgs=fB64[fecha];var moreN=day.fotos.length>imgs.length?(day.fotos.length-imgs.length):0;
+        band('FOTOS DEL DÍA ('+day.fotos.length+')',FOTO);
+        var cols=3,gap=4,colW=(RW-gap*(cols-1))/cols,imgH=colW*0.75,cellH=imgH+7;
+        for(var fi=0;fi<imgs.length;fi+=cols){
           chkY(cellH);
-          for(var k=0;k<2;k++){
-            var it=imgs[i+k];if(!it)break;
+          for(var k=0;k<cols;k++){
+            var it=imgs[fi+k];if(!it)break;
             var x=M+k*(colW+gap);
-            try{doc.addImage(it.b64,'JPEG',x,y,colW,imgH);}catch(e){}
+            if(it.b64){try{doc.addImage(it.b64,'JPEG',x,y,colW,imgH);}catch(e){_fc([238,240,244]);doc.rect(x,y,colW,imgH,'F');}}
+            else{_fc([238,240,244]);doc.rect(x,y,colW,imgH,'F');_tc(MUT);doc.setFontSize(6);doc.text('Foto no disponible',x+colW/2,y+imgH/2,{align:'center'});}
             doc.setDrawColor(210);doc.rect(x,y,colW,imgH);
-            _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-            var cap=(it.cap.area||'')+(it.cap.by?'  ·  '+it.cap.by:'');
-            var cl=doc.splitTextToSize(_s(cap||it.cap.tarea||''),colW);
-            doc.text(cl[0]||'',x+0.5,y+imgH+3.6);
+            _tc(MUT);doc.setFontSize(5.4);doc.setFont('helvetica','normal');
+            var cap=(it.cap.by||'')+(it.cap.area?' · '+it.cap.area:'');
+            doc.text(_s(doc.splitTextToSize(_s(cap),colW)[0]||''),x+0.5,y+imgH+3);
           }
           y+=cellH;
         }
+        if(moreN){_tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','italic');doc.text('+'+moreN+' fotos más en la app',M+2,y+3);y+=5;}
         y+=1;
       }
 
@@ -14780,8 +14825,7 @@ async function generarPDFBitacora(opts){
         var hora=(n.created_at||'').slice(11,16);
         var lines=doc.splitTextToSize(_s(n.nota||'(foto)'),RW-10);
         chkY(lines.length*4.2+11);
-        _fc(AMB_L);doc.rect(M,y,RW,lines.length*4.2+9,'F');
-        _fc(AMB);doc.rect(M,y,2.5,lines.length*4.2+9,'F');
+        _fc(AMB_L);doc.rect(M,y,RW,lines.length*4.2+9,'F');_fc(AMB);doc.rect(M,y,2.5,lines.length*4.2+9,'F');
         doc.setFont('helvetica','bold');doc.setFontSize(6);_tc(AMB);doc.text('NOTA',M+5,y+4.6);
         var byline=[n.autor,hora].filter(Boolean).join('  ·  ');
         if(byline){doc.setFont('helvetica','normal');doc.text(_s(byline),M+18,y+4.6);}
@@ -14791,18 +14835,11 @@ async function generarPDFBitacora(opts){
       });
 
       // Horas extra del día
-      chkY(7);
-      _tc(EXTRA);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
-      doc.text('Horas extra del día: '+(Math.round(hExtra*10)/10)+' h',M+2,y+4);
-      y+=8;
+      chkY(7);_tc(EXTRA);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
+      doc.text('Horas extra del día: '+(Math.round(hExtra*10)/10)+' h',M+2,y+4);y+=8;
     });
 
-    if(rendered===0){
-      chkY(20);_tc(MUT);doc.setFontSize(10);doc.setFont('helvetica','normal');
-      doc.text('Sin movimientos en el período seleccionado.',M,y+10);
-    }
-
-    // Firma(s) del/los ingeniero(s) con movimiento
+    // Firma(s)
     var firmas=Object.keys(engSet);
     if(!firmas.length)firmas=['Ing. responsable de obra'];
     chkY(14+firmas.length*20);
@@ -14818,10 +14855,10 @@ async function generarPDFBitacora(opts){
     var nP=doc.internal.getNumberOfPages();
     for(var pi=1;pi<=nP;pi++){
       doc.setPage(pi);_tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
-      doc.text('MECCA RESIDENCE 2026 · Bitácora de Obra · '+today(),M,290);
+      doc.text('MECCA RESIDENCE 2026 · Bitácora de Obra · generado '+today()+' '+hhmm(),M,290);
       doc.text('Pág. '+pi+'/'+nP,W-M,290,{align:'right'});
     }
-    doc.save('Bitacora_MeccaResidence_'+(soloHoy?today()+'_dia':today())+'.pdf');
+    doc.save('Bitacora_MeccaResidence_'+(fechaSel?fechaSel:(soloHoy?today()+'_dia':today()))+'.pdf');
     setSS('ok','✓ PDF listo');
   }catch(e){setSS('err','Error PDF');showToast('❌ '+e.message,'err',8000);}
 }
