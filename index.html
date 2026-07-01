@@ -14220,7 +14220,7 @@ async function loadBitacora(){
     var actsMap={};
     if(ids.length){
       try{
-        var acts=await sb('obra_actividades?id=in.('+ids.slice(0,200).join(',')+')'+'&select=id,area,fotos,descripcion,ingeniero_nombre,responsable,contratista');
+        var acts=await sb('obra_actividades?id=in.('+ids.slice(0,200).join(',')+')'+'&select=id,area,fotos,descripcion,ingeniero_nombre,personal_nombre');
         if(Array.isArray(acts))acts.forEach(function(a){actsMap[a.id]=a;});
       }catch(e){}
     }
@@ -14243,6 +14243,24 @@ async function loadBitacora(){
       }
       S.bitacora.personalMap=pMap;
     }catch(e){S.bitacora.personalMap=S.bitacora.personalMap||{};}
+    // Tipo de personal (casa/contratista) para separar la asistencia
+    try{
+      var pTipo={};
+      (S.personal||[]).forEach(function(p){if(p&&p.id)pTipo[p.id]=p.tipo;});
+      var faltan=[];
+      (S.bitacora.asist||[]).forEach(function(a){if(a.personal_id&&pTipo[a.personal_id]==null&&faltan.indexOf(a.personal_id)<0)faltan.push(a.personal_id);});
+      if(faltan.length){
+        var ex=await sb('obra_personal?id=in.('+faltan.slice(0,200).join(',')+')&select=id,tipo,nombre');
+        if(Array.isArray(ex))ex.forEach(function(p){pTipo[p.id]=p.tipo;if(!S.bitacora.personalMap[p.id])S.bitacora.personalMap[p.id]=p.nombre;});
+      }
+      S.bitacora.personalTipo=pTipo;
+    }catch(e){S.bitacora.personalTipo=S.bitacora.personalTipo||{};}
+    // Urgentes vencidas (todo el proyecto): prioridad urgente, no completadas, fecha_fin pasada
+    try{
+      var hoyISO=today();
+      var urg=await sb('obra_actividades?prioridad=eq.urgente&estado=neq.completado&fecha_fin=lt.'+hoyISO+'&select=id,area,descripcion,personal_nombre,ingeniero_nombre,estado,fecha_fin,porcentaje&order=fecha_fin.asc&limit=80');
+      S.bitacora.urgVencidas=(Array.isArray(urg)?urg:[]).filter(function(a){return a.fecha_fin&&/^\d{4}-\d{2}-\d{2}$/.test(a.fecha_fin);});
+    }catch(e){S.bitacora.urgVencidas=[];}
     setSS('ok','✓ '+hhmm());
   }catch(e){setSS('err','Error');showToast('❌ Error cargando bit\xE1cora','err',6000);}
   renderBitacora();
@@ -14288,7 +14306,8 @@ function renderBitacora(){
     var sel=dias===d;
     html+='<button onclick="_bitacoraDias('+d+')" style="padding:5px 10px;border-radius:20px;border:1.5px solid '+(sel?'var(--accent)':'var(--border2)')+';background:'+(sel?'var(--accent)':'var(--bg2)')+';color:'+(sel?'#fff':'var(--text1)')+';font-size:12px;font-weight:600;cursor:pointer">'+d+'d</button>';
   });
-  html+='<button onclick="generarPDFBitacora()" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:12px;font-weight:600;cursor:pointer">📄 PDF</button>';
+  html+='<button onclick="generarPDFBitacora({soloHoy:true})" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer">📄 PDF hoy</button>';
+  html+='<button onclick="generarPDFBitacora()" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:12px;font-weight:600;cursor:pointer">📄 PDF rango</button>';
   html+='</div></div>';
 
   if(!dates.length){
@@ -14468,15 +14487,22 @@ async function _bitacoraGuardarNota(fecha){
   }catch(e){setSS('err','Error');showToast('❌ '+e.message,'err',8000);}
 }
 
-async function generarPDFBitacora(){
+async function generarPDFBitacora(opts){
+  opts=opts||{};
+  var soloHoy=!!opts.soloHoy;
   var dias=S.bitacora.dias||14;
   var cambios=S.bitacora.cambios||[];
   var notas=S.bitacora.notas||[];
   var actsMap=S.bitacora.actsMap||{};
   var asistAll=S.bitacora.asist||[];
   var pMap=S.bitacora.personalMap||{};
-  if(!cambios.length&&!notas.length&&!asistAll.length){showToast('Abre la bitácora primero','warn');return;}
+  var pTipo=S.bitacora.personalTipo||{};
+  var urgVenc=S.bitacora.urgVencidas||[];
+  if(!cambios.length&&!notas.length&&!asistAll.length&&!urgVenc.length){showToast('Abre la bitácora primero','warn');return;}
   setSS('syncing','Generando PDF…');
+
+  // Presente = presente / tarde / medio día
+  function present(a){var e=(a.estado||'').toLowerCase();return e==='presente'||e==='tarde'||e.indexOf('medio')===0;}
 
   // Agrupar cambios/notas/fotos por día
   var byDate={};
@@ -14495,12 +14521,11 @@ async function generarPDFBitacora(){
     _gd(d).notas.push(n);
     if(n.fotos)parseFotos(n.fotos).forEach(function(f){_af(d,f.url,f.by||n.autor,'Nota',(n.nota||'').slice(0,40));});
   });
-  // Asistencia por día
   var asistByDate={};
   asistAll.forEach(function(a){var d=(a.fecha||'').slice(0,10);if(!d)return;(asistByDate[d]=asistByDate[d]||[]).push(a);});
-  // Unión de fechas (cambios/notas + asistencia)
   var dset={};Object.keys(byDate).forEach(function(d){dset[d]=1;});Object.keys(asistByDate).forEach(function(d){dset[d]=1;});
   var dates=Object.keys(dset).sort(function(a,b){return b.localeCompare(a);});
+  if(soloHoy){var hy=today();dates=dates.filter(function(d){return d===hy;});}
 
   // Cargar imágenes en alta resolución (Drive sz=w1200)
   function _hi(u){return (u||'').replace(/sz=w\d+/,'sz=w1200');}
@@ -14528,7 +14553,7 @@ async function generarPDFBitacora(){
     var W=210,M=14,RW=W-2*M,y=0;
     var BDX_PUR=[152,32,164],BDX_GRN=[41,101,41];
     var TXT=[30,30,30],MUT=[110,110,120],WHT=[255,255,255];
-    var DAY=[26,86,219],ASIST=[37,99,235],AVANCE=[5,150,105],NUEVA=[124,58,237],FOTO=[13,148,136];
+    var DAY=[26,86,219],ASIST=[37,99,235],AVANCE=[5,150,105],NUEVA=[124,58,237],FOTO=[13,148,136],RED=[185,28,28],EXTRA=[133,79,11];
     var AMB=[133,79,11],AMB_L=[255,244,220];
     function _fc(c){doc.setFillColor.apply(doc,c);}
     function _tc(c){doc.setTextColor.apply(doc,c);}
@@ -14537,6 +14562,9 @@ async function generarPDFBitacora(){
     var _mL=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     var _dL=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
     var dFrom3=new Date(Date.now()-dias*864e5);var tNow=new Date();
+    var subTitle;
+    if(soloHoy){var th=new Date(today()+'T12:00:00');subTitle='Reporte del día · '+_dL[th.getDay()]+' '+th.getDate()+' '+_mp[th.getMonth()]+' '+th.getFullYear();}
+    else{subTitle='Últimos '+dias+' días · '+dFrom3.getDate()+' '+_mp[dFrom3.getMonth()]+' al '+tNow.getDate()+' '+_mp[tNow.getMonth()]+' '+tNow.getFullYear();}
     function drawH(){
       _fc(WHT);doc.rect(0,0,W,22,'F');
       _fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');_fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
@@ -14547,8 +14575,7 @@ async function generarPDFBitacora(){
       var ix=W-M;
       _tc(TXT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');doc.text('BITÁCORA DE OBRA',ix,8,{align:'right'});
       _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('MECCA RESIDENCE 2026',ix,13,{align:'right'});
-      _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
-      doc.text('Últimos '+dias+' días · '+dFrom3.getDate()+' '+_mp[dFrom3.getMonth()]+' al '+tNow.getDate()+' '+_mp[tNow.getMonth()]+' '+tNow.getFullYear(),ix,17.5,{align:'right'});
+      _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text(_s(subTitle),ix,17.5,{align:'right'});
       _fc(BDX_GRN);doc.rect(0,22,W,1,'F');_fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
     }
     function chkY(h){if(y+h>278){doc.addPage();drawH();y=28;}}
@@ -14567,9 +14594,76 @@ async function generarPDFBitacora(){
       lines.forEach(function(ln){doc.text(ln,M+5,y+3.4);y+=4;});
       y+=1;
     }
+    function kpiRow(cards){
+      var n=cards.length,cw=RW/n,h=13;
+      chkY(h+3);
+      cards.forEach(function(c,i){
+        var x=M+i*cw;
+        _fc([249,250,252]);doc.rect(x+0.6,y,cw-1.2,h,'F');
+        doc.setDrawColor(228);doc.rect(x+0.6,y,cw-1.2,h);
+        _fc(c.color);doc.rect(x+0.6,y,cw-1.2,1.4,'F');
+        _tc(c.color);doc.setFont('helvetica','bold');doc.setFontSize(11);
+        doc.text(_s(String(c.num)),x+cw/2,y+7.4,{align:'center'});
+        _tc(MUT);doc.setFont('helvetica','normal');doc.setFontSize(5.2);
+        doc.text(_s(c.label),x+cw/2,y+11,{align:'center'});
+      });
+      y+=h+3;
+    }
+    function asistTable(label,arr){
+      if(!arr.length)return;
+      var pres=arr.filter(present).length;
+      band(label,ASIST,'Presentes: '+pres+' de '+arr.length);
+      doc.setFont('helvetica','bold');doc.setFontSize(6.5);_tc(MUT);chkY(5);
+      doc.text('Nombre',16,y+3);doc.text('Estado',104,y+3);doc.text('Entrada',130,y+3);doc.text('Salida',156,y+3);doc.text('Extra',W-M-2,y+3,{align:'right'});
+      y+=4.2;doc.setDrawColor(225);doc.line(M,y,W-M,y);y+=1.2;
+      arr.forEach(function(a,ai){
+        chkY(5);
+        if(ai%2===1){_fc([247,248,250]);doc.rect(M,y,RW,5,'F');}
+        var nm=pMap[a.personal_id]||a.personal_id||'-';
+        var est=a.estado?(a.estado.charAt(0).toUpperCase()+a.estado.slice(1)):'-';
+        doc.setFont('helvetica','normal');doc.setFontSize(7);_tc(TXT);
+        doc.text(_s(nm),16,y+3.5,{maxWidth:86});
+        doc.text(_s(est),104,y+3.5);
+        doc.text(a.hora_entrada?fmt12h(a.hora_entrada):'-',130,y+3.5);
+        doc.text(a.hora_salida?fmt12h(a.hora_salida):'-',156,y+3.5);
+        doc.text(a.horas_extra?(a.horas_extra+'h'):'-',W-M-2,y+3.5,{align:'right'});
+        y+=5;
+      });
+      y+=3;
+    }
 
     drawH();y=28;
-    var rendered=0;
+
+    // Sección global: TAREAS URGENTES RETRASADAS (una vez, arriba)
+    if(urgVenc.length){
+      var todayD=new Date(today()+'T12:00:00');
+      var urg=urgVenc.slice();
+      urg.forEach(function(a){var fd=new Date(a.fecha_fin+'T12:00:00');a._dias=Math.max(0,Math.round((todayD-fd)/864e5));});
+      urg.sort(function(a,b){return b._dias-a._dias;});
+      band('TAREAS URGENTES RETRASADAS ('+urg.length+')',RED);
+      doc.setFont('helvetica','bold');doc.setFontSize(6.2);_tc(MUT);chkY(5);
+      var ux={d:M+2,ar:M+22,ta:M+50,as:M+106,in:M+140,es:W-M-2};
+      doc.text('Atraso',ux.d,y+3);doc.text('Área',ux.ar,y+3);doc.text('Tarea',ux.ta,y+3);doc.text('Asignado',ux.as,y+3);doc.text('Ingeniero',ux.in,y+3);doc.text('Estado',ux.es,y+3,{align:'right'});
+      y+=4.2;doc.setDrawColor(225);doc.line(M,y,W-M,y);y+=1.2;
+      var lim=Math.min(urg.length,40);
+      for(var ui=0;ui<lim;ui++){
+        var ua=urg[ui];chkY(5);
+        if(ui%2===1){_fc([250,246,246]);doc.rect(M,y,RW,5,'F');}
+        var hot=ua._dias>14;
+        doc.setFont('helvetica',hot?'bold':'normal');doc.setFontSize(6.6);_tc(hot?RED:TXT);
+        doc.text(ua._dias+'d',ux.d,y+3.5);
+        doc.text(_s(ua.area||'-'),ux.ar,y+3.5,{maxWidth:26});
+        doc.text(_s(ua.descripcion||'-'),ux.ta,y+3.5,{maxWidth:54});
+        doc.text(_s(ua.personal_nombre||'-'),ux.as,y+3.5,{maxWidth:32});
+        doc.text(_s((ua.ingeniero_nombre||'-').replace(/^Ing\.?\s*/i,'')),ux.in,y+3.5,{maxWidth:22});
+        doc.text(_s(ua.estado||'-'),ux.es,y+3.5,{align:'right'});
+        y+=5;
+      }
+      if(urg.length>lim){_tc(MUT);doc.setFont('helvetica','italic');doc.setFontSize(6);doc.text('... y '+(urg.length-lim)+' más',M+2,y+3.5);y+=5;}
+      y+=5;
+    }
+
+    var rendered=0;var engSet={};
 
     dates.forEach(function(fecha){
       var day=byDate[fecha]||{cambios:[],notas:[],fotos:[]};
@@ -14578,52 +14672,42 @@ async function generarPDFBitacora(){
       var completadas=day.cambios.filter(function(c){return c.accion==='completado';});
       var avancesArr=day.cambios.filter(function(c){return c.accion==='avance'||(c.accion==='editado'&&/avance|%|estado|fecha|→|->/i.test(c.detalle||''));});
       var nuevasArr=day.cambios.filter(function(c){return c.accion==='creado';});
-      var presentes=asistDia.filter(function(a){return a.estado&&a.estado!=='ausente'&&a.estado!=='justificado';}).length;
+      var casaDia=asistDia.filter(function(a){return (pTipo[a.personal_id]||'')==='propio';});
+      var contrDia=asistDia.filter(function(a){return (pTipo[a.personal_id]||'')!=='propio';});
+      var presCasa=casaDia.filter(present).length,presContr=contrDia.filter(present).length;
+      var hExtra=asistDia.reduce(function(s,a){return s+(parseFloat(a.horas_extra)||0);},0);
       var nFotos=(day.fotos||[]).length;
       var hasMov=completadas.length||avancesArr.length||nuevasArr.length||day.notas.length||nFotos||asistDia.length;
       if(!hasMov)return;
 
-      // Salto de página por día
+      day.cambios.forEach(function(c){var u=(c.usuario_nombre||'');Object.values(USERS).forEach(function(US){var sn=US.nombre.replace(/^Ing\.?\s*/i,'').toLowerCase();if(sn&&u.toLowerCase().indexOf(sn)>=0)engSet[US.nombre]=1;});});
+
       if(rendered>0){doc.addPage();drawH();y=28;}
       rendered++;
 
       // 1) Encabezado del día
       var longDate=_dL[fd.getDay()]+' '+fd.getDate()+' de '+_mL[fd.getMonth()]+' de '+fd.getFullYear();
-      var chips=[];
-      chips.push(completadas.length+' compl');
-      chips.push(avancesArr.length+' avances');
-      chips.push(nuevasArr.length+' nuevas');
-      chips.push(presentes+' present.');
-      if(nFotos)chips.push(nFotos+' fotos');
       chkY(11);
       _fc(DAY);doc.rect(M,y,RW,9,'F');
       _tc(WHT);doc.setFontSize(9.5);doc.setFont('helvetica','bold');doc.text(_s(longDate),M+3,y+6.2);
-      _tc([214,226,250]);doc.setFontSize(6.3);doc.setFont('helvetica','normal');doc.text(_s(chips.join('  ·  ')),W-M-3,y+6.2,{align:'right'});
       y+=12;
 
-      // 2) Asistencia del día
-      if(asistDia.length){
-        band('ASISTENCIA',ASIST,'Presentes: '+presentes+' de '+asistDia.length);
-        doc.setFont('helvetica','bold');doc.setFontSize(6.5);_tc(MUT);chkY(5);
-        doc.text('Nombre',16,y+3);doc.text('Estado',104,y+3);doc.text('Entrada',130,y+3);doc.text('Salida',156,y+3);doc.text('Extra',W-M-2,y+3,{align:'right'});
-        y+=4.2;doc.setDrawColor(225);doc.line(M,y,W-M,y);y+=1.2;
-        asistDia.forEach(function(a,ai){
-          chkY(5);
-          if(ai%2===1){_fc([247,248,250]);doc.rect(M,y,RW,5,'F');}
-          var nm=pMap[a.personal_id]||a.personal_id||'—';
-          var est=a.estado?(a.estado.charAt(0).toUpperCase()+a.estado.slice(1)):'—';
-          doc.setFont('helvetica','normal');doc.setFontSize(7);_tc(TXT);
-          doc.text(_s(nm),16,y+3.5,{maxWidth:86});
-          doc.text(_s(est),104,y+3.5);
-          doc.text(a.hora_entrada?fmt12h(a.hora_entrada):'—',130,y+3.5);
-          doc.text(a.hora_salida?fmt12h(a.hora_salida):'—',156,y+3.5);
-          doc.text(a.horas_extra?(a.horas_extra+'h'):'—',W-M-2,y+3.5,{align:'right'});
-          y+=5;
-        });
-        y+=3;
-      }
+      // 2) Resumen ejecutivo (KPIs)
+      kpiRow([
+        {num:presCasa+'/'+casaDia.length,label:'CASA',color:ASIST},
+        {num:presContr+'/'+contrDia.length,label:'CONTRAT.',color:ASIST},
+        {num:completadas.length,label:'COMPL.',color:AVANCE},
+        {num:avancesArr.length,label:'AVANCES',color:AVANCE},
+        {num:nuevasArr.length,label:'NUEVAS',color:NUEVA},
+        {num:(Math.round(hExtra*10)/10)+'h',label:'H.EXTRA',color:EXTRA},
+        {num:urgVenc.length,label:'URG.VENC',color:RED}
+      ]);
 
-      // 3) Avances del día
+      // 3) Asistencia separada
+      asistTable('ASISTENCIA - PERSONAL DE CASA',casaDia);
+      asistTable('ASISTENCIA - CONTRATISTAS',contrDia);
+
+      // 4) Avances del día
       if(completadas.length||avancesArr.length){
         band('AVANCES DEL DÍA',AVANCE);
         if(completadas.length){
@@ -14644,23 +14728,23 @@ async function generarPDFBitacora(){
         y+=2;
       }
 
-      // 4) Tareas nuevas
+      // 5) Tareas nuevas (asignado = personal_nombre)
       if(nuevasArr.length){
         band('TAREAS NUEVAS',NUEVA);
         nuevasArr.forEach(function(c){
           var act=actsMap[c.entidad_id]||{};
           var meta=[];
           if(act.area)meta.push(act.area);
-          var resp=act.contratista||act.responsable||c.usuario_nombre;if(resp)meta.push(resp);
+          var asig=act.personal_nombre||c.usuario_nombre;if(asig)meta.push(asig);
           if(act.ingeniero_nombre)meta.push('Ing. '+String(act.ingeniero_nombre).replace(/^Ing\.?\s*/i,''));
           bullet((c.entidad_nombre||act.descripcion||'(tarea)')+(meta.length?'  ('+meta.join(' · ')+')':''));
         });
         y+=2;
       }
 
-      // 5) Fotos del día (grid 2 columnas, grandes)
+      // 6) Fotos del día (grid 2 columnas)
       if(fB64[fecha]&&fB64[fecha].length){
-        band('FOTOS DEL DÍA ('+fB64[fecha].length+')',FOTO);
+        band('IMÁGENES DEL DÍA ('+fB64[fecha].length+')',FOTO);
         var imgs=fB64[fecha];var gap=6,colW=(RW-gap)/2,imgH=colW*0.72,cellH=imgH+9;
         for(var i=0;i<imgs.length;i+=2){
           chkY(cellH);
@@ -14679,7 +14763,7 @@ async function generarPDFBitacora(){
         y+=1;
       }
 
-      // 6) Notas del día
+      // 7) Notas del día
       day.notas.forEach(function(n){
         if(!n.nota&&!n.fotos)return;
         var hora=(n.created_at||'').slice(11,16);
@@ -14694,6 +14778,12 @@ async function generarPDFBitacora(){
         lines.forEach(function(ln,li){doc.text(_s(ln),M+5,y+9+li*4.2);});
         y+=lines.length*4.2+12;
       });
+
+      // Horas extra del día
+      chkY(7);
+      _tc(EXTRA);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
+      doc.text('Horas extra del día: '+(Math.round(hExtra*10)/10)+' h',M+2,y+4);
+      y+=8;
     });
 
     if(rendered===0){
@@ -14701,13 +14791,26 @@ async function generarPDFBitacora(){
       doc.text('Sin movimientos en el período seleccionado.',M,y+10);
     }
 
+    // Firma(s) del/los ingeniero(s) con movimiento
+    var firmas=Object.keys(engSet);
+    if(!firmas.length)firmas=['Ing. responsable de obra'];
+    chkY(14+firmas.length*20);
+    y+=6;_tc(MUT);doc.setFont('helvetica','bold');doc.setFontSize(7);doc.text('FIRMAS',M,y+3);y+=6;
+    firmas.forEach(function(nm){
+      chkY(20);
+      doc.setDrawColor(70);doc.line(M+4,y+9,M+78,y+9);
+      _tc(TXT);doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.text(_s(nm),M+4,y+13.5);
+      _tc(MUT);doc.setFont('helvetica','normal');doc.setFontSize(6);doc.text('Bridex Comercial · Mecca Residence 2026',M+4,y+17);
+      y+=21;
+    });
+
     var nP=doc.internal.getNumberOfPages();
     for(var pi=1;pi<=nP;pi++){
       doc.setPage(pi);_tc(MUT);doc.setFontSize(5.5);doc.setFont('helvetica','normal');
       doc.text('MECCA RESIDENCE 2026 · Bitácora de Obra · '+today(),M,290);
       doc.text('Pág. '+pi+'/'+nP,W-M,290,{align:'right'});
     }
-    doc.save('Bitacora_MeccaResidence_'+today()+'.pdf');
+    doc.save('Bitacora_MeccaResidence_'+(soloHoy?today()+'_dia':today())+'.pdf');
     setSS('ok','✓ PDF listo');
   }catch(e){setSS('err','Error PDF');showToast('❌ '+e.message,'err',8000);}
 }
