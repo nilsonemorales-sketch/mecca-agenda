@@ -9899,6 +9899,11 @@ async function generarPDFCierre(fecha){
 
   // ── 4. CARGAR FOTOS (async, CORS-safe) ────────────────────────
   setSS('syncing','Cargando fotos...');
+  // Drive (drive.google.com/thumbnail) no envía cabecera CORS -> el canvas
+  // queda tainted y toDataURL() falla. Se transforma a lh3.googleusercontent
+  // /d/<id>=w1200, que sirve el binario con Access-Control-Allow-Origin.
+  function _driveId(u){var m=(u||'').match(/[?&]id=([^&]+)/)||(u||'').match(/\/d\/([^/=?&]+)/);return m?m[1]:null;}
+  function _hi(u){var id=_driveId(u);if(id)return 'https://lh3.googleusercontent.com/d/'+id+'=w1200';return (u||'').replace(/sz=w\d+/,'sz=w1200');}
   var _ldImg=function(url){
     return new Promise(function(res){
       var t=setTimeout(function(){res(null);},6000);
@@ -9914,7 +9919,7 @@ async function generarPDFCierre(fecha){
         }catch(e){res(null);}
       };
       img.onerror=function(){clearTimeout(t);res(null);};
-      img.src=url;
+      img.src=_hi(url);
     });
   };
   var fotoMap={};
@@ -14527,8 +14532,14 @@ async function generarPDFBitacora(opts){
   var dates=Object.keys(dset).sort(function(a,b){return b.localeCompare(a);});
   if(soloHoy){var hy=today();dates=dates.filter(function(d){return d===hy;});}
 
-  // Cargar imágenes en alta resolución (Drive sz=w1200)
-  function _hi(u){return (u||'').replace(/sz=w\d+/,'sz=w1200');}
+  // Cargar imágenes en alta resolución.
+  // Las URLs de Drive (drive.google.com/thumbnail?id=...) NO envían cabecera
+  // CORS, así que al dibujarlas en un canvas éste queda "tainted" y
+  // toDataURL() lanza SecurityError -> la foto no entra al PDF. Se transforman
+  // a lh3.googleusercontent.com/d/<id>=w1200, que sí sirve el binario con
+  // Access-Control-Allow-Origin y permite exportar el canvas.
+  function _driveId(u){var m=(u||'').match(/[?&]id=([^&]+)/)||(u||'').match(/\/d\/([^/=?&]+)/);return m?m[1]:null;}
+  function _hi(u){var id=_driveId(u);if(id)return 'https://lh3.googleusercontent.com/d/'+id+'=w1200';return (u||'').replace(/sz=w\d+/,'sz=w1200');}
   function _ldI(url){
     return new Promise(function(res){
       var t=setTimeout(function(){res(null);},7000);
