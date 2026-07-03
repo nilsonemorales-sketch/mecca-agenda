@@ -777,7 +777,7 @@ const USERS={
   nilson:{nombre:'Ing. Nilson',rol:'admin',color:'#1a56db',pin:'5349'},
   edgar:{nombre:'Ing. Edgar Polanco',rol:'ing',color:'#228be6',pin:'2025'},
   moises:{nombre:'Ing. Moises Jimenez',rol:'ing',color:'#f08c00',pin:'2026'},
-  luis:{nombre:'Ing. Luis Jimenez',rol:'ing',color:'#0d9488',pin:'1999'},
+  luis:{nombre:'Ing. Luis Jimenez',rol:'view',color:'#0d9488',pin:'1999'},
 };
 const DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
@@ -1357,6 +1357,12 @@ function isAdmin(){return S.user?.rol==='admin';}
 const PROTECTED_TABLES=['obra_personal','obra_actividades','obra_asistencia','obra_penalidades','obra_tareas','obra_semanas','obra_plan_semanal'];
 
 async function sb(path,opts={}){
+  // Solo-visualización: bloquear TODA escritura para usuarios con rol 'view'
+  var _m=(opts.method||'GET').toUpperCase();
+  if(_m!=='GET' && S.user && S.user.rol==='view'){
+    showToast('Tu usuario es de solo visualización','warn',4000);
+    throw new Error('Solo visualización: no puedes editar');
+  }
   // Data protection: block dangerous operations on protected tables
   if(opts.method==='DELETE'){
     const table=path.split('?')[0];
@@ -1950,6 +1956,7 @@ function doLockLogin(){
 // requireEdit: runs action if logged in, otherwise shows login first
 function requireEdit(action){
   if(canEdit()){action();return;}
+  if(S.user&&S.user.rol==='view'){showToast('Tu usuario es de solo visualización','warn',3500);return;}
   // Show login, then run action after successful login
   document.getElementById('mcontent').innerHTML=`
     <div class="mhandle"></div>
@@ -2228,7 +2235,7 @@ async function loadEstancadas(){
     // Limpiar el motivo de las que YA no están estancadas (recibieron un cambio) para no arrastrarlo
     var estIds={}; est.forEach(function(e){estIds[e.id]=1;});
     (S.acts||[]).forEach(function(a){
-      if(a.estado==='en-progreso' && a.estancada_motivo && !estIds[a.id]){
+      if(canEdit() && a.estado==='en-progreso' && a.estancada_motivo && !estIds[a.id]){
         a.estancada_motivo='';
         sb('obra_actividades?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estancada_motivo:''})}).catch(function(){});
       }
@@ -2252,6 +2259,7 @@ function _estEsMia(e,ukey){
   return false;
 }
 async function estancSetMotivo(id,motivo){
+  if(!canEdit())return;
   var a=(S.acts||[]).find(function(x){return x.id===id;});
   var e=(S.estancadas||[]).find(function(x){return x.id===id;});
   if(e) e.motivo=motivo;
@@ -2274,6 +2282,7 @@ function _estRow(e){
       '</div>'+
       '<div style="text-align:right;flex-shrink:0"><div style="font-size:14px;font-weight:800;color:#e03131">'+e.dias+'d</div><div style="font-size:9px;color:var(--text3)">sin tocar</div></div>'+
     '</div>'+
+    (canEdit()?(
     '<div style="margin-top:7px"><select onchange="estancSetMotivo(\''+e.id+'\',this.value)" style="width:100%;padding:5px 8px;border:1.5px solid var(--border2);border-radius:6px;font-size:12px;font-family:var(--font);background:#fff;color:var(--text)">'+opts+'</select></div>'+
     '<div style="display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap">'+
       '<span style="font-size:11px;color:var(--text3)">%</span>'+
@@ -2281,7 +2290,10 @@ function _estRow(e){
       '<button onclick="estancActualizarPct(\''+e.id+'\')" style="padding:4px 10px;border:none;border-radius:6px;background:#1a56db;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Guardar</button>'+
       '<button onclick="estancCompletar(\''+e.id+'\')" style="padding:4px 10px;border:none;border-radius:6px;background:#2f9e44;color:#fff;font-size:11px;font-weight:700;cursor:pointer">✓ Completar</button>'+
       '<button onclick="estancPausar(\''+e.id+'\')" style="padding:4px 10px;border:none;border-radius:6px;background:#e67700;color:#fff;font-size:11px;font-weight:700;cursor:pointer">⏸ Pausar</button>'+
-    '</div>'+
+    '</div>'
+    ):(
+      '<div style="margin-top:6px;font-size:11px;color:var(--text3)">'+(e.motivo?'Motivo: <span style="font-weight:700">'+esc((_estMotMap()[e.motivo]||{}).lbl||e.motivo)+'</span> · ':'')+(e.porcentaje||0)+'%</div>'
+    ))+
   '</div>';
 }
 function estancadasHTML(){
@@ -2318,6 +2330,7 @@ function estancadasHTML(){
 }
 
 async function estancActualizarPct(id){
+  if(!canEdit())return;
   var el=document.getElementById('est-pct-'+id);
   var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
   var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
@@ -2330,6 +2343,7 @@ async function estancActualizarPct(id){
   }catch(e){showToast('Error: '+e.message,'err');}
 }
 async function estancCompletar(id){
+  if(!canEdit())return;
   var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100,estancada_motivo:''})});
@@ -2340,6 +2354,7 @@ async function estancCompletar(id){
   }catch(e){showToast('Error: '+e.message,'err');}
 }
 async function estancPausar(id){
+  if(!canEdit())return;
   var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'pausada',estancada_motivo:''})});
@@ -2355,6 +2370,7 @@ async function estancPausar(id){
 // ══════════════════════════════════════════════════════════════
 function cierreAvancesHTML(){
   if(S._cierreAvOmit) return '';
+  if(!canEdit()) return '';
   var uNom=(S.user&&S.user.nombre)||'';
   var enProg=(S.acts||[]).filter(function(a){return a.estado==='en-progreso';});
   var admin=(!uNom)||uNom.toLowerCase().indexOf('nilson')>=0;
@@ -2389,6 +2405,7 @@ function cierreAvancesHTML(){
 function cierreAvAdj(id,delta){var el=document.getElementById('cav-'+id);if(!el)return;el.value=Math.min(100,Math.max(0,(parseInt(el.value)||0)+delta));}
 function _cavDone(id,txt){var r=document.getElementById('cav-row-'+id);if(r){r.style.opacity='0.55';r.innerHTML='<div style="font-size:12px;color:#2f9e44;font-weight:700;padding:2px 0">✓ '+txt+'</div>';}}
 async function cierreAvGuardar(id){
+  if(!canEdit())return;
   var el=document.getElementById('cav-'+id);
   var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
   var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
@@ -2400,6 +2417,7 @@ async function cierreAvGuardar(id){
   }catch(e){showToast('Error: '+e.message,'err');}
 }
 function cierreAvSinCambios(id){
+  if(!canEdit())return;
   var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
   logCambio('editado','actividad',id,a.descripcion||'','sin avance hoy');
   _cavDone(id,'Sin cambios hoy');
@@ -2532,6 +2550,7 @@ function renderHoy(){
   var _estancadasHTML=estancadasHTML();
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
+    ${(S.user&&S.user.rol==='view')?'<div style="background:#ecfeff;border:1.5px solid #0d9488;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#0f766e;display:flex;align-items:center;gap:6px">👁 Modo solo visualización — puedes ver todo, pero no editar</div>':''}
     ${_estancadasHTML}
     ${_cierreBanner}
 
