@@ -397,6 +397,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <option value="nilson" style="background:#1a0a2e;color:#fff">★ Ing. Nilson — Administrador</option>
       <option value="edgar" style="background:#1a0a2e;color:#fff">Ing. Edgar Polanco</option>
       <option value="moises" style="background:#1a0a2e;color:#fff">Ing. Moises Jimenez</option>
+      <option value="luis" style="background:#1a0a2e;color:#fff">Ing. Luis Jimenez</option>
     </select>
     <div style="color:rgba(255,255,255,.5);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:10px">CÓDIGO DE ACCESO</div>
     <input id="lock-pin" type="password" inputmode="numeric" maxlength="10" placeholder="••••••"
@@ -776,6 +777,7 @@ const USERS={
   nilson:{nombre:'Ing. Nilson',rol:'admin',color:'#1a56db',pin:'5349'},
   edgar:{nombre:'Ing. Edgar Polanco',rol:'ing',color:'#228be6',pin:'2025'},
   moises:{nombre:'Ing. Moises Jimenez',rol:'ing',color:'#f08c00',pin:'2026'},
+  luis:{nombre:'Ing. Luis Jimenez',rol:'ing',color:'#0d9488',pin:'1999'},
 };
 const DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
@@ -2208,7 +2210,7 @@ function _swipeEnd(e){
 // ══════════════════════════════════════════════════════════════
 function _dayStr(delta){var d=new Date(today()+'T12:00:00');d.setDate(d.getDate()+(delta||0));return d.toISOString().slice(0,10);}
 function _diasDesde(fechaStr){try{var a=new Date(today()+'T12:00:00'),b=new Date(fechaStr+'T12:00:00');return Math.max(0,Math.round((a-b)/864e5));}catch(e){return 0;}}
-function _estIngColor(nombre){var n=(nombre||'').toLowerCase();if(n.indexOf('nilson')>=0)return '#1a56db';if(n.indexOf('edgar')>=0)return '#228be6';if(n.indexOf('mois')>=0)return '#f08c00';return '#868e96';}
+function _estIngColor(nombre){var n=(nombre||'').toLowerCase();if(n.indexOf('nilson')>=0)return '#1a56db';if(n.indexOf('edgar')>=0)return '#228be6';if(n.indexOf('mois')>=0)return '#f08c00';if(n.indexOf('luis')>=0)return '#0d9488';return '#868e96';}
 
 // Calcula estancadas: en-progreso cuyo último cambio (obra_cambios) es > 3 días.
 async function loadEstancadas(){
