@@ -1758,7 +1758,7 @@ async function loadAll(){
       sbWithTimeout('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300', 10000),
     ]);
     clearTimeout(retryTimer);
-    S.personal=personal; S.asist=asist; S.acts=acts; S.estancadas=undefined;
+    S.personal=personal; S.asist=asist; S.acts=acts; S.estancadas=undefined; S.abiertas=undefined;
     fixActsConsistency();
     // Cache for instant reload
     try{sessionStorage.setItem('mecca_cache_'+S.fecha,JSON.stringify({personal,asist,acts}));}catch(e){}
@@ -1854,7 +1854,7 @@ async function loadFecha(){
       sb('obra_asistencia?fecha=eq.'+S.fecha),
       sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300'),
     ]);
-    S.asist=asist;S.acts=acts;S.estancadas=undefined;
+    S.asist=asist;S.acts=acts;S.estancadas=undefined;S.abiertas=undefined;
     fixActsConsistency();
     setSS('ok','✓ '+hhmm());
     renderHoy();renderAsist();renderActs();renderReportes();
@@ -2222,11 +2222,13 @@ function _estIngColor(nombre){var n=(nombre||'').toLowerCase();if(n.indexOf('nil
 // Calcula estancadas: en-progreso cuyo último cambio (obra_cambios) es > 3 días.
 async function loadEstancadas(){
   try{
+    if(!S.abiertas) await loadAbiertas();          // evaluar TODAS las en-progreso, no solo la ventana de S.acts
+    var _src=S.abiertas||S.acts||[];
     var d3=_dayStr(-3), d60=_dayStr(-60);
     var rows=await sb('obra_cambios?fecha=gte.'+d60+'&entidad=eq.actividad&select=entidad_id,fecha&order=fecha.desc&limit=5000');
     var last={};
     (rows||[]).forEach(function(r){if(r.entidad_id&&!last[r.entidad_id])last[r.entidad_id]=r.fecha;});
-    var est=(S.acts||[]).filter(function(a){return a.estado==='en-progreso';}).map(function(a){
+    var est=_src.filter(function(a){return a.estado==='en-progreso';}).map(function(a){
       var lf=last[a.id]||null;
       return {id:a.id,area:a.area,descripcion:a.descripcion,personal_nombre:a.personal_nombre,ingeniero_nombre:a.ingeniero_nombre,porcentaje:a.porcentaje||0,motivo:a.estancada_motivo||'',lastFecha:lf,dias:lf?_diasDesde(lf):61};
     }).filter(function(x){return !x.lastFecha||x.lastFecha<d3;});
@@ -2234,7 +2236,7 @@ async function loadEstancadas(){
     S.estancadas=est;
     // Limpiar el motivo de las que YA no están estancadas (recibieron un cambio) para no arrastrarlo
     var estIds={}; est.forEach(function(e){estIds[e.id]=1;});
-    (S.acts||[]).forEach(function(a){
+    _src.forEach(function(a){
       if(canEdit() && a.estado==='en-progreso' && a.estancada_motivo && !estIds[a.id]){
         a.estancada_motivo='';
         sb('obra_actividades?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estancada_motivo:''})}).catch(function(){});
@@ -8133,12 +8135,21 @@ async function guardarUploaderFoto(actId, fotoUrl){
 // ════════════════════════════════════════════════════
 
 // Load tareas
+// Carga TODAS las actividades abiertas (estado != completado), sin ventana de
+// fechas ni tope de 250. Dataset dedicado que usan En Obra y Estancadas para
+// ver también las de fuera del rango cargado en S.acts (p.ej. fechas de agosto).
+async function loadAbiertas(){
+  try{
+    var r=await sb('obra_actividades?estado=neq.completado&order=fecha_fin.asc,created_at.desc&limit=2000');
+    S.abiertas=Array.isArray(r)?r:[];
+  }catch(e){ S.abiertas=S.abiertas||[]; }
+  return S.abiertas;
+}
 async function loadTareas(){
   renderEnObra();
   try{
-    // All non-completed activities dated today or earlier (overdue keep showing until done)
-    const all=await sb('obra_actividades?estado=neq.completado&fecha=lte.'+S.fecha+'&order=fecha.asc,created_at.desc&limit=250');
-    S.actsActivas=all;
+    await loadAbiertas();
+    S.actsActivas=S.abiertas||[];   // En Obra muestra TODAS las abiertas
     S.tareas=[];
     renderEnObra();
   }catch(e){ console.warn('Error En Obra:', e.message); }
