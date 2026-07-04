@@ -777,7 +777,7 @@ const USERS={
   nilson:{nombre:'Ing. Nilson',rol:'admin',color:'#1a56db',pin:'5349'},
   edgar:{nombre:'Ing. Edgar Polanco',rol:'ing',color:'#228be6',pin:'2025'},
   moises:{nombre:'Ing. Moises Jimenez',rol:'ing',color:'#f08c00',pin:'2026'},
-  luis:{nombre:'Ing. Luis Jimenez',rol:'view',color:'#0d9488',pin:'1999'},
+  luis:{nombre:'Ing. Luis Jimenez',rol:'ing',color:'#0ca678',pin:'1999'},
 };
 const DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
@@ -1880,6 +1880,7 @@ function showLogin(){
         <option value="nilson">★ Ing. Nilson (Admin)</option>
         <option value="edgar">Ing. Edgar Polanco</option>
         <option value="moises">Ing. Moises Jimenez</option>
+        <option value="luis">Ing. Luis Jimenez</option>
       </select></div>
     <div class="fw"><label class="fl">PIN</label>
       <input type="password" id="lp" placeholder="••••" style="font-size:28px;letter-spacing:10px;text-align:center;min-height:60px" maxlength="10" inputmode="numeric" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
@@ -1967,6 +1968,7 @@ function requireEdit(action){
         <option value="nilson">★ Ing. Nilson (Admin)</option>
         <option value="edgar">Ing. Edgar Polanco</option>
         <option value="moises">Ing. Moises Jimenez</option>
+        <option value="luis">Ing. Luis Jimenez</option>
       </select></div>
     <div class="fw"><label class="fl">PIN</label>
       <input type="password" id="lp" placeholder="••••" style="font-size:28px;letter-spacing:10px;text-align:center;min-height:60px" inputmode="numeric" maxlength="10" onkeydown="if(event.key==='Enter')doLoginAndRun_cb()">
@@ -2217,7 +2219,7 @@ function _swipeEnd(e){
 // ══════════════════════════════════════════════════════════════
 function _dayStr(delta){var d=new Date(today()+'T12:00:00');d.setDate(d.getDate()+(delta||0));return d.toISOString().slice(0,10);}
 function _diasDesde(fechaStr){try{var a=new Date(today()+'T12:00:00'),b=new Date(fechaStr+'T12:00:00');return Math.max(0,Math.round((a-b)/864e5));}catch(e){return 0;}}
-function _estIngColor(nombre){var n=(nombre||'').toLowerCase();if(n.indexOf('nilson')>=0)return '#1a56db';if(n.indexOf('edgar')>=0)return '#228be6';if(n.indexOf('mois')>=0)return '#f08c00';if(n.indexOf('luis')>=0)return '#0d9488';return '#868e96';}
+function _estIngColor(nombre){var n=(nombre||'').toLowerCase();if(n.indexOf('nilson')>=0)return '#1a56db';if(n.indexOf('edgar')>=0)return '#228be6';if(n.indexOf('mois')>=0)return '#f08c00';if(n.indexOf('luis')>=0)return '#0ca678';return '#868e96';}
 
 // Calcula estancadas: en-progreso cuyo último cambio (obra_cambios) es > 3 días.
 async function loadEstancadas(){
