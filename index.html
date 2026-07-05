@@ -395,7 +395,6 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <select id="lock-user" style="width:100%;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);border-radius:12px;color:#fff;font-size:15px;font-weight:600;padding:13px 14px;margin-bottom:20px;font-family:var(--font);-webkit-appearance:none;appearance:none;cursor:pointer" onchange="document.getElementById('lock-pin').focus()">
       <option value="" style="background:#1a0a2e;color:#fff">Selecciona tu usuario...</option>
       <option value="nilson" style="background:#1a0a2e;color:#fff">★ Ing. Nilson — Administrador</option>
-      <option value="edgar" style="background:#1a0a2e;color:#fff">Ing. Edgar Polanco</option>
       <option value="moises" style="background:#1a0a2e;color:#fff">Ing. Moises Jimenez</option>
       <option value="luis" style="background:#1a0a2e;color:#fff">Ing. Luis Jimenez</option>
     </select>
@@ -775,7 +774,7 @@ function reportAlert(tipo,detalle){
 
 const USERS={
   nilson:{nombre:'Ing. Nilson',rol:'admin',color:'#1a56db',pin:'5349'},
-  edgar:{nombre:'Ing. Edgar Polanco',rol:'ing',color:'#228be6',pin:'2025'},
+  edgar:{nombre:'Ing. Edgar Polanco',rol:'ing',color:'#228be6',pin:'2025',archivado:true},
   moises:{nombre:'Ing. Moises Jimenez',rol:'ing',color:'#f08c00',pin:'2026'},
   luis:{nombre:'Ing. Luis Jimenez',rol:'ing',color:'#0ca678',pin:'1999'},
 };
@@ -1878,7 +1877,6 @@ function showLogin(){
       <select class="sel" id="lu" style="font-size:15px">
         <option value="">Selecciona...</option>
         <option value="nilson">★ Ing. Nilson (Admin)</option>
-        <option value="edgar">Ing. Edgar Polanco</option>
         <option value="moises">Ing. Moises Jimenez</option>
         <option value="luis">Ing. Luis Jimenez</option>
       </select></div>
@@ -1938,6 +1936,7 @@ function doLockLogin(){
   var errEl=document.getElementById('lock-err');
   if(!uid_){errEl.textContent='Selecciona un usuario';return;}
   var u=USERS[uid_];
+  if(u&&u.archivado){errEl.textContent='Este usuario ya no tiene acceso';return;}
   if(!u||pin!==u.pin){
     errEl.textContent='Codigo incorrecto, intenta de nuevo';
     document.getElementById('lock-pin').value='';
@@ -1966,7 +1965,6 @@ function requireEdit(action){
       <select class="sel" id="lu" style="font-size:15px">
         <option value="">Selecciona...</option>
         <option value="nilson">★ Ing. Nilson (Admin)</option>
-        <option value="edgar">Ing. Edgar Polanco</option>
         <option value="moises">Ing. Moises Jimenez</option>
         <option value="luis">Ing. Luis Jimenez</option>
       </select></div>
@@ -1985,6 +1983,7 @@ function doLoginAndRun_cb(){
   const uid_=document.getElementById('lu').value;
   const pin=document.getElementById('lp').value;
   const u=USERS[uid_];
+  if(u&&u.archivado){var le=document.getElementById('lerr');if(le){le.textContent='Este usuario ya no tiene acceso';le.style.display='block';}document.getElementById('lp').value='';return;}
   if(!u||pin!==u.pin){document.getElementById('lerr').style.display='block';document.getElementById('lp').value='';_regLoginFail(uid_);return;}
   _loginFails=0;
   S.user={...u,id:uid_};closeModal();updateUserUI();renderAll();
@@ -11437,8 +11436,14 @@ try{
   var _saved=sessionStorage.getItem('mecca_user');
   if(_saved){
     S.user=JSON.parse(_saved);
-    updateUserUI();
-    hideLockScreen();
+    if(S.user && S.user.id && USERS[S.user.id] && USERS[S.user.id].archivado){
+      // usuario archivado (p.ej. Edgar): cerrar sesión y pedir login
+      S.user=null; try{sessionStorage.removeItem('mecca_user');}catch(e){}
+      showLockScreen();
+    } else {
+      updateUserUI();
+      hideLockScreen();
+    }
   } else {
     showLockScreen();
   }
