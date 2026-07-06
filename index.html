@@ -493,6 +493,8 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       </div>
     </div>
     <div class="hdr-r">
+      <button id="btn-undo" onclick="undoAction()" title="Deshacer (Ctrl+Z)" style="display:none;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↩</button>
+      <button id="btn-redo" onclick="redoAction()" title="Rehacer (Ctrl+Shift+Z)" style="display:none;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↪</button>
       <button id="btn-refresh" onclick="loadAll()" title="Actualizar datos" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:transform .4s ease,background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↺</button>
       <span class="ubadge guest" id="ubadge" onclick="showLogin()">👤 Entrar</span>
       <button class="ibtn primary" onclick="exportarPDF()" style="font-size:11px">PDF</button>
@@ -4355,16 +4357,19 @@ function _afterUndoRedo(){
   try{if(S.currentTab==='obra'&&S.obraVista!=='todas'&&typeof renderEnObra==='function')renderEnObra();}catch(e){}
   _renderUndoBar();
 }
+// Íconos de deshacer/rehacer en la barra superior: aparecen solo cuando aplican.
 function _renderUndoBar(){
-  var el=document.getElementById('undo-bar');
-  var canU=(S._undoStack||[]).length>0, canR=(S._redoStack||[]).length>0;
-  if(!canEdit()||(!canU&&!canR)){ if(el&&el.parentNode) el.parentNode.removeChild(el); return; }
-  if(!el){ el=document.createElement('div'); el.id='undo-bar'; el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:86px;z-index:8500;display:flex;gap:8px;pointer-events:none'; document.body.appendChild(el); }
-  var bs='pointer-events:auto;font-family:var(--font);border-radius:22px;padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.18);border:1.5px solid ';
-  var h='';
-  if(canU){ var u=S._undoStack[S._undoStack.length-1]; h+='<button onclick="undoAction()" title="'+esc(u.desc||'')+'" style="'+bs+'#495057;background:#343a40;color:#fff">↩ Deshacer</button>'; }
-  if(canR){ var rr=S._redoStack[S._redoStack.length-1]; h+='<button onclick="redoAction()" title="'+esc(rr.desc||'')+'" style="'+bs+'#adb5bd;background:#fff;color:#495057">↪ Rehacer</button>'; }
-  el.innerHTML=h;
+  var canEd=canEdit();
+  var canU=canEd&&(S._undoStack||[]).length>0, canR=canEd&&(S._redoStack||[]).length>0;
+  var ub=document.getElementById('btn-undo'), rb=document.getElementById('btn-redo');
+  if(ub){
+    ub.style.display=canU?'inline-flex':'none';
+    if(canU){ var u=S._undoStack[S._undoStack.length-1]; ub.title='Deshacer: '+(u.desc||'')+' (Ctrl+Z)'; }
+  }
+  if(rb){
+    rb.style.display=canR?'inline-flex':'none';
+    if(canR){ var r=S._redoStack[S._redoStack.length-1]; rb.title='Rehacer: '+(r.desc||'') +' (Ctrl+Shift+Z)'; }
+  }
 }
 function updateWorkersField(){
   var boxes=document.querySelectorAll('input[name="a-pers"]:checked');
