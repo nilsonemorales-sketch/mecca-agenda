@@ -2433,6 +2433,119 @@ function cierreAvSinCambios(id){
   _cavDone(id,'Sin cambios hoy');
 }
 
+// ══════════════════════════════════════════════════════════════
+// PENDIENTES por actividad (ítems accionables: material/plano/decisión/…)
+// Requiere columna obra_actividades.pendientes (jsonb). Tolera su ausencia.
+// ══════════════════════════════════════════════════════════════
+var PEND_CATS=[
+  {k:'material',ic:'🧱',lbl:'Material',color:'#b45309',bg:'#fff8eb'},
+  {k:'plano',ic:'📐',lbl:'Plano',color:'#1a56db',bg:'#eff6ff'},
+  {k:'decision',ic:'🤔',lbl:'Decisión',color:'#7c3aed',bg:'#f5f3ff'},
+  {k:'inspeccion',ic:'🔍',lbl:'Inspección',color:'#0d9488',bg:'#e6fcf5'},
+  {k:'otro',ic:'📝',lbl:'Otro',color:'#6b7280',bg:'#f3f4f6'}
+];
+function _pendCatMap(){var m={};PEND_CATS.forEach(function(c){m[c.k]=c;});return m;}
+function _pendGet(a){
+  var v=a&&a.pendientes; if(!v) return [];
+  if(typeof v==='string'){ try{v=JSON.parse(v);}catch(e){return [];} }
+  return Array.isArray(v)?v:[];
+}
+function _pendAbiertos(a){ return _pendGet(a).filter(function(p){return !p.resuelto;}); }
+function _findActAny(id){ return (S.acts||[]).find(function(x){return x.id===id;})||(S.abiertas||[]).find(function(x){return x.id===id;})||(S.aptoActs||[]).find(function(x){return x.id===id;}); }
+function _refreshVistasPend(){ try{if(S.currentTab==='hoy')renderHoy();}catch(e){} try{renderActs();}catch(e){} try{loadAbiertas();}catch(e){} }
+function pendBadge(a){
+  var n=_pendAbiertos(a).length;
+  return '<button onclick="event.stopPropagation();abrirPendientes(\''+a.id+'\')" title="Pendientes" style="background:'+(n?'#f5f3ff':'none')+';border:'+(n?'1px solid #d0bfff':'none')+';color:#7048e8;cursor:pointer;font-size:11px;font-weight:800;padding:'+(n?'2px 7px':'0 2px')+';border-radius:6px;line-height:1;white-space:nowrap">⏳'+(n?' '+n:'')+'</button>';
+}
+function abrirPendientes(actId){
+  var a=_findActAny(actId); if(!a){ showToast('Actividad no encontrada','warn'); return; }
+  var pend=_pendGet(a), cm=_pendCatMap(), editable=canEdit();
+  var abiertos=pend.filter(function(p){return !p.resuelto;}), resueltos=pend.filter(function(p){return p.resuelto;});
+  var catOpts=PEND_CATS.map(function(c){return '<option value="'+c.k+'">'+c.ic+' '+esc(c.lbl)+'</option>';}).join('');
+  var row=function(p){
+    var c=cm[p.categoria]||cm.otro;
+    return '<div style="border:1px solid var(--border2);border-left:4px solid '+c.color+';border-radius:8px;padding:8px 10px;margin-bottom:6px;background:'+(p.resuelto?'#f8f9fa':'#fff')+';'+(p.resuelto?'opacity:.75':'')+'">'+
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
+        '<div style="flex:1;min-width:0">'+
+          '<span style="font-size:9px;font-weight:800;color:'+c.color+';background:'+c.bg+';padding:1px 6px;border-radius:6px">'+c.ic+' '+esc(c.lbl.toUpperCase())+'</span>'+
+          '<div style="font-size:13px;color:var(--text);margin-top:4px;'+(p.resuelto?'text-decoration:line-through':'')+'">'+esc(p.texto||'')+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);margin-top:3px">'+esc(p.por||'')+(p.fecha?' · '+esc(p.fecha):'')+(p.resuelto?' · ✓ '+esc(p.resueltoPor||'')+(p.resueltoFecha?' ('+esc(p.resueltoFecha)+')':''):'')+'</div>'+
+        '</div>'+
+        (!p.resuelto&&editable?'<button onclick="pendResolver(\''+actId+'\',\''+p.id+'\')" style="padding:4px 10px;border:none;border-radius:6px;background:#2f9e44;color:#fff;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;font-family:var(--font)">✓ Resolver</button>':'')+
+      '</div></div>';
+  };
+  document.getElementById('mcontent').innerHTML=
+    '<div class="mhandle"></div>'+
+    '<h3>⏳ Pendientes — '+esc((a.descripcion||'').slice(0,50))+'</h3>'+
+    (editable?
+      '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px">'+
+        '<div style="display:flex;gap:6px;margin-bottom:6px"><select id="pend-cat" class="sel" style="flex:0 0 130px">'+catOpts+'</select>'+
+        '<input type="text" id="pend-txt" placeholder="Ej: falta cemento gris" style="flex:1;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:14px;font-family:var(--font)"></div>'+
+        '<button onclick="pendAgregar(\''+actId+'\')" style="width:100%;padding:9px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">➕ Agregar pendiente</button>'+
+      '</div>':'')+
+    (abiertos.length?'<div style="font-size:11px;font-weight:800;color:#b45309;margin-bottom:6px">Abiertos ('+abiertos.length+')</div>'+abiertos.map(row).join(''):'<div class="empty" style="color:var(--text3);padding:16px;font-size:13px">Sin pendientes abiertos</div>')+
+    (resueltos.length?'<div style="font-size:11px;font-weight:800;color:#2f9e44;margin:10px 0 6px">Resueltos ('+resueltos.length+')</div>'+resueltos.map(row).join(''):'')+
+    '<div class="mactions"><button class="btn" onclick="closeModal()">Cerrar</button></div>';
+  openModal();
+  setTimeout(function(){var t=document.getElementById('pend-txt');if(t)t.focus();},100);
+}
+async function pendAgregar(actId){
+  if(!canEdit())return;
+  var a=_findActAny(actId); if(!a) return;
+  var txt=((document.getElementById('pend-txt')||{}).value||'').trim();
+  var cat=(document.getElementById('pend-cat')||{}).value||'otro';
+  if(!txt){ var t=document.getElementById('pend-txt'); if(t)t.focus(); return; }
+  var pend=_pendGet(a);
+  pend.push({id:uid(),texto:txt,categoria:cat,por:(S.user&&S.user.nombre)||'',fecha:today(),resuelto:false});
+  a.pendientes=pend;
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({pendientes:pend})});
+    logCambio('editado','actividad',actId,a.descripcion||'','pendiente ('+cat+'): '+txt.slice(0,60));
+    showToast('Pendiente agregado'); abrirPendientes(actId); _refreshVistasPend();
+  }catch(e){ pend.pop(); a.pendientes=pend; showToast('Error: '+e.message,'err'); }
+}
+async function pendResolver(actId,pendId){
+  if(!canEdit())return;
+  var a=_findActAny(actId); if(!a) return;
+  var pend=_pendGet(a); var p=pend.find(function(x){return x.id===pendId;}); if(!p) return;
+  p.resuelto=true; p.resueltoPor=(S.user&&S.user.nombre)||''; p.resueltoFecha=today(); a.pendientes=pend;
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({pendientes:pend})});
+    logCambio('editado','actividad',actId,a.descripcion||'','pendiente resuelto: '+(p.texto||'').slice(0,60));
+    showToast('Pendiente resuelto ✓');
+    var m=document.getElementById('mcontent'); if(m&&/Pendientes —/.test(m.innerHTML)) abrirPendientes(actId);
+    _refreshVistasPend();
+  }catch(e){ p.resuelto=false; delete p.resueltoPor; delete p.resueltoFecha; showToast('Error: '+e.message,'err'); }
+}
+function pendientesGlobalHTML(){
+  var src=S.abiertas||S.acts||[]; var items=[];
+  src.forEach(function(a){ _pendAbiertos(a).forEach(function(p){ items.push({a:a,p:p}); }); });
+  if(!items.length) return '';
+  if(S._pendOpen===undefined) S._pendOpen=false;
+  var h='<div style="margin-bottom:10px;border:1.5px solid #7048e8;border-radius:12px;overflow:hidden;background:#fff">';
+  h+='<div onclick="S._pendOpen=!S._pendOpen;renderHoy()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f5f3ff">'+
+     '<span style="font-size:13px;font-weight:800;color:#5b21b6">⏳ Pendientes abiertos ('+items.length+')</span>'+
+     '<span style="font-size:13px;color:#5b21b6">'+(S._pendOpen?'▲':'▼')+'</span></div>';
+  if(S._pendOpen){
+    h+='<div>';
+    PEND_CATS.forEach(function(c){
+      var grp=items.filter(function(it){return (it.p.categoria||'otro')===c.k;});
+      if(!grp.length) return;
+      h+='<div style="padding:5px 12px;background:'+c.bg+';border-top:1px solid var(--border2);font-size:11px;font-weight:800;color:'+c.color+'">'+c.ic+' '+esc(c.lbl)+' ('+grp.length+')</div>';
+      grp.forEach(function(it){
+        h+='<div style="padding:8px 12px;border-top:1px solid var(--border2);display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
+          '<div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--text);font-weight:600">'+esc(it.p.texto||'')+'</div>'+
+          '<div onclick="abrirPendientes(\''+it.a.id+'\')" style="cursor:pointer;font-size:10px;color:var(--accent);margin-top:2px">'+esc(it.a.descripcion||'')+(it.a.area?' · '+esc(it.a.area):'')+' ▸</div></div>'+
+          (canEdit()?'<button onclick="pendResolver(\''+it.a.id+'\',\''+it.p.id+'\')" style="padding:3px 10px;border:none;border-radius:6px;background:#2f9e44;color:#fff;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">✓</button>':'')+
+          '</div>';
+      });
+    });
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
 function renderHoy(){
   const propios=S.personal.filter(p=>p.tipo==='propio');
   const pres=S.asist.filter(a=>['presente','tarde','medio día'].includes(a.estado)).length;
@@ -2558,10 +2671,12 @@ function renderHoy(){
 
   if(S.estancadas===undefined && !S._estancLoading){S._estancLoading=true;loadEstancadas().then(function(){S._estancLoading=false;renderHoy();});}
   var _estancadasHTML=estancadasHTML();
+  var _pendGlobalHTML=pendientesGlobalHTML();
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
     ${(S.user&&S.user.rol==='view')?'<div style="background:#ecfeff;border:1.5px solid #0d9488;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#0f766e;display:flex;align-items:center;gap:6px">👁 Modo solo visualización — puedes ver todo, pero no editar</div>':''}
     ${_estancadasHTML}
+    ${_pendGlobalHTML}
     ${_cierreBanner}
 
     <!-- Attendance strip -->
@@ -3513,7 +3628,7 @@ function _aptoCard(a){
      (a.ingeniero_nombre?'<span>👤 '+esc(String(a.ingeniero_nombre).replace(/^Ing\.?\s*/i,''))+'</span>':'')+
      (a.fecha_fin?'<span>📅 '+esc(a.fecha_fin)+'</span>':'')+
      '</div></div>';
-  h+='<span '+(canEdit()?'onclick="aptoCiclarEstado(\''+a.id+'\')" ':'')+'style="'+(canEdit()?'cursor:pointer;':'')+'font-size:10px;background:'+ec+'22;color:'+ec+';padding:2px 8px;border-radius:6px;font-weight:700;white-space:nowrap;flex-shrink:0">'+esc(a.estado)+(canEdit()&&a.estado!=='completado'?' ▸':'')+'</span>';
+  h+='<span '+(canEdit()?'onclick="aptoCiclarEstado(\''+a.id+'\')" ':'')+'style="'+(canEdit()?'cursor:pointer;':'')+'font-size:10px;background:'+ec+'22;color:'+ec+';padding:2px 8px;border-radius:6px;font-weight:700;white-space:nowrap;flex-shrink:0">'+esc(a.estado)+(canEdit()&&a.estado!=='completado'?' ▸':'')+'</span>'+pendBadge(a);
   h+='</div>';
   h+='<div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin:6px 0"><div style="height:100%;width:'+Math.min(100,a.porcentaje||0)+'%;background:'+ec+';border-radius:2px"></div></div>';
   if(canEdit()&&a.estado!=='completado'){
@@ -3830,6 +3945,7 @@ function actHTML(a, ai, tipo){
       <div style="font-size:13px;font-weight:600;flex:1;min-width:0;line-height:1.3">${urgente?'🔴 ':''}${esc(a.descripcion)}${blocked?' 🔒':''}</div>
       <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
         <span style="font-size:10px;background:${eb};color:${ec};padding:2px 7px;border-radius:6px;font-weight:700;border:1px solid ${ec}44;white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();cycleEstado('${a.id}')">${el} ▸</span>
+        ${pendBadge(a)}
         ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 2px;line-height:1" onclick="editAct('${a.id}')">✏️</button>`:''}
       </div>
     </div>
@@ -4392,6 +4508,7 @@ function showAddActPropio(ai, ctx){
     <h3>👷 ${edit?'Editar actividad':'Actividad — Personal x la casa'}</h3>
     <div class="fw"><label class="fl">¿Qué se realizó? *</label>
       <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Ej: Colocación de cerámica baño..." style="font-size:15px"></div>
+    ${a.id?`<div style="margin:-2px 0 8px"><button type="button" onclick="abrirPendientes('${a.id}')" style="padding:6px 12px;border:1.5px solid #7048e8;background:#f5f3ff;color:#7048e8;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">⏳ Pendientes (${_pendAbiertos(a).length})</button></div>`:''}
     <div class="fw">
       <label class="fl">Ubicación / Área</label>
       <div style="display:flex;gap:8px;align-items:center">
@@ -4489,6 +4606,7 @@ function showAddActContratista(ai, preContratista, ctx){
 
     <div class="fw"><label class="fl">¿Qué se va a realizar? *</label>
       <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Ej: Instalación sistema eléctrico..." style="font-size:15px"></div>
+    ${a.id?`<div style="margin:-2px 0 8px"><button type="button" onclick="abrirPendientes('${a.id}')" style="padding:6px 12px;border:1.5px solid #7048e8;background:#f5f3ff;color:#7048e8;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">⏳ Pendientes (${_pendAbiertos(a).length})</button></div>`:''}
 
     <div class="fw">
       <label class="fl">Ubicación / Área</label>
@@ -4602,6 +4720,7 @@ function showAddActIngeniero(ai){
 
     <div class="fw"><label class="fl">Descripción *</label>
       <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Detalle la tarea..." style="font-size:15px"></div>
+    ${a.id?`<div style="margin:-2px 0 8px"><button type="button" onclick="abrirPendientes('${a.id}')" style="padding:6px 12px;border:1.5px solid #7048e8;background:#f5f3ff;color:#7048e8;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">⏳ Pendientes (${_pendAbiertos(a).length})</button></div>`:''}
 
     <div class="fw"><label class="fl">Área / Ubicación</label>
       <div style="display:flex;gap:8px;align-items:center">
