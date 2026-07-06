@@ -1756,7 +1756,7 @@ async function loadAll(){
     const[personal,asist,acts]=await Promise.all([
       sbWithTimeout('obra_personal?activo=eq.true&order=nombre', 10000),
       sbWithTimeout('obra_asistencia?fecha=eq.'+S.fecha, 10000),
-      sbWithTimeout('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300', 10000),
+      sbWithTimeout('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=2000', 10000),
     ]);
     clearTimeout(retryTimer);
     S.personal=personal; S.asist=asist; S.acts=acts; S.estancadas=undefined; S.abiertas=undefined;
@@ -1853,7 +1853,7 @@ async function loadFecha(){
   try{
     const[asist,acts]=await Promise.all([
       sb('obra_asistencia?fecha=eq.'+S.fecha),
-      sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300'),
+      sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=2000'),
     ]);
     S.asist=asist;S.acts=acts;S.estancadas=undefined;S.abiertas=undefined;
     fixActsConsistency();
@@ -1899,17 +1899,21 @@ function doLogin(){
   const u=USERS[uid_];
   if(!u||pin!==u.pin){document.getElementById('lerr').style.display='block';document.getElementById('lp').value='';return;}
   S.user={...u,id:uid_};
+  S._undoStack=[]; S._redoStack=[];
   try{sessionStorage.setItem('mecca_user',JSON.stringify(S.user));}catch(e){}
   closeModal();
   updateUserUI();
   renderAll();
+  _renderUndoBar();
   if(S.currentTab==='enobra') loadTareas();
 }
 
 function logout(){
   S.user=null;
+  S._undoStack=[]; S._redoStack=[];
   try{sessionStorage.removeItem('mecca_user');}catch(e){}
   updateUserUI();renderAll();
+  _renderUndoBar();
   showLockScreen();
 }
 
@@ -2476,6 +2480,7 @@ async function toggleArqAct(id){
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({requiere_arq:nuevo})});
     logCambio('editado','actividad',id,a.descripcion||'',nuevo?'marcada: requiere Arq. Miguel':'quitada marca Arq. Miguel');
+    _undoPatch(id,a.descripcion,(nuevo?'marcar Arq. en ':'quitar Arq. en ')+_undoNombre(a),{requiere_arq:!nuevo},{requiere_arq:nuevo});
     showToast(nuevo?'🏛 Requiere al Arq. Miguel':'Marca Arq. quitada');
     try{if(S.currentTab==='hoy')renderHoy();}catch(e){} try{renderActs();}catch(e){}
   }catch(e){ a.requiere_arq=!nuevo; showToast('Error: '+e.message,'err'); }
@@ -2531,10 +2536,12 @@ async function pendResolver(actId,pendId){
   if(!canEdit())return;
   var a=_findActAny(actId); if(!a) return;
   var pend=_pendGet(a); var p=pend.find(function(x){return x.id===pendId;}); if(!p) return;
+  var _prevPend=JSON.parse(JSON.stringify(pend));
   p.resuelto=true; p.resueltoPor=(S.user&&S.user.nombre)||''; p.resueltoFecha=today(); a.pendientes=pend;
   try{
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({pendientes:pend})});
     logCambio('editado','actividad',actId,a.descripcion||'','pendiente resuelto: '+(p.texto||'').slice(0,60));
+    _undoPatch(actId,a.descripcion,'resolver pendiente en '+_undoNombre(a),{pendientes:_prevPend},{pendientes:JSON.parse(JSON.stringify(pend))});
     showToast('Pendiente resuelto ✓');
     var m=document.getElementById('mcontent'); if(m&&/Pendientes —/.test(m.innerHTML)) abrirPendientes(actId);
     _refreshVistasPend();
@@ -3726,21 +3733,25 @@ async function aptoGuardarPct(id){
   var elp=document.getElementById('apto-pct-'+id);
   var n=Math.min(100,Math.max(0,parseInt(elp&&elp.value)||0));
   var a=(S.aptoActs||[]).find(function(x){return x.id===id;}); if(!a) return;
+  var prevPct=a.porcentaje, prevEstado=a.estado;
   try{
     var nuevoEstado=(n>=100)?'completado':(a.estado==='pendiente'?'en-progreso':a.estado);
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:nuevoEstado})});
     a.porcentaje=n; a.estado=nuevoEstado;
     logCambio(n>=100?'completado':'avance','actividad',id,a.descripcion||'',n+'%');
+    _undoPatch(id,a.descripcion,'% de '+_undoNombre(a)+' → '+n+'%',{porcentaje:prevPct,estado:prevEstado},{porcentaje:n,estado:nuevoEstado});
     loadAbiertas(); showToast('Avance guardado ✓'); renderActs();
   }catch(e){ showToast('Error: '+e.message,'err'); }
 }
 async function aptoCompletar(id){
   if(!canEdit())return;
   var a=(S.aptoActs||[]).find(function(x){return x.id===id;}); if(!a) return;
+  var prevPct=a.porcentaje, prevEstado=a.estado;
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
     a.estado='completado'; a.porcentaje=100;
     logCambio('completado','actividad',id,a.descripcion||'','completada');
+    _undoPatch(id,a.descripcion,'completar '+_undoNombre(a),{estado:prevEstado,porcentaje:prevPct},{estado:'completado',porcentaje:100});
     loadAbiertas(); showToast('Completada ✓'); renderActs();
   }catch(e){ showToast('Error: '+e.message,'err'); }
 }
@@ -3753,6 +3764,7 @@ async function aptoCiclarEstado(id){
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:next})});
     logCambio('editado','actividad',id,a.descripcion||'','estado: '+prev+' -> '+next);
+    _undoPatch(id,a.descripcion,'estado de '+_undoNombre(a)+' → '+next,{estado:prev},{estado:next});
     loadAbiertas();
   }catch(e){ a.estado=prev; renderActs(); showToast('Error: '+e.message,'err'); }
 }
@@ -4163,6 +4175,7 @@ async function doMarcarCompletada(actId){
     // Estado/porcentaje first — critical operation
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
     setSS('ok','✓ Completada');
+    _undoPatch(actId,a.descripcion,'completar '+_undoNombre(a),{estado:prevEstado,porcentaje:prevPct},{estado:'completado',porcentaje:100});
     _appendRegistro(a,actId,{tipo:'fin'});
     sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
       body:JSON.stringify({hora_inicio:a.hora_inicio,hora_fin:a.hora_fin})}).catch(function(){});
@@ -4210,10 +4223,10 @@ function marcarActCompletada(id){
 //   pct>=100 + non-completado → mark completado
 //   completado + pct<100      → set pct=100
 // ── Pin de tareas creadas/editadas: sobreviven a las recargas de S.acts ──
-// S.acts es una ventana (300 más recientes por fecha). Una tarea nueva con
-// fecha fuera de esa ventana se caería en el siguiente auto-refresh; se
-// "fijan" aquí y se re-inyectan tras cada recarga hasta que la ventana las
-// incluya o se completen.
+// S.acts carga todas las abiertas (limit 2000, igual que loadAbiertas), pero
+// una tarea recién creada/editada podría no estar aún en la respuesta del
+// siguiente auto-refresh; se "fijan" aquí y se re-inyectan tras cada recarga
+// hasta que la recarga las incluya o se completen.
 function _pinAct(a){ if(a&&a.id){ (S._touchedActs=S._touchedActs||{})[a.id]=a; } }
 function _mergeTouchedActs(){
   var t=S._touchedActs; if(!t) return;
@@ -4250,7 +4263,7 @@ async function fixActsConsistency(){
 async function loadActsAll(){
   setSS('syncing','Cargando...');
   try{
-    var lim=S.actLimitAll?3000:(S.actMostrarTodas?500:300);
+    var lim=S.actLimitAll?3000:(S.actMostrarTodas?500:2000);
     if(S.actMostrarTodas){
       S.acts=await sb('obra_actividades?order=fecha.desc,created_at.desc&limit='+lim);
     } else {
@@ -4261,6 +4274,98 @@ async function loadActsAll(){
   }catch(e){setSS('err','Error cargando');}
 }
 
+// ── DESHACER / REHACER ────────────────────────────────
+// Historial en memoria de sesión (máx 4). Cada entrada revierte con un PATCH
+// inverso (o DELETE para "crear") y registra en obra_cambios. Solo del usuario
+// actual; no persiste entre sesiones.
+var _UNDO_MAX=4;
+function _undoNombre(a){ return a&&a.descripcion?('"'+String(a.descripcion).slice(0,28)+'"'):'actividad'; }
+function _undoPush(entry){
+  if(!S.user) return;
+  entry.user=S.user.id;
+  S._undoStack=S._undoStack||[];
+  S._undoStack.push(entry);
+  while(S._undoStack.length>_UNDO_MAX) S._undoStack.shift();
+  S._redoStack=[]; // una acción nueva descarta la pila de rehacer
+  _renderUndoBar();
+}
+function _undoPatch(actId,actNombre,desc,revert,apply){ _undoPush({kind:'patch',actId:actId,actNombre:actNombre,desc:desc,revert:revert,apply:apply}); }
+function _undoCreate(actNombre,createdActs){
+  createdActs=(createdActs||[]).filter(Boolean);
+  if(!createdActs.length) return;
+  _undoPush({kind:'create',actId:createdActs[0].id,actNombre:actNombre,desc:'crear '+(actNombre||'actividad')+(createdActs.length>1?' (+'+(createdActs.length-1)+' más)':''),createdActs:createdActs});
+}
+function _undoRemoveLocal(id){
+  S.acts=(S.acts||[]).filter(function(x){return x.id!==id;});
+  if(S.abiertas) S.abiertas=S.abiertas.filter(function(x){return x.id!==id;});
+  if(S.actsActivas) S.actsActivas=S.actsActivas.filter(function(x){return x.id!==id;});
+  if(S.aptoActs) S.aptoActs=S.aptoActs.filter(function(x){return x.id!==id;});
+  if(S._touchedActs) delete S._touchedActs[id];
+}
+async function undoAction(){
+  if(!canEdit()){_renderUndoBar();return;}
+  var st=S._undoStack||[]; if(!st.length) return;
+  var e=st[st.length-1];
+  if(e.user && S.user && e.user!==S.user.id) return; // no tocar acciones de otros usuarios
+  st.pop(); _renderUndoBar();
+  try{
+    if(e.kind==='create'){
+      for(var i=0;i<e.createdActs.length;i++){
+        var cid=e.createdActs[i].id;
+        await sb('obra_actividades?id=eq.'+cid,{method:'DELETE',prefer:'return=minimal'});
+        _undoRemoveLocal(cid);
+      }
+    } else {
+      await sb('obra_actividades?id=eq.'+e.actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(e.revert)});
+      var a=_findActAny(e.actId); if(a) Object.assign(a,e.revert);
+    }
+    logCambio('editado','actividad',e.actId,e.actNombre||'','deshacer: '+e.desc);
+    S._redoStack=S._redoStack||[]; S._redoStack.push(e); while(S._redoStack.length>_UNDO_MAX)S._redoStack.shift();
+    showToast('↩ Deshecho: '+e.desc);
+    _afterUndoRedo();
+  }catch(err){ st.push(e); showToast('No se pudo deshacer: '+(err.message||''),'err'); }
+  _renderUndoBar();
+}
+async function redoAction(){
+  if(!canEdit()){_renderUndoBar();return;}
+  var st=S._redoStack||[]; if(!st.length) return;
+  var e=st.pop(); _renderUndoBar();
+  try{
+    if(e.kind==='create'){
+      for(var i=0;i<e.createdActs.length;i++){
+        var ca=e.createdActs[i];
+        await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(ca)});
+        if(!_findActAny(ca.id)) (S.acts=S.acts||[]).unshift(Object.assign({},ca));
+        _pinAct(ca);
+      }
+    } else {
+      await sb('obra_actividades?id=eq.'+e.actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(e.apply)});
+      var a=_findActAny(e.actId); if(a) Object.assign(a,e.apply);
+    }
+    logCambio('editado','actividad',e.actId,e.actNombre||'','rehacer: '+e.desc);
+    S._undoStack=S._undoStack||[]; S._undoStack.push(e); while(S._undoStack.length>_UNDO_MAX)S._undoStack.shift();
+    showToast('↪ Rehecho: '+e.desc);
+    _afterUndoRedo();
+  }catch(err){ st.push(e); showToast('No se pudo rehacer: '+(err.message||''),'err'); }
+  _renderUndoBar();
+}
+function _afterUndoRedo(){
+  try{if(S.currentTab==='hoy')renderHoy();}catch(e){}
+  try{renderActs();}catch(e){}
+  try{if(S.currentTab==='obra'&&S.obraVista!=='todas'&&typeof renderEnObra==='function')renderEnObra();}catch(e){}
+  _renderUndoBar();
+}
+function _renderUndoBar(){
+  var el=document.getElementById('undo-bar');
+  var canU=(S._undoStack||[]).length>0, canR=(S._redoStack||[]).length>0;
+  if(!canEdit()||(!canU&&!canR)){ if(el&&el.parentNode) el.parentNode.removeChild(el); return; }
+  if(!el){ el=document.createElement('div'); el.id='undo-bar'; el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:86px;z-index:8500;display:flex;gap:8px;pointer-events:none'; document.body.appendChild(el); }
+  var bs='pointer-events:auto;font-family:var(--font);border-radius:22px;padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.18);border:1.5px solid ';
+  var h='';
+  if(canU){ var u=S._undoStack[S._undoStack.length-1]; h+='<button onclick="undoAction()" title="'+esc(u.desc||'')+'" style="'+bs+'#495057;background:#343a40;color:#fff">↩ Deshacer</button>'; }
+  if(canR){ var rr=S._redoStack[S._redoStack.length-1]; h+='<button onclick="redoAction()" title="'+esc(rr.desc||'')+'" style="'+bs+'#adb5bd;background:#fff;color:#495057">↪ Rehacer</button>'; }
+  el.innerHTML=h;
+}
 function updateWorkersField(){
   var boxes=document.querySelectorAll('input[name="a-pers"]:checked');
   var names=Array.from(boxes).map(function(b){return b.value;});
@@ -4345,6 +4450,7 @@ async function cycleEstado(actId){
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
       body:JSON.stringify({estado:a.estado,porcentaje:a.porcentaje})});
     setSS('ok','✓ '+a.estado);
+    _undoPatch(actId,a.descripcion,'estado de '+_undoNombre(a)+' → '+a.estado,{estado:prevEstado,porcentaje:prevPct},{estado:a.estado,porcentaje:a.porcentaje});
     if(a.estado==='en-progreso') _appendRegistro(a,actId,{tipo:'inicio'});
     else if(a.estado==='pausada') _appendRegistro(a,actId,{tipo:'pausa'});
     else if(a.estado==='completado') _appendRegistro(a,actId,{tipo:'fin'});
@@ -4368,6 +4474,7 @@ async function quickSetPct(actId,pct){
     marcarActCompletada(actId);
     return;
   }
+  var prevPct=a.porcentaje, prevEstado=a.estado;
   a.porcentaje=pct;
   var _pctPatch={porcentaje:pct,estado:a.estado};
   if(pct>0&&a.estado==='pendiente'){
@@ -4379,6 +4486,7 @@ async function quickSetPct(actId,pct){
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
       body:JSON.stringify(_pctPatch)});
     setSS('ok','✓ '+pct+'%');
+    _undoPatch(actId,a.descripcion,'% de '+_undoNombre(a)+' → '+pct+'%',{porcentaje:prevPct,estado:prevEstado},{porcentaje:pct,estado:a.estado});
   }catch(e){}
 }
 
@@ -4405,7 +4513,8 @@ function showPctPopover(actId, triggerEl){
 // Keyboard shortcuts (desktop)
 document.addEventListener('keydown',function(e){
   if(e.target.closest('input,textarea,select,[contenteditable]'))return;
-  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(S.currentTab==='plan') ganttUndo();return;}
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(S.currentTab==='plan'){ganttUndo();}else if(e.shiftKey){redoAction();}else{undoAction();}return;}
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();if(S.currentTab!=='plan')redoAction();return;}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
   var k=e.key.toLowerCase();
   if(k==='n'){e.preventDefault();if(canEdit())fabAction();else requireEdit(fabAction);}
@@ -4421,6 +4530,7 @@ document.addEventListener('keydown',function(e){
 async function togglePrioridadAct(id){
   var a=S.acts.find(function(x){return x.id===id;});
   if(!a) return;
+  var prevPrioridad=a.prioridad;
   var nueva=a.prioridad==='urgente'?'normal':'urgente';
   a.prioridad=nueva;
   var aa=S.actsActivas?S.actsActivas.find(function(x){return x.id===id;}):null;
@@ -4429,6 +4539,7 @@ async function togglePrioridadAct(id){
   try{
     await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({prioridad:nueva})});
     setSS('ok',nueva==='urgente'?'🔴 Marcada urgente':'Prioridad normal');
+    _undoPatch(id,a.descripcion,(nueva==='urgente'?'marcar urgente ':'quitar urgente ')+_undoNombre(a),{prioridad:prevPrioridad||'normal'},{prioridad:nueva});
   }catch(e){
     console.error('togglePrioridadAct error:',e.message||e);
     // Revert local change on failure
@@ -4917,6 +5028,7 @@ async function saveActIngeniero(ai){
         await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(act)});
         logCambio('creado','actividad',act.id,act.descripcion+(act.area?' — '+act.area:''),'Nueva actividad en '+(act.area||'sin área'));
       }
+      _undoCreate((_createdIngActs[0]&&_createdIngActs[0].descripcion)||'actividad',_createdIngActs.map(function(x){return Object.assign({},x);}));
     }else{
       var realIdxIng=S.acts.findIndex(function(x){return x.id===editIdIng;});
       var oldAIng=realIdxIng>=0?Object.assign({},S.acts[realIdxIng]):{};
@@ -5138,6 +5250,7 @@ async function saveAct(ai){
         logCambio('creado','actividad',act.id,act.descripcion+(act.area?' — '+act.area:''),'Nueva actividad en '+(act.area||'sin área'));
         _pinAct(act);
       }
+      _undoCreate((_createdActs[0]&&_createdActs[0].descripcion)||'actividad',_createdActs.map(function(x){return Object.assign({},x);}));
     }else{
       var realIdx=S.acts.findIndex(function(x){return x.id===editId;});
       var oldA=realIdx>=0?Object.assign({},S.acts[realIdx]):{};
@@ -11835,7 +11948,7 @@ setInterval(async function(){
   if(_actSaving) return; // skip auto-refresh while a save is in flight to avoid overwriting optimistic state
   try{
     var asist=await sb('obra_asistencia?fecha=eq.'+S.fecha);
-    var acts=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300');
+    var acts=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=2000');
     S.asist=asist; S.acts=acts;
     fixActsConsistency();
     setSS('ok','↺ '+hhmm());
