@@ -397,6 +397,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <option value="nilson" style="background:#1a0a2e;color:#fff">★ Ing. Nilson — Administrador</option>
       <option value="moises" style="background:#1a0a2e;color:#fff">Ing. Moises Jimenez</option>
       <option value="luis" style="background:#1a0a2e;color:#fff">Ing. Luis Jimenez</option>
+      <option value="karina" style="background:#1a0a2e;color:#fff">Ing. Karina Breton</option>
     </select>
     <div style="color:rgba(255,255,255,.5);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:10px">CÓDIGO DE ACCESO</div>
     <input id="lock-pin" type="password" inputmode="numeric" maxlength="10" placeholder="••••••"
@@ -777,6 +778,7 @@ const USERS={
   edgar:{nombre:'Ing. Edgar Polanco',rol:'ing',color:'#228be6',pin:'2025',archivado:true},
   moises:{nombre:'Ing. Moises Jimenez',rol:'ing',color:'#f08c00',pin:'2026'},
   luis:{nombre:'Ing. Luis Jimenez',rol:'ing',color:'#0ca678',pin:'1999'},
+  karina:{nombre:'Ing. Karina Breton',rol:'ing',color:'#9c36b5',pin:'1996'},
 };
 const DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
@@ -1879,6 +1881,7 @@ function showLogin(){
         <option value="nilson">★ Ing. Nilson (Admin)</option>
         <option value="moises">Ing. Moises Jimenez</option>
         <option value="luis">Ing. Luis Jimenez</option>
+        <option value="karina">Ing. Karina Breton</option>
       </select></div>
     <div class="fw"><label class="fl">PIN</label>
       <input type="password" id="lp" placeholder="••••" style="font-size:28px;letter-spacing:10px;text-align:center;min-height:60px" maxlength="10" inputmode="numeric" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
@@ -1967,6 +1970,7 @@ function requireEdit(action){
         <option value="nilson">★ Ing. Nilson (Admin)</option>
         <option value="moises">Ing. Moises Jimenez</option>
         <option value="luis">Ing. Luis Jimenez</option>
+        <option value="karina">Ing. Karina Breton</option>
       </select></div>
     <div class="fw"><label class="fl">PIN</label>
       <input type="password" id="lp" placeholder="••••" style="font-size:28px;letter-spacing:10px;text-align:center;min-height:60px" inputmode="numeric" maxlength="10" onkeydown="if(event.key==='Enter')doLoginAndRun_cb()">
@@ -2218,7 +2222,10 @@ function _swipeEnd(e){
 // ══════════════════════════════════════════════════════════════
 function _dayStr(delta){var d=new Date(today()+'T12:00:00');d.setDate(d.getDate()+(delta||0));return d.toISOString().slice(0,10);}
 function _diasDesde(fechaStr){try{var a=new Date(today()+'T12:00:00'),b=new Date(fechaStr+'T12:00:00');return Math.max(0,Math.round((a-b)/864e5));}catch(e){return 0;}}
-function _estIngColor(nombre){var n=(nombre||'').toLowerCase();if(n.indexOf('nilson')>=0)return '#1a56db';if(n.indexOf('edgar')>=0)return '#228be6';if(n.indexOf('mois')>=0)return '#f08c00';if(n.indexOf('luis')>=0)return '#0ca678';return '#868e96';}
+function _estIngColor(nombre){var n=(nombre||'').toLowerCase();if(n.indexOf('nilson')>=0)return '#1a56db';if(n.indexOf('edgar')>=0)return '#228be6';if(n.indexOf('mois')>=0)return '#f08c00';if(n.indexOf('luis')>=0)return '#0ca678';if(n.indexOf('karina')>=0)return '#9c36b5';return '#868e96';}
+// Multi-responsable: personal_nombre puede ser una lista "Nombre1, Nombre2, ...".
+function _responsables(str){return (str||'').split(',').map(function(s){return s.trim();}).filter(Boolean);}
+function _matchResp(personal_nombre,filtro){ return !filtro || _responsables(personal_nombre).indexOf(filtro)>=0; }
 
 // Calcula estancadas: en-progreso cuyo último cambio (obra_cambios) es > 3 días.
 async function loadEstancadas(){
@@ -3203,7 +3210,7 @@ function applyActFilters(acts){
   const ubicaciones = av.ubicaciones||[];
   const contratistas = (av.contratistas||[]).filter(c=>c!=='__sin_asignar__');
   const responsables = av.responsables||[];
-  if(contratistas.length) filtered = filtered.filter(a=>contratistas.indexOf(a.personal_nombre)>=0&&a.tipo_personal==='contratista');
+  if(contratistas.length) filtered = filtered.filter(a=>a.tipo_personal==='contratista'&&_responsables(a.personal_nombre).some(r=>contratistas.indexOf(r)>=0));
   if(av.prioridad) filtered = filtered.filter(a=>a.prioridad===av.prioridad);
   if(ubicaciones.length) filtered = filtered.filter(a=>ubicaciones.indexOf(a.area||'')>=0);
   if(responsables.length) filtered = filtered.filter(a=>responsables.indexOf(a.ingeniero_nombre||'')>=0);
@@ -4500,12 +4507,15 @@ function showAddActContratista(ai, preContratista, ctx){
           <option value="">Sin asignar</option>
           ${Object.values(USERS).map(u=>`<option value="${u.nombre}" ${a.ingeniero_nombre===u.nombre?'selected':''}>${u.nombre}</option>`).join('')}
         </select></div>
-      <div class="fw"><label class="fl">Contratista asignado</label>
-        <select id="a-pers" class="sel" onchange="autoAsignarIng(this.value)">
-          <option value="">Sin asignar</option>
-          ${a.personal_nombre&&!S.personal.find(p=>p.nombre===a.personal_nombre)?`<option value="${a.personal_nombre}" selected>${esc(a.personal_nombre)} (no registrado)</option>`:''}
-          ${S.personal.filter(p=>p.tipo==='contratista').map(p=>`<option value="${p.nombre}" ${a.personal_nombre===p.nombre?'selected':''}>${esc(p.nombre)}${p.oficio?' · '+p.oficio:''}</option>`).join('')}
-        </select></div>
+      <div class="fw"><label class="fl">Contratista(s) asignado(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
+        ${(function(){
+          var selNames=_responsables(a.personal_nombre);
+          var conts=S.personal.filter(p=>p.tipo==='contratista');
+          var extras=selNames.filter(n=>!conts.find(p=>p.nombre===n));
+          var chk=function(nm,extra,oficio){var sel=selNames.indexOf(nm)>=0;return '<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1.5px solid '+(sel?'var(--accent)':'var(--border2)')+';border-radius:var(--r);cursor:pointer;background:'+(sel?'#e8f0fe':'#fff')+';margin-bottom:4px"><input type="checkbox" name="a-pers" value="'+esc(nm)+'"'+(sel?' checked':'')+' style="width:18px;height:18px;accent-color:var(--accent)" onchange="updateWorkersField();autoAsignarIng((document.getElementById(\'a-pers\').value||\'\').split(\',\')[0].trim())"><span style="font-size:13px;font-weight:500">'+esc(nm)+(extra?' (no registrado)':'')+'</span>'+(oficio?'<span style="font-size:11px;color:var(--text3);margin-left:4px">'+esc(oficio)+'</span>':'')+'</label>';};
+          return conts.map(p=>chk(p.nombre,false,p.oficio)).join('')+extras.map(n=>chk(n,true,'')).join('')+'<input type="hidden" id="a-pers" value="'+esc(a.personal_nombre||'')+'">';
+        })()}
+      </div>
     </div>
 
     <div class="fw"><label class="fl">Estado</label>
@@ -5057,7 +5067,7 @@ function renderReportes(){
     if(RF.contratistas.length&&RF.contratistas.indexOf(p.nombre)<0) return false;
     return true;
   }).map(function(p){
-    var pActs=actsF.filter(function(a){return a.personal_nombre===p.nombre;});
+    var pActs=actsF.filter(function(a){return _matchResp(a.personal_nombre,p.nombre);});
     var done=pActs.filter(function(a){return a.estado==='completado';}).length;
     var asist=S.asist.find(function(a){return a.personal_id===p.id;});
     var hrs=asist?(function(){
@@ -5664,7 +5674,7 @@ function renderPersonal(){
         <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:8px">⚠️ Contratistas sin ficha (${ghosts.length})</div>
         <div style="font-size:11px;color:#78350f;margin-bottom:10px">Estos nombres aparecen en actividades pero no están registrados como contratista. Puedes registrarlos o renombrarlos.</div>
         ${ghosts.map(n=>{
-          const cnt=S.acts.filter(a=>a.personal_nombre===n).length;
+          const cnt=S.acts.filter(a=>_matchResp(a.personal_nombre,n)).length;
           return`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #fde68a">
             <div>
               <span style="font-size:13px;font-weight:600;color:#92400e">${esc(n)}</span>
@@ -8330,8 +8340,8 @@ function getFilteredActsActs(){
   var q=(S.enObraFiltroTexto||'').toLowerCase().trim();
   var filtered=S.actsActivas.filter(function(a){
     if(S.enObraFiltroTipo && a.tipo_personal!==S.enObraFiltroTipo) return false;
-    if(S.enObraFiltroContratista && a.personal_nombre!==S.enObraFiltroContratista) return false;
-    if(S.enObraFiltroPersonal && a.personal_nombre!==S.enObraFiltroPersonal) return false;
+    if(S.enObraFiltroContratista && !_matchResp(a.personal_nombre,S.enObraFiltroContratista)) return false;
+    if(S.enObraFiltroPersonal && !_matchResp(a.personal_nombre,S.enObraFiltroPersonal)) return false;
     if(S.enObraFiltroEstado && a.estado!==S.enObraFiltroEstado) return false;
     if(S.enObraFiltroUbic && (a.area||'')!==S.enObraFiltroUbic) return false;
     if(S.enObraFiltroUrgente && a.prioridad!=='urgente') return false;
