@@ -3438,6 +3438,10 @@ function renderActs(){
     </div>
     ${buildActsFiltros()}
     <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">${filtered.length} actividad${filtered.length!==1?'es':''} ${(S.actFiltroRapidos||[]).length||Object.values(S.actFiltroAvanzado||{}).some(v=>Array.isArray(v)?v.length>0:!!v)?'filtradas':'total'}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff8eb;border:1px solid #ffe066;border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:11px;color:#856404">
+      <span>📅 ${allActs.length} cargadas${_actsRango(allActs)}</span>
+      ${S.actLimitAll?'<span style="color:#2f9e44;font-weight:700">Todas cargadas ✓</span>':`<button onclick="S.actLimitAll=true;loadActsAll().then(function(){renderActs();})" style="padding:4px 10px;border:1.5px solid #f08c00;background:#fff;color:#e67700;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">⤓ Cargar todas</button>`}
+    </div>
 
     ${groups.length===0
       ?`<div class="empty">Sin actividades para los filtros seleccionados</div>`
@@ -4048,7 +4052,27 @@ function marcarActCompletada(id){
 // Fix any estado/porcentaje inconsistencies:
 //   pct>=100 + non-completado → mark completado
 //   completado + pct<100      → set pct=100
+// ── Pin de tareas creadas/editadas: sobreviven a las recargas de S.acts ──
+// S.acts es una ventana (300 más recientes por fecha). Una tarea nueva con
+// fecha fuera de esa ventana se caería en el siguiente auto-refresh; se
+// "fijan" aquí y se re-inyectan tras cada recarga hasta que la ventana las
+// incluya o se completen.
+function _pinAct(a){ if(a&&a.id){ (S._touchedActs=S._touchedActs||{})[a.id]=a; } }
+function _mergeTouchedActs(){
+  var t=S._touchedActs; if(!t) return;
+  Object.keys(t).forEach(function(id){
+    if((S.acts||[]).some(function(x){return x.id===id;})){ delete t[id]; return; } // ya entró en la ventana
+    if(t[id].estado==='completado'){ delete t[id]; return; }
+    S.acts.unshift(t[id]);
+  });
+}
+function _actsRango(acts){
+  var fs=(acts||[]).map(function(a){return (a.fecha||a.fecha_inicio||'').slice(0,10);}).filter(Boolean).sort();
+  if(!fs.length) return '';
+  return fs[0]===fs[fs.length-1]?(' · '+fs[0]):(' · '+fs[0]+' → '+fs[fs.length-1]);
+}
 async function fixActsConsistency(){
+  _mergeTouchedActs();
   var toFix=S.acts.filter(function(a){
     var pct=parseInt(a.porcentaje)||0;
     return (pct>=100&&a.estado!=='completado')||(a.estado==='completado'&&pct<100);
@@ -4069,10 +4093,11 @@ async function fixActsConsistency(){
 async function loadActsAll(){
   setSS('syncing','Cargando...');
   try{
+    var lim=S.actLimitAll?3000:(S.actMostrarTodas?500:300);
     if(S.actMostrarTodas){
-      S.acts=await sb('obra_actividades?order=fecha.desc,created_at.desc&limit=500');
+      S.acts=await sb('obra_actividades?order=fecha.desc,created_at.desc&limit='+lim);
     } else {
-      S.acts=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=300');
+      S.acts=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit='+lim);
     }
     fixActsConsistency();
     setSS('ok','✓ '+hhmm());
@@ -4899,11 +4924,13 @@ async function saveAct(ai){
         await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(act)});
         act.foto_pendiente=false;
         logCambio('creado','actividad',act.id,act.descripcion+(act.area?' — '+act.area:''),'Nueva actividad en '+(act.area||'sin área'));
+        _pinAct(act);
       }
     }else{
       var realIdx=S.acts.findIndex(function(x){return x.id===editId;});
       var oldA=realIdx>=0?Object.assign({},S.acts[realIdx]):{};
       if(realIdx>=0) Object.assign(S.acts[realIdx],a);
+      _pinAct(realIdx>=0?S.acts[realIdx]:Object.assign({id:editId},a));
       await sb('obra_actividades?id=eq.'+editId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
       var diffs=[];
       if((oldA.estado||'')!==(a.estado||'')) diffs.push('estado: '+(oldA.estado||'—')+' → '+a.estado);
@@ -4916,7 +4943,7 @@ async function saveAct(ai){
     _actSaving = false;
     setSS('ok','✓ '+hhmm()); reRenderActs();
     if(!editId) showToast('✅ Actividad guardada','ok',3500);
-    if(S.currentTab==='enobra') loadTareas();
+    if(S.currentTab==='enobra') loadTareas(); else loadAbiertas();
     if(S.actVista==='apto' && S.aptoSel) loadAptoActs(S.aptoSel).then(function(){renderActs();});
   }catch(e){
     _actSaving = false;
