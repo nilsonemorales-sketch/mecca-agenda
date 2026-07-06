@@ -1051,7 +1051,7 @@ function checkInactividadIngenieros(){
   const alertas = [];
   // Check each engineer
   Object.entries(USERS).filter(([uid_])=>uid_!=='nilson').forEach(([uid_, u])=>{
-    const actsHoy = S.acts.filter(a=>a.fecha===hoy&&a.ingeniero_id===uid_);
+    const actsHoy = S.acts.filter(a=>a.fecha===hoy&&_matchIngId(a.ingeniero_id,uid_));
     const actualizaciones = actsHoy.length;
     // Check morning update (should have at least 1 activity registered after 7:30)
     const tieneMañana = actsHoy.some(a=>{
@@ -1118,7 +1118,7 @@ async function autoPenalidadInactividad(){
   const [hf,mf] = horario.fin.split(':').map(Number);
   if(horaActual < hf*60+mf) return; // Not end of day yet
   for(const [uid_, u] of Object.entries(USERS).filter(([k])=>k!=='nilson')){
-    const actsHoy = S.acts.filter(a=>a.fecha===hoy&&a.ingeniero_id===uid_);
+    const actsHoy = S.acts.filter(a=>a.fecha===hoy&&_matchIngId(a.ingeniero_id,uid_));
     if(actsHoy.length < 2){
       // Check if penalty already registered today
       const yaExiste = S.pens.some(p=>p.personal_nombre===u.nombre&&p.fecha===hoy&&p.tipo==='Inactividad en obra');
@@ -2226,6 +2226,13 @@ function _estIngColor(nombre){var n=(nombre||'').toLowerCase();if(n.indexOf('nil
 // Multi-responsable: personal_nombre puede ser una lista "Nombre1, Nombre2, ...".
 function _responsables(str){return (str||'').split(',').map(function(s){return s.trim();}).filter(Boolean);}
 function _matchResp(personal_nombre,filtro){ return !filtro || _responsables(personal_nombre).indexOf(filtro)>=0; }
+// Multi-ingeniero: ingeniero_nombre puede ser una lista "Ing. A, Ing. B"; ingeniero_id "a,b".
+function _ingenieros(str){return (str||'').split(',').map(function(s){return s.trim();}).filter(Boolean);}
+function _ingIds(str){return (str||'').split(',').map(function(s){return s.trim();}).filter(Boolean);}
+function _matchIngNombre(ingeniero_nombre,filtro){ return !filtro || _ingenieros(ingeniero_nombre).indexOf(filtro)>=0; }
+function _matchIngId(ingeniero_id,uid_){ return !uid_ || _ingIds(ingeniero_id).indexOf(uid_)>=0; }
+function _ingPrimero(a){ return _ingenieros(a&&a.ingeniero_nombre)[0]||''; }
+function _ingIdsFromNombres(str){return _ingenieros(str).map(function(nm){var e=Object.entries(USERS).find(function(x){return x[1].nombre===nm;});return e?e[0]:'';}).filter(Boolean).join(',');}
 
 // Calcula estancadas: en-progreso cuyo último cambio (obra_cambios) es > 3 días.
 async function loadEstancadas(){
@@ -2281,14 +2288,14 @@ async function estancSetMotivo(id,motivo){
 }
 
 function _estRow(e){
-  var ic=_estIngColor(e.ingeniero_nombre);
+  var ic=_estIngColor(_ingPrimero(e));
   var opts='<option value="">— Motivo del estancamiento —</option>';
   _EST_MOTIVOS.forEach(function(m){opts+='<option value="'+m.k+'"'+(e.motivo===m.k?' selected':'')+'>'+m.ic+' '+esc(m.short)+'</option>';});
   return '<div style="padding:9px 12px;border-top:1px solid var(--border2);border-left:4px solid '+ic+'">'+
     '<div style="display:flex;align-items:flex-start;gap:8px">'+
       '<div style="flex:1;min-width:0">'+
         '<div style="font-size:12px;font-weight:700;color:var(--text)">'+esc(e.descripcion||'(sin descripción)')+'</div>'+
-        '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(e.area||'')+(e.personal_nombre?' · '+esc(e.personal_nombre):'')+(e.ingeniero_nombre?' · <span style="color:'+ic+';font-weight:700">'+esc(e.ingeniero_nombre.replace(/^Ing\.?\s*/i,''))+'</span>':'')+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(e.area||'')+(e.personal_nombre?' · '+esc(e.personal_nombre):'')+(e.ingeniero_nombre?' · <span style="color:'+ic+';font-weight:700">'+esc(_ingenieros(e.ingeniero_nombre).map(function(n){return n.replace(/^Ing\.?\s*/i,'');}).join(', '))+'</span>':'')+'</div>'+
       '</div>'+
       '<div style="text-align:right;flex-shrink:0"><div style="font-size:14px;font-weight:800;color:#e03131">'+e.dias+'d</div><div style="font-size:9px;color:var(--text3)">sin tocar</div></div>'+
     '</div>'+
@@ -2457,6 +2464,22 @@ function pendBadge(a){
   var n=_pendAbiertos(a).length;
   return '<button onclick="event.stopPropagation();abrirPendientes(\''+a.id+'\')" title="Pendientes" style="background:'+(n?'#f5f3ff':'none')+';border:'+(n?'1px solid #d0bfff':'none')+';color:#7048e8;cursor:pointer;font-size:11px;font-weight:800;padding:'+(n?'2px 7px':'0 2px')+';border-radius:6px;line-height:1;white-space:nowrap">⏳'+(n?' '+n:'')+'</button>';
 }
+// Marca "Requiere Arq. Miguel" — chip morado distintivo
+function arqBadge(a){
+  if(!a||!a.requiere_arq) return '';
+  return '<span title="Requiere apoyo del Arq. Miguel" style="font-size:10px;background:#f3f0ff;color:#7048e8;border:1px solid #d0bfff;padding:2px 7px;border-radius:6px;font-weight:800;white-space:nowrap;line-height:1.4">🏛 Arq.</span>';
+}
+async function toggleArqAct(id){
+  if(!canEdit())return;
+  var a=_findActAny(id); if(!a) return;
+  var nuevo=!a.requiere_arq; a.requiere_arq=nuevo;
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({requiere_arq:nuevo})});
+    logCambio('editado','actividad',id,a.descripcion||'',nuevo?'marcada: requiere Arq. Miguel':'quitada marca Arq. Miguel');
+    showToast(nuevo?'🏛 Requiere al Arq. Miguel':'Marca Arq. quitada');
+    try{if(S.currentTab==='hoy')renderHoy();}catch(e){} try{renderActs();}catch(e){}
+  }catch(e){ a.requiere_arq=!nuevo; showToast('Error: '+e.message,'err'); }
+}
 function abrirPendientes(actId){
   var a=_findActAny(actId); if(!a){ showToast('Actividad no encontrada','warn'); return; }
   var pend=_pendGet(a), cm=_pendCatMap(), editable=canEdit();
@@ -2612,7 +2635,7 @@ function renderHoy(){
       <div style="width:3px;min-height:38px;border-radius:2px;background:${retrasada?'#e03131':proxima?'#f08c00':a.tipo_personal==='contratista'?'#7048e8':'var(--accent)'};flex-shrink:0;align-self:stretch"></div>
       <div style="flex:1;min-width:0" onclick="showQuickActSheet('${a.id}')">
         <div style="font-size:13px;font-weight:${done?'400':'600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${done?'var(--text3)':'var(--text)'};${done?'text-decoration:line-through':''}">
-          ${urg&&!done?'<span style="color:#e03131;font-size:9px;font-weight:800;vertical-align:middle;margin-right:3px">●</span>':''}${esc(a.descripcion)}
+          ${urg&&!done?'<span style="color:#e03131;font-size:9px;font-weight:800;vertical-align:middle;margin-right:3px">●</span>':''}${a.requiere_arq?'<span title="Requiere Arq. Miguel" style="font-size:10px;vertical-align:middle;margin-right:3px">🏛</span>':''}${esc(a.descripcion)}
         </div>
         <div style="font-size:11px;color:${retrasada?'#e03131':proxima?'#e67700':'var(--text3)'};margin-top:1px">
           ${retrasada?Math.round((new Date(today())-new Date(fechaVenc(a)))/864e5)+'d retraso · ':''}${proxima&&!retrasada?'⚠️ '+(diasFv===0?'Vence hoy':'Vence en '+diasFv+'d')+' · ':''}${a.area?esc(a.area):''}${a.personal_nombre?' · '+esc(a.personal_nombre.split(' ')[0]):''}
@@ -3123,6 +3146,11 @@ function toggleFiltroUrgente(){
   S.actFiltroAvanzado = {...S.actFiltroAvanzado, prioridad: on ? '' : 'urgente'};
   renderActs();
 }
+function toggleFiltroArq(){
+  var on = !!S.actFiltroAvanzado.requiereArq;
+  S.actFiltroAvanzado = {...S.actFiltroAvanzado, requiereArq: on ? false : true};
+  renderActs();
+}
 
 const FILTROS_RAPIDOS_ACT = [
   {id:'',        label:'Todos'},
@@ -3327,8 +3355,9 @@ function applyActFilters(acts){
   const responsables = av.responsables||[];
   if(contratistas.length) filtered = filtered.filter(a=>a.tipo_personal==='contratista'&&_responsables(a.personal_nombre).some(r=>contratistas.indexOf(r)>=0));
   if(av.prioridad) filtered = filtered.filter(a=>a.prioridad===av.prioridad);
+  if(av.requiereArq) filtered = filtered.filter(a=>!!a.requiere_arq);
   if(ubicaciones.length) filtered = filtered.filter(a=>ubicaciones.indexOf(a.area||'')>=0);
-  if(responsables.length) filtered = filtered.filter(a=>responsables.indexOf(a.ingeniero_nombre||'')>=0);
+  if(responsables.length) filtered = filtered.filter(a=>_ingenieros(a.ingeniero_nombre).some(n=>responsables.indexOf(n)>=0));
   if(av.tipo) filtered = filtered.filter(a=>a.tipo_personal===av.tipo);
   if(av.sinContratista) filtered = filtered.filter(a=>a.tipo_personal==='contratista'&&!a.personal_nombre);
   return sortByPriority(filtered);
@@ -3366,8 +3395,8 @@ function getActGroups(){
     return areas.map(ar=>({titulo:'📍 '+ar,items:acts.filter(a=>(a.area||'Sin ubicación')===ar)}));
   }
   if(f==='responsable'){
-    const resps=[...new Set(acts.map(a=>a.ingeniero_nombre||'Sin responsable'))].sort();
-    return resps.map(r=>({titulo:'👤 '+r,items:acts.filter(a=>(a.ingeniero_nombre||'Sin responsable')===r)}));
+    const resps=[...new Set(acts.flatMap(a=>_ingenieros(a.ingeniero_nombre).length?_ingenieros(a.ingeniero_nombre):['Sin responsable']))].sort();
+    return resps.map(r=>({titulo:'👤 '+r,items:acts.filter(a=>{var ns=_ingenieros(a.ingeniero_nombre);return ns.length?ns.indexOf(r)>=0:r==='Sin responsable';})}));
   }
   if(f==='contratista'){
     const conts=[...new Set(acts.filter(a=>a.tipo_personal==='contratista').map(a=>a.personal_nombre||'Sin asignar'))].sort();
@@ -3450,8 +3479,8 @@ function buildActsFiltros(){
   var allUbics=[...new Set((S.acts||[]).filter(function(a){return a.area;}).map(function(a){return a.area;}))].sort();
   var contOpts=getContratistasOpts();
   var ingOpts=getIngOpts();
-  var propioOn=av.tipo==='propio',adminOn=av.tipo==='ingeniero',urgOn=av.prioridad==='urgente';
-  var hasFilters=rapidos.length||ubicaciones.length||contratistas.length||responsables.length||av.tipo||av.sinContratista||av.prioridad;
+  var propioOn=av.tipo==='propio',adminOn=av.tipo==='ingeniero',urgOn=av.prioridad==='urgente',arqOn=!!av.requiereArq;
+  var hasFilters=rapidos.length||ubicaciones.length||contratistas.length||responsables.length||av.tipo||av.sinContratista||av.prioridad||av.requiereArq;
   var open=S.actFiltroOpen||null;
 
   // Dropdown trigger button
@@ -3513,6 +3542,7 @@ function buildActsFiltros(){
   h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,tipo:S.actFiltroAvanzado.tipo===\'propio\'?\'\':\'propio\'};S.actFiltroOpen=null;renderActs()" style="'+pillSt+(propioOn?'#1c7ed6':'var(--border2)')+';background:'+(propioOn?'#e7f5ff':'var(--bg2)')+';color:'+(propioOn?'#1c7ed6':'var(--text2)')+'">'+(propioOn?'✓ ':'')+'👷 Propio</button>';
   h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,tipo:S.actFiltroAvanzado.tipo===\'ingeniero\'?\'\':\'ingeniero\'};S.actFiltroOpen=null;renderActs()" style="'+pillSt+(adminOn?'#1a56db':'var(--border2)')+';background:'+(adminOn?'#e8f0fe':'var(--bg2)')+';color:'+(adminOn?'#1a56db':'var(--text2)')+'">'+(adminOn?'✓ ':'')+'📋 Admin</button>';
   h+='<button onclick="toggleFiltroUrgente()" style="'+pillSt+(urgOn?'#e03131':'var(--border2)')+';background:'+(urgOn?'#fff5f5':'var(--bg2)')+';color:'+(urgOn?'#e03131':'var(--text2)')+'">'+(urgOn?'✓ ':'')+'🔴 Urgentes</button>';
+  h+='<button onclick="toggleFiltroArq()" style="'+pillSt+(arqOn?'#7048e8':'var(--border2)')+';background:'+(arqOn?'#f3f0ff':'var(--bg2)')+';color:'+(arqOn?'#7048e8':'var(--text2)')+'">'+(arqOn?'✓ ':'')+'🏛 Con el Arq.</button>';
   if(hasFilters) h+='<button onclick="_actLimpiarFiltros()" style="'+pillSt+'#e03131;background:#fff5f5;color:#e03131">× Limpiar</button>';
   h+='</div>';
   if(panel) h+=panel;
@@ -3618,17 +3648,17 @@ function selectApto(area){
   loadAptoActs(area).then(function(){ renderActs(); });
 }
 function _aptoCard(a){
-  var ic=_estIngColor(a.ingeniero_nombre);
+  var ic=_estIngColor(_ingPrimero(a));
   var ec={'completado':'#2f9e44','en-progreso':'#1a56db','pendiente':'#868e96','pausada':'#e67700'}[a.estado]||'#868e96';
   var h='<div style="border:1.5px solid var(--border);border-left:4px solid '+ic+';border-radius:10px;padding:9px 11px;margin-bottom:6px;background:#fff">';
   h+='<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
   h+='<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text)">'+(a.prioridad==='urgente'?'🔴 ':'')+esc(a.descripcion||'(sin descripción)')+'</div>';
   h+='<div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap">'+
      (a.personal_nombre?'<span>👷 '+esc(a.personal_nombre)+'</span>':'')+
-     (a.ingeniero_nombre?'<span>👤 '+esc(String(a.ingeniero_nombre).replace(/^Ing\.?\s*/i,''))+'</span>':'')+
+     (a.ingeniero_nombre?'<span>👤 '+esc(_ingenieros(a.ingeniero_nombre).map(function(n){return n.replace(/^Ing\.?\s*/i,'');}).join(', '))+'</span>':'')+
      (a.fecha_fin?'<span>📅 '+esc(a.fecha_fin)+'</span>':'')+
      '</div></div>';
-  h+='<span '+(canEdit()?'onclick="aptoCiclarEstado(\''+a.id+'\')" ':'')+'style="'+(canEdit()?'cursor:pointer;':'')+'font-size:10px;background:'+ec+'22;color:'+ec+';padding:2px 8px;border-radius:6px;font-weight:700;white-space:nowrap;flex-shrink:0">'+esc(a.estado)+(canEdit()&&a.estado!=='completado'?' ▸':'')+'</span>'+pendBadge(a);
+  h+='<span '+(canEdit()?'onclick="aptoCiclarEstado(\''+a.id+'\')" ':'')+'style="'+(canEdit()?'cursor:pointer;':'')+'font-size:10px;background:'+ec+'22;color:'+ec+';padding:2px 8px;border-radius:6px;font-weight:700;white-space:nowrap;flex-shrink:0">'+esc(a.estado)+(canEdit()&&a.estado!=='completado'?' ▸':'')+'</span>'+arqBadge(a)+pendBadge(a);
   h+='</div>';
   h+='<div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin:6px 0"><div style="height:100%;width:'+Math.min(100,a.porcentaje||0)+'%;background:'+ec+';border-radius:2px"></div></div>';
   if(canEdit()&&a.estado!=='completado'){
@@ -3765,8 +3795,8 @@ function getActGroupsFromActs(acts){
     return areas.map(ar=>({titulo:'📍 '+ar,items:acts.filter(a=>(a.area||'Sin ubicación')===ar)})).filter(g=>g.items.length);
   }
   if(f==='responsable'){
-    const resps=[...new Set(acts.map(a=>a.ingeniero_nombre||'Sin responsable'))].sort();
-    return resps.map(r=>({titulo:'👤 '+r,items:acts.filter(a=>(a.ingeniero_nombre||'Sin responsable')===r)})).filter(g=>g.items.length);
+    const resps=[...new Set(acts.flatMap(a=>_ingenieros(a.ingeniero_nombre).length?_ingenieros(a.ingeniero_nombre):['Sin responsable']))].sort();
+    return resps.map(r=>({titulo:'👤 '+r,items:acts.filter(a=>{var ns=_ingenieros(a.ingeniero_nombre);return ns.length?ns.indexOf(r)>=0:r==='Sin responsable';})})).filter(g=>g.items.length);
   }
   if(f==='contratista'){
     const conts=[...new Set(acts.filter(a=>a.tipo_personal==='contratista').map(a=>a.personal_nombre||'Sin asignar'))].sort();
@@ -3869,6 +3899,7 @@ function actsDesktopTable(acts, showDate){
     html+='<td style="padding:6px 8px;overflow:hidden">'
       +'<div style="display:flex;align-items:center;gap:5px;min-width:0">'
       +(alerta?'<span style="flex-shrink:0;font-size:12px;line-height:1">'+alerta+'</span>':'')
+      +(a.requiere_arq?'<span title="Requiere Arq. Miguel" style="flex-shrink:0;font-size:11px">🏛</span>':'')
       +'<span style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px">'+esc(a.descripcion)+'</span>'
       +'</div>';
     if(fechaLine||a.notas){
@@ -3945,6 +3976,7 @@ function actHTML(a, ai, tipo){
       <div style="font-size:13px;font-weight:600;flex:1;min-width:0;line-height:1.3">${urgente?'🔴 ':''}${esc(a.descripcion)}${blocked?' 🔒':''}</div>
       <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
         <span style="font-size:10px;background:${eb};color:${ec};padding:2px 7px;border-radius:6px;font-weight:700;border:1px solid ${ec}44;white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();cycleEstado('${a.id}')">${el} ▸</span>
+        ${arqBadge(a)}
         ${pendBadge(a)}
         ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 2px;line-height:1" onclick="editAct('${a.id}')">✏️</button>`:''}
       </div>
@@ -3998,6 +4030,7 @@ function actHTML(a, ai, tipo){
     ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);flex-wrap:wrap">
       <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:7px 6px;border-radius:8px;border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Completar</button>
       <button onclick="togglePrioridadAct('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid ${urgente?'#e03131':'var(--border2)'};background:${urgente?'#ffe3e3':'var(--bg)'};font-size:12px;cursor:pointer">${urgente?'🔴':'⚪'}</button>
+      <button title="${a.requiere_arq?'Quitar marca Arq. Miguel':'Requiere Arq. Miguel'}" onclick="toggleArqAct('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid ${a.requiere_arq?'#7048e8':'var(--border2)'};background:${a.requiere_arq?'#f3f0ff':'var(--bg)'};font-size:12px;cursor:pointer">🏛</button>
       ${canEdit()?`<button onclick="abrirFotoUpload('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg);color:var(--text3);font-size:12px;cursor:pointer">📸</button>`:''}
       ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="flex:1;padding:7px 6px;border-radius:8px;border:1.5px solid var(--accent);background:#e8f0fe;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">▶ Iniciar</button>`:''}
       ${!a.hora_inicio?`<button onclick="stampHora('${a.id}','hora_inicio')" style="padding:7px 10px;border-radius:8px;border:1.5px solid #1a56db;background:#e8f0fe;color:#1a56db;font-size:12px;font-weight:700;cursor:pointer" title="Registrar hora de inicio">▶ Inicio</button>`:`<button onclick="stampHora('${a.id}','hora_fin')" style="padding:7px 10px;border-radius:8px;border:1.5px solid #e67700;background:#fff3bf;color:#e67700;font-size:12px;font-weight:700;cursor:pointer" title="Registrar hora de fin">⏹ Fin</button>`}
@@ -4066,10 +4099,11 @@ function syncEstadoPct(sel){
 
 // Resolve engineer from an activity record (uses ingeniero_id first, falls back to nombre)
 function resolveIngenieroDeAct(a){
-  var ingId=a.ingeniero_id||'';
+  var ingId=_ingIds(a.ingeniero_id||'')[0]||'';
   if(ingId && USERS[ingId]) return {id:ingId, user:USERS[ingId]};
-  if(a.ingeniero_nombre){
-    var entry=Object.entries(USERS).find(function(e){return e[1].nombre===a.ingeniero_nombre;});
+  var nombre=_ingPrimero(a);
+  if(nombre){
+    var entry=Object.entries(USERS).find(function(e){return e[1].nombre===nombre;});
     if(entry) return {id:entry[0], user:entry[1]};
   }
   return null;
@@ -4234,6 +4268,51 @@ function updateWorkersField(){
   if(inp) inp.value=names.join(', ');
   // Update label styles
   document.querySelectorAll('input[name="a-pers"]').forEach(function(b){
+    var lbl=b.parentElement;
+    if(lbl){
+      lbl.style.borderColor=b.checked?'var(--accent)':'var(--border2)';
+      lbl.style.background=b.checked?'#e8f0fe':'#fff';
+    }
+  });
+}
+// Multi-ingeniero: checkboxes con un campo oculto #a-ing (lista "Ing. A, Ing. B")
+function ingCheckboxes(a){
+  var sel=_ingenieros(a&&a.ingeniero_nombre);
+  var users=Object.values(USERS).filter(function(u){return !u.archivado;});
+  // Incluir cualquier ingeniero seleccionado que esté archivado / fuera de USERS
+  sel.forEach(function(nm){
+    if(!users.some(function(u){return u.nombre===nm;})){
+      var au=Object.values(USERS).find(function(u){return u.nombre===nm;});
+      users.push(au||{nombre:nm});
+    }
+  });
+  var boxes=users.map(function(u){
+    var c=sel.indexOf(u.nombre)>=0;
+    return '<label style="display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border:1.5px solid '+(c?'var(--accent)':'var(--border2)')+';border-radius:var(--r);cursor:pointer;background:'+(c?'#e8f0fe':'#fff')+';margin:0 4px 4px 0">'+
+      '<input type="checkbox" name="a-ing-cb" value="'+esc(u.nombre)+'"'+(c?' checked':'')+' style="width:17px;height:17px;accent-color:var(--accent)" onchange="updateIngField()">'+
+      '<span style="font-size:13px;font-weight:500">'+esc(u.nombre)+'</span></label>';
+  }).join('');
+  return '<div style="display:flex;flex-wrap:wrap;align-items:center">'+boxes+'</div><input type="hidden" id="a-ing" value="'+esc(sel.join(', '))+'">';
+}
+// Toggle "Requiere Arq. Miguel" para los formularios de crear/editar
+function arqToggleHTML(a){
+  var on=!!(a&&a.requiere_arq);
+  return '<label id="a-req-arq-lbl" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1.5px solid '+(on?'#7048e8':'var(--border2)')+';border-radius:var(--r);cursor:pointer;background:'+(on?'#f3f0ff':'#fff')+';margin:-2px 0 8px" onclick="var c=document.getElementById(\'a-req-arq\');if(event.target!==c){c.checked=!c.checked;}_arqTogUI();">'+
+    '<input type="checkbox" id="a-req-arq"'+(on?' checked':'')+' style="width:18px;height:18px;accent-color:#7048e8" onclick="event.stopPropagation();_arqTogUI();">'+
+    '<span style="font-size:13px;font-weight:600;color:'+(on?'#7048e8':'var(--text2)')+'">🏛 Requiere apoyo del Arq. Miguel</span></label>';
+}
+function _arqTogUI(){
+  var c=document.getElementById('a-req-arq'),l=document.getElementById('a-req-arq-lbl');
+  if(!c||!l)return;
+  l.style.borderColor=c.checked?'#7048e8':'var(--border2)';
+  l.style.background=c.checked?'#f3f0ff':'#fff';
+  var sp=l.querySelector('span'); if(sp) sp.style.color=c.checked?'#7048e8':'var(--text2)';
+}
+function updateIngField(){
+  var boxes=document.querySelectorAll('input[name="a-ing-cb"]:checked');
+  var names=Array.from(boxes).map(function(b){return b.value;});
+  var inp=document.getElementById('a-ing'); if(inp) inp.value=names.join(', ');
+  document.querySelectorAll('input[name="a-ing-cb"]').forEach(function(b){
     var lbl=b.parentElement;
     if(lbl){
       lbl.style.borderColor=b.checked?'var(--accent)':'var(--border2)';
@@ -4508,6 +4587,7 @@ function showAddActPropio(ai, ctx){
     <h3>👷 ${edit?'Editar actividad':'Actividad — Personal x la casa'}</h3>
     <div class="fw"><label class="fl">¿Qué se realizó? *</label>
       <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Ej: Colocación de cerámica baño..." style="font-size:15px"></div>
+    ${arqToggleHTML(a)}
     ${a.id?`<div style="margin:-2px 0 8px"><button type="button" onclick="abrirPendientes('${a.id}')" style="padding:6px 12px;border:1.5px solid #7048e8;background:#f5f3ff;color:#7048e8;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">⏳ Pendientes (${_pendAbiertos(a).length})</button></div>`:''}
     <div class="fw">
       <label class="fl">Ubicación / Área</label>
@@ -4520,11 +4600,8 @@ function showAddActPropio(ai, ctx){
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:#e8f0fe;border-radius:var(--r);margin-bottom:8px"></div>
     <div id="ubicaciones-selected" style="min-height:4px"></div>
     <div class="fgrid">
-      <div class="fw"><label class="fl">Responsable</label>
-        <select id="a-ing" class="sel">
-          <option value="">Sin asignar</option>
-          ${Object.values(USERS).map(u=>`<option value="${u.nombre}" ${a.ingeniero_nombre===u.nombre?'selected':''}>${u.nombre}</option>`).join('')}
-        </select></div>
+      <div class="fw"><label class="fl">Responsable(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
+        ${ingCheckboxes(a)}</div>
       <div class="fw">
         <label class="fl">Trabajadores <span style="font-size:10px;color:var(--text3)">(selecciona varios)</span></label>
         ${(function(){
@@ -4606,6 +4683,7 @@ function showAddActContratista(ai, preContratista, ctx){
 
     <div class="fw"><label class="fl">¿Qué se va a realizar? *</label>
       <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Ej: Instalación sistema eléctrico..." style="font-size:15px"></div>
+    ${arqToggleHTML(a)}
     ${a.id?`<div style="margin:-2px 0 8px"><button type="button" onclick="abrirPendientes('${a.id}')" style="padding:6px 12px;border:1.5px solid #7048e8;background:#f5f3ff;color:#7048e8;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">⏳ Pendientes (${_pendAbiertos(a).length})</button></div>`:''}
 
     <div class="fw">
@@ -4620,11 +4698,8 @@ function showAddActContratista(ai, preContratista, ctx){
     <div id="ubicaciones-selected" style="min-height:4px"></div>
 
     <div class="fgrid">
-      <div class="fw"><label class="fl">Responsable (Ing/Arq)</label>
-        <select id="a-ing" class="sel">
-          <option value="">Sin asignar</option>
-          ${Object.values(USERS).map(u=>`<option value="${u.nombre}" ${a.ingeniero_nombre===u.nombre?'selected':''}>${u.nombre}</option>`).join('')}
-        </select></div>
+      <div class="fw"><label class="fl">Responsable(s) (Ing/Arq) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
+        ${ingCheckboxes(a)}</div>
       <div class="fw"><label class="fl">Contratista(s) asignado(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
         ${(function(){
           var selNames=_responsables(a.personal_nombre);
@@ -4720,6 +4795,7 @@ function showAddActIngeniero(ai){
 
     <div class="fw"><label class="fl">Descripción *</label>
       <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Detalle la tarea..." style="font-size:15px"></div>
+    ${arqToggleHTML(a)}
     ${a.id?`<div style="margin:-2px 0 8px"><button type="button" onclick="abrirPendientes('${a.id}')" style="padding:6px 12px;border:1.5px solid #7048e8;background:#f5f3ff;color:#7048e8;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">⏳ Pendientes (${_pendAbiertos(a).length})</button></div>`:''}
 
     <div class="fw"><label class="fl">Área / Ubicación</label>
@@ -4731,11 +4807,8 @@ function showAddActIngeniero(ai){
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:#e8f0fe;border-radius:var(--r);margin-bottom:8px"></div>
     <div id="ubicaciones-selected" style="min-height:4px"></div>
 
-    <div class="fw"><label class="fl">Ingeniero responsable</label>
-      <select id="a-ing" class="sel" style="font-size:15px">
-        <option value="">Sin asignar</option>
-        ${Object.values(USERS).map(u=>`<option value="${u.nombre}" ${(a.personal_nombre||a.ingeniero_nombre)===u.nombre?'selected':''}>${u.nombre}</option>`).join('')}
-      </select></div>
+    <div class="fw"><label class="fl">Ingeniero(s) responsable(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
+      ${ingCheckboxes(a.ingeniero_nombre?a:{ingeniero_nombre:a.personal_nombre||a.ingeniero_nombre})}</div>
     <input type="hidden" id="a-pers" value="">
 
     <div class="fgrid">
@@ -4802,7 +4875,8 @@ async function saveActIngeniero(ai){
     tipo_personal:'ingeniero',
     ingeniero_nombre:ing||S.user?.nombre||'',
     personal_nombre:ing||S.user?.nombre||'',
-    ingeniero_id:ing?Object.entries(USERS).find(([k,u])=>u.nombre===ing)?.[0]||S.user?.id||'':S.user?.id||'',
+    ingeniero_id:ing?(_ingIdsFromNombres(ing)||S.user?.id||''):S.user?.id||'',
+    requiere_arq:!!(document.getElementById('a-req-arq')||{}).checked,
     unidad:'',cantidad_plan:0,cantidad_real:0,
     porcentaje:parseFloat(document.getElementById('a-pct').value)||0,
     notas:document.getElementById('a-n').value.trim(),
@@ -4906,25 +4980,34 @@ function calcPct(){
   }
 }
 
+// Marca (check) el checkbox de un ingeniero por nombre y sincroniza #a-ing. La auto-herencia pone UNO solo; el multi es opcional a mano.
+function _setIngHeredado(nombre){
+  if(!nombre)return;
+  var cb=Array.from(document.querySelectorAll('input[name="a-ing-cb"]')).find(function(b){return b.value===nombre||_ingenieros(nombre).indexOf(b.value)>=0;});
+  if(cb&&!cb.checked){cb.checked=true;updateIngField();}
+  else if(!cb){var inp=document.getElementById('a-ing');if(inp&&!inp.value)inp.value=nombre;}
+}
 function autoAsignarIng(contratistaNombre){
   if(!contratistaNombre)return;
-  var ingSelect=document.getElementById('a-ing');
-  if(!ingSelect||ingSelect.value)return; // skip if engineer already set
+  var ingHidden=document.getElementById('a-ing');
+  if(!ingHidden||(ingHidden.value||'').trim())return; // skip if engineer(s) already set
   // Primary: read ingeniero_asignado from obra_personal
   var p=S.personal.find(function(x){return x.nombre===contratistaNombre&&x.tipo==='contratista';});
-  if(p&&p.ingeniero_asignado){ingSelect.value=p.ingeniero_asignado;return;}
+  if(p&&p.ingeniero_asignado){_setIngHeredado(p.ingeniero_asignado);return;}
   // Fallback: most-used engineer from S.acts history
   var contMap={};
   (S.acts||[]).forEach(function(a){
     if(a.tipo_personal==='contratista'&&a.personal_nombre&&a.ingeniero_nombre){
-      if(!contMap[a.personal_nombre])contMap[a.personal_nombre]={};
-      contMap[a.personal_nombre][a.ingeniero_nombre]=(contMap[a.personal_nombre][a.ingeniero_nombre]||0)+1;
+      _responsables(a.personal_nombre).forEach(function(cn){
+        if(!contMap[cn])contMap[cn]={};
+        _ingenieros(a.ingeniero_nombre).forEach(function(inm){contMap[cn][inm]=(contMap[cn][inm]||0)+1;});
+      });
     }
   });
   if(contMap[contratistaNombre]){
     var best='';var bestCnt=0;
     Object.entries(contMap[contratistaNombre]).forEach(function(e){if(e[1]>bestCnt){bestCnt=e[1];best=e[0];}});
-    if(best){ingSelect.value=best;return;}
+    if(best){_setIngHeredado(best);return;}
   }
 }
 
@@ -4954,7 +5037,6 @@ async function saveAct(ai){
     area:areaVal,
     estado:getFld('a-est','pendiente'),
     tipo_personal:getFld('a-tipo','propio'),
-    ingeniero_nombre:getFld('a-ing',''),
     personal_nombre:getFld('a-pers',''),
     unidad:getFld('a-u','').trim(),
     cantidad_plan:parseFloat(getFld('a-plan','0'))||0,
@@ -4963,8 +5045,9 @@ async function saveAct(ai){
     notas:getFld('a-n','').trim(),
     fecha_inicio:getFld('a-fi',''),
     fecha_fin:getFld('a-ff',''),
-    ingeniero_id:getFld('a-ing','')?Object.entries(USERS).find(([k,u])=>u.nombre===getFld('a-ing',''))?.[0]||S.user?.id||'':S.user?.id||'',
+    ingeniero_id:getFld('a-ing','')?(_ingIdsFromNombres(getFld('a-ing',''))||S.user?.id||''):S.user?.id||'',
     ingeniero_nombre:getFld('a-ing','')||S.user?.nombre||'',
+    requiere_arq:!!(document.getElementById('a-req-arq')||{}).checked,
     fecha:S.fecha,
     foto_pendiente:false,
     predecesoras:getFld('a-preds','').trim()||null,
@@ -5164,7 +5247,7 @@ function renderReportes(){
   var actsF=(S.acts||[]).filter(function(a){
     if(RF.tipos.length       &&RF.tipos.indexOf(a.tipo_personal)<0)              return false;
     if(RF.contratistas.length&&RF.contratistas.indexOf(a.personal_nombre||'')<0) return false;
-    if(RF.ingenieros.length  &&RF.ingenieros.indexOf(a.ingeniero_nombre||'')<0)  return false;
+    if(RF.ingenieros.length  &&!_ingenieros(a.ingeniero_nombre).some(function(n){return RF.ingenieros.indexOf(n)>=0;}))  return false;
     if(RF.estados.length     &&RF.estados.indexOf(a.estado||'')<0)               return false;
     if(RF.areas.length       &&RF.areas.indexOf((a.area||'').trim())<0)          return false;
     return true;
@@ -5375,7 +5458,7 @@ function repSelAll(){
   var filtered=(S.acts||[]).filter(function(a){
     if(RF.tipos&&RF.tipos.length       &&RF.tipos.indexOf(a.tipo_personal)<0)              return false;
     if(RF.contratistas&&RF.contratistas.length&&RF.contratistas.indexOf(a.personal_nombre||'')<0) return false;
-    if(RF.ingenieros&&RF.ingenieros.length  &&RF.ingenieros.indexOf(a.ingeniero_nombre||'')<0)   return false;
+    if(RF.ingenieros&&RF.ingenieros.length  &&!_ingenieros(a.ingeniero_nombre).some(function(n){return RF.ingenieros.indexOf(n)>=0;}))   return false;
     if(RF.estados&&RF.estados.length     &&RF.estados.indexOf(a.estado||'')<0)              return false;
     if(RF.areas&&RF.areas.length         &&RF.areas.indexOf((a.area||'').trim())<0)         return false;
     return true;
@@ -8304,7 +8387,7 @@ function renderFotos(){
           const fotosP=S.fotosFiltroIng==='todos'?fotosAll:fotosAll.filter(f=>f.by===S.fotosFiltroIng);
           if(!fotosP.length)return'';
           const fotosUrls_=fotosP.map(f=>f.url);
-          const ing=Object.values(USERS).find(u=>u.nombre===a.ingeniero_nombre);
+          const ing=Object.values(USERS).find(u=>u.nombre===_ingPrimero(a));
           const ingColor=ing?.color||'var(--text3)';
           return`<div style="margin-bottom:12px">
             <!-- ACTIVIDAD META -->
