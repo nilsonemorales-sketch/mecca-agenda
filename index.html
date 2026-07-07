@@ -2343,7 +2343,7 @@ function _hoyEsDelDia(a){
 }
 async function loadMarcadasHoy(){
   try{
-    var rows=await sb('obra_cambios?fecha=eq.'+today()+'&entidad=eq.actividad&select=entidad_id&limit=5000');
+    var rows=await sb('obra_cambios?fecha=eq.'+today()+'&entidad=eq.actividad&accion=neq.creado&select=entidad_id&limit=5000');
     var m={}; (rows||[]).forEach(function(r){ if(r.entidad_id) m[String(r.entidad_id)]=1; });
     S.marcadasHoy=m;
   }catch(e){ S.marcadasHoy=S.marcadasHoy||{}; }
@@ -2432,6 +2432,298 @@ function hoyMarcarSinCambios(id){
   _hoyMarcarLocal(id);
   showToast('Marcada — sin cambios hoy');
   renderHoy();
+}
+// ══════════════════════════════════════════════════════════════
+// PLAN DEL DÍA — planificación matutina (Hoy)
+// Reutiliza el criterio del día de #53 (_hoyEsDelDia / S.marcadasHoy) y añade:
+// reasignar responsable, barra de progreso, alta rápida de actividad, y un
+// PDF liviano "Plan del Día" (sin fotos) compartible por WhatsApp.
+// ══════════════════════════════════════════════════════════════
+function _planDiaPersonalOpts(sel){
+  var opts='<option value="">— asignar —</option>';
+  (S.personal||[]).filter(function(p){return p.activo!==false;}).forEach(function(p){
+    opts+='<option value="'+esc(p.nombre)+'"'+(sel===p.nombre?' selected':'')+'>'+esc(p.nombre)+(p.tipo==='contratista'?' (contr.)':'')+'</option>';
+  });
+  return opts;
+}
+function _planDiaSplit(){
+  var abiertas=S.abiertas||[]; var marc=S.marcadasHoy||{};
+  var delDia=abiertas.filter(_hoyEsDelDia);
+  var pend=delDia.filter(function(a){return !marc[String(a.id)];});
+  var done=delDia.filter(function(a){return marc[String(a.id)];});
+  pend.sort(function(a,b){
+    var da=_hoyDiasAtraso(a),db=_hoyDiasAtraso(b);
+    if(db!==da) return db-da;                                   // mayor atraso primero
+    return (a.fecha_fin||'9999').localeCompare(b.fecha_fin||'9999'); // luego fecha_fin asc
+  });
+  return {delDia:delDia,pend:pend,done:done};
+}
+function renderPlanDia(){
+  var sp=_planDiaSplit();
+  var editable=canEdit();
+  var nContr=Object.keys((sp.delDia||[]).reduce(function(m,a){var k=(a.personal_nombre||'').trim();if(k)m[k]=1;return m;},{})).length;
+  var h='<div class="sec-title" style="margin:16px 0 8px">📋 Plan del día'+
+    '<span style="font-weight:400;color:var(--text3);margin-left:8px;font-size:10px;">actividades asignadas · <span id="plan-dia-count">'+sp.delDia.length+'</span></span></div>';
+  sp.pend.forEach(function(a){ h+=_planDiaCard(a,editable); });
+  sp.done.forEach(function(a){
+    h+='<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:9px 14px;margin-bottom:6px;opacity:0.65;font-size:12px;color:var(--text3)">✓ '+esc(a.descripcion||'')+(a.area?' — '+esc(a.area):'')+'</div>';
+  });
+  if(!sp.delDia.length){
+    h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-xs);padding:14px;text-align:center;font-size:12px;color:var(--text3)">No hay actividades programadas para hoy.</div>';
+  }
+  if(editable){
+    h+='<button onclick="planDiaNuevaAct()" style="width:100%;padding:10px;background:var(--bg3);border:1.5px dashed var(--border2);border-radius:var(--r2);color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:4px;">＋ Nueva actividad para hoy</button>';
+  }
+  h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:13px 16px;margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;box-shadow:var(--shadow-xs)">'+
+     '<div><div style="font-size:13px;font-weight:700;color:var(--text)">📄 Plan del día</div>'+
+     '<div style="font-size:11px;color:var(--text3);margin-top:2px;" id="plan-pdf-subtitle">'+sp.delDia.length+' actividad'+(sp.delDia.length!==1?'es':'')+' · '+nContr+' contratista'+(nContr!==1?'s':'')+'</div></div>'+
+     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+       '<button onclick="generarPDFPlan()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);box-shadow:0 4px 12px rgba(124,58,237,.25)">Generar PDF</button>'+
+       '<button onclick="compartirPlanWA()" style="padding:8px 16px;background:var(--green);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📲 WhatsApp</button>'+
+     '</div></div>';
+  return h;
+}
+function _planDiaCard(a,editable){
+  var atraso=_hoyDiasAtraso(a); var venc=atraso>0;
+  var asignado=a.personal_nombre||a.ingeniero_nombre||'';
+  var pct=a.porcentaje||0;
+  var h='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-xs);padding:12px 14px;margin-bottom:8px;">';
+  h+='<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc(a.descripcion||'(sin descripción)')+'</div>';
+  h+='<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+
+     [a.area?esc(a.area):null, asignado?esc(asignado):null, esc(a.estado), pct+'%'].filter(Boolean).join(' · ')+
+     (venc?' <span style="color:var(--red);font-weight:700;">· '+atraso+'d atraso</span>':'')+'</div>';
+  h+='<div style="height:3px;background:var(--bg3);border-radius:2px;margin:7px 0 9px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,pct)+'%;border-radius:2px;background:var(--accent)"></div></div>';
+  if(editable){
+    h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'+
+       '<select onchange="planDiaAsignar(\''+a.id+'\', this.value)" style="font-size:11px;color:var(--text2);background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:4px 8px;font-family:var(--font)">'+_planDiaPersonalOpts(a.personal_nombre)+'</select>'+
+       '<input type="number" min="0" max="100" value="'+pct+'" id="pct-'+a.id+'" style="width:52px;font-size:12px;text-align:center;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:5px 6px;color:var(--text);font-family:var(--font)">'+
+       '<button onclick="planDiaGuardar(\''+a.id+'\')" style="padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--r);font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--font)">Guardar</button>'+
+       '<button onclick="planDiaSinCambios(\''+a.id+'\')" style="padding:5px 10px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:var(--r);font-size:11px;cursor:pointer;font-family:var(--font)">Sin cambios hoy</button>'+
+       '</div>';
+  }
+  h+='</div>';
+  return h;
+}
+async function planDiaAsignar(actId, nombre){
+  if(!canEdit())return;
+  var a=_findActAny(actId)||(S.abiertas||[]).find(function(x){return x.id===actId;});
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({personal_nombre:nombre})});
+    if(a) a.personal_nombre=nombre;
+    logCambio('editado','actividad',actId,(a&&a.descripcion)||'','reasignado desde plan del día → '+(nombre||'sin asignar'));
+    showToast('Reasignado ✓');
+    loadAbiertas().then(function(){renderHoy();});
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+async function planDiaGuardar(actId){
+  if(!canEdit())return;
+  var el=document.getElementById('pct-'+actId);
+  var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
+  var a=_findActAny(actId)||(S.abiertas||[]).find(function(x){return x.id===actId;});
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:(n>=100?'completado':'en-progreso')})});
+    if(a){ a.porcentaje=n; if(n>=100)a.estado='completado'; }
+    logCambio(n>=100?'completado':'avance','actividad',actId,(a&&a.descripcion)||'',n+'%');
+    _hoyMarcarLocal(actId);
+    showToast(n>=100?'Completada ✓':'Avance '+n+'% ✓');
+    loadAbiertas().then(function(){renderHoy();});
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+function planDiaSinCambios(actId){
+  if(!canEdit())return;
+  var a=_findActAny(actId)||(S.abiertas||[]).find(function(x){return x.id===actId;});
+  logCambio('editado','actividad',actId,(a&&a.descripcion)||'','sin avance hoy');
+  _hoyMarcarLocal(actId);
+  showToast('Marcada — sin cambios hoy');
+  renderHoy();
+}
+function planDiaNuevaAct(){
+  if(!canEdit())return;
+  var h=today();
+  var lbl='display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;font-family:var(--font)';
+  var inp='width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:var(--r);background:#fff;font-size:13px;font-family:var(--font);color:var(--text)';
+  document.getElementById('mcontent').innerHTML=
+    '<div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:14px">＋ Nueva actividad para hoy</div>'+
+    '<div style="display:flex;flex-direction:column;gap:10px">'+
+      '<div><label style="'+lbl+'">Descripción</label><input id="pd-desc" type="text" placeholder="Ej: Colocación de cerámica baño" style="'+inp+'"></div>'+
+      '<div><label style="'+lbl+'">Área</label>'+ubicacionSelect('pd-area','')+'</div>'+
+      '<div><label style="'+lbl+'">Asignado</label><select id="pd-pers" style="'+inp+'">'+_planDiaPersonalOpts('')+'</select></div>'+
+      '<div style="display:flex;gap:8px">'+
+        '<div style="flex:1"><label style="'+lbl+'">Prioridad</label><select id="pd-prio" style="'+inp+'"><option value="normal">Normal</option><option value="urgente">Urgente</option></select></div>'+
+        '<div style="flex:0 0 92px"><label style="'+lbl+'">% inicial</label><input id="pd-pct" type="number" min="0" max="100" value="0" style="'+inp+'"></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px">'+
+        '<div style="flex:1"><label style="'+lbl+'">Inicio</label><input id="pd-fi" type="date" value="'+h+'" style="'+inp+'"></div>'+
+        '<div style="flex:1"><label style="'+lbl+'">Fin</label><input id="pd-ff" type="date" value="'+h+'" style="'+inp+'"></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="planDiaCrearAct()">Crear</button></div>';
+  openModal();
+  setTimeout(function(){var d=document.getElementById('pd-desc');if(d)d.focus();},100);
+}
+async function planDiaCrearAct(){
+  if(!canEdit())return;
+  var descEl=document.getElementById('pd-desc');
+  var desc=((descEl&&descEl.value)||'').trim();
+  if(!desc){ if(descEl){descEl.style.borderColor='var(--red)';descEl.focus();} return; }
+  var area=(document.getElementById('pd-area')||{}).value||'';
+  var pers=(document.getElementById('pd-pers')||{}).value||'';
+  var prio=(document.getElementById('pd-prio')||{}).value||'normal';
+  var pct=Math.min(100,Math.max(0,parseInt((document.getElementById('pd-pct')||{}).value)||0));
+  var fi=(document.getElementById('pd-fi')||{}).value||today();
+  var ff=(document.getElementById('pd-ff')||{}).value||today();
+  var pObj=(S.personal||[]).find(function(x){return x.nombre===pers;});
+  var tipo=pObj?(pObj.tipo==='propio'?'propio':'contratista'):'contratista';
+  var act={
+    id:uid(), descripcion:desc, area:area, estado:'en-progreso', tipo_personal:tipo,
+    personal_nombre:pers, ingeniero_nombre:(S.user&&S.user.nombre)||'', ingeniero_id:(S.user&&S.user.id)||'',
+    porcentaje:pct, prioridad:prio, fecha_inicio:fi, fecha_fin:ff, fecha:today(), foto_pendiente:false
+  };
+  try{
+    await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(act)});
+    logCambio('creado','actividad',act.id,desc+(area?' — '+area:''),'plan del día');
+    (S.abiertas=S.abiertas||[]).unshift(act);
+    closeModal();
+    showToast('✅ Actividad creada');
+    loadAbiertas().then(function(){renderHoy();});
+  }catch(e){ showToast('Error: '+e.message,'err'); }
+}
+function generarPDFPlan(opts){
+  opts=opts||{};
+  if(!window.jspdf||!window.jspdf.jsPDF){ setSS('err','PDF no disponible'); return; }
+  var sp=_planDiaSplit();
+  var delDia=sp.delDia.slice();
+  // urgentes del día: prioridad urgente o vencidas
+  var urg=delDia.filter(function(a){return a.prioridad==='urgente'||_hoyDiasAtraso(a)>0;});
+  urg.sort(function(a,b){return _hoyDiasAtraso(b)-_hoyDiasAtraso(a);});
+  var progr=delDia.slice().sort(function(a,b){
+    var da=_hoyDiasAtraso(a),db=_hoyDiasAtraso(b);
+    if(db!==da) return db-da;
+    return (a.fecha_fin||'9999').localeCompare(b.fecha_fin||'9999');
+  });
+  var contrSet=Object.keys(delDia.reduce(function(m,a){var k=(a.personal_nombre||'').trim();if(k)m[k]=1;return m;},{}));
+  var presentSet=['presente','tarde','medio día','medio dia'];
+  var presentes=(S.asist||[]).filter(function(x){return presentSet.indexOf(x.estado)>=0;})
+    .map(function(x){var p=(S.personal||[]).find(function(pp){return pp.id===x.personal_id;});return p?p.nombre:(x.personal_nombre||'');})
+    .filter(Boolean);
+  var hoyISO=today();
+  var dd=hoyISO.slice(8,10)+'/'+hoyISO.slice(5,7)+'/'+hoyISO.slice(0,4);
+  var ingNom=(S.user&&S.user.nombre)||'';
+  try{
+    var jsPDFp=window.jspdf.jsPDF;
+    var doc=new jsPDFp({orientation:'portrait',unit:'mm',format:'a4'});
+    var W=210,M=14,RW=W-2*M,y=0,pageNo=1;
+    var BDX_PUR=[152,32,164],BDX_GRN=[41,101,41],RED=[201,42,42],BLUE=[26,86,219];
+    var TXT=[30,30,30],MUT=[100,100,100],WHT=[255,255,255],LGRAY=[245,246,248],GBG=[236,247,236];
+    function _fc(c){doc.setFillColor.apply(doc,c);}
+    function _tc(c){doc.setTextColor.apply(doc,c);}
+    function _s(s){return(s||'').replace(/[^\x00-\x7F]/g,function(ch){return ch;});}
+    function foot(){
+      _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+      doc.text('MECCA RESIDENCE 2026 · Plan del Día · Pag. '+pageNo,W/2,290,{align:'center'});
+    }
+    function drawH(){
+      _fc(WHT);doc.rect(0,0,W,22,'F');
+      _fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');_fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
+      _fc(BDX_PUR);doc.roundedRect(M,3.5,14,14,2.5,2.5,'F');
+      _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('B',M+4.7,13.5);
+      _tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('BRIDEX',M+17,13);
+      var ix=W-M;
+      _tc(TXT);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text('PLAN DEL DIA',ix,8,{align:'right'});
+      _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('MECCA RESIDENCE 2026 · '+dd,ix,12.5,{align:'right'});
+      if(ingNom){_tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(_s(ingNom),ix,16.5,{align:'right'});}
+      _fc(BDX_GRN);doc.rect(0,22,W,1,'F');_fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
+    }
+    function chkY(hh){ if(y+hh>282){ foot(); doc.addPage(); pageNo++; drawH(); y=28; } }
+    drawH(); y=28;
+    // KPI band (verde)
+    _fc(GBG);doc.rect(M,y,RW,13,'F');_fc(BDX_GRN);doc.rect(M,y,RW,0.6,'F');
+    function kpi(v,l,cx,col){_tc(col);doc.setFontSize(17);doc.setFont('helvetica','bold');doc.text(''+v,cx,y+7,{align:'center'});_tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text(l,cx,y+11,{align:'center'});}
+    kpi(delDia.length,'Actividades',M+RW*0.17,BDX_GRN);
+    kpi(contrSet.length,'Contratistas',M+RW*0.5,BLUE);
+    kpi(urg.length,'Urgentes',M+RW*0.83,urg.length?RED:MUT);
+    y+=17;
+    // URGENTES band (roja)
+    if(urg.length){
+      chkY(8);
+      _fc(RED);doc.rect(M,y,RW,6,'F');
+      _tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text('URGENTES DEL DIA',M+3,y+4);
+      y+=7;
+      urg.forEach(function(a,i){
+        chkY(7);
+        var atr=_hoyDiasAtraso(a);
+        _fc(i%2===0?[255,236,236]:WHT);doc.rect(M,y,RW,6.5,'F');_fc(RED);doc.rect(M,y,1.6,6.5,'F');
+        _tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+        doc.text(doc.splitTextToSize(_s(a.area||'—'),30)[0],M+3,y+4.3);
+        doc.setFont('helvetica','normal');
+        doc.text(doc.splitTextToSize(_s(a.descripcion||''),88)[0],M+34,y+4.3);
+        _tc(MUT);doc.text(doc.splitTextToSize(_s(a.personal_nombre||'—'),30)[0],M+124,y+4.3);
+        if(atr>0){_tc(RED);doc.setFont('helvetica','bold');doc.text('+'+atr+'d',W-M-3,y+4.3,{align:'right'});}
+        y+=6.5;
+      });
+      y+=3;
+    }
+    // ACTIVIDADES PROGRAMADAS (azul)
+    chkY(8);
+    _fc(BLUE);doc.rect(M,y,RW,6,'F');
+    _tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text('ACTIVIDADES PROGRAMADAS',M+3,y+4);
+    y+=7;
+    var cA=M+3,cD=M+34,cP=M+108,cPct=M+150,cE=M+164;
+    _fc(LGRAY);doc.rect(M,y,RW,5,'F');
+    _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','bold');
+    doc.text('AREA',cA,y+3.4);doc.text('DESCRIPCION',cD,y+3.4);doc.text('ASIGNADO',cP,y+3.4);doc.text('%',cPct,y+3.4);doc.text('ESTADO',cE,y+3.4);
+    y+=5.5;
+    if(!progr.length){ _tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','italic');doc.text('Sin actividades programadas para hoy.',M+3,y+4);y+=7; }
+    progr.forEach(function(a,i){
+      chkY(6.5);
+      _fc(i%2===0?WHT:LGRAY);doc.rect(M,y,RW,6,'F');_fc(BLUE);doc.rect(M,y,1.4,6,'F');
+      _tc(TXT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+      doc.text(doc.splitTextToSize(_s(a.area||'—'),29)[0],cA,y+4);
+      doc.setFont('helvetica','bold');doc.text(doc.splitTextToSize(_s(a.descripcion||''),72)[0],cD,y+4);
+      doc.setFont('helvetica','normal');_tc(MUT);doc.text(doc.splitTextToSize(_s(a.personal_nombre||'—'),40)[0],cP,y+4);
+      _tc(TXT);doc.text((a.porcentaje||0)+'%',cPct,y+4);
+      _tc(MUT);doc.text(_s(a.estado||''),cE,y+4);
+      y+=6;
+    });
+    y+=3;
+    // PERSONAL EN OBRA (gris)
+    chkY(8);
+    _fc([80,80,80]);doc.rect(M,y,RW,6,'F');
+    _tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text('PERSONAL EN OBRA HOY ('+presentes.length+')',M+3,y+4);
+    y+=7;
+    _tc(TXT);doc.setFontSize(7);doc.setFont('helvetica','normal');
+    var pTxt=presentes.length?presentes.join(', '):'Sin asistencia registrada';
+    doc.splitTextToSize(_s(pTxt),RW-6).forEach(function(ln){ chkY(5); doc.text(ln,M+3,y+3.5); y+=4.5; });
+    y+=4;
+    // NOTAS + firma
+    chkY(24);
+    _tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text('NOTAS:',M,y+3);
+    doc.setDrawColor(200,200,200);doc.line(M+16,y+3,W-M,y+3);y+=9;
+    doc.line(M,y+3,W-M,y+3);y+=10;
+    _tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','normal');
+    doc.text('Firma Ing. Residente: ______________________________',M,y+3);
+    foot();
+    if(opts.returnBlob){ return doc.output('blob'); }
+    doc.save('Plan_'+hoyISO+'.pdf');
+    setSS('ok','✓ Plan del día generado');
+  }catch(e){ console.error(e); setSS('err','Error al generar PDF'); }
+}
+async function compartirPlanWA(){
+  var blob=generarPDFPlan({returnBlob:true});
+  if(!blob){ return; }
+  var fname='Plan_Mecca_'+today()+'.pdf';
+  try{
+    var file=new File([blob],fname,{type:'application/pdf'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:'Plan del Día · Mecca Residence'});
+      return;
+    }
+  }catch(e){ /* cae al fallback */ }
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.download=fname; a.click();
+  URL.revokeObjectURL(url);
+  showToast('PDF descargado — compártelo por WhatsApp','info',3000);
 }
 function estancadasHTML(){
   var est=S.estancadas||[];
@@ -2821,10 +3113,12 @@ function renderHoy(){
   var _estancadasHTML=estancadasHTML();
   var _pendGlobalHTML=pendientesGlobalHTML();
   var _hoyPendMarcarHTML=hoyPendMarcarHTML();
+  var _planDiaHTML=renderPlanDia();
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
     ${(S.user&&S.user.rol==='view')?'<div style="background:#ecfeff;border:1.5px solid #0d9488;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#0f766e;display:flex;align-items:center;gap:6px">👁 Modo solo visualización — puedes ver todo, pero no editar</div>':''}
     ${_hoyPendMarcarHTML}
+    ${_planDiaHTML}
     ${_estancadasHTML}
     ${_pendGlobalHTML}
     ${_cierreBanner}
