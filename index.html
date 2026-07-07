@@ -1320,7 +1320,7 @@ let S={
   planosMapas:{}, planosVista:'mapa', planosNivelSel:'', _planoPendingPin:null,
   replan:{area:'',contr:'',soloVencidas:true,sel:{},_groups:{}},
   bitacora:{dias:14,cambios:[],notas:[],actsMap:{},_pendingFotos:[]},
-  planMode:'', enObraFiltroPlan:'', actFiltroPlan:'', planAgrupacion:(function(){try{return localStorage.getItem('mecca_planAgrup')||'contratista';}catch(e){return 'contratista';}})(),
+  planMode:'', enObraFiltroPlan:'', actFiltroPlan:'', planFiltro:{estados:[],tipos:[],q:''}, planAgrupacion:(function(){try{return localStorage.getItem('mecca_planAgrup')||'contratista';}catch(e){return 'contratista';}})(),
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
@@ -2461,24 +2461,75 @@ function _planDiaSplit(){
   });
   return {delDia:delDia,pend:pend,done:done};
 }
+// Filtros del Plan del día (estado + tipo + búsqueda)
+function _planFiltroAplica(list){
+  var pf=S.planFiltro||{estados:[],tipos:[],q:''};
+  var q=(pf.q||'').toLowerCase().trim();
+  return list.filter(function(a){
+    if(pf.estados&&pf.estados.length&&pf.estados.indexOf(a.estado)<0) return false;
+    if(pf.tipos&&pf.tipos.length&&pf.tipos.indexOf(a.tipo_personal)<0) return false;
+    if(q){ var hay=((a.descripcion||'')+' '+(a.area||'')+' '+(a.personal_nombre||'')+' '+(a.ingeniero_nombre||'')).toLowerCase(); if(hay.indexOf(q)<0) return false; }
+    return true;
+  });
+}
+function _planFiltroActivo(){ var pf=S.planFiltro||{}; return !!((pf.estados&&pf.estados.length)||(pf.tipos&&pf.tipos.length)||(pf.q&&pf.q.trim())); }
+function _planFiltroToggle(kind,val){
+  var pf=S.planFiltro=S.planFiltro||{estados:[],tipos:[],q:''};
+  var arr=pf[kind]=pf[kind]||[];
+  var i=arr.indexOf(val); if(i>=0)arr.splice(i,1); else arr.push(val);
+  if(S.currentTab==='hoy')renderHoy();
+}
+function _planFiltroClear(){ S.planFiltro={estados:[],tipos:[],q:''}; if(S.currentTab==='hoy')renderHoy(); }
+function _planFiltroBuscar(v){
+  (S.planFiltro=S.planFiltro||{estados:[],tipos:[],q:''}).q=v;
+  if(S.currentTab==='hoy')renderHoy();
+  var el=document.getElementById('plan-search'); if(el){ el.focus(); try{el.setSelectionRange(v.length,v.length);}catch(e){} }
+}
 function renderPlanDia(){
   var sp=_planDiaSplit();
   var editable=canEdit();
+  var pf=S.planFiltro||{estados:[],tipos:[],q:''};
+  var pend=_planFiltroAplica(sp.pend);
+  var filtroActivo=_planFiltroActivo();
   var nContr=Object.keys((sp.delDia||[]).reduce(function(m,a){var k=(a.personal_nombre||'').trim();if(k)m[k]=1;return m;},{})).length;
+  var countLbl=filtroActivo?(pend.length+' de '+sp.delDia.length):(''+sp.delDia.length);
   var h='<div class="sec-title" style="margin:16px 0 8px">📋 Plan del día'+
-    '<span style="font-weight:400;color:var(--text3);margin-left:8px;font-size:10px;">actividades asignadas · <span id="plan-dia-count">'+sp.delDia.length+'</span></span></div>';
-  // Selector de agrupación (compartido con el PDF)
+    '<span style="font-weight:400;color:var(--text3);margin-left:8px;font-size:10px;">actividades asignadas · <span id="plan-dia-count">'+countLbl+'</span></span></div>';
+  // Barra PDF / WhatsApp (arriba)
+  h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:13px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;box-shadow:var(--shadow-xs)">'+
+     '<div><div style="font-size:13px;font-weight:700;color:var(--text)">📄 Plan del día</div>'+
+     '<div style="font-size:11px;color:var(--text3);margin-top:2px;" id="plan-pdf-subtitle">'+sp.delDia.length+' actividad'+(sp.delDia.length!==1?'es':'')+' · '+nContr+' contratista'+(nContr!==1?'s':'')+'</div></div>'+
+     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+       '<button onclick="generarPDFPlan()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);box-shadow:0 4px 12px rgba(124,58,237,.25)">Generar PDF</button>'+
+       '<button onclick="compartirPlanWA()" style="padding:8px 16px;background:var(--green);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📲 WhatsApp</button>'+
+     '</div></div>';
   if(sp.delDia.length){
+    // Selector de agrupación (compartido con el PDF)
     var _ag=S.planAgrupacion||'contratista';
     var agSeg=function(val,label){return '<button onclick="planSetAgrupacion(\''+val+'\')" style="padding:5px 10px;border:1.5px solid '+(_ag===val?'var(--accent)':'var(--border2)')+';background:'+(_ag===val?'var(--accent-soft)':'var(--bg2)')+';color:'+(_ag===val?'var(--accent)':'var(--text2)')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);border-radius:8px;white-space:nowrap">'+label+'</button>';};
-    h+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:11px;color:var(--text3);font-weight:700">Organizar por:</span>'+
+    h+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:11px;color:var(--text3);font-weight:700">Organizar por:</span>'+
        agSeg('contratista','👷 Contratista')+agSeg('area','📍 Área')+agSeg('ingeniero','👤 Ingeniero')+agSeg('ninguno','— Sin agrupar')+'</div>';
+    // Fila de filtros (estado + tipo + búsqueda)
+    var chip=function(label,active,onclick){return '<button onclick="'+onclick+'" style="flex-shrink:0;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:'+(active?'800':'600')+';cursor:pointer;font-family:var(--font);border:1.5px solid '+(active?'var(--accent)':'var(--border2)')+';background:'+(active?'var(--accent)':'var(--bg2)')+';color:'+(active?'#fff':'var(--text2)')+'">'+label+'</button>';};
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'+
+       chip('Todas',!filtroActivo,'_planFiltroClear()')+
+       chip('🔄 En progreso',(pf.estados||[]).indexOf('en-progreso')>=0,"_planFiltroToggle('estados','en-progreso')")+
+       chip('⏳ Pendiente',(pf.estados||[]).indexOf('pendiente')>=0,"_planFiltroToggle('estados','pendiente')")+
+       chip('⏸ Pausada',(pf.estados||[]).indexOf('pausada')>=0,"_planFiltroToggle('estados','pausada')")+
+       '<div style="width:1px;background:var(--border);align-self:stretch;margin:0 2px"></div>'+
+       chip('👷 Propio',(pf.tipos||[]).indexOf('propio')>=0,"_planFiltroToggle('tipos','propio')")+
+       chip('🔨 Contratista',(pf.tipos||[]).indexOf('contratista')>=0,"_planFiltroToggle('tipos','contratista')")+
+       '</div>'+
+       '<input id="plan-search" type="search" value="'+esc(pf.q||'')+'" placeholder="Buscar en el plan…" oninput="_planFiltroBuscar(this.value)" style="width:100%;padding:8px 11px;border:1.5px solid var(--border2);border-radius:var(--r);font-size:13px;font-family:var(--font);background:var(--bg);color:var(--text);margin-bottom:10px">';
   }
-  // Tarjetas pendientes, agrupadas
-  _planAgruparlista(sp.pend).forEach(function(g){
+  // Tarjetas pendientes (filtradas), agrupadas
+  _planAgruparlista(pend).forEach(function(g){
     if(g.titulo) h+='<div style="font-size:11px;font-weight:800;color:var(--accent);margin:10px 0 5px;padding:3px 0;border-bottom:1px solid var(--border2)">'+esc(g.titulo)+' <span style="color:var(--text3);font-weight:600">('+g.items.length+')</span></div>';
     g.items.forEach(function(a){ h+=_planDiaCard(a,editable); });
   });
+  if(sp.delDia.length && !pend.length){
+    h+='<div style="padding:14px;text-align:center;font-size:12px;color:var(--text3)">'+(filtroActivo?'Sin resultados con ese filtro.':'Todo lo del plan ya fue marcado ✓')+'</div>';
+  }
   sp.done.forEach(function(a){
     h+='<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:9px 14px;margin-bottom:6px;opacity:0.65;font-size:12px;color:var(--text3)">✓ '+esc(a.descripcion||'')+(a.area?' — '+esc(a.area):'')+'</div>';
   });
@@ -2488,13 +2539,6 @@ function renderPlanDia(){
   if(editable){
     h+='<button onclick="planDiaNuevaAct()" style="width:100%;padding:10px;background:var(--bg3);border:1.5px dashed var(--border2);border-radius:var(--r2);color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:4px;">＋ Nueva actividad para hoy</button>';
   }
-  h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:13px 16px;margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;box-shadow:var(--shadow-xs)">'+
-     '<div><div style="font-size:13px;font-weight:700;color:var(--text)">📄 Plan del día</div>'+
-     '<div style="font-size:11px;color:var(--text3);margin-top:2px;" id="plan-pdf-subtitle">'+sp.delDia.length+' actividad'+(sp.delDia.length!==1?'es':'')+' · '+nContr+' contratista'+(nContr!==1?'s':'')+'</div></div>'+
-     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-       '<button onclick="generarPDFPlan()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);box-shadow:0 4px 12px rgba(124,58,237,.25)">Generar PDF</button>'+
-       '<button onclick="compartirPlanWA()" style="padding:8px 16px;background:var(--green);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📲 WhatsApp</button>'+
-     '</div></div>';
   return h;
 }
 function _planDiaCard(a,editable){
@@ -3172,138 +3216,16 @@ function renderHoy(){
   const aus=S.asist.filter(a=>a.estado==='ausente').length;
   const marcados=S.asist.filter(a=>a.estado).length;
   const sinMarcar=propios.length-marcados;
-  const hoy=S.fecha;
-  if(S._hoyPersonalOpen===undefined) S._hoyPersonalOpen=true;
-  var totalHrsHoy=propios.reduce(function(sum,p){
-    var a=S.asist.find(function(x){return x.personal_id===p.id;})||{};
-    if(!a.hora_entrada||!a.hora_salida) return sum;
-    return sum+(calcHorasEfectivas(a.hora_entrada,a.hora_salida,hoy,a.horas_extra).efectivas||0);
-  },0);
-  var totalExtraHoy=propios.reduce(function(sum,p){
-    var a=S.asist.find(function(x){return x.personal_id===p.id;})||{};
-    return sum+(parseFloat(a.horas_extra)||0);
-  },0);
-
-  // Activities active today: started on or before today AND (no end date OR end date >= today)
-  // Retrasadas (end date already passed) are shown separately above
-  const actsActivasHoy=S.acts.filter(function(a){
-    if(a.estado==='completado') return false;
-    var fi=a.fecha_inicio||a.fecha||'';
-    var ff=a.fecha_fin||'';
-    if(!fi) return false;
-    if(fi>hoy) return false;           // not started yet
-    if(ff&&ff<hoy) return false;       // end date passed → retrasada, shown above
-    return true;
-  });
-  // Also include completadas for today to show the count
-  const completadasHoy=S.acts.filter(function(a){
-    if(a.estado!=='completado') return false;
-    var fi=a.fecha_inicio||a.fecha||'';
-    var ff=a.fecha_fin||'';
-    return (ff&&ff===hoy)||(fi&&fi===hoy);
-  });
-  const actsParaContar=[...actsActivasHoy,...completadasHoy];
-  const actDone=completadasHoy.length;
-  const retrasadas=(S.actsActivas&&S.actsActivas.length?S.actsActivas:S.acts).filter(a=>isRetrasada(a));
   const pct=propios.length?Math.round(pres/propios.length*100):0;
-  const isDesktop=window.innerWidth>600;
 
-  // Apply Hoy filters
-  var _hFE=S.hoyFiltroEstados||[]; var _hFT=S.hoyFiltroTipos||[];
-  var actsVista=sortByPriority(actsActivasHoy);
-  if(_hFE.length) actsVista=actsVista.filter(a=>_hFE.indexOf(a.estado)>=0);
-  if(_hFT.length) actsVista=actsVista.filter(a=>_hFT.indexOf(a.tipo_personal)>=0);
-
-  function actRow(a){
-    var retrasada=isRetrasada(a);
-    var proxima=isProximaRetraso(a);
-    var est=retrasada?'retrasada':a.estado;
-    var ECOLOR={completado:'#2f9e44','en-progreso':'#1a56db',pendiente:'#868e96',pausada:'#e67700',retrasada:'#e03131'};
-    var EBGC={completado:'#d3f9d8','en-progreso':'#dbe4ff',pendiente:'#f1f3f5',pausada:'#fff3bf',retrasada:'#ffe3e3'};
-    var c=ECOLOR[est]||'#868e96'; var bg=EBGC[est]||'#f1f3f5';
-    var done=a.estado==='completado';
-    var urg=a.prioridad==='urgente';
-    var diasFv=proxima?Math.round((new Date(fechaVenc(a)+'T12:00:00')-new Date(today()+'T12:00:00'))/864e5):0;
-    var lbl=retrasada?'retrasada ▸':proxima?(diasFv===0?'vence hoy ▸':diasFv===1?'vence mañana ▸':'vence en '+diasFv+'d ▸'):est+' ▸';
-    var btnC=proxima&&!retrasada?'#e67700':c;
-    var btnBg=proxima&&!retrasada?'#fff3bf':bg;
-    return`<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:8px;position:relative"
-        ontouchstart="_swipeStart(event,'${a.id}')" ontouchmove="_swipeMove(event)" ontouchend="_swipeEnd(event)">
-      <div style="width:3px;min-height:38px;border-radius:2px;background:${retrasada?'#e03131':proxima?'#f08c00':a.tipo_personal==='contratista'?'#7048e8':'var(--accent)'};flex-shrink:0;align-self:stretch"></div>
-      <div style="flex:1;min-width:0" onclick="showQuickActSheet('${a.id}')">
-        <div style="font-size:13px;font-weight:${done?'400':'600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${done?'var(--text3)':'var(--text)'};${done?'text-decoration:line-through':''}">
-          ${urg&&!done?'<span style="color:#e03131;font-size:9px;font-weight:800;vertical-align:middle;margin-right:3px">●</span>':''}${a.requiere_arq?'<span title="Requiere Arq. Miguel" style="font-size:10px;vertical-align:middle;margin-right:3px">🏛</span>':''}${esc(a.descripcion)}
-        </div>
-        <div style="font-size:11px;color:${retrasada?'#e03131':proxima?'#e67700':'var(--text3)'};margin-top:1px">
-          ${retrasada?Math.round((new Date(today())-new Date(fechaVenc(a)))/864e5)+'d retraso · ':''}${proxima&&!retrasada?'⚠️ '+(diasFv===0?'Vence hoy':'Vence en '+diasFv+'d')+' · ':''}${a.area?esc(a.area):''}${a.personal_nombre?' · '+esc(a.personal_nombre.split(' ')[0]):''}
-        </div>
-      </div>
-      <button onclick="event.stopPropagation();cycleEstado('${a.id}')" style="background:${btnBg};color:${btnC};border:1.5px solid ${btnC}44;border-radius:8px;padding:5px 9px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:var(--font)">${lbl}</button>
-    </div>`;
-  }
-
-  // Filter chip helper
-  function fchip(label,active,onclick){
-    return`<button onclick="${onclick}" style="flex-shrink:0;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:${active?'800':'600'};cursor:pointer;font-family:var(--font);border:1.5px solid ${active?'var(--accent)':'var(--border2)'};background:${active?'var(--accent)':'var(--bg2)'};color:${active?'#fff':'var(--text2)'};transition:all .12s">${label}</button>`;
-  }
-
-  // Period section HTML
-  var periodoDesde=S.hoyPeriodoDesde||(()=>{var d=new Date(S.fecha);d.setDate(d.getDate()-6);return d.toISOString().slice(0,10);})();
-  var periodoHasta=S.hoyPeriodoHasta||S.fecha;
-
-  // Planning widget — show 3 worst-performing plan activities
-  var planWidget='';
-  if((S.planActs||[]).length){
-    var planSorted=(S.planActs||[]).slice().sort(function(a,b){return calcularAvancePadre(a.id)-calcularAvancePadre(b.id);}).slice(0,3);
-    planWidget='<div style="margin:0 0 10px;background:#fff;border-radius:12px;border:1px solid var(--border);overflow:hidden">'+
-      '<div style="padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between">'+
-        '<span style="font-size:12px;font-weight:700;color:var(--text2)">&#128203; Planificación</span>'+
-        '<button onclick="switchTab(\'plan\')" style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-family:var(--font)">Ver todo &#8594;</button>'+
-      '</div>'+
-      planSorted.map(function(p){
-        var av=calcularAvancePadre(p.id);
-        var clr=av>=80?'#059669':av>=40?'#D97706':'#DC2626';
-        var hoy2=today();
-        var diasR2=p.fecha_fin_plan?Math.ceil((new Date(p.fecha_fin_plan+'T12:00:00')-new Date(hoy2+'T12:00:00'))/86400000):null;
-        return '<div style="padding:8px 14px;border-top:1px solid var(--border)">'+
-          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
-            '<span style="width:8px;height:8px;border-radius:50%;background:'+clr+';flex-shrink:0"></span>'+
-            '<span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.nombre)+'</span>'+
-            '<span style="font-size:12px;font-weight:700;color:'+clr+'">'+av+'%</span>'+
-          '</div>'+
-          '<div style="background:var(--bg3);border-radius:3px;height:5px;overflow:hidden">'+
-            '<div style="background:'+clr+';height:100%;width:'+av+'%;border-radius:3px"></div>'+
-          '</div>'+
-          (diasR2!==null?'<div style="font-size:10px;color:var(--text3);margin-top:3px">'+(diasR2<0?'&#9888;&#65039; Vencida hace '+Math.abs(diasR2)+'d':diasR2+' días restantes')+'</div>':'')+
-        '</div>';
-      }).join('')+
-    '</div>';
-  }
-
-  var _hourNow=new Date().getHours();
-  var _cierreHecho=false;try{_cierreHecho=localStorage.getItem('mecca_cierre_'+hoy)==='1';}catch(e){}
-  var _cierreBanner=(_hourNow>=17&&!_cierreHecho)?
-    '<div style="background:#f3f0ff;border:1.5px solid #7048e8;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">'+
-      '<div style="font-size:12px;font-weight:600;color:#7048e8">📅 Son las '+_hourNow+'h — ¿Ya generaste el cierre del día?</div>'+
-      '<button onclick="goTab(\'reportes\');S.reportesVista=\'cierre\';renderReportesHub()" style="padding:6px 14px;background:#7048e8;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">Ir al cierre →</button>'+
-    '</div>':
-    '';
-
-  if(S.estancadas===undefined && !S._estancLoading){S._estancLoading=true;loadEstancadas().then(function(){S._estancLoading=false;renderHoy();});}
+  // Hoy = solo planificación. El Plan del día usa S.abiertas; se carga si falta.
+  // NO se cargan estancadas/marcadas (viven en sus propios módulos) para dejar Hoy liviano.
   if(S.abiertas===undefined && !S._abiertasHoyLoading){S._abiertasHoyLoading=true;loadAbiertas().then(function(){S._abiertasHoyLoading=false;renderHoy();});}
-  if(S.marcadasHoy===undefined && !S._marcadasLoading){S._marcadasLoading=true;loadMarcadasHoy().then(function(){S._marcadasLoading=false;renderHoy();});}
-  var _estancadasHTML=estancadasHTML();
-  var _pendGlobalHTML=pendientesGlobalHTML();
-  var _hoyPendMarcarHTML=hoyPendMarcarHTML();
   var _planDiaHTML=renderPlanDia();
+
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
     ${(S.user&&S.user.rol==='view')?'<div style="background:#ecfeff;border:1.5px solid #0d9488;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#0f766e;display:flex;align-items:center;gap:6px">👁 Modo solo visualización — puedes ver todo, pero no editar</div>':''}
-    ${_hoyPendMarcarHTML}
-    ${_planDiaHTML}
-    ${_estancadasHTML}
-    ${_pendGlobalHTML}
-    ${_cierreBanner}
 
     <!-- Attendance strip -->
     <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:10px">
@@ -3316,178 +3238,7 @@ function renderHoy(){
       <button onclick="goTab('equipo');S.equipoVista='asistencia';renderEquipo()" style="padding:6px 12px;border-radius:var(--r);border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">Marcar →</button>
     </div>
 
-    <!-- Stats row -->
-    <div class="stats-row" style="margin-bottom:10px">
-      <div class="scard"><div class="v" style="color:var(--green)">${pres}</div><div class="l">Presentes</div></div>
-      <div class="scard"><div class="v" style="color:var(--red)">${aus}</div><div class="l">Ausentes</div></div>
-      <div class="scard"><div class="v" style="color:var(--accent)">${actDone}<span style="font-size:11px;color:var(--text3)">/${actsParaContar.length}</span></div><div class="l">Completadas</div></div>
-      <div class="scard" onclick="${retrasadas.length?'document.getElementById(\'hoy-retrasadas\').scrollIntoView({behavior:\'smooth\'})':''}" style="${retrasadas.length?'cursor:pointer':''}">
-        <div class="v" style="color:${retrasadas.length>0?'#e03131':'var(--text3)'}">${retrasadas.length}</div>
-        <div class="l" style="color:${retrasadas.length>0?'#e03131':''}">Retrasadas</div>
-      </div>
-    </div>
-
-    <!-- Reportes rápidos -->
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button onclick="goTab('reportes');S.reportesVista='cierre';renderReportesHub()" style="flex:1;padding:10px 12px;background:#f3f0ff;border:1.5px solid #7048e8;border-radius:10px;font-size:12px;font-weight:700;color:#7048e8;cursor:pointer;font-family:var(--font);text-align:left">📅 Cierre del día</button>
-      <button onclick="generarPDFCierre(today())" style="flex:0 0 auto;padding:10px 14px;background:#7048e8;border:none;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:var(--font)" title="Generar PDF del cierre de hoy">📄</button>
-      <button onclick="abrirSelectorUbicaciones()" style="flex:0 0 auto;padding:10px 12px;background:#f0fdf4;border:1.5px solid #2f9e44;border-radius:10px;font-size:12px;font-weight:700;color:#2f9e44;cursor:pointer;font-family:var(--font)" title="Reporte por apartamento">🏠 Por Apto</button>
-    </div>
-
-    <!-- Personal x la Casa — Rendimiento hoy -->
-    <div class="card" style="margin-bottom:10px">
-      <div class="card-hdr" style="cursor:pointer" onclick="S._hoyPersonalOpen=!S._hoyPersonalOpen;renderHoy()">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="card-title">👷 Personal x la Casa</span>
-          <span style="font-size:11px;color:var(--text3)">${pres}/${propios.length} presentes${totalHrsHoy>0?' · '+fmtHoras(totalHrsHoy+(totalExtraHoy>0?totalExtraHoy:0)):''}</span>
-        </div>
-        <span style="font-size:14px;color:var(--text3)">${S._hoyPersonalOpen?'▲':'▼'}</span>
-      </div>
-      ${(()=>{
-        if(!S._hoyPersonalOpen) return '';
-        if(!propios.length) return '<div style="padding:12px;font-size:12px;color:var(--text3);text-align:center">Sin personal propio registrado — agrega en la pestaña Personal</div>';
-        var rows=propios.map(function(p){
-          var a=S.asist.find(function(x){return x.personal_id===p.id;})||{};
-          var hrs=a.hora_entrada&&a.hora_salida?calcHorasEfectivas(a.hora_entrada,a.hora_salida,hoy,a.horas_extra):{efectivas:0,extra:parseFloat(a.horas_extra)||0};
-          var clrMap={presente:'#2f9e44',tarde:'#e67700','medio día':'#1c7ed6',ausente:'#e03131',justificado:'#868e96'};
-          var lblMap={presente:'Presente',tarde:'Tarde','medio día':'Medio día',ausente:'Ausente',justificado:'Justificado'};
-          var clr=clrMap[a.estado]||'#adb5bd';
-          var lbl=lblMap[a.estado]||'Sin registrar';
-          var timeStr=a.hora_entrada&&a.hora_salida?fmt12h(a.hora_entrada)+' → '+fmt12h(a.hora_salida):'';
-          return '<div style="display:flex;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);gap:10px;cursor:pointer" onclick="goTab(\'equipo\');S.equipoVista=\'asistencia\';renderEquipo()">'+
-            '<div style="width:9px;height:9px;border-radius:50%;background:'+clr+';flex-shrink:0"></div>'+
-            '<div style="flex:1;min-width:0">'+
-              '<div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(p.nombre)+'</div>'+
-              '<div style="font-size:11px;color:var(--text3);margin-top:1px">'+(timeStr||lbl)+'</div>'+
-            '</div>'+
-            '<div style="text-align:right;flex-shrink:0">'+
-              (hrs.efectivas>0?'<div style="font-size:13px;font-weight:700;color:#2f9e44">'+fmtHoras(hrs.efectivas)+'</div>':'<div style="font-size:12px;color:'+clr+';font-weight:600">'+lbl+'</div>')+
-              (hrs.extra>0?'<div style="font-size:10px;color:#1c7ed6;font-weight:600">+'+hrs.extra+'h extra</div>':'')+
-            '</div>'+
-          '</div>';
-        }).join('');
-        var footer='<div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'+
-          '<span style="font-size:11px;color:var(--text3)">'+(totalHrsHoy>0?'Total: '+fmtHoras(totalHrsHoy)+(totalExtraHoy>0?' + '+totalExtraHoy+'h extra':''):'Registra entradas y salidas en Asistencia')+'</span>'+
-          '<button onclick="event.stopPropagation();goTab(\'equipo\');S.equipoVista=\'asistencia\';renderEquipo()" style="padding:5px 12px;border-radius:var(--r);border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Asistencia →</button>'+
-        '</div>';
-        return '<div style="padding:0 12px">'+rows+'</div>'+footer;
-      })()}
-    </div>
-
-    <!-- RETRASADAS — always visible if any -->
-    ${retrasadas.length>0?`
-    <div id="hoy-retrasadas" style="background:#fff5f5;border:1.5px solid #ffa8a8;border-radius:var(--r2);margin-bottom:10px;overflow:hidden">
-      <div style="background:#ffe3e3;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffa8a8">
-        <span style="font-size:13px;font-weight:800;color:#c92a2a">⏰ ${retrasadas.length} actividad${retrasadas.length!==1?'es':''} retrasada${retrasadas.length!==1?'s':''}</span>
-        <button onclick="goTab('actividades')" style="font-size:11px;font-weight:700;color:#c92a2a;background:none;border:1px solid #ffa8a8;border-radius:6px;padding:3px 8px;cursor:pointer;font-family:var(--font)">Ver todas →</button>
-      </div>
-      <div style="padding:0 12px">
-        ${retrasadas.slice(0,6).map(a=>{
-          const d=Math.round((new Date(S.fecha)-new Date(a.fecha))/864e5);
-          return`<div style="padding:8px 0;border-bottom:1px solid #ffd6d6;display:flex;align-items:center;gap:8px" onclick="showQuickActSheet('${a.id}')">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:600;color:#c92a2a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.descripcion)}</div>
-              <div style="font-size:10.5px;color:#e03131;margin-top:1px">${d}d · ${a.area?esc(a.area):'Sin área'}${a.personal_nombre?' · '+esc(a.personal_nombre.split(' ')[0]):''}</div>
-            </div>
-            <button onclick="event.stopPropagation();cycleEstado('${a.id}')" style="background:#ffe3e3;color:#c92a2a;border:1px solid #ffa8a8;border-radius:8px;padding:5px 9px;font-size:10px;font-weight:800;cursor:pointer;font-family:var(--font);white-space:nowrap">${a.estado} ▸</button>
-          </div>`;}).join('')}
-        ${retrasadas.length>6?`<div style="padding:8px 0;font-size:11px;color:#e03131;font-weight:600;text-align:center">+${retrasadas.length-6} más</div>`:''}
-      </div>
-    </div>`:
-    `<div style="background:#d3f9d8;border:1px solid #8ce99a;border-radius:var(--r2);padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#2f9e44;text-align:center">✅ Sin actividades retrasadas</div>`}
-
-    <!-- Activities section -->
-    <div class="card">
-      <div class="card-hdr">
-        <span class="card-title">⚡ Actividades del día</span>
-        <div style="display:flex;gap:6px;align-items:center">
-          <span style="font-size:11px;color:var(--text3)">${actDone}/${actsParaContar.length} hechas</span>
-          ${canEdit()?`<button class="ibtn" style="font-size:11px" onclick="requireEdit(showAddActSmart)">+ Nueva</button>`:''}
-        </div>
-      </div>
-
-      <!-- Filters row 1: estado + tipo (multi-select) -->
-      <div style="padding:8px 12px 4px;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none">
-        ${fchip('Todas',!_hFE.length&&!_hFT.length,"_hoyToggleEstado('');_hoyToggleTipo('')")}
-        ${fchip('🔄 En progreso',_hFE.indexOf('en-progreso')>=0,"_hoyToggleEstado('en-progreso')")}
-        ${fchip('⏳ Pendiente',_hFE.indexOf('pendiente')>=0,"_hoyToggleEstado('pendiente')")}
-        ${fchip('⏸ Pausada',_hFE.indexOf('pausada')>=0,"_hoyToggleEstado('pausada')")}
-        <div style="width:1px;background:var(--border);flex-shrink:0;margin:2px 2px"></div>
-        ${fchip('👷 Propio',_hFT.indexOf('propio')>=0,"_hoyToggleTipo('propio')")}
-        ${fchip('🔨 Contratista',_hFT.indexOf('contratista')>=0,"_hoyToggleTipo('contratista')")}
-      </div>
-      <!-- Filters row 2: agrupación -->
-      <div style="padding:4px 12px 8px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none">
-        <span style="font-size:10px;color:var(--text3);font-weight:600;flex-shrink:0">Agrupar:</span>
-        ${fchip('Sin agrupar',!S.hoyAgrupacion,"S.hoyAgrupacion='';renderHoy()")}
-        ${fchip('🔨 Contratista',S.hoyAgrupacion==='contratista',"S.hoyAgrupacion=S.hoyAgrupacion==='contratista'?'':'contratista';renderHoy()")}
-        ${fchip('📍 Nivel',S.hoyAgrupacion==='nivel',"S.hoyAgrupacion=S.hoyAgrupacion==='nivel'?'':'nivel';renderHoy()")}
-      </div>
-
-      <div style="padding:0 12px">
-        ${(()=>{
-          if(actsVista.length===0) return`<div class="empty" style="padding:16px">${_hFE.length||_hFT.length?'Sin resultados con ese filtro':'Sin actividades para este día'}</div>`;
-          if(!S.hoyAgrupacion) return actsVista.map(actRow).join('');
-          // Build groups
-          var grupos=[];
-          if(S.hoyAgrupacion==='contratista'){
-            var conts=[...new Set(actsVista.filter(a=>a.tipo_personal==='contratista').map(a=>a.personal_nombre||'⚠️ Sin asignar'))].sort();
-            conts.forEach(function(c){
-              var items=actsVista.filter(a=>a.tipo_personal==='contratista'&&(a.personal_nombre||'⚠️ Sin asignar')===c);
-              if(items.length) grupos.push({titulo:'🔨 '+c,color:'#4b2d9e',bg:'#f0ebff',items});
-            });
-            var propios=actsVista.filter(a=>a.tipo_personal==='propio');
-            if(propios.length) grupos.push({titulo:'👷 Personal propio',color:'#1864ab',bg:'#e8f4fd',items:propios});
-            var ings=actsVista.filter(a=>a.tipo_personal==='ingeniero');
-            if(ings.length) grupos.push({titulo:'📋 Administrativo',color:'#495057',bg:'#f1f3f5',items:ings});
-          } else {
-            var niveles=['N7','N6','N5','N4','N3','N2','N1','General'];
-            niveles.forEach(function(n){
-              var items=actsVista.filter(a=>(a.area||'').startsWith(n));
-              if(items.length) grupos.push({titulo:'📍 '+n,color:'#0c8599',bg:'#e3fafc',items});
-            });
-            var sinNivel=actsVista.filter(a=>!['N7','N6','N5','N4','N3','N2','N1','General'].some(n=>(a.area||'').startsWith(n)));
-            if(sinNivel.length) grupos.push({titulo:'📍 Sin nivel',color:'#868e96',bg:'#f1f3f5',items:sinNivel});
-          }
-          return grupos.map(function(g){
-            var gDone=g.items.filter(a=>a.estado==='completado').length;
-            return '<div style="margin-bottom:2px">'
-              +'<div style="background:'+g.bg+';border-left:3px solid '+g.color+';padding:5px 10px;display:flex;align-items:center;justify-content:space-between;margin:0 -12px">'
-                +'<span style="font-size:11px;font-weight:800;color:'+g.color+'">'+g.titulo+'</span>'
-                +'<span style="font-size:10px;color:var(--text3)">'+gDone+'/'+g.items.length+'</span>'
-              +'</div>'
-              +g.items.map(actRow).join('')
-              +'</div>';
-          }).join('');
-        })()}
-        ${!isDesktop&&canEdit()&&actsVista.length?`<div style="padding:8px 0;text-align:center;color:var(--text3);font-size:10.5px">← Deslizar para completar</div>`:''}
-      </div>
-    </div>
-
-    ${planWidget}
-
-    <!-- Asistencia por período -->
-    <div class="card" style="margin-top:10px">
-      <div class="card-hdr" style="cursor:pointer" onclick="S.hoyPeriodoOpen=!S.hoyPeriodoOpen;renderHoy()">
-        <span class="card-title">📅 Asistencia por período</span>
-        <span style="font-size:16px;color:var(--text3)">${S.hoyPeriodoOpen?'▲':'▼'}</span>
-      </div>
-      ${S.hoyPeriodoOpen?`
-      <div style="padding:10px 12px">
-        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
-          <div style="flex:1;min-width:120px">
-            <label style="font-size:10px;color:var(--text3);font-weight:600;display:block;margin-bottom:3px">Desde</label>
-            <input type="date" value="${periodoDesde}" onchange="S.hoyPeriodoDesde=this.value" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:var(--font);background:var(--bg);color:var(--text)">
-          </div>
-          <div style="flex:1;min-width:120px">
-            <label style="font-size:10px;color:var(--text3);font-weight:600;display:block;margin-bottom:3px">Hasta</label>
-            <input type="date" value="${periodoHasta}" onchange="S.hoyPeriodoHasta=this.value" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:var(--font);background:var(--bg);color:var(--text)">
-          </div>
-          <button onclick="loadAsistPeriodo()" style="padding:8px 16px;border-radius:var(--r);border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">Ver →</button>
-        </div>
-        <div id="hoy-periodo-tabla">${S.hoyPeriodoData?renderAsistPeriodoTabla(S.hoyPeriodoData):'<div style="text-align:center;color:var(--text3);font-size:12px;padding:12px">Selecciona el período y toca Ver</div>'}</div>
-      </div>`:''}
-    </div>`;
+    ${_planDiaHTML}`;
 }
 
 async function loadAsistPeriodo(){
