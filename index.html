@@ -2319,6 +2319,120 @@ function _estRow(e){
     ))+
   '</div>';
 }
+// ══════════════════════════════════════════════════════════════
+// HOY: Planificadas para hoy · pendientes de marcar
+// Lista las actividades relevantes del día (vencen hoy / en ventana /
+// en-progreso / vencidas) que aún no tienen un cambio registrado hoy en
+// obra_cambios. Fuente: S.abiertas (todas las abiertas, sin la ventana de
+// S.acts). Al marcarlas (%, completar, sin cambios) salen de la lista.
+// ══════════════════════════════════════════════════════════════
+function _hoyDiasAtraso(a){
+  var ff=(a.fecha_fin||'').slice(0,10); if(!ff) return 0;
+  var d=Math.round((new Date(today()+'T12:00:00')-new Date(ff+'T12:00:00'))/864e5);
+  return d>0?d:0;
+}
+function _hoyEsDelDia(a){
+  if(!a||a.estado==='completado') return false;
+  var h=today();
+  var fi=(a.fecha_inicio||'').slice(0,10), ff=(a.fecha_fin||'').slice(0,10);
+  if(ff&&ff===h) return true;                 // vence hoy
+  if(fi&&ff&&fi<=h&&h<=ff) return true;       // en ventana de ejecución hoy
+  if(a.estado==='en-progreso') return true;   // en curso
+  if(ff&&ff<h) return true;                    // vencida y aún abierta
+  return false;
+}
+async function loadMarcadasHoy(){
+  try{
+    var rows=await sb('obra_cambios?fecha=eq.'+today()+'&entidad=eq.actividad&select=entidad_id&limit=5000');
+    var m={}; (rows||[]).forEach(function(r){ if(r.entidad_id) m[String(r.entidad_id)]=1; });
+    S.marcadasHoy=m;
+  }catch(e){ S.marcadasHoy=S.marcadasHoy||{}; }
+  return S.marcadasHoy;
+}
+function _hoyMarcarLocal(id){ (S.marcadasHoy=S.marcadasHoy||{})[String(id)]=1; }
+function hoyPendMarcarHTML(){
+  var abiertas=S.abiertas||[];
+  var marc=S.marcadasHoy||{};
+  var delDia=abiertas.filter(_hoyEsDelDia);
+  var Y=delDia.length;
+  if(!Y) return '';
+  var X=delDia.filter(function(a){return marc[String(a.id)];}).length;
+  var pend=delDia.filter(function(a){return !marc[String(a.id)];});
+  pend.sort(function(a,b){ return _hoyDiasAtraso(b)-_hoyDiasAtraso(a); }); // vencidas primero, mayor atraso arriba
+  var editable=canEdit();
+  var h='<div style="margin-bottom:10px;border:1.5px solid #1a56db;border-radius:12px;overflow:hidden;background:#fff">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:#e8f0fe">'+
+     '<span style="font-size:13px;font-weight:800;color:#1a56db">📋 Planificadas para hoy · pendientes de marcar</span>'+
+     '<span style="font-size:11px;font-weight:800;color:#1a56db;background:#fff;border:1px solid #a5c8ff;border-radius:10px;padding:2px 9px;white-space:nowrap">marcadas hoy: '+X+' / '+Y+'</span>'+
+     '</div>';
+  if(!pend.length){
+    h+='<div style="padding:14px;text-align:center;font-size:13px;font-weight:700;color:#2f9e44">✓ Todo lo del día está marcado</div>';
+  } else {
+    pend.forEach(function(a){ h+=_hoyPendRow(a,editable); });
+  }
+  h+='</div>';
+  return h;
+}
+function _hoyPendRow(a,editable){
+  var atraso=_hoyDiasAtraso(a);
+  var venc=atraso>0;
+  var ec={'completado':'#2f9e44','en-progreso':'#1a56db','pendiente':'#868e96','pausada':'#e67700'}[a.estado]||'#868e96';
+  var asignado=a.personal_nombre||a.ingeniero_nombre||'';
+  var h='<div style="padding:9px 12px;border-top:1px solid var(--border2);'+(venc?'border-left:4px solid #e03131;background:#fff5f5':'border-left:4px solid #1a56db')+'">';
+  h+='<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc(a.descripcion||'(sin descripción)')+'</div>';
+  h+='<div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
+     (a.area?'<span>📍 '+esc(a.area)+'</span>':'')+
+     (asignado?'<span>👤 '+esc(asignado)+'</span>':'')+
+     '<span style="color:'+ec+';font-weight:700">'+esc(a.estado)+'</span>'+
+     '<span>'+(a.porcentaje||0)+'%</span>'+
+     (venc?'<span style="color:#e03131;font-weight:800">⏰ '+atraso+'d de atraso</span>':'')+
+     '</div>';
+  if(editable){
+    h+='<div style="display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap">'+
+       '<span style="font-size:11px;color:var(--text3)">%</span>'+
+       '<input type="number" min="0" max="100" value="'+(a.porcentaje||0)+'" id="hoypm-'+a.id+'" style="width:56px;padding:5px 7px;border:1.5px solid var(--border2);border-radius:6px;font-size:12px;font-family:var(--font)">'+
+       '<button onclick="hoyMarcarPct(\''+a.id+'\')" style="padding:5px 11px;border:none;border-radius:6px;background:#1a56db;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Guardar</button>'+
+       '<button onclick="hoyMarcarCompletar(\''+a.id+'\')" style="padding:5px 11px;border:none;border-radius:6px;background:#2f9e44;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Completar</button>'+
+       '<button onclick="hoyMarcarSinCambios(\''+a.id+'\')" style="padding:5px 11px;border:1.5px solid var(--border2);border-radius:6px;background:#fff;color:var(--text2);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Sin cambios hoy</button>'+
+       '</div>';
+  }
+  h+='</div>';
+  return h;
+}
+async function hoyMarcarPct(id){
+  if(!canEdit())return;
+  var el=document.getElementById('hoypm-'+id);
+  var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
+  var a=_findActAny(id)||(S.abiertas||[]).find(function(x){return x.id===id;});
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:(n>=100?'completado':'en-progreso')})});
+    if(a){ a.porcentaje=n; if(n>=100)a.estado='completado'; }
+    logCambio(n>=100?'completado':'avance','actividad',id,(a&&a.descripcion)||'',n+'%');
+    _hoyMarcarLocal(id);
+    showToast(n>=100?'Completada ✓':'Avance '+n+'% ✓');
+    loadAbiertas().then(function(){renderHoy();});
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+async function hoyMarcarCompletar(id){
+  if(!canEdit())return;
+  var a=_findActAny(id)||(S.abiertas||[]).find(function(x){return x.id===id;});
+  try{
+    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
+    if(a){ a.estado='completado'; a.porcentaje=100; }
+    logCambio('completado','actividad',id,(a&&a.descripcion)||'','completada');
+    _hoyMarcarLocal(id);
+    showToast('Completada ✓');
+    loadAbiertas().then(function(){renderHoy();});
+  }catch(e){showToast('Error: '+e.message,'err');}
+}
+function hoyMarcarSinCambios(id){
+  if(!canEdit())return;
+  var a=_findActAny(id)||(S.abiertas||[]).find(function(x){return x.id===id;});
+  logCambio('editado','actividad',id,(a&&a.descripcion)||'','sin avance hoy');
+  _hoyMarcarLocal(id);
+  showToast('Marcada — sin cambios hoy');
+  renderHoy();
+}
 function estancadasHTML(){
   var est=S.estancadas||[];
   if(!est.length) return '';
@@ -2702,11 +2816,15 @@ function renderHoy(){
     '';
 
   if(S.estancadas===undefined && !S._estancLoading){S._estancLoading=true;loadEstancadas().then(function(){S._estancLoading=false;renderHoy();});}
+  if(S.abiertas===undefined && !S._abiertasHoyLoading){S._abiertasHoyLoading=true;loadAbiertas().then(function(){S._abiertasHoyLoading=false;renderHoy();});}
+  if(S.marcadasHoy===undefined && !S._marcadasLoading){S._marcadasLoading=true;loadMarcadasHoy().then(function(){S._marcadasLoading=false;renderHoy();});}
   var _estancadasHTML=estancadasHTML();
   var _pendGlobalHTML=pendientesGlobalHTML();
+  var _hoyPendMarcarHTML=hoyPendMarcarHTML();
   document.getElementById('c-hoy').innerHTML=`
     ${dateNavHTML()}
     ${(S.user&&S.user.rol==='view')?'<div style="background:#ecfeff;border:1.5px solid #0d9488;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#0f766e;display:flex;align-items:center;gap:6px">👁 Modo solo visualización — puedes ver todo, pero no editar</div>':''}
+    ${_hoyPendMarcarHTML}
     ${_estancadasHTML}
     ${_pendGlobalHTML}
     ${_cierreBanner}
