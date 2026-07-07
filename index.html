@@ -1333,6 +1333,7 @@ let S={
 };
 
 function today(){return new Date().toISOString().slice(0,10);}
+function tomorrow(){var d=new Date(today()+'T12:00:00');d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
 // Returns a short display name, stripping honorific prefixes like "Ing.", "Dr.", "Arq."
 function shortName(n){return (n||'').replace(/^(Ing\.|Dr\.|Arq\.|Lic\.)\s*/i,'').split(' ')[0]||n||'';}
@@ -2448,7 +2449,8 @@ function _planDiaPersonalOpts(sel){
 }
 function _planDiaSplit(){
   var abiertas=S.abiertas||[]; var marc=S.marcadasHoy||{};
-  var delDia=abiertas.filter(_hoyEsDelDia);
+  var hoy=today();
+  var delDia=abiertas.filter(function(a){return (a.fecha_plan||'').slice(0,10)===hoy;});
   var pend=delDia.filter(function(a){return !marc[String(a.id)];});
   var done=delDia.filter(function(a){return marc[String(a.id)];});
   pend.sort(function(a,b){
@@ -2469,7 +2471,7 @@ function renderPlanDia(){
     h+='<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:9px 14px;margin-bottom:6px;opacity:0.65;font-size:12px;color:var(--text3)">✓ '+esc(a.descripcion||'')+(a.area?' — '+esc(a.area):'')+'</div>';
   });
   if(!sp.delDia.length){
-    h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-xs);padding:14px;text-align:center;font-size:12px;color:var(--text3)">No hay actividades programadas para hoy.</div>';
+    h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-xs);padding:14px;text-align:center;font-size:12px;color:var(--text3)">No hay actividades planificadas — agrégalas desde En Obra.</div>';
   }
   if(editable){
     h+='<button onclick="planDiaNuevaAct()" style="width:100%;padding:10px;background:var(--bg3);border:1.5px dashed var(--border2);border-radius:var(--r2);color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:4px;">＋ Nueva actividad para hoy</button>';
@@ -2724,6 +2726,116 @@ async function compartirPlanWA(){
   a.href=url; a.download=fname; a.click();
   URL.revokeObjectURL(url);
   showToast('PDF descargado — compártelo por WhatsApp','info',3000);
+}
+// ══════════════════════════════════════════════════════════════
+// FECHA_PLAN — planificar actividades para hoy/mañana desde En Obra.
+// fecha_plan (DATE) en obra_actividades: NULL = sin plan, valor = día
+// planificado. Alimenta el "Plan del día" (Hoy) y el paso "Plan de mañana"
+// del Cierre.
+// ══════════════════════════════════════════════════════════════
+function _planUpdateMem(actId,fecha){
+  ['abiertas','acts','actsActivas','aptoActs'].forEach(function(k){
+    (S[k]||[]).forEach(function(x){ if(x.id===actId) x.fecha_plan=fecha; });
+  });
+}
+function _planRerender(){
+  try{ if(typeof renderEnObra==='function' && S.currentTab==='obra' && S.obraVista!=='todas') renderEnObra(); }catch(e){}
+  try{ renderActs(); }catch(e){}
+  try{ if(S.currentTab==='hoy') renderHoy(); }catch(e){}
+  try{ if(S.currentTab==='reportes' && S.reportesVista==='cierre') renderCierreDia(S._cierreFecha); }catch(e){}
+}
+async function _planSet(actId,fecha,detalle){
+  if(!canEdit())return;
+  var a=_findActAny(actId)||(S.abiertas||[]).find(function(x){return x.id===actId;});
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fecha_plan:fecha})});
+    _planUpdateMem(actId,fecha);
+    logCambio('editado','actividad',actId,(a&&a.descripcion)||'',detalle);
+    _planRerender();
+  }catch(e){ showToast('Error: '+e.message,'err'); }
+}
+function planAgregar(actId,dia){
+  var f=dia==='manana'?tomorrow():today();
+  _planSet(actId,f,dia==='manana'?'planificada para mañana':'planificada para hoy');
+  showToast(dia==='manana'?'📅 Planificada para mañana':'✓ Planificada para hoy');
+}
+function planMover(actId,dia){
+  var f=dia==='manana'?tomorrow():today();
+  _planSet(actId,f,dia==='manana'?'movida al plan de mañana':'movida al plan de hoy');
+  showToast(dia==='manana'?'→ Movida a mañana':'→ Movida a hoy');
+}
+function planQuitar(actId){
+  _planSet(actId,null,'plan quitado');
+  showToast('Plan quitado');
+}
+// Botón inteligente para las tarjetas de En Obra
+function _planBtnEnObra(a){
+  if(!canEdit()) return '';
+  var fp=(a.fecha_plan||'').slice(0,10), hoy=today(), man=tomorrow();
+  var bs='font-size:11px;padding:6px 9px;border-radius:8px;cursor:pointer;font-family:var(--font);font-weight:700;border:1.5px solid ';
+  var x='<button onclick="planQuitar(\''+a.id+'\')" title="Quitar del plan" style="'+bs+'var(--border2);background:#fff;color:var(--text3);flex:0 0 auto;padding:6px 10px">✕</button>';
+  var wrap=function(inner){return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">'+inner+'</div>';};
+  if(!fp){
+    return wrap(
+      '<button onclick="planAgregar(\''+a.id+'\',\'hoy\')" style="'+bs+'#7c3aed;background:#f3f0ff;color:#7c3aed;flex:1">＋ Plan hoy</button>'+
+      '<button onclick="planAgregar(\''+a.id+'\',\'manana\')" style="'+bs+'var(--border2);background:#fff;color:var(--text2);flex:1">＋ Plan mañana</button>'
+    );
+  }
+  if(fp===hoy){
+    return wrap(
+      '<button onclick="planMover(\''+a.id+'\',\'manana\')" style="'+bs+'#2f9e44;background:#eafaf0;color:#2f9e44;flex:1">✓ Hoy · mover a mañana</button>'+x
+    );
+  }
+  if(fp===man){
+    return wrap(
+      '<button onclick="planMover(\''+a.id+'\',\'hoy\')" title="Mover a hoy" style="'+bs+'#1a56db;background:#eef2ff;color:#1a56db;flex:1">📅 Plan mañana</button>'+x
+    );
+  }
+  // otra fecha (pasada/futura)
+  return wrap(
+    '<button onclick="planMover(\''+a.id+'\',\'hoy\')" title="Mover a hoy" style="'+bs+'var(--border2);background:#fff;color:var(--text2);flex:1">📅 '+esc(fp)+'</button>'+x
+  );
+}
+// Paso del Cierre: mover el plan de hoy no completado a mañana
+function cierrePlanMananaHTML(){
+  if(S._cierrePlanOmit) return '';
+  if(!canEdit()) return '';
+  var hoy=today();
+  var pend=(S.abiertas||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===hoy && a.estado!=='completado';});
+  if(!pend.length) return '';
+  var h='<div style="margin-bottom:14px;border:1.5px solid #e67700;border-radius:12px;overflow:hidden;background:#fff">';
+  h+='<div style="padding:10px 14px;background:#fff4e6;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'+
+     '<span style="font-size:13px;font-weight:800;color:#b45309">📅 Plan de mañana ('+pend.length+')</span>'+
+     '<div style="display:flex;gap:6px">'+
+       '<button onclick="planTodasManana()" style="padding:5px 11px;border:none;background:#e67700;color:#fff;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">→ Todas a mañana</button>'+
+       '<button onclick="S._cierrePlanOmit=true;renderCierreDia(S._cierreFecha)" style="padding:5px 11px;border:1.5px solid var(--border2);background:#fff;color:var(--text2);border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Omitir</button>'+
+     '</div></div><div>';
+  pend.forEach(function(a){
+    h+='<div id="cpm-row-'+a.id+'" style="padding:9px 12px;border-top:1px solid var(--border2);display:flex;align-items:center;gap:8px">'+
+       '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;color:var(--text)">'+esc(a.descripcion||'')+'</div>'+
+       '<div style="font-size:11px;color:var(--text3);margin-top:1px">'+esc(a.area||'')+(a.personal_nombre?' · '+esc(a.personal_nombre):'')+' · '+(a.porcentaje||0)+'%</div></div>'+
+       '<button onclick="planMover(\''+a.id+'\',\'manana\')" style="flex-shrink:0;padding:6px 12px;border:none;border-radius:7px;background:#e67700;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">→ Mañana</button>'+
+       '</div>';
+  });
+  h+='</div></div>';
+  return h;
+}
+async function planTodasManana(){
+  if(!canEdit())return;
+  var hoy=today();
+  var pend=(S.abiertas||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===hoy && a.estado!=='completado';});
+  if(!pend.length) return;
+  var man=tomorrow();
+  for(var i=0;i<pend.length;i++){
+    var a=pend[i];
+    try{
+      await sb('obra_actividades?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fecha_plan:man})});
+      _planUpdateMem(a.id,man);
+      logCambio('editado','actividad',a.id,a.descripcion||'','movida al plan de mañana');
+    }catch(e){}
+  }
+  showToast('→ '+pend.length+' movidas a mañana');
+  _planRerender();
 }
 function estancadasHTML(){
   var est=S.estancadas||[];
@@ -9117,6 +9229,7 @@ function getFilteredActsHTML(){
       btns+='<button class="tarea-btn" style="font-size:11px;padding:7px;flex:1" onclick="'+onEdit+'">Editar</button>';
       btns+='</div>';
     }
+    var planBtn=_planBtnEnObra(a);
 
     parts.push(
       '<div style="background:#fff;border:1px solid rgba(240,184,96,.3);border-left:3px solid var(--amber);border-radius:var(--r2);padding:12px 14px;margin-bottom:8px">'+
@@ -9127,7 +9240,7 @@ function getFilteredActsHTML(){
           '</div>'+
           '<span style="font-size:10px;background:#fff3cd;color:#856404;padding:2px 8px;border-radius:8px;font-weight:600;flex-shrink:0">En progreso</span>'+
         '</div>'+
-        pctBar+btns+
+        pctBar+btns+planBtn+
       '</div>'
     );
   }
@@ -10935,6 +11048,7 @@ async function renderCierreDia(fechaTarget){
   var cambios=[];
   try{ cambios=await sb('obra_cambios?fecha=eq.'+fecha+'&order=hora.asc&limit=500'); }
   catch(e){ el.innerHTML='<div class="empty">Error al cargar datos</div>'; return; }
+  if(fecha===today() && S.abiertas===undefined){ try{ await loadAbiertas(); }catch(e){} }
   var completadas=cambios.filter(function(c){return c.accion==='completado';});
   var editadas=cambios.filter(function(c){return c.accion==='editado';});
   var creadas=cambios.filter(function(c){return c.accion==='creado';});
@@ -10974,6 +11088,8 @@ async function renderCierreDia(fechaTarget){
   '</div>';
   // Paso: actualizar avances de en-progreso (antes del resumen; omitible)
   if(fecha===today()) h+=cierreAvancesHTML();
+  // Paso: mover el plan de hoy no completado a mañana (omitible)
+  if(fecha===today()) h+=cierrePlanMananaHTML();
   // Stats chips
   h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">';
   h+=[{v:completadas.length,l:'Completadas',c:'#2f9e44',bg:'#d3f9d8'},{v:editadas.length,l:'Avance/Edición',c:'#1a56db',bg:'#dbe4ff'},{v:creadas.length,l:'Nuevas tareas',c:'#7048e8',bg:'#f3d9fa'}]
