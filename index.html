@@ -1332,7 +1332,7 @@ let S={
   driveUrl:'',
 };
 
-function today(){return new Date().toISOString().slice(0,10);}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function tomorrow(){var d=new Date(today()+'T12:00:00');d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
 // Returns a short display name, stripping honorific prefixes like "Ing.", "Dr.", "Arq."
@@ -3193,7 +3193,7 @@ function renderHoy(){
       planSorted.map(function(p){
         var av=calcularAvancePadre(p.id);
         var clr=av>=80?'#059669':av>=40?'#D97706':'#DC2626';
-        var hoy2=new Date().toISOString().slice(0,10);
+        var hoy2=today();
         var diasR2=p.fecha_fin_plan?Math.ceil((new Date(p.fecha_fin_plan+'T12:00:00')-new Date(hoy2+'T12:00:00'))/86400000):null;
         return '<div style="padding:8px 14px;border-top:1px solid var(--border)">'+
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
@@ -4368,7 +4368,7 @@ function actsDesktopTable(acts, showDate){
   if(!acts.length) return '<div class="empty" style="padding:16px">Sin actividades</div>';
   var ECOLOR={'completado':'#2f9e44','en-progreso':'#1a56db','pendiente':'#868e96','pausada':'#f08c00','retrasada':'#e03131'};
   var EBG={'completado':'#d3f9d8','en-progreso':'#dbe4ff','pendiente':'#f1f3f5','pausada':'#fff3bf','retrasada':'#ffe3e3'};
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
   var html='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:540px;border-collapse:collapse;font-size:12px;table-layout:fixed">';
   html+='<colgroup>'
     +'<col style="width:108px">'   // Estado
@@ -4493,7 +4493,7 @@ function actsDesktopTable(acts, showDate){
 
 function actHTML(a, ai, tipo){
   const fotos=fotoUrls(a.fotos);
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=today();
   const retrasada=isRetrasada(a);
   const vencida=retrasada;
   var proxima=isProximaRetraso(a);
@@ -8303,7 +8303,7 @@ function exportarHistorialPDF(uid_){
       doc.text('Generado: '+new Date().toLocaleDateString('es-DO')+' '+(new Date().toLocaleTimeString('es-DO',{hour:'2-digit',minute:'2-digit'})),W-M,292,{align:'right'});
     }
 
-    doc.save('BRIDEX_Historial_'+safe(u.nombre).replace(/\s+/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.pdf');
+    doc.save('BRIDEX_Historial_'+safe(u.nombre).replace(/\s+/g,'_')+'_'+today()+'.pdf');
   }catch(e){alert('Error generando PDF: '+e.message);}
 }
 
@@ -9884,7 +9884,7 @@ function subNavBtn(label, isActive, onclick){
 // Apply kanban-specific filters (independent from "Todas" tab filters)
 function applyKbf(acts){
   var f=S.kbf||{};
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
   var r=acts;
   if(f.tipo)     r=r.filter(function(a){return a.tipo_personal===f.tipo;});
   if(f.persona)  r=r.filter(function(a){
@@ -9909,7 +9909,7 @@ function renderKanban(){
   if(!el) return;
   if(!S.kbf) S.kbf={tipo:'',persona:'',nivel:'',retrasadas:false,urgentes:false};
   var f=S.kbf;
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
   var all=S.acts;
   var acts=applyKbf(all);
   var isDesk=window.innerWidth>600;
@@ -10230,7 +10230,7 @@ async function marcarAsistCont(pid, estado){
 }
 
 function renderRepContratistasHTML(){
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
   if(!S.contRepDesde) S.contRepDesde=hoy.slice(0,7)+'-01';
   if(!S.contRepHasta) S.contRepHasta=hoy;
   var INP='width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px';
@@ -10422,7 +10422,7 @@ function renderBonificaciones(){
     },0);
   }
 
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
   var registradoHoy=asistMes.some(function(r){return r.fecha===hoy;});
 
   var h='<div style="padding:8px 0">';
@@ -10562,7 +10562,7 @@ async function savePen(pen){
 }
 
 async function checkRegistroContratas(){
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
   var conts=S.personal.filter(function(p){return p.tipo==='contratista'&&p.activo;});
   var contIds=conts.map(function(p){return p.id;});
   // Check DB directly so we don't rely on stale S.asist
@@ -10598,7 +10598,7 @@ async function penalizarDiasSinRegistro(mes){
   (_bonifAsist||[]).forEach(function(r){
     if(contIds.indexOf(r.personal_id)>=0&&(r.estado==='presente'||r.estado==='medio día')) diasConReg.add(r.fecha);
   });
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
   var d=new Date(mes+'-01'); var dias=[];
   while(d.toISOString().slice(0,10)<=hoy&&d.toISOString().slice(0,7)===mes){
     var dow=d.getDay();
@@ -12101,7 +12101,7 @@ function renderAptoReport(){
 
   var acts=getAptoActs(sel);
   var completadas=acts.filter(function(a){return a.estado==='completado';}).length;
-  var retrasadas=acts.filter(function(a){var hoy=new Date().toISOString().slice(0,10);return isRetrasada(a);}).length;
+  var retrasadas=acts.filter(function(a){var hoy=today();return isRetrasada(a);}).length;
   var pctGlobal=acts.length?Math.round(acts.reduce(function(s,a){return s+(a.porcentaje||0);},0)/acts.length):0;
 
   // Header del reporte
@@ -12124,7 +12124,7 @@ function renderAptoReport(){
     el.innerHTML=h; return;
   }
 
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
 
   // Build groups: each contractor + Personal x la casa
   var grupos=[];
@@ -12199,7 +12199,7 @@ function renderAptoReport(){
 
 function printAptoReport(apto){
   var acts=getAptoActs(apto);
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
   var completadas=acts.filter(function(a){return a.estado==='completado';}).length;
   var enProgreso=acts.filter(function(a){return a.estado==='en-progreso';}).length;
   var pct=acts.length?Math.round(acts.reduce(function(s,a){return s+(a.porcentaje||0);},0)/acts.length):0;
@@ -12311,7 +12311,7 @@ function printAptoReport(apto){
 function renderProyeccion(){
   var el=document.getElementById('c-proy');
   if(!el) return;
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
   var acts=S.acts;
   if(!acts.length){el.innerHTML='<div class="empty" style="padding:40px">Sin actividades</div>';return;}
 
@@ -13764,7 +13764,7 @@ function _gRender(){
   svg+=_gTimeAxis(b,ppd,svgW);
 
   // Today line
-  var tx=_gX(new Date().toISOString().slice(0,10),b.min,ppd);
+  var tx=_gX(today(),b.min,ppd);
   if(tx>0&&tx<svgW){
     svg+='<line x1="'+tx+'" y1="'+GTOP+'" x2="'+tx+'" y2="'+svgH+'" stroke="#EF4444" stroke-width="2" stroke-dasharray="4,3" opacity=".7"/>';
     svg+='<rect x="'+(tx-18)+'" y="2" width="36" height="20" rx="5" fill="#EF4444"/>';
@@ -14348,7 +14348,7 @@ function ganttPrint(){
   s+='<line x1="0" y1="'+(PTOP+PAXH)+'" x2="'+svgW+'" y2="'+(PTOP+PAXH)+'" stroke="#cbd5e1" stroke-width="1"/>';
   s+='<line x1="'+PSIDE+'" y1="'+PTOP+'" x2="'+PSIDE+'" y2="'+legendY+'" stroke="#cbd5e1" stroke-width="1.5"/>';
   // Today dashed line
-  var tdx=px(new Date().toISOString().slice(0,10));
+  var tdx=px(today());
   if(tdx>=PSIDE&&tdx<=svgW){
     s+='<line x1="'+tdx+'" y1="'+(PTOP+PAXH)+'" x2="'+tdx+'" y2="'+legendY+'" stroke="#EF4444" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.75"/>';
     s+='<text x="'+(tdx+2)+'" y="'+(PTOP+PAXH-1)+'" font-size="7" fill="#EF4444" font-weight="700">HOY</text>';
@@ -14922,7 +14922,7 @@ async function planUpdateAvance(planId,val){
   var n=Math.min(100,Math.max(0,parseInt(val)||0));
   var p=(S.planActs||[]).find(function(x){return x.id===planId;});if(!p) return;
   try{
-    var bd={avance_manual:n};var hoyD=new Date().toISOString().slice(0,10);
+    var bd={avance_manual:n};var hoyD=today();
     if(n>0&&!p.fecha_inicio_real){bd.fecha_inicio_real=hoyD;}
     if(n>=100&&!p.fecha_fin_real){bd.fecha_fin_real=hoyD;}
     await sb('obra_plan_actividades?id=eq.'+planId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(bd)});
@@ -15129,7 +15129,7 @@ function renderPlanSemanal(){
 
 function renderPlanGanttMacroHTML(plans){
   if(!plans.length) return '<div style="padding:40px;text-align:center;color:var(--text3)">Sin actividades en el plan</div>';
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=today();
   var allDates=[];
   plans.forEach(function(p){if(p.fecha_inicio_plan)allDates.push(p.fecha_inicio_plan);if(p.fecha_fin_plan)allDates.push(p.fecha_fin_plan);});
   if(!allDates.length){allDates.push(hoy);allDates.push(new Date(Date.now()+90*86400000).toISOString().slice(0,10));}
