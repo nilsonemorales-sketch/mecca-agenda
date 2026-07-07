@@ -1320,6 +1320,7 @@ let S={
   planosMapas:{}, planosVista:'mapa', planosNivelSel:'', _planoPendingPin:null,
   replan:{area:'',contr:'',soloVencidas:true,sel:{},_groups:{}},
   bitacora:{dias:14,cambios:[],notas:[],actsMap:{},_pendingFotos:[]},
+  planMode:'', enObraFiltroPlan:'', actFiltroPlan:'', planAgrupacion:(function(){try{return localStorage.getItem('mecca_planAgrup')||'contratista';}catch(e){return 'contratista';}})(),
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
@@ -2466,7 +2467,18 @@ function renderPlanDia(){
   var nContr=Object.keys((sp.delDia||[]).reduce(function(m,a){var k=(a.personal_nombre||'').trim();if(k)m[k]=1;return m;},{})).length;
   var h='<div class="sec-title" style="margin:16px 0 8px">📋 Plan del día'+
     '<span style="font-weight:400;color:var(--text3);margin-left:8px;font-size:10px;">actividades asignadas · <span id="plan-dia-count">'+sp.delDia.length+'</span></span></div>';
-  sp.pend.forEach(function(a){ h+=_planDiaCard(a,editable); });
+  // Selector de agrupación (compartido con el PDF)
+  if(sp.delDia.length){
+    var _ag=S.planAgrupacion||'contratista';
+    var agSeg=function(val,label){return '<button onclick="planSetAgrupacion(\''+val+'\')" style="padding:5px 10px;border:1.5px solid '+(_ag===val?'var(--accent)':'var(--border2)')+';background:'+(_ag===val?'var(--accent-soft)':'var(--bg2)')+';color:'+(_ag===val?'var(--accent)':'var(--text2)')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);border-radius:8px;white-space:nowrap">'+label+'</button>';};
+    h+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:11px;color:var(--text3);font-weight:700">Organizar por:</span>'+
+       agSeg('contratista','👷 Contratista')+agSeg('area','📍 Área')+agSeg('ingeniero','👤 Ingeniero')+agSeg('ninguno','— Sin agrupar')+'</div>';
+  }
+  // Tarjetas pendientes, agrupadas
+  _planAgruparlista(sp.pend).forEach(function(g){
+    if(g.titulo) h+='<div style="font-size:11px;font-weight:800;color:var(--accent);margin:10px 0 5px;padding:3px 0;border-bottom:1px solid var(--border2)">'+esc(g.titulo)+' <span style="color:var(--text3);font-weight:600">('+g.items.length+')</span></div>';
+    g.items.forEach(function(a){ h+=_planDiaCard(a,editable); });
+  });
   sp.done.forEach(function(a){
     h+='<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:9px 14px;margin-bottom:6px;opacity:0.65;font-size:12px;color:var(--text3)">✓ '+esc(a.descripcion||'')+(a.area?' — '+esc(a.area):'')+'</div>';
   });
@@ -2676,7 +2688,7 @@ function generarPDFPlan(opts){
     doc.text('AREA',cA,y+3.4);doc.text('DESCRIPCION',cD,y+3.4);doc.text('ASIGNADO',cP,y+3.4);doc.text('%',cPct,y+3.4);doc.text('ESTADO',cE,y+3.4);
     y+=5.5;
     if(!progr.length){ _tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','italic');doc.text('Sin actividades programadas para hoy.',M+3,y+4);y+=7; }
-    progr.forEach(function(a,i){
+    var drawFila=function(a,i){
       chkY(6.5);
       _fc(i%2===0?WHT:LGRAY);doc.rect(M,y,RW,6,'F');_fc(BLUE);doc.rect(M,y,1.4,6,'F');
       _tc(TXT);doc.setFontSize(6);doc.setFont('helvetica','normal');
@@ -2686,6 +2698,17 @@ function generarPDFPlan(opts){
       _tc(TXT);doc.text((a.porcentaje||0)+'%',cPct,y+4);
       _tc(MUT);doc.text(_s(a.estado||''),cE,y+4);
       y+=6;
+    };
+    _planAgruparlista(progr).forEach(function(g){
+      var items=g.items.slice().sort(function(a,b){return _hoyDiasAtraso(b)-_hoyDiasAtraso(a);});
+      if(g.titulo){
+        chkY(6+6); // subencabezado + al menos 1 fila
+        _fc([230,230,230]);doc.rect(M,y,RW,5.5,'F');
+        _tc([60,60,60]);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
+        doc.text(_s(g.titulo)+' ('+items.length+')',M+3,y+3.8);
+        y+=6;
+      }
+      items.forEach(drawFila);
     });
     y+=3;
     // PERSONAL EN OBRA (gris)
@@ -2767,6 +2790,53 @@ function planMover(actId,dia){
 function planQuitar(actId){
   _planSet(actId,null,'plan quitado');
   showToast('Plan quitado');
+}
+// ── Modo Plan (toque rápido) ────────────────────────────────────────
+// S.planMode: '' | 'hoy' | 'manana'. Con el modo activo, tocar una tarjeta
+// la agrega/quita del plan del día elegido.
+function planToggleDia(actId){
+  if(!S.planMode) return;
+  var a=_findActAny(actId)||(S.abiertas||[]).find(function(x){return x.id===actId;});
+  var objetivo=S.planMode==='manana'?tomorrow():today();
+  var fp=(a&&a.fecha_plan||'').slice(0,10);
+  if(fp===objetivo) planQuitar(actId);
+  else planAgregar(actId,S.planMode);
+}
+function _planEnPlanActivo(a){
+  if(!S.planMode) return false;
+  var obj=S.planMode==='manana'?tomorrow():today();
+  return (a&&a.fecha_plan||'').slice(0,10)===obj;
+}
+// Toggle segmentado Normal / Plan HOY / Plan MAÑANA (compartido En Obra + Actividades)
+function planModoToggleHTML(rerenderCall){
+  if(!canEdit()) return '';
+  var m=S.planMode||'';
+  var seg=function(val,label,active){
+    return '<button onclick="S.planMode=\''+val+'\';'+rerenderCall+'" style="flex:1;padding:7px 6px;border:1.5px solid '+(active?'var(--accent)':'var(--border2)')+';background:'+(active?'var(--accent)':'var(--bg2)')+';color:'+(active?'#fff':'var(--text2)')+';font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--font);border-radius:8px;white-space:nowrap">'+label+'</button>';
+  };
+  return '<div style="display:flex;gap:6px;margin-bottom:8px">'+
+    seg('','Normal',m==='')+seg('hoy','📅 Plan HOY',m==='hoy')+seg('manana','📅 Plan MAÑANA',m==='manana')+
+    '</div>'+(m?_planModoBanner():'');
+}
+function _planModoBanner(){
+  var d=S.planMode==='manana'?'MAÑANA':'HOY';
+  return '<div style="background:var(--accent-soft);border:1.5px solid var(--accent);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:var(--accent)">📅 Modo Plan '+d+' activo — tocá una tarjeta para agregarla o quitarla del plan.</div>';
+}
+// Agrupación reutilizable del Plan del día (Hoy + PDF)
+function _planAgruparlista(lista){
+  var modo=S.planAgrupacion||'contratista';
+  if(modo==='ninguno') return [{titulo:'',items:lista}];
+  var keyFn = modo==='area'      ? function(a){return a.area||'⚠️ Sin área';}
+            : modo==='ingeniero' ? function(a){return a.ingeniero_nombre||'⚠️ Sin ingeniero';}
+            :                      function(a){return a.personal_nombre||'⚠️ Sin asignar';};
+  var m={};
+  lista.forEach(function(a){var k=(keyFn(a)||'').trim()||'⚠️ Sin asignar';(m[k]=m[k]||[]).push(a);});
+  return Object.keys(m).sort().map(function(k){return {titulo:k,items:m[k]};});
+}
+function planSetAgrupacion(val){
+  S.planAgrupacion=val;
+  try{localStorage.setItem('mecca_planAgrup',val);}catch(e){}
+  try{if(S.currentTab==='hoy')renderHoy();}catch(e){}
 }
 // Botón inteligente para las tarjetas de En Obra
 function _planBtnEnObra(a){
@@ -3893,6 +3963,7 @@ function applyActFilters(acts){
   if(responsables.length) filtered = filtered.filter(a=>_ingenieros(a.ingeniero_nombre).some(n=>responsables.indexOf(n)>=0));
   if(av.tipo) filtered = filtered.filter(a=>a.tipo_personal===av.tipo);
   if(av.sinContratista) filtered = filtered.filter(a=>a.tipo_personal==='contratista'&&!a.personal_nombre);
+  if(S.actFiltroPlan){ var _obj=S.actFiltroPlan==='manana'?tomorrow():today(); filtered = filtered.filter(a=>(a.fecha_plan||'').slice(0,10)===_obj); }
   return sortByPriority(filtered);
 }
 
@@ -3983,7 +4054,7 @@ function _actToggleResponsable(val){
   var idx=arr.indexOf(val);if(idx>=0)arr.splice(idx,1);else arr.push(val);
   S.actFiltroAvanzado={...S.actFiltroAvanzado,responsables:arr};renderActs();
 }
-function _actLimpiarFiltros(){S.actFiltroRapidos=[];S.actFiltroAvanzado={};S.actFiltroOpen=null;renderActs();}
+function _actLimpiarFiltros(){S.actFiltroRapidos=[];S.actFiltroAvanzado={};S.actFiltroPlan='';S.actFiltroOpen=null;renderActs();}
 function _hoyToggleEstado(val){
   if(!val){S.hoyFiltroEstados=[];renderHoy();return;}
   var arr=(S.hoyFiltroEstados||[]).slice();
@@ -4013,7 +4084,7 @@ function buildActsFiltros(){
   var contOpts=getContratistasOpts();
   var ingOpts=getIngOpts();
   var propioOn=av.tipo==='propio',adminOn=av.tipo==='ingeniero',urgOn=av.prioridad==='urgente',arqOn=!!av.requiereArq;
-  var hasFilters=rapidos.length||ubicaciones.length||contratistas.length||responsables.length||av.tipo||av.sinContratista||av.prioridad||av.requiereArq;
+  var hasFilters=rapidos.length||ubicaciones.length||contratistas.length||responsables.length||av.tipo||av.sinContratista||av.prioridad||av.requiereArq||S.actFiltroPlan;
   var open=S.actFiltroOpen||null;
 
   // Dropdown trigger button
@@ -4076,6 +4147,11 @@ function buildActsFiltros(){
   h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,tipo:S.actFiltroAvanzado.tipo===\'ingeniero\'?\'\':\'ingeniero\'};S.actFiltroOpen=null;renderActs()" style="'+pillSt+(adminOn?'#1a56db':'var(--border2)')+';background:'+(adminOn?'#e8f0fe':'var(--bg2)')+';color:'+(adminOn?'#1a56db':'var(--text2)')+'">'+(adminOn?'✓ ':'')+'📋 Admin</button>';
   h+='<button onclick="toggleFiltroUrgente()" style="'+pillSt+(urgOn?'#e03131':'var(--border2)')+';background:'+(urgOn?'#fff5f5':'var(--bg2)')+';color:'+(urgOn?'#e03131':'var(--text2)')+'">'+(urgOn?'✓ ':'')+'🔴 Urgentes</button>';
   h+='<button onclick="toggleFiltroArq()" style="'+pillSt+(arqOn?'#7048e8':'var(--border2)')+';background:'+(arqOn?'#f3f0ff':'var(--bg2)')+';color:'+(arqOn?'#7048e8':'var(--text2)')+'">'+(arqOn?'✓ ':'')+'🏛 Con el Arq.</button>';
+  var _aphCnt=(S.acts||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===today()&&a.estado!=='completado';}).length;
+  var _apmCnt=(S.acts||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===tomorrow()&&a.estado!=='completado';}).length;
+  var _aphOn=S.actFiltroPlan==='hoy',_apmOn=S.actFiltroPlan==='manana';
+  h+='<button onclick="S.actFiltroPlan=S.actFiltroPlan===\'hoy\'?\'\':\'hoy\';renderActs()" style="'+pillSt+(_aphOn?'var(--accent)':'var(--border2)')+';background:'+(_aphOn?'var(--accent-soft)':'var(--bg2)')+';color:'+(_aphOn?'var(--accent)':'var(--text2)')+'">'+(_aphOn?'✓ ':'')+'📅 Plan hoy ('+_aphCnt+')</button>';
+  h+='<button onclick="S.actFiltroPlan=S.actFiltroPlan===\'manana\'?\'\':\'manana\';renderActs()" style="'+pillSt+(_apmOn?'var(--accent)':'var(--border2)')+';background:'+(_apmOn?'var(--accent-soft)':'var(--bg2)')+';color:'+(_apmOn?'var(--accent)':'var(--text2)')+'">'+(_apmOn?'✓ ':'')+'📅 Plan mañana ('+_apmCnt+')</button>';
   if(hasFilters) h+='<button onclick="_actLimpiarFiltros()" style="'+pillSt+'#e03131;background:#fff5f5;color:#e03131">× Limpiar</button>';
   h+='</div>';
   if(panel) h+=panel;
@@ -4115,6 +4191,7 @@ function renderActs(){
         📋 Todas
       </button>
     </div>
+    ${planModoToggleHTML('renderActs()')}
     <div style="margin-bottom:12px">
       <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Agrupar por</div>
       <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px">
@@ -4122,7 +4199,7 @@ function renderActs(){
       </div>
     </div>
     ${buildActsFiltros()}
-    <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">${filtered.length} actividad${filtered.length!==1?'es':''} ${(S.actFiltroRapidos||[]).length||Object.values(S.actFiltroAvanzado||{}).some(v=>Array.isArray(v)?v.length>0:!!v)?'filtradas':'total'}</div>
+    <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">${filtered.length} actividad${filtered.length!==1?'es':''} ${(S.actFiltroRapidos||[]).length||S.actFiltroPlan||Object.values(S.actFiltroAvanzado||{}).some(v=>Array.isArray(v)?v.length>0:!!v)?'filtradas':'total'}</div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff8eb;border:1px solid #ffe066;border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:11px;color:#856404">
       <span>📅 ${allActs.length} cargadas${_actsRango(allActs)}</span>
       ${S.actLimitAll?'<span style="color:#2f9e44;font-weight:700">Todas cargadas ✓</span>':`<button onclick="S.actLimitAll=true;loadActsAll().then(function(){renderActs();})" style="padding:4px 10px;border:1.5px solid #f08c00;background:#fff;color:#e67700;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">⤓ Cargar todas</button>`}
@@ -4419,7 +4496,10 @@ function actsDesktopTable(acts, showDate){
       ?'<span style="color:#e03131;font-weight:700;cursor:pointer;font-size:11px" onclick="event.stopPropagation();editAct(\''+a.id+'\')" title="Asignar">⚠️ Sin asignar</span>'
       :'<span style="color:var(--text2);font-size:11.5px">'+esc(a.personal_nombre||a.ingeniero_nombre||'—')+'</span>';
 
-    html+='<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\''+bg+'\'" onclick="editAct(\''+a.id+'\')">';
+    var _planActive=canEdit()&&!!S.planMode, _enPlan=_planActive&&_planEnPlanActivo(a);
+    if(_enPlan) bg='var(--accent-soft)';
+    var _rowClick=_planActive?('planToggleDia(\''+a.id+'\')'):('editAct(\''+a.id+'\')');
+    html+='<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s'+(_enPlan?';box-shadow:inset 3px 0 0 var(--accent)':'')+'" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\''+bg+'\'" onclick="'+_rowClick+'">';
 
     // Estado
     html+='<td style="padding:6px 8px" onclick="event.stopPropagation()">'
@@ -4508,6 +4588,17 @@ function actHTML(a, ai, tipo){
        :a.estado;
   var bleft=retrasada?'#e03131':a.estado==='en-progreso'?'#1a56db':a.estado==='pausada'?'#f08c00':tipo==='contratista'?'var(--blue)':'var(--accent)';
   var bborder=retrasada?'rgba(220,50,50,.3)':a.estado==='en-progreso'?'rgba(26,86,219,.2)':'var(--border)';
+
+  // Modo plan: tarjeta compacta clickeable (agregar/quitar del plan)
+  if(canEdit() && S.planMode){
+    var _enPlan=_planEnPlanActivo(a);
+    return '<div onclick="planToggleDia(\''+a.id+'\')" style="padding:10px 12px;margin-bottom:6px;border-radius:var(--r2);cursor:pointer;border:'+(_enPlan?'2px solid var(--accent);background:var(--accent-soft)':'1.5px solid var(--border)')+'">'+
+      (_enPlan?'<div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:4px">✓ En plan '+(S.planMode==='manana'?'MAÑANA':'HOY')+'</div>':'')+
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">'+(urgente?'🔴 ':'')+esc(a.descripcion)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+[a.area?'📍 '+esc(a.area):null,a.personal_nombre?'👷 '+esc(a.personal_nombre):null,esc(a.estado),(a.porcentaje||0)+'%'].filter(Boolean).join(' · ')+'</div>'+
+      '<div style="font-size:11px;color:var(--accent);font-weight:700;margin-top:6px">'+(_enPlan?'Tocar para quitar del plan':'Tocar para agregar al plan')+'</div>'+
+    '</div>';
+  }
 
   return`<div class="act-item ${tipo}" style="padding:8px 10px;margin-bottom:6px;border:1.5px solid ${bborder};border-left:4px solid ${bleft};${retrasada?'background:#fffafa;':''}">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:3px">
@@ -9189,6 +9280,7 @@ function getFilteredActsActs(){
     if(S.enObraFiltroEstado && a.estado!==S.enObraFiltroEstado) return false;
     if(S.enObraFiltroUbic && (a.area||'')!==S.enObraFiltroUbic) return false;
     if(S.enObraFiltroUrgente && a.prioridad!=='urgente') return false;
+    if(S.enObraFiltroPlan){ var _obj=S.enObraFiltroPlan==='manana'?tomorrow():today(); if((a.fecha_plan||'').slice(0,10)!==_obj) return false; }
     if(q){
       var hay=(a.descripcion||'').toLowerCase()+(a.area||'').toLowerCase()+(a.personal_nombre||'').toLowerCase()+(a.ingeniero_nombre||'').toLowerCase();
       if(hay.indexOf(q)<0) return false;
@@ -9206,8 +9298,8 @@ function buildEnObraFiltros(){
   var propioOpts=combinedNames.map(function(n){return{val:n,label:n};});
   var totalActs=S.actsActivas.length;
 
-  var hasFilters=S.enObraFiltroTipo||S.enObraFiltroContratista||S.enObraFiltroPersonal||S.enObraFiltroEstado||S.enObraFiltroUbic||S.enObraFiltroUrgente;
-  var activeFiltCount=[S.enObraFiltroTipo,S.enObraFiltroContratista,S.enObraFiltroPersonal,S.enObraFiltroEstado,S.enObraFiltroUbic].filter(Boolean).length+(S.enObraFiltroUrgente?1:0);
+  var hasFilters=S.enObraFiltroTipo||S.enObraFiltroContratista||S.enObraFiltroPersonal||S.enObraFiltroEstado||S.enObraFiltroUbic||S.enObraFiltroUrgente||S.enObraFiltroPlan;
+  var activeFiltCount=[S.enObraFiltroTipo,S.enObraFiltroContratista,S.enObraFiltroPersonal,S.enObraFiltroEstado,S.enObraFiltroUbic,S.enObraFiltroPlan].filter(Boolean).length+(S.enObraFiltroUrgente?1:0);
   var filteredCount=getFilteredActsActs().length;
 
   var h='';
@@ -9280,9 +9372,17 @@ function buildEnObraFiltros(){
     h+='<button onclick="toggleEnObraPropio()" style="flex:1;padding:7px 8px;border-radius:8px;border:1.5px solid '+(propioOn?'#1c7ed6':'#dee2e6')+';background:'+(propioOn?'#e7f5ff':'#f8f9fa')+';color:'+(propioOn?'#1c7ed6':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(propioOn?'✓ ':'')+'👷 Propio</button>';
     h+='<button onclick="S.enObraFiltroUrgente=!S.enObraFiltroUrgente;renderEnObra()" style="flex:1;padding:7px 8px;border-radius:8px;border:1.5px solid '+(urgOn?'#e03131':'#dee2e6')+';background:'+(urgOn?'#fff5f5':'#f8f9fa')+';color:'+(urgOn?'#e03131':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(urgOn?'✓ ':'')+'🔴 Urgentes'+(urgCnt?' ('+urgCnt+')':'')+'</button>';
     h+='</div>';
+    // Chips de plan (contador)
+    var _phCnt=(S.actsActivas||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===today()&&a.estado!=='completado';}).length;
+    var _pmCnt=(S.actsActivas||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===tomorrow()&&a.estado!=='completado';}).length;
+    var _phOn=S.enObraFiltroPlan==='hoy',_pmOn=S.enObraFiltroPlan==='manana';
+    h+='<div style="display:flex;gap:6px;margin-bottom:8px">';
+    h+='<button onclick="S.enObraFiltroPlan=S.enObraFiltroPlan===\'hoy\'?\'\':\'hoy\';renderEnObra()" style="flex:1;padding:7px 8px;border-radius:8px;border:1.5px solid '+(_phOn?'var(--accent)':'#dee2e6')+';background:'+(_phOn?'var(--accent-soft)':'#f8f9fa')+';color:'+(_phOn?'var(--accent)':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(_phOn?'✓ ':'')+'📅 Plan hoy ('+_phCnt+')</button>';
+    h+='<button onclick="S.enObraFiltroPlan=S.enObraFiltroPlan===\'manana\'?\'\':\'manana\';renderEnObra()" style="flex:1;padding:7px 8px;border-radius:8px;border:1.5px solid '+(_pmOn?'var(--accent)':'#dee2e6')+';background:'+(_pmOn?'var(--accent-soft)':'#f8f9fa')+';color:'+(_pmOn?'var(--accent)':'#495057')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">'+(_pmOn?'✓ ':'')+'📅 Plan mañana ('+_pmCnt+')</button>';
+    h+='</div>';
 
     if(hasFilters){
-      h+='<button onclick="S.enObraFiltroTipo=\'\';S.enObraFiltroContratista=\'\';S.enObraFiltroPersonal=\'\';S.enObraFiltroEstado=\'\';S.enObraFiltroUbic=\'\';S.enObraFiltroUrgente=false;S.enObraContratista=\'\';renderEnObra()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid #e03131;background:#fff5f5;color:#e03131;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">× Limpiar filtros</button>';
+      h+='<button onclick="S.enObraFiltroTipo=\'\';S.enObraFiltroContratista=\'\';S.enObraFiltroPersonal=\'\';S.enObraFiltroEstado=\'\';S.enObraFiltroUbic=\'\';S.enObraFiltroUrgente=false;S.enObraFiltroPlan=\'\';S.enObraContratista=\'\';renderEnObra()" style="width:100%;padding:7px;border-radius:8px;border:1.5px solid #e03131;background:#fff5f5;color:#e03131;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">× Limpiar filtros</button>';
       if(S.enObraContratista) h+='<div style="margin-top:6px;font-size:11px;color:#1a56db;font-weight:600;text-align:center">Toca + para agregar actividad a '+esc(S.enObraContratista)+'</div>';
     }
 
@@ -9351,6 +9451,9 @@ function renderEnObra(){
 
     <!-- FILTROS -->
     ${buildEnObraFiltros()}
+
+    <!-- MODO PLAN -->
+    ${planModoToggleHTML('renderEnObra()')}
 
     <!-- ACTIVIDADES -->
     ${acts.length===0
@@ -9528,26 +9631,34 @@ function buildActCardObra(a){
       '</div>'
     :'';
 
-  return '<div style="background:#fff;border:1.5px solid '+bc+';border-left:4px solid '+ec+';border-radius:var(--r2);padding:8px 10px;margin-bottom:8px'+(retrasada?';background:#fffafa':'')+'">'+
+  var planActive=canEdit()&&!!S.planMode, enPlan=_planEnPlanActivo(a);
+  var openStyle='background:#fff;border:1.5px solid '+bc+';border-left:4px solid '+ec+';border-radius:var(--r2);padding:8px 10px;margin-bottom:8px'+(retrasada?';background:#fffafa':'');
+  if(planActive){ openStyle+=';cursor:pointer'; if(enPlan) openStyle+=';border:2px solid var(--accent);background:var(--accent-soft)'; }
+  var metaArea = (planActive
+    ? (a.area?'<span style="color:var(--accent);font-weight:600">📍 '+esc(a.area)+'</span>':'<span style="color:#e67700;font-weight:600">⚠️ Sin ubicación</span>')
+    : (a.area?'<span style="color:var(--accent);font-weight:600">📍 '+esc(a.area)+'</span>':'<span style="color:#e67700;cursor:pointer;font-weight:600" onclick="setArea(\''+id+'\')">⚠️ Sin ubicación</span>'));
+  return '<div style="'+openStyle+'"'+(planActive?' onclick="planToggleDia(\''+id+'\')"':'')+'>'+
+    (planActive&&enPlan?'<div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:4px">✓ En plan '+(S.planMode==='manana'?'MAÑANA':'HOY')+'</div>':'')+
     blockedBanner+
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:3px">'+
       '<div style="font-size:13px;font-weight:600;flex:1;min-width:0;line-height:1.3">'+tipo+' '+desc+'</div>'+
       '<span style="font-size:10px;background:'+eb+';color:'+ec+';padding:2px 7px;border-radius:6px;font-weight:700;border:1px solid '+ec+'44;white-space:nowrap;flex-shrink:0">'+el+'</span>'+
     '</div>'+
     '<div style="font-size:11px;color:var(--text3);display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:2px">'+
-      (a.area
-        ?'<span style="color:var(--accent);font-weight:600">📍 '+esc(a.area)+'</span>'
-        :'<span style="color:#e67700;cursor:pointer;font-weight:600" onclick="setArea(\''+id+'\')">⚠️ Sin ubicación</span>')+
+      metaArea+
       (a.personal_nombre?'<span style="opacity:.4">·</span><span>👷 '+esc(a.personal_nombre)+'</span>':'')+
       (a.ingeniero_nombre?'<span style="opacity:.4">·</span><span>👤 '+esc(a.ingeniero_nombre)+'</span>':'')+
       '<span style="opacity:.4">·</span><span>📅 '+a.fecha+'</span>'+
     '</div>'+
     (pct>0?'<div style="height:3px;background:#e9ecef;border-radius:2px;overflow:hidden;margin:4px 0"><div style="height:100%;width:'+Math.min(100,pct)+'%;background:'+ec+';border-radius:2px"></div></div>':'')+
-    avanceChips+
-    (a.notas?'<div style="font-size:11px;color:var(--text3);margin-top:4px;padding:4px 8px;background:#f8f9fa;border-radius:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.notas)+'</div>':'')+
-    (tieneFoto(a)?'<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:5px">'+fotoUrls(a.fotos).map(function(f){return'<img src="'+f+'" style="width:44px;height:44px;object-fit:cover;border-radius:5px;cursor:pointer;border:1px solid #dee2e6" onclick="verFotoInfo(\''+f+'\',\''+esc(a.descripcion)+'\',\''+a.fecha+'\',\''+esc(a.area||'')+'\',\'\',\'\',\''+id+'\')" loading="lazy">';}).join('')+'</div>':'')+
-  btns+
-  _planBtnEnObra(a)+
+    (planActive?'' :
+      avanceChips+
+      (a.notas?'<div style="font-size:11px;color:var(--text3);margin-top:4px;padding:4px 8px;background:#f8f9fa;border-radius:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.notas)+'</div>':'')+
+      (tieneFoto(a)?'<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:5px">'+fotoUrls(a.fotos).map(function(f){return'<img src="'+f+'" style="width:44px;height:44px;object-fit:cover;border-radius:5px;cursor:pointer;border:1px solid #dee2e6" onclick="verFotoInfo(\''+f+'\',\''+esc(a.descripcion)+'\',\''+a.fecha+'\',\''+esc(a.area||'')+'\',\'\',\'\',\''+id+'\')" loading="lazy">';}).join('')+'</div>':'')+
+      btns+
+      _planBtnEnObra(a)
+    )+
+    (planActive?'<div style="font-size:11px;color:var(--accent);font-weight:700;margin-top:6px">'+(enPlan?'Tocar para quitar del plan':'Tocar para agregar al plan')+'</div>':'')+
   '</div>';
 }
 
