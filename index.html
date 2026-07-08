@@ -688,16 +688,47 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260609_6';
-const APP_BUILD='mecca-v7';
-// Auto-update: fetch sw.js with unique timestamp (bypasses ALL caches, even CDN).
-// If the CACHE version in sw.js doesn't match APP_BUILD, reload with cache-busted URL.
+const APP_VERSION='20260609_8';
+const APP_BUILD='mecca-v8';
+// ── AUTO-ACTUALIZACIÓN ROBUSTA ───────────────────────────────────────────────
+// Detecta cualquier deploy nuevo comparando la firma (ETag/Last-Modified) del
+// index.html servido por GitHub Pages, que cambia en cada push. NO depende de
+// subir versiones a mano. Usa HEAD (no baja los ~950KB) y cache:'reload' para
+// revalidar contra la CDN. Si la firma cambió respecto a la que se cargó, recarga
+// con una URL única (cache-miss garantizado en navegador y CDN). Guard anti-loop
+// con sessionStorage + el parámetro ?_r=.
 (function(){
-  if(/[?&]_r=/.test(location.search)){try{history.replaceState(null,'',location.pathname);}catch(e){}return;}
-  fetch('./sw.js?_='+Date.now()).then(function(r){return r.text();}).then(function(txt){
-    var m=txt.match(/var CACHE=['"]([^'"]+)['"]/);
-    if(m&&m[1]!==APP_BUILD)location.replace(location.pathname+'?_r='+Date.now());
-  }).catch(function(){});
+  if(/[?&]_r=/.test(location.search)){ try{history.replaceState(null,'',location.pathname);}catch(e){} }
+  var SIG_KEY='mecca_appsig';
+  function firma(){
+    return fetch(location.pathname+'?_sig='+Date.now(), {method:'HEAD', cache:'reload'})
+      .then(function(r){ return (r.headers.get('etag')||r.headers.get('last-modified')||''); })
+      .catch(function(){ return ''; });
+  }
+  // Baseline = firma del código que se está corriendo. En arranque en frío la
+  // navegación vino fresca (SW usa cache:'reload'), así que la firma actual == la que corre.
+  // Si ya hay baseline en sessionStorage (misma sesión), NO lo pisamos: así una
+  // PWA que quedó abierta con código viejo conserva su baseline viejo y detecta el deploy.
+  (function initBaseline(){
+    var have=null; try{ have=sessionStorage.getItem(SIG_KEY); }catch(e){}
+    if(have) return;
+    firma().then(function(s){ if(s){ try{ sessionStorage.setItem(SIG_KEY,s); }catch(e){} } });
+  })();
+  var _busy=false;
+  function chequear(){
+    if(_busy) return; _busy=true;
+    firma().then(function(s){
+      _busy=false;
+      var base=null; try{ base=sessionStorage.getItem(SIG_KEY); }catch(e){}
+      if(s && base && s!==base){
+        try{ sessionStorage.setItem(SIG_KEY,s); }catch(e){} // evita loop
+        location.replace(location.pathname+'?_r='+Date.now());
+      }
+    });
+  }
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) chequear(); });
+  window.addEventListener('focus', chequear);
+  setInterval(chequear, 60000); // y cada minuto
 })();
 // ── AVISOS DE SEGURIDAD ─────────────────────────────
 // URL de tu Apps Script (Web App) — la MISMA que usas para subir fotos.
@@ -12351,45 +12382,8 @@ setInterval(function(){
 }, 60000); // revisar cada minuto
 
 // ── AUTO-ACTUALIZACIÓN ──────────────────────────────────────────────────────
-// Cada vez que la app vuelve al primer plano (y cada 5 min), compara la versión
-// de sw.js en el servidor con APP_BUILD. Si difieren, recarga con URL única
-// que garantiza cache-miss tanto en el navegador como en la CDN de GitHub.
-// NOTA: location.reload(true) está deprecado y Safari iOS lo ignora — solo
-// location.replace con una URL nueva garantiza contenido fresco.
-(function(){
-  var _checking=false;
-  function checkForUpdate(){
-    if(_checking)return;
-    _checking=true;
-    fetch('./sw.js?_='+Date.now())
-      .then(function(r){return r.text();})
-      .then(function(txt){
-        _checking=false;
-        var m=txt.match(/var CACHE=['"]([^'"]+)['"]/);
-        if(m&&m[1]&&m[1]!==APP_BUILD){
-          var modal=document.getElementById('modal');
-          var modalOpen=modal&&modal.style.display!=='none';
-          if(!modalOpen){
-            location.replace(location.pathname+'?_r='+Date.now());
-          } else {
-            var _wc=setInterval(function(){
-              if(!modal||modal.style.display==='none'){
-                clearInterval(_wc);
-                location.replace(location.pathname+'?_r='+Date.now());
-              }
-            },5000);
-          }
-        }
-      })
-      .catch(function(){_checking=false;});
-  }
-  setInterval(checkForUpdate,5*60*1000);
-  document.addEventListener('visibilitychange',function(){
-    if(document.visibilityState==='visible')checkForUpdate();
-  });
-  // Verificar también al inicio (después de 3 segundos para no interferir con carga)
-  setTimeout(checkForUpdate,3000);
-})();
+// La detección de deploys nuevos se hace por firma (ETag/Last-Modified) en el
+// bloque "AUTO-ACTUALIZACIÓN ROBUSTA" al inicio del script. Aquí no se repite.
 
 loadAll();
 
