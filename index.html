@@ -1351,7 +1351,7 @@ let S={
   planosMapas:{}, planosVista:'mapa', planosNivelSel:'', _planoPendingPin:null,
   replan:{area:'',contr:'',soloVencidas:true,sel:{},_groups:{}},
   bitacora:{dias:14,cambios:[],notas:[],actsMap:{},_pendingFotos:[]},
-  planMode:'', enObraFiltroPlan:'', actFiltroPlan:'', planFiltro:{estados:[],tipos:[],q:''}, planAgrupacion:(function(){try{return localStorage.getItem('mecca_planAgrup')||'contratista';}catch(e){return 'contratista';}})(),
+  planMode:'', enObraFiltroPlan:'', actFiltroPlan:'', planFiltro:{estados:[],tipos:[],q:''}, planAddQ:'', planAgrupacion:(function(){try{return localStorage.getItem('mecca_planAgrup')||'contratista';}catch(e){return 'contratista';}})(),
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
@@ -2577,9 +2577,52 @@ function renderPlanDia(){
     h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-xs);padding:14px;text-align:center;font-size:12px;color:var(--text3)">No hay actividades planificadas — agrégalas desde En Obra.</div>';
   }
   if(editable){
-    h+='<button onclick="planDiaNuevaAct()" style="width:100%;padding:10px;background:var(--bg3);border:1.5px dashed var(--border2);border-radius:var(--r2);color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:4px;">＋ Nueva actividad para hoy</button>';
+    // Buscador para AGREGAR actividades existentes (abiertas, no planificadas hoy) al plan
+    var _addQ=(S.planAddQ||'');
+    h+='<div style="margin-top:12px">'+
+       '<label style="font-size:11px;color:var(--text3);font-weight:700;display:block;margin-bottom:4px">Agregar actividad al plan</label>'+
+       '<div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1.5px solid var(--border2);border-radius:var(--r);padding:6px 10px">'+
+         '<span style="color:var(--text3)">🔎</span>'+
+         '<input id="plan-add-search" type="search" value="'+esc(_addQ)+'" placeholder="Buscar actividad para agregar al plan…" oninput="_planAddBuscar(this.value)" style="flex:1;border:none;outline:none;background:transparent;font-size:13px;font-family:var(--font);color:var(--text)">'+
+       '</div>';
+    if(_addQ.trim().length>=2){
+      var _q=_addQ.toLowerCase().trim(), _hoy=today();
+      var _cand=(S.abiertas||[]).filter(function(a){
+        if(a.estado==='completado') return false;
+        if((a.fecha_plan||'').slice(0,10)===_hoy) return false;
+        var hay=((a.descripcion||'')+' '+(a.area||'')+' '+(a.personal_nombre||'')+' '+(a.ingeniero_nombre||'')).toLowerCase();
+        return hay.indexOf(_q)>=0;
+      }).slice(0,8);
+      h+='<div style="margin-top:6px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">';
+      if(!_cand.length){
+        h+='<div style="padding:10px 12px;font-size:12px;color:var(--text3);text-align:center">Sin coincidencias</div>';
+      } else {
+        _cand.forEach(function(a,i){
+          var asig=a.personal_nombre||a.ingeniero_nombre||'';
+          h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;'+(i?'border-top:1px solid var(--border2);':'')+'background:var(--bg2)">'+
+             '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;color:var(--text)">'+esc(a.descripcion||'(sin descripción)')+'</div>'+
+             '<div style="font-size:10px;color:var(--text3);margin-top:1px">'+[a.area?esc(a.area):null,asig?esc(asig):null].filter(Boolean).join(' · ')+'</div></div>'+
+             '<button onclick="planAddDesdeBuscador(\''+a.id+'\')" style="flex-shrink:0;padding:5px 10px;background:var(--accent-soft);color:var(--accent);border:1.5px solid var(--accent);border-radius:var(--r);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">＋ Plan hoy</button>'+
+             '</div>';
+        });
+      }
+      h+='</div>';
+    }
+    h+='</div>';
+    h+='<button onclick="planDiaNuevaAct()" style="width:100%;padding:10px;background:var(--bg3);border:1.5px dashed var(--border2);border-radius:var(--r2);color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:8px;">＋ Nueva actividad para hoy</button>';
   }
   return h;
+}
+function _planAddBuscar(v){
+  S.planAddQ=v;
+  if(S.currentTab==='hoy') renderHoy();
+  var el=document.getElementById('plan-add-search');
+  if(el){ el.focus(); try{el.setSelectionRange(v.length,v.length);}catch(e){} }
+}
+function planAddDesdeBuscador(id){
+  planAgregar(id,'hoy');   // PATCH fecha_plan=hoy + updateMem + rerender + toast
+  S.planAddQ='';
+  if(S.currentTab==='hoy') renderHoy();
 }
 function _planDiaCard(a,editable,esDup){
   var atraso=_hoyDiasAtraso(a); var venc=atraso>0;
@@ -2707,9 +2750,6 @@ function generarPDFPlan(opts){
   if(!window.jspdf||!window.jspdf.jsPDF){ setSS('err','PDF no disponible'); return; }
   var sp=_planDiaSplit();
   var delDia=sp.delDia.slice();
-  // urgentes del día: prioridad urgente o vencidas
-  var urg=delDia.filter(function(a){return a.prioridad==='urgente'||_hoyDiasAtraso(a)>0;});
-  urg.sort(function(a,b){return _hoyDiasAtraso(b)-_hoyDiasAtraso(a);});
   var progr=delDia.slice().sort(function(a,b){
     var da=_hoyDiasAtraso(a),db=_hoyDiasAtraso(b);
     if(db!==da) return db-da;
@@ -2750,34 +2790,8 @@ function generarPDFPlan(opts){
     }
     function chkY(hh){ if(y+hh>282){ foot(); doc.addPage(); pageNo++; drawH(); y=28; } }
     drawH(); y=28;
-    // KPI band (verde)
-    _fc(GBG);doc.rect(M,y,RW,13,'F');_fc(BDX_GRN);doc.rect(M,y,RW,0.6,'F');
-    function kpi(v,l,cx,col){_tc(col);doc.setFontSize(17);doc.setFont('helvetica','bold');doc.text(''+v,cx,y+7,{align:'center'});_tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text(l,cx,y+11,{align:'center'});}
-    kpi(delDia.length,'Actividades',M+RW*0.17,BDX_GRN);
-    kpi(contrSet.length,'Contratistas',M+RW*0.5,BLUE);
-    kpi(urg.length,'Urgentes',M+RW*0.83,urg.length?RED:MUT);
-    y+=17;
-    // URGENTES band (roja)
-    if(urg.length){
-      chkY(8);
-      _fc(RED);doc.rect(M,y,RW,6,'F');
-      _tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text('URGENTES DEL DIA',M+3,y+4);
-      y+=7;
-      urg.forEach(function(a,i){
-        chkY(7);
-        var atr=_hoyDiasAtraso(a);
-        _fc(i%2===0?[255,236,236]:WHT);doc.rect(M,y,RW,6.5,'F');_fc(RED);doc.rect(M,y,1.6,6.5,'F');
-        _tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');
-        doc.text(doc.splitTextToSize(_s(a.area||'—'),30)[0],M+3,y+4.3);
-        doc.setFont('helvetica','normal');
-        doc.text(doc.splitTextToSize(_s(a.descripcion||''),88)[0],M+34,y+4.3);
-        _tc(MUT);doc.text(doc.splitTextToSize(_s(a.personal_nombre||'—'),30)[0],M+124,y+4.3);
-        if(atr>0){_tc(RED);doc.setFont('helvetica','bold');doc.text('+'+atr+'d',W-M-3,y+4.3,{align:'right'});}
-        y+=6.5;
-      });
-      y+=3;
-    }
-    // ACTIVIDADES PROGRAMADAS (azul)
+    // ACTIVIDADES PROGRAMADAS (azul) — arranca justo bajo el encabezado
+    // (sin banda de KPIs ni sección de urgentes: el reporte es solo tareas + personal)
     chkY(8);
     _fc(BLUE);doc.rect(M,y,RW,6,'F');
     _tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text('ACTIVIDADES PROGRAMADAS',M+3,y+4);
