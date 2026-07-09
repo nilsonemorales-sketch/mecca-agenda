@@ -1351,7 +1351,7 @@ let S={
   planosMapas:{}, planosVista:'mapa', planosNivelSel:'', _planoPendingPin:null,
   replan:{area:'',contr:'',soloVencidas:true,sel:{},_groups:{}},
   bitacora:{dias:14,cambios:[],notas:[],actsMap:{},_pendingFotos:[]},
-  planMode:'', enObraFiltroPlan:'', actFiltroPlan:'', planFiltro:{estados:[],tipos:[],q:''}, planAddQ:'', planAgrupacion:(function(){try{return localStorage.getItem('mecca_planAgrup')||'contratista';}catch(e){return 'contratista';}})(),
+  planMode:'', enObraFiltroPlan:'', actFiltroPlan:'', actFiltroTexto:'', planFiltro:{estados:[],tipos:[],q:''}, planAddQ:'', planAgrupacion:(function(){try{return localStorage.getItem('mecca_planAgrup')||'contratista';}catch(e){return 'contratista';}})(),
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
@@ -3785,7 +3785,20 @@ function applyActFilters(acts){
   if(av.tipo) filtered = filtered.filter(a=>a.tipo_personal===av.tipo);
   if(av.sinContratista) filtered = filtered.filter(a=>a.tipo_personal==='contratista'&&!a.personal_nombre);
   if(S.actFiltroPlan){ var _obj=S.actFiltroPlan==='manana'?tomorrow():today(); filtered = filtered.filter(a=>(a.fecha_plan||'').slice(0,10)===_obj); }
+  if(S.actFiltroTexto && S.actFiltroTexto.trim()){
+    var _q=S.actFiltroTexto.toLowerCase().trim();
+    filtered = filtered.filter(function(a){
+      var hay=((a.descripcion||'')+' '+(a.area||'')+' '+(a.personal_nombre||'')+' '+(a.ingeniero_nombre||'')).toLowerCase();
+      return hay.indexOf(_q)>=0;
+    });
+  }
   return sortByPriority(filtered);
+}
+function _actBuscar(v){
+  S.actFiltroTexto=v;
+  renderActs();
+  var el=document.getElementById('act-search');
+  if(el){ el.focus(); try{el.setSelectionRange(v.length,v.length);}catch(e){} }
 }
 
 // Build filter groups for activities
@@ -3875,7 +3888,7 @@ function _actToggleResponsable(val){
   var idx=arr.indexOf(val);if(idx>=0)arr.splice(idx,1);else arr.push(val);
   S.actFiltroAvanzado={...S.actFiltroAvanzado,responsables:arr};renderActs();
 }
-function _actLimpiarFiltros(){S.actFiltroRapidos=[];S.actFiltroAvanzado={};S.actFiltroPlan='';S.actFiltroOpen=null;renderActs();}
+function _actLimpiarFiltros(){S.actFiltroRapidos=[];S.actFiltroAvanzado={};S.actFiltroPlan='';S.actFiltroTexto='';S.actFiltroOpen=null;renderActs();}
 function _hoyToggleEstado(val){
   if(!val){S.hoyFiltroEstados=[];renderHoy();return;}
   var arr=(S.hoyFiltroEstados||[]).slice();
@@ -3905,7 +3918,7 @@ function buildActsFiltros(){
   var contOpts=getContratistasOpts();
   var ingOpts=getIngOpts();
   var propioOn=av.tipo==='propio',adminOn=av.tipo==='ingeniero',urgOn=av.prioridad==='urgente',arqOn=!!av.requiereArq;
-  var hasFilters=rapidos.length||ubicaciones.length||contratistas.length||responsables.length||av.tipo||av.sinContratista||av.prioridad||av.requiereArq||S.actFiltroPlan;
+  var hasFilters=rapidos.length||ubicaciones.length||contratistas.length||responsables.length||av.tipo||av.sinContratista||av.prioridad||av.requiereArq||S.actFiltroPlan||S.actFiltroTexto;
   var open=S.actFiltroOpen||null;
 
   // Dropdown trigger button
@@ -4012,6 +4025,11 @@ function renderActs(){
         📋 Todas
       </button>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r2);padding:8px 12px;margin-bottom:10px">
+      <span style="color:var(--text3)">🔎</span>
+      <input id="act-search" type="search" value="${esc(S.actFiltroTexto||'')}" placeholder="Buscar actividad, área, persona..." oninput="_actBuscar(this.value)" style="flex:1;border:none;outline:none;font-size:13px;font-family:var(--font);background:transparent;color:var(--text)">
+      ${S.actFiltroTexto?`<button onclick="_actBuscar('')" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:0;line-height:1">×</button>`:''}
+    </div>
     ${planModoToggleHTML('renderActs()')}
     <div style="margin-bottom:12px">
       <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Agrupar por</div>
@@ -4020,7 +4038,7 @@ function renderActs(){
       </div>
     </div>
     ${buildActsFiltros()}
-    <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">${filtered.length} actividad${filtered.length!==1?'es':''} ${(S.actFiltroRapidos||[]).length||S.actFiltroPlan||Object.values(S.actFiltroAvanzado||{}).some(v=>Array.isArray(v)?v.length>0:!!v)?'filtradas':'total'}</div>
+    <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">${filtered.length} actividad${filtered.length!==1?'es':''} ${(S.actFiltroRapidos||[]).length||S.actFiltroPlan||S.actFiltroTexto||Object.values(S.actFiltroAvanzado||{}).some(v=>Array.isArray(v)?v.length>0:!!v)?'filtradas':'total'}</div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff8eb;border:1px solid #ffe066;border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:11px;color:#856404">
       <span>📅 ${allActs.length} cargadas${_actsRango(allActs)}</span>
       ${S.actLimitAll?'<span style="color:#2f9e44;font-weight:700">Todas cargadas ✓</span>':`<button onclick="S.actLimitAll=true;loadActsAll().then(function(){renderActs();})" style="padding:4px 10px;border:1.5px solid #f08c00;background:#fff;color:#e67700;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">⤓ Cargar todas</button>`}
