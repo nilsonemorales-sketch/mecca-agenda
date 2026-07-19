@@ -522,7 +522,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="tab" data-tab="plan" id="tab-plan" onclick="goTab('plan')" style="display:none">📅 Plan</div>
     <div class="tab" data-tab="replan" id="tab-replan" onclick="goTab('replan')" style="display:none">🗓️ Replnf.</div>
     <div class="tab" data-tab="bitacora" id="tab-bitacora" onclick="goTab('bitacora')" style="display:none">📒 Bitácora</div>
-    <div class="tab" data-tab="gerencia" onclick="goTab('gerencia')">📈 Gerencia</div>
+    <div class="tab" data-tab="gerencia" id="tab-gerencia" onclick="goTab('gerencia')" style="display:none">📈 Gerencia</div>
     <div class="tab" data-tab="metodologia" onclick="goTab('metodologia')">📖 Metodología</div>
   </div>
 
@@ -666,7 +666,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <button class="dw-btn" onclick="goTabD('planos')">📐 Planos y documentos</button>
     <button class="dw-btn" onclick="goTabD('compras')">🛒 Órdenes de Compra</button>
     <button class="dw-btn" onclick="goTabD('plan')">📅 Planificación — Gantt interactivo</button>
-    <button class="dw-btn" onclick="goTabD('gerencia')">📈 Gerencia — Panel ejecutivo</button>
+    <button class="dw-btn" id="dw-gerencia" onclick="goTabD('gerencia')" style="display:none">📈 Gerencia — Panel ejecutivo</button>
     <button class="dw-btn" onclick="goTabD('metodologia')">📖 Metodología — Guía de uso</button>
   </div>
   <div class="dw-sec">
@@ -2084,7 +2084,10 @@ function updateUserUI(){
   var adminVal=isAdmin();
   if(tP) tP.style.display=adminVal?'':'none';
   if(tR) tR.style.display=adminVal?'':'none';
-  if(!adminVal&&(S.currentTab==='plan'||S.currentTab==='replan')) goTab('hoy');
+  // Gerencia: solo admin (tab superior + entrada del drawer)
+  var tG=document.getElementById('tab-gerencia'); if(tG) tG.style.display=adminVal?'':'none';
+  var dG=document.getElementById('dw-gerencia'); if(dG) dG.style.display=adminVal?'':'none';
+  if(!adminVal&&(S.currentTab==='plan'||S.currentTab==='replan'||S.currentTab==='gerencia')) goTab('hoy');
   // Bitácora: visible para admin e ingenieros (canEdit)
   var tBit=document.getElementById('tab-bitacora');
   var editVal=canEdit();
@@ -2394,89 +2397,6 @@ async function loadMarcadasHoy(){
   return S.marcadasHoy;
 }
 function _hoyMarcarLocal(id){ (S.marcadasHoy=S.marcadasHoy||{})[String(id)]=1; }
-function hoyPendMarcarHTML(){
-  var abiertas=S.abiertas||[];
-  var marc=S.marcadasHoy||{};
-  var delDia=abiertas.filter(_hoyEsDelDia);
-  var Y=delDia.length;
-  if(!Y) return '';
-  var X=delDia.filter(function(a){return marc[String(a.id)];}).length;
-  var pend=delDia.filter(function(a){return !marc[String(a.id)];});
-  pend.sort(function(a,b){ return _hoyDiasAtraso(b)-_hoyDiasAtraso(a); }); // vencidas primero, mayor atraso arriba
-  var editable=canEdit();
-  var h='<div style="margin-bottom:10px;border:1.5px solid #1a56db;border-radius:12px;overflow:hidden;background:#fff">';
-  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:#e8f0fe">'+
-     '<span style="font-size:13px;font-weight:800;color:#1a56db">📋 Planificadas para hoy · pendientes de marcar</span>'+
-     '<span style="font-size:11px;font-weight:800;color:#1a56db;background:#fff;border:1px solid #a5c8ff;border-radius:10px;padding:2px 9px;white-space:nowrap">marcadas hoy: '+X+' / '+Y+'</span>'+
-     '</div>';
-  if(!pend.length){
-    h+='<div style="padding:14px;text-align:center;font-size:13px;font-weight:700;color:#2f9e44">✓ Todo lo del día está marcado</div>';
-  } else {
-    pend.forEach(function(a){ h+=_hoyPendRow(a,editable); });
-  }
-  h+='</div>';
-  return h;
-}
-function _hoyPendRow(a,editable){
-  var atraso=_hoyDiasAtraso(a);
-  var venc=atraso>0;
-  var ec={'completado':'#2f9e44','en-progreso':'#1a56db','pendiente':'#868e96','pausada':'#e67700'}[a.estado]||'#868e96';
-  var asignado=a.personal_nombre||a.ingeniero_nombre||'';
-  var h='<div style="padding:9px 12px;border-top:1px solid var(--border2);'+(venc?'border-left:4px solid #e03131;background:#fff5f5':'border-left:4px solid #1a56db')+'">';
-  h+='<div style="font-size:13px;font-weight:700;color:var(--text)">'+esc(a.descripcion||'(sin descripción)')+'</div>';
-  h+='<div style="font-size:11px;color:var(--text3);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
-     (a.area?'<span>📍 '+esc(a.area)+'</span>':'')+
-     (asignado?'<span>👤 '+esc(asignado)+'</span>':'')+
-     '<span style="color:'+ec+';font-weight:700">'+esc(a.estado)+'</span>'+
-     '<span>'+(a.porcentaje||0)+'%</span>'+
-     (venc?'<span style="color:#e03131;font-weight:800">⏰ '+atraso+'d de atraso</span>':'')+
-     '</div>';
-  if(editable){
-    h+='<div style="display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap">'+
-       '<span style="font-size:11px;color:var(--text3)">%</span>'+
-       '<input type="number" min="0" max="100" value="'+(a.porcentaje||0)+'" id="hoypm-'+a.id+'" style="width:56px;padding:5px 7px;border:1.5px solid var(--border2);border-radius:6px;font-size:12px;font-family:var(--font)">'+
-       '<button onclick="hoyMarcarPct(\''+a.id+'\')" style="padding:5px 11px;border:none;border-radius:6px;background:#1a56db;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Guardar</button>'+
-       '<button onclick="hoyMarcarCompletar(\''+a.id+'\')" style="padding:5px 11px;border:none;border-radius:6px;background:#2f9e44;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Completar</button>'+
-       '<button onclick="hoyMarcarSinCambios(\''+a.id+'\')" style="padding:5px 11px;border:1.5px solid var(--border2);border-radius:6px;background:#fff;color:var(--text2);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Sin cambios hoy</button>'+
-       '</div>';
-  }
-  h+='</div>';
-  return h;
-}
-async function hoyMarcarPct(id){
-  if(!canEdit())return;
-  var el=document.getElementById('hoypm-'+id);
-  var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
-  var a=_findActAny(id)||(S.abiertas||[]).find(function(x){return x.id===id;});
-  try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:(n>=100?'completado':'en-progreso')})});
-    if(a){ a.porcentaje=n; if(n>=100)a.estado='completado'; }
-    logCambio(n>=100?'completado':'avance','actividad',id,(a&&a.descripcion)||'',n+'%');
-    _hoyMarcarLocal(id);
-    showToast(n>=100?'Completada ✓':'Avance '+n+'% ✓');
-    loadAbiertas().then(function(){renderHoy();});
-  }catch(e){showToast('Error: '+e.message,'err');}
-}
-async function hoyMarcarCompletar(id){
-  if(!canEdit())return;
-  var a=_findActAny(id)||(S.abiertas||[]).find(function(x){return x.id===id;});
-  try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
-    if(a){ a.estado='completado'; a.porcentaje=100; }
-    logCambio('completado','actividad',id,(a&&a.descripcion)||'','completada');
-    _hoyMarcarLocal(id);
-    showToast('Completada ✓');
-    loadAbiertas().then(function(){renderHoy();});
-  }catch(e){showToast('Error: '+e.message,'err');}
-}
-function hoyMarcarSinCambios(id){
-  if(!canEdit())return;
-  var a=_findActAny(id)||(S.abiertas||[]).find(function(x){return x.id===id;});
-  logCambio('editado','actividad',id,(a&&a.descripcion)||'','sin avance hoy');
-  _hoyMarcarLocal(id);
-  showToast('Marcada — sin cambios hoy');
-  renderHoy();
-}
 // ══════════════════════════════════════════════════════════════
 // PLAN DEL DÍA — planificación matutina (Hoy)
 // Reutiliza el criterio del día de #53 (_hoyEsDelDia / S.marcadasHoy) y añade:
@@ -2580,6 +2500,35 @@ function renderPlanDia(){
   });
   if(sp.delDia.length && !pend.length){
     h+='<div style="padding:14px;text-align:center;font-size:12px;color:var(--text3)">'+(filtroActivo?'Sin resultados con ese filtro.':'Todo lo del plan ya fue marcado ✓')+'</div>';
+  }
+  // ⚡ Sugeridas — vencen hoy o están vencidas (abiertas), NO en el plan y sin marcar hoy
+  var _marcS=S.marcadasHoy||{}, _hoyS=today();
+  var sugeridas=(S.abiertas||[]).filter(function(a){
+    if(!_hoyEsDelDia(a)) return false;
+    if((a.fecha_plan||'').slice(0,10)===_hoyS) return false;   // ya en el plan
+    if(_marcS[String(a.id)]) return false;                     // ya marcada hoy
+    return true;
+  });
+  sugeridas.sort(function(a,b){ return _hoyDiasAtraso(b)-_hoyDiasAtraso(a); });
+  if(sugeridas.length){
+    if(S._planSugOpen===undefined) S._planSugOpen=false;
+    h+='<div style="margin-top:10px;border:1.5px solid #f59e0b;border-radius:12px;overflow:hidden;background:#fff">';
+    h+='<div onclick="S._planSugOpen=!S._planSugOpen;renderHoy()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:#fff8eb">'+
+       '<span style="font-size:12px;font-weight:800;color:#b45309">⚡ Sugeridas — vencen hoy o están vencidas ('+sugeridas.length+')</span>'+
+       '<span style="font-size:12px;color:#b45309">'+(S._planSugOpen?'▲':'▼')+'</span></div>';
+    if(S._planSugOpen){
+      h+='<div>';
+      sugeridas.forEach(function(a){
+        var atr=_hoyDiasAtraso(a), venc=atr>0, asig=a.personal_nombre||a.ingeniero_nombre||'';
+        h+='<div style="padding:9px 12px;border-top:1px solid var(--border2);display:flex;align-items:center;gap:8px;'+(venc?'background:#fff5f5':'')+'">'+
+           '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;color:var(--text)">'+esc(a.descripcion||'(sin descripción)')+'</div>'+
+           '<div style="font-size:10px;color:var(--text3);margin-top:1px">'+[a.area?esc(a.area):null,asig?esc(asig):null,esc(a.estado),(venc?'⏰ '+atr+'d atraso':null)].filter(Boolean).join(' · ')+'</div></div>'+
+           (editable?'<button onclick="planAgregar(\''+a.id+'\',\'hoy\')" style="flex-shrink:0;padding:5px 10px;background:var(--accent-soft);color:var(--accent);border:1.5px solid var(--accent);border-radius:var(--r);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">＋ Al plan</button>':'')+
+           '</div>';
+      });
+      h+='</div>';
+    }
+    h+='</div>';
   }
   sp.done.forEach(function(a){
     h+='<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:9px 14px;margin-bottom:6px;opacity:0.65;font-size:12px;color:var(--text3)">✓ '+esc(a.descripcion||'')+(a.area?' — '+esc(a.area):'')+'</div>';
@@ -3299,9 +3248,10 @@ function renderHoy(){
   const sinMarcar=propios.length-marcados;
   const pct=propios.length?Math.round(pres/propios.length*100):0;
 
-  // Hoy = solo planificación. El Plan del día usa S.abiertas; se carga si falta.
-  // NO se cargan estancadas/marcadas (viven en sus propios módulos) para dejar Hoy liviano.
+  // Hoy = solo planificación. El Plan del día usa S.abiertas (plan + sugeridas) y
+  // S.marcadasHoy (para el conteo y las sugeridas sin marcar); se cargan si faltan.
   if(S.abiertas===undefined && !S._abiertasHoyLoading){S._abiertasHoyLoading=true;loadAbiertas().then(function(){S._abiertasHoyLoading=false;renderHoy();});}
+  if(S.marcadasHoy===undefined && !S._marcadasLoading){S._marcadasLoading=true;loadMarcadasHoy().then(function(){S._marcadasLoading=false;renderHoy();});}
   var _planDiaHTML=renderPlanDia();
 
   document.getElementById('c-hoy').innerHTML=`
@@ -9123,7 +9073,14 @@ async function loadTareas(){
 
 function getFilteredActsActs(){
   var q=(S.enObraFiltroTexto||'').toLowerCase().trim();
+  var rap=S.enObraFiltroRapido||'', mh=S.marcadasHoy||{};
+  var uNom=(S.user&&S.user.nombre)||'', ukey=uNom.replace(/^ing\.?\s*/i,'').toLowerCase().split(' ')[0];
   var filtered=S.actsActivas.filter(function(a){
+    // Filtro rápido (chips de campo)
+    if(rap==='mi-frente' && !_estEsMia(a,ukey)) return false;
+    else if(rap==='vencidas' && !isRetrasada(a)) return false;
+    else if(rap==='en-progreso' && a.estado!=='en-progreso') return false;
+    else if(rap==='sin-marcar' && (!_hoyEsDelDia(a)||mh[String(a.id)])) return false;
     if(S.enObraFiltroTipo && a.tipo_personal!==S.enObraFiltroTipo) return false;
     if(S.enObraFiltroContratista && !_matchResp(a.personal_nombre,S.enObraFiltroContratista)) return false;
     if(S.enObraFiltroPersonal && !_matchResp(a.personal_nombre,S.enObraFiltroPersonal)) return false;
@@ -9137,9 +9094,72 @@ function getFilteredActsActs(){
     }
     return true;
   });
-  return sortByPriority(filtered);
+  return _enObraOrden(filtered,mh);
+}
+// Orden útil de campo: primero hoy-sin-marcar, luego vencidas, luego el resto
+// (dentro de cada grupo se conserva el orden por prioridad).
+function _enObraOrden(acts,mh){
+  mh=mh||S.marcadasHoy||{};
+  function tier(a){
+    if(_hoyEsDelDia(a)&&!mh[String(a.id)]) return 0;
+    if(isRetrasada(a)) return 1;
+    return 2;
+  }
+  return sortByPriority(acts).sort(function(a,b){ return tier(a)-tier(b); });
 }
 
+// ── FILTROS RÁPIDOS DE CAMPO + INDICADOR "REGISTRADAS HOY" ──────────
+function buildEnObraRapido(){
+  var mh=S.marcadasHoy||{};
+  var uNom=(S.user&&S.user.nombre)||'', ukey=uNom.replace(/^ing\.?\s*/i,'').toLowerCase().split(' ')[0];
+  var acts=S.actsActivas||[];
+  var cMi=acts.filter(function(a){return _estEsMia(a,ukey);}).length;
+  var cSin=acts.filter(function(a){return _hoyEsDelDia(a)&&!mh[String(a.id)];}).length;
+  var cVenc=acts.filter(function(a){return isRetrasada(a);}).length;
+  var cProg=acts.filter(function(a){return a.estado==='en-progreso';}).length;
+  var delDia=acts.filter(function(a){return _hoyEsDelDia(a);});
+  var Y=delDia.length, X=delDia.filter(function(a){return mh[String(a.id)];}).length;
+
+  var h='';
+  // Indicador de progreso del día
+  if(Y>0){
+    var pctDia=Math.round(X/Y*100), full=X>=Y;
+    h+='<div style="background:'+(full?'#d3f9d8':'#fff')+';border:1.5px solid '+(full?'#40c057':'#dee2e6')+';border-radius:12px;padding:9px 13px;margin-bottom:10px">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">';
+    h+='<span style="font-size:12.5px;font-weight:800;color:'+(full?'#2b8a3e':'var(--text)')+'">'+(full?'✅ ':'📝 ')+'Registradas hoy: '+X+' de '+Y+'</span>';
+    h+='<span style="font-size:11px;font-weight:700;color:'+(full?'#2b8a3e':'var(--text3)')+';font-family:var(--mono)">'+pctDia+'%</span>';
+    h+='</div>';
+    h+='<div style="height:6px;background:#e9ecef;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pctDia+'%;background:'+(full?'#40c057':'var(--accent)')+';border-radius:3px;transition:width .3s"></div></div>';
+    h+='</div>';
+  }
+  // Chips de campo (un toque)
+  var cur=S.enObraFiltroRapido||'';
+  var chips=[
+    {v:'mi-frente',l:'👷 Mi frente',n:cMi},
+    {v:'sin-marcar',l:'📝 Sin marcar hoy',n:cSin},
+    {v:'vencidas',l:'⏰ Vencidas',n:cVenc},
+    {v:'en-progreso',l:'▶ En progreso',n:cProg},
+    {v:'',l:'Todas',n:acts.length}
+  ];
+  h+='<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;-webkit-overflow-scrolling:touch">';
+  chips.forEach(function(c){
+    var on=cur===c.v;
+    h+='<button onclick="S.enObraFiltroRapido=\''+c.v+'\';renderEnObra()" style="flex:0 0 auto;padding:8px 12px;border-radius:20px;border:1.5px solid '+(on?'var(--accent)':'#dee2e6')+';background:'+(on?'var(--accent)':'#fff')+';color:'+(on?'#fff':'#495057')+';font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;min-height:36px">'+c.l+(c.n?' <span style="opacity:.75;font-weight:600">'+c.n+'</span>':'')+'</button>';
+  });
+  h+='</div>';
+  return h;
+}
+// Búsqueda + filtros avanzados, colapsados por defecto (secundarios al flujo de campo)
+function buildEnObraAvanzado(){
+  var open=!!S.enObraBusquedaOpen;
+  var hasAdv=S.enObraFiltroTexto||S.enObraFiltroTipo||S.enObraFiltroContratista||S.enObraFiltroPersonal||S.enObraFiltroEstado||S.enObraFiltroUbic||S.enObraFiltroUrgente||S.enObraFiltroPlan||S.enObraAgrupacion;
+  var h='<div style="margin-bottom:10px">';
+  h+='<button onclick="S.enObraBusquedaOpen=!S.enObraBusquedaOpen;renderEnObra()" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 13px;border-radius:10px;border:1.5px solid '+(open||hasAdv?'var(--accent)':'#dee2e6')+';background:'+(hasAdv&&!open?'var(--accent-soft)':'#f8f9fa')+';color:'+(open||hasAdv?'var(--accent)':'#495057')+';font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">';
+  h+='<span>🔍 Búsqueda y filtros avanzados'+(hasAdv?' •':'')+'</span><span>'+(open?'▲':'▼')+'</span></button>';
+  if(open) h+='<div style="margin-top:10px">'+buildEnObraFiltros()+'</div>';
+  h+='</div>';
+  return h;
+}
 function buildEnObraFiltros(){
   var contOpts=getContratistasOpts();
   var fromPersonal=S.personal.filter(function(p){return p.tipo==='propio'&&p.activo;}).map(function(p){return p.nombre;});
@@ -9268,6 +9288,14 @@ function renderEnObra(){
     return;
   }
 
+  // Chip por defecto: Mi frente (lo del ingeniero conectado)
+  if(S.enObraFiltroRapido===undefined) S.enObraFiltroRapido='mi-frente';
+  // Cargar marcas de hoy (para "Registradas hoy" y el chip "Sin marcar")
+  if(S.marcadasHoy===undefined && !S._marcadasLoadingEO){
+    S._marcadasLoadingEO=true;
+    loadMarcadasHoy().then(function(){ S._marcadasLoadingEO=false; if(S.currentTab==='enobra'||S.currentTab==='obra') renderEnObra(); });
+  }
+
   var acts=getFilteredActsActs();
   var enProgreso=S.actsActivas.filter(function(a){return a.estado==='en-progreso';});
   var pendiente=S.actsActivas.filter(function(a){return a.estado==='pendiente';});
@@ -9299,8 +9327,11 @@ function renderEnObra(){
       ].map(s=>`<div class="scard"><div class="v" style="color:${s.c};font-size:18px">${s.v}</div><div class="l">${s.l}</div></div>`).join('')}
     </div>
 
-    <!-- FILTROS -->
-    ${buildEnObraFiltros()}
+    <!-- FILTROS RÁPIDOS DE CAMPO -->
+    ${buildEnObraRapido()}
+
+    <!-- BÚSQUEDA Y FILTROS AVANZADOS (secundario) -->
+    ${buildEnObraAvanzado()}
 
     <!-- MODO PLAN -->
     ${planModoToggleHTML('renderEnObra()')}
@@ -9430,6 +9461,18 @@ function buildActCardObra(a){
     '</div>';
   }
 
+  // Quick actions inline (registro rápido de avance sin abrir modal)
+  var quickRow='';
+  if(a.estado!=='completado'&&canEdit()){
+    var _marcHoy=(S.marcadasHoy||{})[String(id)];
+    quickRow='<div style="display:flex;align-items:center;gap:5px;margin:6px 0 2px;flex-wrap:wrap">'+
+      '<input type="number" min="0" max="100" value="'+pct+'" id="eo-pct-'+id+'" onclick="event.stopPropagation()" style="width:54px;font-size:12px;text-align:center;background:#fff;border:1.5px solid #dee2e6;border-radius:8px;padding:6px 4px;color:var(--text);font-family:var(--font);min-height:36px">'+
+      '<button onclick="event.stopPropagation();enObraGuardarPct(\''+id+'\')" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--font);min-height:36px">Guardar</button>'+
+      '<button onclick="event.stopPropagation();enObraSinCambios(\''+id+'\')" style="padding:6px 11px;background:#f8f9fa;color:var(--text3);border:1.5px solid #dee2e6;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);min-height:36px">Sin cambios hoy</button>'+
+      (_marcHoy?'<span style="margin-left:auto;font-size:10px;font-weight:800;color:#2f9e44;background:#d3f9d8;border-radius:6px;padding:3px 8px">✓ registrada hoy</span>':'')+
+    '</div>';
+  }
+
   var btns = '';
   if(canEdit()){
     if(a.estado==='pendiente'){
@@ -9503,6 +9546,7 @@ function buildActCardObra(a){
     (pct>0?'<div style="height:3px;background:#e9ecef;border-radius:2px;overflow:hidden;margin:4px 0"><div style="height:100%;width:'+Math.min(100,pct)+'%;background:'+ec+';border-radius:2px"></div></div>':'')+
     (planActive?'' :
       avanceChips+
+      quickRow+
       (a.notas?'<div style="font-size:11px;color:var(--text3);margin-top:4px;padding:4px 8px;background:#f8f9fa;border-radius:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.notas)+'</div>':'')+
       (tieneFoto(a)?'<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:5px">'+fotoUrls(a.fotos).map(function(f){return'<img src="'+f+'" style="width:44px;height:44px;object-fit:cover;border-radius:5px;cursor:pointer;border:1px solid #dee2e6" onclick="verFotoInfo(\''+f+'\',\''+esc(a.descripcion)+'\',\''+a.fecha+'\',\''+esc(a.area||'')+'\',\'\',\'\',\''+id+'\')" loading="lazy">';}).join('')+'</div>':'')+
       btns+
@@ -9564,6 +9608,33 @@ async function setAvanceRapido(actId,newPct){
     renderActs();renderEnObra();
     setSS('err','No se pudo guardar');
   }
+}
+
+// Registro rápido de avance desde En Obra (input % + Guardar) — refleja en el
+// contador "Registradas hoy" vía _hoyMarcarLocal + logCambio (como Plan del día).
+async function enObraGuardarPct(actId){
+  if(!canEdit())return;
+  var el=document.getElementById('eo-pct-'+actId);
+  var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
+  var a=(S.actsActivas||[]).find(function(x){return x.id===actId;})||_findActAny(actId);
+  var newEst=(n>=100?'completado':'en-progreso');
+  try{
+    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:newEst})});
+    [S.actsActivas,S.acts,S.abiertas].forEach(function(arr){ if(!arr) return; var i=arr.findIndex(function(x){return x.id===actId;}); if(i>=0){ arr[i].porcentaje=n; arr[i].estado=newEst; } });
+    logCambio(n>=100?'completado':'avance','actividad',actId,(a&&a.descripcion)||'',n+'%');
+    _hoyMarcarLocal(actId);
+    showToast(n>=100?'Completada ✓':'Avance '+n+'% ✓');
+    if(n>=100){ renderActs(); renderHoy(); loadTareas(); }
+    else { renderActs(); renderEnObra(); }
+  }catch(e){ showToast('Error: '+(e.message||''),'err'); }
+}
+function enObraSinCambios(actId){
+  if(!canEdit())return;
+  var a=(S.actsActivas||[]).find(function(x){return x.id===actId;})||_findActAny(actId);
+  logCambio('editado','actividad',actId,(a&&a.descripcion)||'','sin avance hoy');
+  _hoyMarcarLocal(actId);
+  showToast('Marcada — sin cambios hoy');
+  renderEnObra();
 }
 
 // Actions for activities in En Obra
@@ -9706,9 +9777,10 @@ function renderMetodologia(){
   diag+='</div>';
   var flujoBody=diag+
     det('🌅 Plan del día (Hoy)',
-      'Al abrir la app, la pestaña '+b('Hoy')+' muestra el '+b('Plan del día')+' con las actividades planificadas para hoy, agrupadas (por contratista, área o ingeniero).'+
+      'Al abrir la app, la pestaña '+b('Hoy')+' muestra una sola sección — el '+b('Plan del día')+' — con las actividades planificadas para hoy (agrupadas por contratista, área o ingeniero).'+
       li([
-        'Para '+b('agregar tareas al plan')+': desde '+b('En Obra')+', usa el botón inteligente de cada tarjeta — <b>＋ Plan hoy</b> o <b>＋ Plan mañana</b>. También puedes buscarlas con el buscador «Agregar actividad al plan».',
+        'Debajo del plan hay un bloque plegable '+b('⚡ Sugeridas — vencen hoy o están vencidas')+': tareas relevantes del día que aún no están en el plan. Con <b>＋ Al plan</b> las agregas al plan de hoy en un toque.',
+        'Para '+b('agregar tareas al plan')+' también puedes usar el botón inteligente de cada tarjeta en '+b('En Obra')+' — <b>＋ Plan hoy</b> o <b>＋ Plan mañana</b> — o el buscador «Agregar actividad al plan».',
         'Genera el '+b('PDF matutino')+' con <b>Generar PDF</b> y compártelo al grupo de Bitácora con <b>📲 WhatsApp</b>.',
         'El plan se puede filtrar (estado/tipo/texto) y reorganizar sin perder lo que ya marcaste.'
       ]))+
@@ -9739,24 +9811,38 @@ function renderMetodologia(){
   // ── 2. Módulos ──
   var mods=[
     ['📋 Hoy','El arranque del día: plan del día, asistencia rápida y accesos al cierre. Es donde el ingeniero trabaja la planificación.'],
-    ['🏗️ En Obra','Las actividades activas en terreno. Marcar avance, iniciar/interrumpir/completar, subir fotos y agregarlas al plan (＋ Plan hoy / mañana).'],
+    ['🏗️ En Obra','Optimizado para el celular en la mano. Filtros rápidos de campo en chips (👷 Mi frente, 📝 Sin marcar hoy, ⏰ Vencidas, ▶ En progreso, Todas) y registro rápido inline en cada tarjeta (input % + Guardar, ✓ Completar, «Sin cambios hoy»). Arriba, el indicador «Registradas hoy: X de Y». El buscador y filtros avanzados quedan colapsados como secundarios.'],
     ['📋 Actividades','El listado completo con filtros por estado, contratista, responsable, ubicación, plan y buscador de texto. Para gestionar y agrupar todo.'],
     ['👷 Equipo','Asistencia (entrada/salida, horas extra solo del personal de casa), contratistas, personal, penalidades y bonificaciones.'],
     ['📊 Reportes','Dashboard, plan semanal, cierre del día e historial de cambios. La vista de control.'],
     ['📷 Fotos','Galería de todas las fotos por fecha, ubicación e ingeniero. Evidencia visual del avance.'],
     ['📐 Planos','Planos y documentos de la obra, con pines de ubicación.'],
     ['🛒 Compras','Órdenes de compra en formato BRIDEX.'],
-    ['📅 Gantt (Planificación)','Cronograma interactivo del proyecto para ver la secuencia y las fechas de las etapas.'],
-    ['📈 Gerencia','Panel ejecutivo solo lectura: avance por nivel, ritmo semanal, riesgos e informe PDF (para dueños/inversionistas).'],
+    ['📅 Gantt (Planificación)','Cronograma interactivo del proyecto (uno solo) para ver la secuencia y las fechas de las etapas.'],
+    ['📈 Gerencia (solo administrador)','Panel ejecutivo solo lectura: avance por nivel, ritmo semanal, riesgos e informe PDF (para dueños/inversionistas). Solo visible para el administrador.'],
     ['📖 Metodología','Esta guía: flujo diario, módulos, roles, reglas y secuencias constructivas.']
   ];
   h+=det('🧭 Los módulos, uno a uno',
     mods.map(function(m){return '<div style="padding:7px 0;border-bottom:1px solid var(--border)"><div style="font-weight:700;color:var(--text);font-size:13px">'+m[0]+'</div><div style="font-size:12px;color:var(--text3);margin-top:1px">'+m[1]+'</div></div>';}).join(''));
 
+  // ── Mapa de PDFs ──
+  var pdfMap=[
+    ['📋 Plan del día','Hoy → Generar PDF','Plan matutino liviano (sin fotos) para el grupo de WhatsApp.'],
+    ['🌆 Cierre del día','Reportes → Cierre del día','Resumen de lo registrado en la jornada.'],
+    ['📄 Bitácora','Reportes → Bitácora','Reporte oficial por día o por rango, con asistencia, avances, fotos y urgentes.'],
+    ['📈 Informe Ejecutivo','Gerencia → Generar PDF','Resumen ejecutivo para dueños/inversionistas (solo administrador).']
+  ];
+  var tbl='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'+
+    '<thead><tr style="text-align:left;color:var(--text3)"><th style="padding:6px 8px;border-bottom:1.5px solid var(--border)">PDF</th><th style="padding:6px 8px;border-bottom:1.5px solid var(--border)">Dónde</th><th style="padding:6px 8px;border-bottom:1.5px solid var(--border)">Qué incluye</th></tr></thead><tbody>'+
+    pdfMap.map(function(r){return '<tr><td style="padding:6px 8px;border-bottom:1px solid var(--border);font-weight:700;color:var(--text);white-space:nowrap">'+r[0]+'</td><td style="padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text2);white-space:nowrap">'+r[1]+'</td><td style="padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text3)">'+r[2]+'</td></tr>';}).join('')+
+    '</tbody></table></div>';
+  h+=det('🗂️ Mapa de PDFs',
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Cada reporte tiene un único lugar. No hay botones duplicados.</div>'+tbl);
+
   // ── 3. Roles ──
   h+=det('👥 Roles y responsabilidades',
     li([
-      b('Admin (Ing. Nilson)')+': todo — más gestión de usuarios y configuración.',
+      b('Admin (Ing. Nilson)')+': todo — más gestión de usuarios, configuración y el panel <b>📈 Gerencia</b> (solo el administrador lo ve).',
       b('Ingeniero residente')+': registrar asistencia, avances y fotos, hacer el cierre diario y planificar el día.',
       b('Visualización (view)')+': consulta todo y genera PDFs, pero no edita.'
     ])+
@@ -9787,7 +9873,8 @@ function renderMetodologia(){
   h+=det('❓ Preguntas frecuentes',
     faq('«No veo los cambios nuevos»','La app ahora se actualiza sola en ~1 min al volver a abrirla. Si aún ves lo viejo, recarga fuerte (Ctrl+Shift+R) o reabre la app.')+
     faq('«No puedo editar»','Tu usuario es de visualización (solo lectura). Coordina con el administrador para que te dé permisos.')+
-    faq('«Una tarea no aparece en el plan»','Agrégala desde En Obra con ＋ Plan hoy, o búscala en «Agregar actividad al plan» dentro de Hoy.')+
+    faq('«Una tarea no aparece en el plan»','Si vence hoy o está vencida, aparece en el bloque ⚡ Sugeridas dentro de Hoy — tócala en ＋ Al plan. También puedes agregarla desde En Obra con ＋ Plan hoy o buscarla en «Agregar actividad al plan».')+
+    faq('«¿Cómo registro rápido en obra?»','En En Obra, filtra por 👷 Mi frente, escribe el % en la tarjeta y toca Guardar. Si no hubo avance, usa «Sin cambios hoy». La meta es que «Registradas hoy» llegue a X/X.')+
     faq('«Me equivoqué en un registro»','Todos los cambios quedan en la bitácora. Corrige el % de la tarea y anota la aclaración en sus notas.'));
 
   h+='</div>';
@@ -10150,7 +10237,10 @@ function goTab(tab){
   else if(tab==='replan')   renderReplan();
   else if(tab==='bitacora') loadBitacora();
   else if(tab==='metodologia') renderMetodologia();
-  else if(tab==='gerencia') { renderGerencia(); loadGerencia().then(function(){ if(S.currentTab==='gerencia') renderGerencia(); }); }
+  else if(tab==='gerencia') {
+    if(!isAdmin()){ showToast('Solo el administrador puede ver Gerencia','warn',3000); goTab('hoy'); return; }
+    renderGerencia(); loadGerencia().then(function(){ if(S.currentTab==='gerencia') renderGerencia(); });
+  }
 }
 
 // ── DRAWER & NAV HELPERS ──────────────────────────
@@ -15914,7 +16004,6 @@ function renderBitacora(){
     var sel=dias===d;
     html+='<button onclick="_bitacoraDias('+d+')" style="padding:5px 10px;border-radius:20px;border:1.5px solid '+(sel?'var(--accent)':'var(--border2)')+';background:'+(sel?'var(--accent)':'var(--bg2)')+';color:'+(sel?'#fff':'var(--text1)')+';font-size:12px;font-weight:600;cursor:pointer">'+d+'d</button>';
   });
-  html+='<button onclick="generarPDFBitacora({soloHoy:true})" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer">📄 PDF hoy</button>';
   html+='<button onclick="generarPDFBitacora()" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:12px;font-weight:600;cursor:pointer">📄 PDF rango</button>';
   html+='<input type="date" id="bit-pdf-fecha" max="'+today()+'" style="padding:4px 8px;border-radius:12px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:12px">';
   html+='<button onclick="var f=(document.getElementById(\'bit-pdf-fecha\')||{}).value; if(f){generarPDFBitacora({fecha:f});}else{showToast(\'Elige un día primero\',\'warn\');}" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text1);font-size:12px;font-weight:600;cursor:pointer">📄 PDF de un día</button>';
@@ -16099,9 +16188,8 @@ async function _bitacoraGuardarNota(fecha){
 
 async function generarPDFBitacora(opts){
   opts=opts||{};
-  var soloHoy=!!opts.soloHoy;
   var fechaSel=opts.fecha||null;                 // 'YYYY-MM-DD' (selector de día)
-  var singleDay=soloHoy||!!fechaSel;
+  var singleDay=!!fechaSel;
   var dias=S.bitacora.dias||14;
   var cambios=S.bitacora.cambios||[];
   var notas=S.bitacora.notas||[];
@@ -16138,7 +16226,6 @@ async function generarPDFBitacora(opts){
   var dset={};Object.keys(byDate).forEach(function(d){dset[d]=1;});Object.keys(asistByDate).forEach(function(d){dset[d]=1;});
   var dates=Object.keys(dset).sort(function(a,b){return b.localeCompare(a);});
   if(fechaSel){dates=dates.filter(function(d){return d===fechaSel;});if(!dates.length)dates=[fechaSel];}
-  else if(soloHoy){var hy=today();dates=dates.filter(function(d){return d===hy;});if(!dates.length)dates=[hy];}
 
   // Cargar imágenes (lh3; el Bloque 1 lo cambia a proxy JSONP)
   // Cargar fotos vía proxy JSONP (data URL exportable), en lotes de 4 con progreso.
@@ -16456,7 +16543,7 @@ async function generarPDFBitacora(opts){
       doc.text('MECCA RESIDENCE 2026 · Bitácora de Obra · generado '+today()+' '+hhmm(),M,290);
       doc.text('Pág. '+pi+'/'+nP,W-M,290,{align:'right'});
     }
-    doc.save('Bitacora_MeccaResidence_'+(fechaSel?fechaSel:(soloHoy?today()+'_dia':today()))+'.pdf');
+    doc.save('Bitacora_MeccaResidence_'+(fechaSel?fechaSel:today())+'.pdf');
     setSS('ok','✓ PDF listo');
   }catch(e){setSS('err','Error PDF');showToast('❌ '+e.message,'err',8000);}
 }
