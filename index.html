@@ -15947,7 +15947,9 @@ async function generarPDFBitacora(opts){
         doc.text(_s(est),104,y+3.5);
         doc.text(a.hora_entrada?fmt12h(a.hora_entrada):'-',130,y+3.5);
         doc.text(a.hora_salida?fmt12h(a.hora_salida):'-',156,y+3.5);
-        doc.text(a.horas_extra?(a.horas_extra+'h'):'-',W-M-2,y+3.5,{align:'right'});
+        // HE solo para personal de casa (propio); contratistas no tienen HE
+        var _heCasa=(pTipo[a.personal_id]||'')==='propio';
+        doc.text((_heCasa&&a.horas_extra)?(a.horas_extra+'h'):'-',W-M-2,y+3.5,{align:'right'});
         y+=5;
       });
       y+=3;
@@ -15997,7 +15999,9 @@ async function generarPDFBitacora(opts){
       var contrDia=asistDia.filter(function(a){return (pTipo[a.personal_id]||'')!=='propio';});
       var presCasa=casaDia.filter(present).length,presContr=contrDia.filter(present).length;
       var totReg=casaDia.length+contrDia.length,totPres=presCasa+presContr;
-      var hExtra=asistDia.reduce(function(s,a){return s+(parseFloat(a.horas_extra)||0);},0);
+      // Horas extra: SOLO personal de casa (propio). En contratistas, horas_extra guarda
+      // "trabajadores en obra", no horas — no se cuenta como HE.
+      var hExtra=casaDia.reduce(function(s,a){return s+(parseFloat(a.horas_extra)||0);},0);
       var nFotos=(day.fotos||[]).length;
       var hasMov=completadas.length||avancesArr.length||nuevasArr.length||day.notas.length||nFotos||asistDia.length;
 
