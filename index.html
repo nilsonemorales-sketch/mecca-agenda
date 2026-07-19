@@ -522,6 +522,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="tab" data-tab="plan" id="tab-plan" onclick="goTab('plan')" style="display:none">📅 Plan</div>
     <div class="tab" data-tab="replan" id="tab-replan" onclick="goTab('replan')" style="display:none">🗓️ Replnf.</div>
     <div class="tab" data-tab="bitacora" id="tab-bitacora" onclick="goTab('bitacora')" style="display:none">📒 Bitácora</div>
+    <div class="tab" data-tab="metodologia" onclick="goTab('metodologia')">📖 Metodología</div>
   </div>
 
   <div class="body">
@@ -593,6 +594,9 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="view" id="view-bitacora">
       <div id="c-bitacora"></div>
     </div>
+    <div class="view" id="view-metodologia">
+      <div id="c-metodologia"></div>
+    </div>
   </div>
 
   <!-- BOTTOM NAV (mobile) -->
@@ -658,6 +662,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <button class="dw-btn" onclick="goTabD('planos')">📐 Planos y documentos</button>
     <button class="dw-btn" onclick="goTabD('compras')">🛒 Órdenes de Compra</button>
     <button class="dw-btn" onclick="goTabD('plan')">📅 Planificación — Gantt interactivo</button>
+    <button class="dw-btn" onclick="goTabD('metodologia')">📖 Metodología — Guía de uso</button>
   </div>
   <div class="dw-sec">
     <div class="dw-title">SESIÓN</div>
@@ -9661,6 +9666,128 @@ function mostrarPausaObra(id, desc){
   };
 }
 // ── NAVIGATION ────────────────────────────────────────────────
+// ── MÓDULO METODOLOGÍA — guía de uso estática (sin fetch) ──────────────────
+function renderMetodologia(){
+  var el=document.getElementById('c-metodologia'); if(!el) return;
+  var det=function(sum,body,open){
+    return '<details'+(open?' open':'')+' style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:8px;box-shadow:var(--shadow-xs)">'+
+      '<summary style="padding:12px 14px;cursor:pointer;font-weight:800;font-size:14px;color:var(--text);user-select:none">'+sum+'</summary>'+
+      '<div style="padding:2px 14px 14px;font-size:13px;color:var(--text2);line-height:1.65">'+body+'</div></details>';
+  };
+  var li=function(arr){ return '<ul style="margin:6px 0 0;padding-left:18px">'+arr.map(function(x){return '<li style="margin-bottom:4px">'+x+'</li>';}).join('')+'</ul>'; };
+  var b=function(t){ return '<b style="color:var(--text)">'+t+'</b>'; };
+
+  var h='<div style="max-width:820px;margin:0 auto;padding-bottom:24px">';
+  h+='<div class="sec-title" style="margin:14px 0 4px">📖 Metodología — Guía de uso</div>';
+  h+='<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Cómo se usa la app y las reglas del proyecto. Onboarding, referencia diaria y transparencia para la gerencia.</div>';
+
+  // ── 1. Flujo diario ──
+  var pasos=[
+    {ic:'🌅',t:'MAÑANA',c:'#7c3aed',items:['Plan del día','· revisar el plan','· asignar tareas','· PDF → WhatsApp']},
+    {ic:'☀️',t:'DURANTE EL DÍA',c:'#1a56db',items:['Registrar avances','· marcar asistencia','· actualizar %','· completar tareas']},
+    {ic:'🌆',t:'TARDE',c:'#e67700',items:['Cierre del día','· avances finales','· fotos del día','· plan de mañana']},
+    {ic:'📄',t:'AUTOMÁTICO',c:'#2f9e44',items:['Bitácora / PDF','· se genera el reporte','· se envía al grupo','  de WhatsApp']}
+  ];
+  var diag='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">';
+  pasos.forEach(function(p,i){
+    diag+='<div style="flex:1 1 140px;min-width:140px;background:var(--bg2);border:1px solid var(--border);border-top:3px solid '+p.c+';border-radius:var(--r2);padding:10px 12px;box-shadow:var(--shadow-xs)">'+
+      '<div style="font-size:11px;font-weight:800;color:'+p.c+';letter-spacing:.5px">'+p.ic+' '+p.t+'</div>'+
+      '<div style="font-size:13px;font-weight:700;color:var(--text);margin:4px 0 2px">'+p.items[0]+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);line-height:1.5">'+p.items.slice(1).map(function(x){return esc(x);}).join('<br>')+'</div>'+
+      (i<pasos.length-1?'<div style="text-align:right;color:var(--text3);font-size:14px;margin-top:2px">▸</div>':'')+
+    '</div>';
+  });
+  diag+='</div>';
+  var flujoBody=diag+
+    det('🌅 Plan del día (Hoy)',
+      'Al abrir la app, la pestaña '+b('Hoy')+' muestra el '+b('Plan del día')+' con las actividades planificadas para hoy, agrupadas (por contratista, área o ingeniero).'+
+      li([
+        'Para '+b('agregar tareas al plan')+': desde '+b('En Obra')+', usa el botón inteligente de cada tarjeta — <b>＋ Plan hoy</b> o <b>＋ Plan mañana</b>. También puedes buscarlas con el buscador «Agregar actividad al plan».',
+        'Genera el '+b('PDF matutino')+' con <b>Generar PDF</b> y compártelo al grupo de Bitácora con <b>📲 WhatsApp</b>.',
+        'El plan se puede filtrar (estado/tipo/texto) y reorganizar sin perder lo que ya marcaste.'
+      ]))+
+    det('☀️ Registrar avances',
+      'Durante el día, marca lo que va pasando. La meta es que el '+b('contador de marcadas llegue a X/X')+' — que todo lo del día quede registrado.'+
+      li([
+        b('Guardar %')+': ajusta el porcentaje de avance de la tarea.',
+        b('✓ Completar')+': la marca como terminada (100%).',
+        b('Sin cambios hoy')+': la saca de «pendientes de marcar» sin tocar el %, cuando no avanzó.',
+        'La '+b('asistencia')+' del personal se marca en '+b('Equipo → Asistencia')+' («Marcar →» desde Hoy).'
+      ]))+
+    det('🌆 Cierre del día',
+      'Al final de la jornada, el '+b('Cierre')+' (Reportes → Cierre del día) resume lo registrado y ayuda a cerrar:'+
+      li([
+        b('Actualizar avances')+': repasa las en-progreso y ajusta % o «sin cambios».',
+        b('Plan de mañana')+': mueve las tareas del plan de hoy que quedaron sin completar al día siguiente («→ Mañana» o «→ Todas a mañana»).',
+        'Genera el '+b('PDF del cierre')+' con el resumen del día.'
+      ]))+
+    det('📄 Bitácora',
+      'La '+b('Bitácora')+' arma el reporte oficial de la obra.'+
+      li([
+        'Se genera por '+b('día')+' o por '+b('rango de fechas')+'.',
+        'Incluye '+b('asistencia, avances, fotos y urgentes')+' del período.',
+        'Las fotos se guardan en '+b('Google Drive')+' automáticamente al subirlas.'
+      ]));
+  h+=det('🔄 El flujo diario', flujoBody, true);
+
+  // ── 2. Módulos ──
+  var mods=[
+    ['📋 Hoy','El arranque del día: plan del día, asistencia rápida y accesos al cierre. Es donde el ingeniero trabaja la planificación.'],
+    ['🏗️ En Obra','Las actividades activas en terreno. Marcar avance, iniciar/interrumpir/completar, subir fotos y agregarlas al plan (＋ Plan hoy / mañana).'],
+    ['📋 Actividades','El listado completo con filtros por estado, contratista, responsable, ubicación, plan y buscador de texto. Para gestionar y agrupar todo.'],
+    ['👷 Equipo','Asistencia (entrada/salida, horas extra solo del personal de casa), contratistas, personal, penalidades y bonificaciones.'],
+    ['📊 Reportes','Dashboard, plan semanal, cierre del día e historial de cambios. La vista de control.'],
+    ['📷 Fotos','Galería de todas las fotos por fecha, ubicación e ingeniero. Evidencia visual del avance.'],
+    ['📐 Planos','Planos y documentos de la obra, con pines de ubicación.'],
+    ['🛒 Compras','Órdenes de compra en formato BRIDEX.'],
+    ['📅 Gantt (Planificación)','Cronograma interactivo del proyecto para ver la secuencia y las fechas de las etapas.'],
+    ['📈 Gerencia','Panel ejecutivo solo lectura: avance por nivel, ritmo semanal, riesgos e informe PDF (para dueños/inversionistas).'],
+    ['📖 Metodología','Esta guía: flujo diario, módulos, roles, reglas y secuencias constructivas.']
+  ];
+  h+=det('🧭 Los módulos, uno a uno',
+    mods.map(function(m){return '<div style="padding:7px 0;border-bottom:1px solid var(--border)"><div style="font-weight:700;color:var(--text);font-size:13px">'+m[0]+'</div><div style="font-size:12px;color:var(--text3);margin-top:1px">'+m[1]+'</div></div>';}).join(''));
+
+  // ── 3. Roles ──
+  h+=det('👥 Roles y responsabilidades',
+    li([
+      b('Admin (Ing. Nilson)')+': todo — más gestión de usuarios y configuración.',
+      b('Ingeniero residente')+': registrar asistencia, avances y fotos, hacer el cierre diario y planificar el día.',
+      b('Visualización (view)')+': consulta todo y genera PDFs, pero no edita.'
+    ])+
+    '<div style="margin-top:10px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r);padding:9px 12px;font-size:13px;color:var(--accent);font-weight:700">⭐ Regla de oro: el que ve el trabajo, lo registra el mismo día.</div>');
+
+  // ── 4. Reglas ──
+  h+=det('📏 Reglas del proyecto',
+    li([
+      b('Asistencia')+': el personal de casa marca entrada/salida y horas extra; los contratistas solo presente/ausente — <b>no tienen horas extra</b> (trabajan por ajuste).',
+      b('Prioridades')+': «urgente» solo para la etapa activa de la quincena (ej. N2 + Parqueo). Al cambiar de etapa se rota: la nueva sube a urgente y la anterior baja a normal.',
+      b('Fechas')+': toda tarea nueva lleva fecha de inicio y fin. Si vence sin completarse, se reprograma en la revisión semanal — no se deja vencida.',
+      b('Fotos')+': mínimo las de los frentes activos en el cierre; se guardan en Drive automáticamente.',
+      b('Estancadas')+': si una tarea en progreso pasa 3+ días sin registro, aparece en Estancadas — hay que ponerle motivo o avanzarla.'
+    ]));
+
+  // ── 5. Secuencias constructivas ──
+  var seq=function(t,pasos){ return '<div style="margin-bottom:9px"><div style="font-weight:700;color:var(--text);font-size:13px">'+t+'</div><div style="font-size:12px;color:var(--text2);margin-top:2px">'+pasos+'</div></div>'; };
+  h+=det('🏗️ Secuencias constructivas (referencia técnica)',
+    seq('Acabados por apto','plomería → eléctrico → pañete / cerrar → pintura. Puertas y ventanas antes de tapar muros; accesorios eléctricos después de pintar.')+
+    seq('Puertas','montar → calzos → ajustar → correderas → pintar → cerraduras → topes.')+
+    seq('Verja','replanteo → excavación → acero → encofrado → vaciado → 2 días de fraguado → blocks → fraguaché → pañete.')+
+    seq('Fachadas','pañete → fino → mochetas → vuelos / goteros → planchas → pintura → desmontar andamios al final.')+
+    seq('Estrategia de torre','piso por piso: N2 + Parqueo → N3 + N4 → N5 + N6 → N7 + fachadas + escalera.')+
+    '<div style="margin-top:6px;background:#e6fcf5;border:1px solid #63e6be;border-radius:var(--r);padding:8px 12px;font-size:13px;color:#0ca678;font-weight:700">🎯 Meta: 31 de octubre de 2026.</div>');
+
+  // ── 6. FAQ ──
+  var faq=function(q,a){ return '<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="font-weight:700;color:var(--text);font-size:13px">'+q+'</div><div style="font-size:12px;color:var(--text3);margin-top:2px">'+a+'</div></div>'; };
+  h+=det('❓ Preguntas frecuentes',
+    faq('«No veo los cambios nuevos»','La app ahora se actualiza sola en ~1 min al volver a abrirla. Si aún ves lo viejo, recarga fuerte (Ctrl+Shift+R) o reabre la app.')+
+    faq('«No puedo editar»','Tu usuario es de visualización (solo lectura). Coordina con el administrador para que te dé permisos.')+
+    faq('«Una tarea no aparece en el plan»','Agrégala desde En Obra con ＋ Plan hoy, o búscala en «Agregar actividad al plan» dentro de Hoy.')+
+    faq('«Me equivoqué en un registro»','Todos los cambios quedan en la bitácora. Corrige el % de la tarea y anota la aclaración en sus notas.'));
+
+  h+='</div>';
+  el.innerHTML=h;
+}
+
 function goTab(tab){
   // Legacy tab redirects — old internal calls still work
   var legacyMap={enobra:'obra',asistencia:'equipo',actividades:'obra',
@@ -9676,7 +9803,7 @@ function goTab(tab){
     tab=legacyMap[tab];
   }
   S.currentTab=tab;
-  var VIEWS=['hoy','obra','equipo','reportes','fotos','planos','compras','plan','replan','bitacora'];
+  var VIEWS=['hoy','obra','equipo','reportes','fotos','planos','compras','plan','replan','bitacora','metodologia'];
   VIEWS.forEach(function(v){
     var el=document.getElementById('view-'+v);
     if(el) el.classList.toggle('active', v===tab);
@@ -9703,6 +9830,7 @@ function goTab(tab){
   else if(tab==='plan')     renderPlan();
   else if(tab==='replan')   renderReplan();
   else if(tab==='bitacora') loadBitacora();
+  else if(tab==='metodologia') renderMetodologia();
 }
 
 // ── DRAWER & NAV HELPERS ──────────────────────────
