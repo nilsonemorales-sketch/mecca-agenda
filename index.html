@@ -522,6 +522,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="tab" data-tab="plan" id="tab-plan" onclick="goTab('plan')" style="display:none">📅 Plan</div>
     <div class="tab" data-tab="replan" id="tab-replan" onclick="goTab('replan')" style="display:none">🗓️ Replnf.</div>
     <div class="tab" data-tab="bitacora" id="tab-bitacora" onclick="goTab('bitacora')" style="display:none">📒 Bitácora</div>
+    <div class="tab" data-tab="gerencia" onclick="goTab('gerencia')">📈 Gerencia</div>
     <div class="tab" data-tab="metodologia" onclick="goTab('metodologia')">📖 Metodología</div>
   </div>
 
@@ -594,6 +595,9 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="view" id="view-bitacora">
       <div id="c-bitacora"></div>
     </div>
+    <div class="view" id="view-gerencia">
+      <div id="c-gerencia"></div>
+    </div>
     <div class="view" id="view-metodologia">
       <div id="c-metodologia"></div>
     </div>
@@ -662,6 +666,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <button class="dw-btn" onclick="goTabD('planos')">📐 Planos y documentos</button>
     <button class="dw-btn" onclick="goTabD('compras')">🛒 Órdenes de Compra</button>
     <button class="dw-btn" onclick="goTabD('plan')">📅 Planificación — Gantt interactivo</button>
+    <button class="dw-btn" onclick="goTabD('gerencia')">📈 Gerencia — Panel ejecutivo</button>
     <button class="dw-btn" onclick="goTabD('metodologia')">📖 Metodología — Guía de uso</button>
   </div>
   <div class="dw-sec">
@@ -1356,6 +1361,7 @@ let S={
   planosMapas:{}, planosVista:'mapa', planosNivelSel:'', _planoPendingPin:null,
   replan:{area:'',contr:'',soloVencidas:true,sel:{},_groups:{}},
   bitacora:{dias:14,cambios:[],notas:[],actsMap:{},_pendingFotos:[]},
+  gerencia:null, gerenciaNivelOpen:{},
   planMode:'', enObraFiltroPlan:'', actFiltroPlan:'', actFiltroTexto:'', planFiltro:{estados:[],tipos:[],q:''}, planAddQ:'', planAgrupacion:(function(){try{return localStorage.getItem('mecca_planAgrup')||'contratista';}catch(e){return 'contratista';}})(),
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
@@ -9788,6 +9794,319 @@ function renderMetodologia(){
   el.innerHTML=h;
 }
 
+// ══════════════════════════════════════════════════════════════
+// PANEL GERENCIA — dashboard solo lectura + informe ejecutivo PDF
+// Fuente propia (fetch agregado), no depende de S.acts.
+// ══════════════════════════════════════════════════════════════
+function _gerHace(dias){ var d=new Date(today()+'T12:00:00'); d.setDate(d.getDate()-dias); return d.toISOString().slice(0,10); }
+function _gerNivel(area){
+  area=(area||'').trim();
+  var m=area.match(/^N\s*([2-7])/i); if(m) return 'N'+m[1];
+  var low=area.toLowerCase();
+  if(low.indexOf('parqueo')>=0) return 'Parqueo';
+  if(low.indexOf('fachada')>=0) return 'Fachadas';
+  if(low.indexOf('escalera')>=0) return 'Escaleras';
+  return 'Otros';
+}
+var _GER_NIVELES=['N2','N3','N4','N5','N6','N7','Parqueo','Fachadas','Escaleras','Otros'];
+var _GER_META='2026-10-31';
+function _gerVencida(a){ var ff=(a.fecha_fin||'').slice(0,10); return a.estado!=='completado' && ff && ff<today(); }
+function _gerDias(a){ var ff=(a.fecha_fin||'').slice(0,10); if(!ff) return 0; return Math.round((new Date(today()+'T12:00:00')-new Date(ff+'T12:00:00'))/864e5); }
+function _gerColor(pct){ return pct>=60?'#2f9e44':pct>=30?'#e67700':'#e03131'; }
+async function loadGerencia(){
+  try{
+    var acts=await sb('obra_actividades?select=id,area,estado,porcentaje,prioridad,fecha_fin,fecha_plan,personal_nombre,descripcion,tipo_personal&limit=3000');
+    var cambios=await sb('obra_cambios?fecha=gte.'+_gerHace(30)+'&select=fecha,accion,entidad_id,entidad_nombre,usuario_nombre&limit=5000');
+    var asist=[];
+    try{ asist=await sb('obra_asistencia?fecha=gte.'+_gerHace(7)+'&select=fecha,estado,personal_id&limit=5000'); }catch(e){}
+    S.gerencia={acts:Array.isArray(acts)?acts:[], cambios:Array.isArray(cambios)?cambios:[], asist:Array.isArray(asist)?asist:[]};
+  }catch(e){ S.gerencia=S.gerencia||{acts:[],cambios:[],asist:[]}; }
+  return S.gerencia;
+}
+function _gerenciaMetrics(){
+  var G=S.gerencia||{acts:[],cambios:[],asist:[]};
+  var acts=G.acts||[], cambios=G.cambios||[];
+  var total=acts.length, completadas=acts.filter(function(a){return a.estado==='completado';}).length;
+  var pctGlobal=total?Math.round(completadas/total*100):0;
+  var abiertas=acts.filter(function(a){return a.estado!=='completado';}).length;
+  var vencidas=acts.filter(_gerVencida);
+  var urgentes=acts.filter(function(a){return a.prioridad==='urgente'&&a.estado!=='completado';});
+  // por nivel
+  var byNivel={};
+  acts.forEach(function(a){ var n=_gerNivel(a.area); (byNivel[n]=byNivel[n]||{total:0,done:0,area:{}}); byNivel[n].total++; if(a.estado==='completado')byNivel[n].done++;
+    var ar=(a.area||'Sin área').trim()||'Sin área'; (byNivel[n].area[ar]=byNivel[n].area[ar]||{total:0,done:0}); byNivel[n].area[ar].total++; if(a.estado==='completado')byNivel[n].area[ar].done++; });
+  var niveles=_GER_NIVELES.filter(function(n){return byNivel[n]&&byNivel[n].total;}).map(function(n){
+    var d=byNivel[n], pct=d.total?Math.round(d.done/d.total*100):0;
+    var areas=Object.keys(d.area).sort().map(function(k){var x=d.area[k];return {area:k,pct:x.total?Math.round(x.done/x.total*100):0,done:x.done,total:x.total};});
+    return {nivel:n,pct:pct,done:d.done,total:d.total,areas:areas};
+  });
+  // ritmo semanal (6 semanas, completadas por semana)
+  var comp=cambios.filter(function(c){return c.accion==='completado';});
+  var semanas=[]; var t0=new Date(today()+'T12:00:00');
+  for(var i=5;i>=0;i--){
+    var end=new Date(t0); end.setDate(end.getDate()-i*7);
+    var start=new Date(end); start.setDate(start.getDate()-6);
+    var s=start.toISOString().slice(0,10), e=end.toISOString().slice(0,10);
+    var cnt=comp.filter(function(c){var f=(c.fecha||'').slice(0,10);return f>=s&&f<=e;}).length;
+    semanas.push({ini:s,fin:e,label:e.slice(8,10)+'/'+e.slice(5,7),count:cnt});
+  }
+  // riesgos: vencidas por atraso desc, top 10
+  var riesgos=vencidas.slice().sort(function(a,b){return _gerDias(b)-_gerDias(a);}).slice(0,10);
+  // rendimiento por contratista
+  var cmap={};
+  acts.forEach(function(a){
+    if(a.tipo_personal!=='contratista') return;
+    _responsables(a.personal_nombre).forEach(function(nm){
+      var c=cmap[nm]=cmap[nm]||{nombre:nm,abiertas:0,completadas:0,vencidas:0};
+      if(a.estado==='completado') c.completadas++; else c.abiertas++;
+      if(_gerVencida(a)) c.vencidas++;
+    });
+  });
+  var contratistas=Object.keys(cmap).map(function(k){return cmap[k];}).sort(function(a,b){return (b.vencidas-a.vencidas)||(b.abiertas-a.abiertas);});
+  // logros de la semana (completadas últimos 7 días)
+  var h7=_gerHace(7);
+  var actById={}; acts.forEach(function(a){if(a.id)actById[a.id]=a;});
+  var logros=comp.filter(function(c){return (c.fecha||'').slice(0,10)>=h7;}).slice(0,12).map(function(c){
+    var a=c.entidad_id&&actById[c.entidad_id];
+    return {desc:c.entidad_nombre||(a&&a.descripcion)||'', area:(a&&a.area)||'', quien:c.usuario_nombre||''};
+  });
+  // semana próxima: fecha_plan o fecha_fin en próximos 7 días
+  var man7=_gerHace(-7); var hoy=today();
+  var proxima=acts.filter(function(a){
+    if(a.estado==='completado') return false;
+    var fp=(a.fecha_plan||'').slice(0,10), ff=(a.fecha_fin||'').slice(0,10);
+    return (fp&&fp>=hoy&&fp<=man7)||(ff&&ff>=hoy&&ff<=man7);
+  }).sort(function(a,b){
+    var da=(a.fecha_plan||a.fecha_fin||'9999').slice(0,10), db=(b.fecha_plan||b.fecha_fin||'9999').slice(0,10);
+    return da.localeCompare(db);
+  }).slice(0,10);
+  // asistencia promedio (presentes/día) última semana — SOLO presentes (sin HE)
+  var asist=G.asist||[]; var presSet=['presente','tarde','medio día','medio dia'];
+  var byDia={}; asist.forEach(function(a){var d=(a.fecha||'').slice(0,10);if(!d)return;(byDia[d]=byDia[d]||0); if(presSet.indexOf(a.estado)>=0)byDia[d]++;});
+  var diasA=Object.keys(byDia); var asistProm=diasA.length?Math.round(diasA.reduce(function(s,d){return s+byDia[d];},0)/diasA.length):0;
+  var quedanDias=Math.max(0,Math.round((new Date(_GER_META+'T12:00:00')-new Date(hoy+'T12:00:00'))/864e5));
+  return {total:total,completadas:completadas,pctGlobal:pctGlobal,abiertas:abiertas,vencidas:vencidas,urgentes:urgentes,
+    niveles:niveles,semanas:semanas,riesgos:riesgos,contratistas:contratistas,logros:logros,proxima:proxima,asistProm:asistProm,quedanDias:quedanDias};
+}
+function _gerToggleNivel(n){ S.gerenciaNivelOpen[n]=!S.gerenciaNivelOpen[n]; renderGerencia(); }
+function renderGerencia(){
+  var el=document.getElementById('c-gerencia'); if(!el) return;
+  if(!S.gerencia){ el.innerHTML='<div class="empty" style="padding:40px 20px;text-align:center"><div style="font-size:13px;color:var(--text3)">Cargando panel…</div></div>'; return; }
+  var M=_gerenciaMetrics();
+  var h='<div style="max-width:900px;margin:0 auto;padding-bottom:28px">';
+  h+='<div class="sec-title" style="margin:14px 0 4px">📈 Gerencia — Estado de la obra</div>';
+  h+='<div style="font-size:11px;color:var(--text3);margin-bottom:12px">Solo lectura · MECCA RESIDENCE 2026 · '+M.total+' actividades</div>';
+  // 1) KPIs
+  var kpi=function(v,l,c){return '<div class="scard"><div class="v" style="color:'+c+';font-size:20px">'+v+'</div><div class="l">'+l+'</div></div>';};
+  h+='<div class="stats-row">'+
+     kpi(M.pctGlobal+'%','Avance global','var(--accent)')+
+     kpi(M.abiertas,'Abiertas','var(--text2)')+
+     kpi(M.vencidas.length,'Vencidas',M.vencidas.length?'#e03131':'var(--text3)')+
+     kpi(M.urgentes.length,'Urgentes',M.urgentes.length?'#e67700':'var(--text3)')+
+     '</div>';
+  h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-xs);padding:12px 14px;margin-bottom:14px">'+
+     '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px"><span style="font-size:12px;font-weight:700;color:var(--text)">Avance global: '+M.completadas+' de '+M.total+'</span><span style="font-size:13px;font-weight:800;color:var(--accent)">'+M.pctGlobal+'%</span></div>'+
+     '<div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+M.pctGlobal+'%;background:var(--accent);border-radius:4px"></div></div>'+
+     '<div style="font-size:11px;color:var(--text3);margin-top:6px">🎯 Meta: 31 oct 2026 · quedan <b>'+M.quedanDias+'</b> días</div></div>';
+  // 2) Avance por nivel
+  h+='<div class="sec-title" style="margin:16px 0 8px">🏗️ Avance por nivel</div>';
+  M.niveles.forEach(function(n){
+    var col=_gerColor(n.pct); var open=!!S.gerenciaNivelOpen[n.nivel];
+    h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-xs);margin-bottom:6px;overflow:hidden">'+
+       '<div onclick="_gerToggleNivel(\''+n.nivel+'\')" style="cursor:pointer;padding:10px 14px">'+
+         '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px"><span style="font-size:13px;font-weight:700;color:var(--text)">'+esc(n.nivel)+' <span style="font-size:11px;color:var(--text3);font-weight:500">'+n.done+'/'+n.total+' · '+n.areas.length+' áreas</span></span><span style="font-size:13px;font-weight:800;color:'+col+'">'+n.pct+'% '+(open?'▲':'▼')+'</span></div>'+
+         '<div style="height:7px;background:var(--bg3);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+n.pct+'%;background:'+col+';border-radius:4px"></div></div>'+
+       '</div>';
+    if(open){
+      h+='<div style="border-top:1px solid var(--border2);padding:4px 14px 8px">';
+      n.areas.forEach(function(ar){
+        var acol=_gerColor(ar.pct);
+        h+='<div style="display:flex;align-items:center;gap:8px;padding:5px 0"><span style="flex:1;font-size:11px;color:var(--text2)">'+esc(ar.area)+'</span>'+
+           '<div style="flex:0 0 90px;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+ar.pct+'%;background:'+acol+'"></div></div>'+
+           '<span style="flex:0 0 54px;text-align:right;font-size:11px;font-weight:700;color:'+acol+'">'+ar.pct+'% <span style="color:var(--text3);font-weight:500">'+ar.done+'/'+ar.total+'</span></span></div>';
+      });
+      h+='</div>';
+    }
+    h+='</div>';
+  });
+  // 3) Ritmo semanal
+  h+='<div class="sec-title" style="margin:16px 0 8px">📊 Ritmo semanal — completadas por semana</div>';
+  var maxC=Math.max(1,Math.max.apply(null,M.semanas.map(function(s){return s.count;})));
+  h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-xs);padding:12px 14px;margin-bottom:14px">'+
+     '<div style="display:flex;align-items:flex-end;justify-content:space-around;gap:6px;height:90px">';
+  M.semanas.forEach(function(s){
+    var hb=Math.round(s.count/maxC*70)+4;
+    h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px">'+
+       '<span style="font-size:11px;font-weight:800;color:var(--accent)">'+s.count+'</span>'+
+       '<div style="width:70%;max-width:34px;height:'+hb+'px;background:var(--accent);border-radius:4px 4px 0 0"></div>'+
+       '<span style="font-size:9px;color:var(--text3)">'+s.label+'</span></div>';
+  });
+  h+='</div><div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center">Últimas 6 semanas · fuente: registro de cambios</div></div>';
+  // 4) Riesgos
+  h+='<div class="sec-title" style="margin:16px 0 8px">🔴 Riesgos — vencidas ('+M.vencidas.length+')</div>';
+  if(!M.riesgos.length){ h+='<div style="background:#d3f9d8;border:1px solid #8ce99a;border-radius:var(--r2);padding:12px;text-align:center;font-size:12px;font-weight:700;color:#2f9e44;margin-bottom:14px">✅ Sin actividades vencidas</div>'; }
+  else{
+    h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-xs);overflow:hidden;margin-bottom:14px">';
+    M.riesgos.forEach(function(a,i){
+      h+='<div style="padding:8px 12px;'+(i?'border-top:1px solid var(--border2);':'')+'border-left:3px solid #e03131;display:flex;align-items:center;gap:8px">'+
+         '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(a.descripcion||'(sin descripción)')+'</div>'+
+         '<div style="font-size:10px;color:var(--text3);margin-top:1px">'+[a.area?esc(a.area):null,a.personal_nombre?esc(a.personal_nombre):null].filter(Boolean).join(' · ')+'</div></div>'+
+         '<span style="flex-shrink:0;font-size:12px;font-weight:800;color:#e03131">'+_gerDias(a)+'d</span></div>';
+    });
+    if(M.vencidas.length>M.riesgos.length) h+='<div style="padding:6px 12px;font-size:11px;color:var(--text3);text-align:center;border-top:1px solid var(--border2)">+'+(M.vencidas.length-M.riesgos.length)+' vencidas más</div>';
+    h+='</div>';
+  }
+  // 5) Rendimiento por contratista
+  h+='<div class="sec-title" style="margin:16px 0 8px">🔨 Rendimiento por contratista</div>';
+  if(!M.contratistas.length){ h+='<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Sin contratistas con actividades.</div>'; }
+  else{
+    h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-xs);overflow-x:auto;margin-bottom:14px">'+
+       '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:340px">'+
+       '<thead><tr style="background:var(--bg3)"><th style="text-align:left;padding:7px 10px;font-size:10px;color:var(--text3);font-weight:700">CONTRATISTA</th><th style="text-align:center;padding:7px 6px;font-size:10px;color:var(--text3);font-weight:700">ABIERTAS</th><th style="text-align:center;padding:7px 6px;font-size:10px;color:var(--text3);font-weight:700">COMPLET.</th><th style="text-align:center;padding:7px 8px;font-size:10px;color:#e03131;font-weight:700">VENC.</th></tr></thead><tbody>';
+    M.contratistas.slice(0,20).forEach(function(c,i){
+      h+='<tr style="border-top:1px solid var(--border2)"><td style="padding:7px 10px;color:var(--text)">'+esc(c.nombre)+'</td>'+
+         '<td style="text-align:center;padding:7px 6px;color:var(--text2)">'+c.abiertas+'</td>'+
+         '<td style="text-align:center;padding:7px 6px;color:#2f9e44;font-weight:600">'+c.completadas+'</td>'+
+         '<td style="text-align:center;padding:7px 8px;font-weight:800;color:'+(c.vencidas?'#e03131':'var(--text3)')+'">'+c.vencidas+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  // 6) Botonera
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'+
+     '<button onclick="generarPDFEjecutivo()" style="flex:1;min-width:150px;padding:11px 16px;background:var(--accent);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);box-shadow:0 4px 12px rgba(124,58,237,.25)">📄 Informe Ejecutivo PDF</button>'+
+     '<button onclick="compartirEjecutivoWA()" style="flex:1;min-width:130px;padding:11px 16px;background:var(--green);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">📲 WhatsApp</button>'+
+     '</div>';
+  h+='</div>';
+  el.innerHTML=h;
+}
+function generarPDFEjecutivo(opts){
+  opts=opts||{};
+  if(!window.jspdf||!window.jspdf.jsPDF){ setSS('err','PDF no disponible'); return; }
+  if(!S.gerencia){ showToast('Abre el panel Gerencia primero','warn'); return; }
+  var M=_gerenciaMetrics();
+  var hoyISO=today();
+  var d0=new Date(hoyISO+'T12:00:00'); var wStart=new Date(d0); wStart.setDate(wStart.getDate()-6);
+  var MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var rango=wStart.getDate()+' al '+d0.getDate()+' '+MESES[d0.getMonth()]+' '+d0.getFullYear();
+  var compSemana=(M.semanas[M.semanas.length-1]||{count:0}).count;
+  var ingNom=(S.user&&S.user.nombre)||'';
+  try{
+    var jsPDFp=window.jspdf.jsPDF;
+    var doc=new jsPDFp({orientation:'portrait',unit:'mm',format:'a4'});
+    var W=210,Mg=14,RW=W-2*Mg,y=0,pageNo=1;
+    var BDX_PUR=[152,32,164],BDX_GRN=[41,101,41],RED=[201,42,42],BLUE=[26,86,219],GREY=[90,90,90];
+    var TXT=[30,30,30],MUT=[100,100,100],WHT=[255,255,255],LGRAY=[245,246,248],GBG=[236,247,236];
+    function _fc(c){doc.setFillColor.apply(doc,c);} function _tc(c){doc.setTextColor.apply(doc,c);}
+    function _s(s){return(s||'').toString().replace(/[^\x00-\x7F]/g,function(ch){return ch;});}
+    function foot(){ _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','normal');
+      doc.text('MECCA RESIDENCE 2026 · Informe Ejecutivo · generado '+hoyISO.slice(8,10)+'/'+hoyISO.slice(5,7)+' '+hhmm()+' · Pag. '+pageNo,W/2,290,{align:'center'}); }
+    function drawH(){
+      _fc(WHT);doc.rect(0,0,W,22,'F');
+      _fc(BDX_GRN);doc.rect(0,0,W,1.4,'F');_fc(BDX_PUR);doc.rect(0,1.4,W,0.6,'F');
+      _fc(BDX_PUR);doc.roundedRect(Mg,3.5,14,14,2.5,2.5,'F');
+      _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('B',Mg+4.7,13.5);
+      _tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('BRIDEX',Mg+17,13);
+      var ix=W-Mg;
+      _tc(TXT);doc.setFontSize(10.5);doc.setFont('helvetica','bold');doc.text('INFORME EJECUTIVO DE OBRA',ix,8,{align:'right'});
+      _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('MECCA RESIDENCE 2026 · Semana del '+rango,ix,12.5,{align:'right'});
+      if(ingNom){_tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(_s(ingNom),ix,16.5,{align:'right'});}
+      _fc(BDX_GRN);doc.rect(0,22,W,1,'F');_fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
+    }
+    function chkY(hh){ if(y+hh>282){ foot(); doc.addPage(); pageNo++; drawH(); y=28; } }
+    function band(txt,col){ chkY(8); _fc(col);doc.rect(Mg,y,RW,6,'F'); _tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text(txt,Mg+3,y+4); y+=7.5; }
+    drawH(); y=28;
+    // RESUMEN (verde)
+    _fc(GBG);doc.rect(Mg,y,RW,12,'F');_fc(BDX_GRN);doc.rect(Mg,y,RW,0.6,'F');
+    _tc(BDX_GRN);doc.setFontSize(8);doc.setFont('helvetica','bold');
+    doc.text('RESUMEN',Mg+3,y+4.5);
+    _tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','normal');
+    doc.text('Avance global '+M.pctGlobal+'%  ('+M.completadas+'/'+M.total+')   ·   '+compSemana+' completadas esta semana   ·   meta 31 oct (quedan '+M.quedanDias+' dias)',Mg+3,y+9);
+    y+=15;
+    // Tabla avance por nivel con barras
+    _tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('AVANCE POR NIVEL',Mg+2,y+2);y+=4;
+    M.niveles.forEach(function(n){
+      chkY(6);
+      var col=n.pct>=60?BDX_GRN:n.pct>=30?[230,119,0]:RED;
+      _tc(TXT);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text(_s(n.nivel),Mg+2,y+3.5);
+      _tc(MUT);doc.setFont('helvetica','normal');doc.setFontSize(6);doc.text(n.done+'/'+n.total,Mg+24,y+3.5);
+      var bx=Mg+40,bw=RW-70;
+      _fc([228,231,235]);doc.roundedRect(bx,y+1,bw,3.4,1,1,'F');
+      _fc(col);if(n.pct>0)doc.roundedRect(bx,y+1,bw*Math.min(100,n.pct)/100,3.4,1,1,'F');
+      _tc(col);doc.setFont('helvetica','bold');doc.setFontSize(7);doc.text(n.pct+'%',W-Mg-2,y+3.5,{align:'right'});
+      y+=5.5;
+    });
+    y+=3;
+    // LOGROS (azul)
+    band('LOGROS DE LA SEMANA',BLUE);
+    if(!M.logros.length){ _tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','italic');doc.text('Sin actividades completadas en los ultimos 7 dias.',Mg+3,y+3);y+=6; }
+    M.logros.slice(0,10).forEach(function(l,i){
+      chkY(5.5);
+      _fc(i%2===0?WHT:LGRAY);doc.rect(Mg,y,RW,5,'F');_fc(BLUE);doc.rect(Mg,y,1.4,5,'F');
+      _tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text(_s(l.area||'—'),Mg+3,y+3.4,{maxWidth:28});
+      doc.setFont('helvetica','bold');doc.text(doc.splitTextToSize(_s(l.desc||''),100)[0],Mg+34,y+3.4);
+      _tc(MUT);doc.setFont('helvetica','normal');doc.text(_s(l.quien||''),W-Mg-2,y+3.4,{align:'right'});
+      y+=5;
+    });
+    y+=3;
+    // RIESGOS (roja)
+    band('RIESGOS Y ATRASOS',RED);
+    _tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text('Total vencidas: '+M.vencidas.length+'    ·    Urgentes abiertas: '+M.urgentes.length,Mg+3,y+3);y+=6;
+    M.riesgos.slice(0,5).forEach(function(a,i){
+      chkY(5.5);
+      _fc(i%2===0?[255,236,236]:WHT);doc.rect(Mg,y,RW,5,'F');_fc(RED);doc.rect(Mg,y,1.4,5,'F');
+      _tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      doc.text(_s(a.area||'—'),Mg+3,y+3.4,{maxWidth:26});
+      doc.setFont('helvetica','bold');doc.text(doc.splitTextToSize(_s(a.descripcion||''),95)[0],Mg+32,y+3.4);
+      _tc(RED);doc.text('+'+_gerDias(a)+'d',W-Mg-2,y+3.4,{align:'right'});
+      y+=5;
+    });
+    y+=3;
+    // SEMANA PROXIMA (gris)
+    band('SEMANA PROXIMA',GREY);
+    if(!M.proxima.length){ _tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','italic');doc.text('Sin actividades con fecha en los proximos 7 dias.',Mg+3,y+3);y+=6; }
+    M.proxima.forEach(function(a,i){
+      chkY(5.5);
+      _fc(i%2===0?WHT:LGRAY);doc.rect(Mg,y,RW,5,'F');_fc(GREY);doc.rect(Mg,y,1.4,5,'F');
+      _tc(TXT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');
+      var f=(a.fecha_plan||a.fecha_fin||'').slice(5,10);
+      doc.text(_s(f||'—'),Mg+3,y+3.4);
+      doc.text(_s(a.area||'—'),Mg+18,y+3.4,{maxWidth:24});
+      doc.setFont('helvetica','bold');doc.text(doc.splitTextToSize(_s(a.descripcion||''),96)[0],Mg+46,y+3.4);
+      _tc(MUT);doc.setFont('helvetica','normal');doc.text(_s(a.personal_nombre||''),W-Mg-2,y+3.4,{align:'right'});
+      y+=5;
+    });
+    y+=4;
+    // Asistencia + firmas
+    chkY(20);
+    _tc(TXT);doc.setFontSize(7.5);doc.setFont('helvetica','normal');
+    doc.text('Asistencia promedio de la semana: '+M.asistProm+' presentes/dia   (sin horas extra de contratistas)',Mg+2,y+3);y+=9;
+    doc.setDrawColor(200,200,200);
+    doc.text('Firma Ing. Residente: ____________________',Mg,y+3);
+    doc.text('Admin: ____________________',W-Mg-58,y+3);
+    foot();
+    if(opts.returnBlob){ return doc.output('blob'); }
+    doc.save('Informe_Ejecutivo_'+hoyISO+'.pdf');
+    setSS('ok','✓ Informe ejecutivo generado');
+  }catch(e){ console.error(e); setSS('err','Error al generar PDF'); }
+}
+async function compartirEjecutivoWA(){
+  var blob=generarPDFEjecutivo({returnBlob:true});
+  if(!blob){ return; }
+  var fname='Informe_Ejecutivo_'+today()+'.pdf';
+  try{
+    var file=new File([blob],fname,{type:'application/pdf'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:'Informe Ejecutivo · Mecca Residence'});
+      return;
+    }
+  }catch(e){ /* fallback */ }
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a'); a.href=url; a.download=fname; a.click();
+  URL.revokeObjectURL(url);
+  showToast('PDF descargado — compártelo por WhatsApp','info',3000);
+}
+
 function goTab(tab){
   // Legacy tab redirects — old internal calls still work
   var legacyMap={enobra:'obra',asistencia:'equipo',actividades:'obra',
@@ -9803,7 +10122,7 @@ function goTab(tab){
     tab=legacyMap[tab];
   }
   S.currentTab=tab;
-  var VIEWS=['hoy','obra','equipo','reportes','fotos','planos','compras','plan','replan','bitacora','metodologia'];
+  var VIEWS=['hoy','obra','equipo','reportes','fotos','planos','compras','plan','replan','bitacora','metodologia','gerencia'];
   VIEWS.forEach(function(v){
     var el=document.getElementById('view-'+v);
     if(el) el.classList.toggle('active', v===tab);
@@ -9831,6 +10150,7 @@ function goTab(tab){
   else if(tab==='replan')   renderReplan();
   else if(tab==='bitacora') loadBitacora();
   else if(tab==='metodologia') renderMetodologia();
+  else if(tab==='gerencia') { renderGerencia(); loadGerencia().then(function(){ if(S.currentTab==='gerencia') renderGerencia(); }); }
 }
 
 // ── DRAWER & NAV HELPERS ──────────────────────────
