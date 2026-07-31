@@ -2418,10 +2418,15 @@ function _planDupSet(lista){
   (lista||[]).forEach(function(a){ var k=_planNorm(a.descripcion)+'|'+_planNorm(a.area); if(cnt[k]>1) dup[a.id]=k; });
   return dup;
 }
-function _planDiaSplit(){
-  var abiertas=S.abiertas||[]; var marc=S.marcadasHoy||{};
-  var hoy=today();
-  var delDia=abiertas.filter(function(a){return (a.fecha_plan||'').slice(0,10)===hoy;});
+// Día mostrado en el Plan del día: '' = hoy, o un ISO 'YYYY-MM-DD'
+function _planFechaActiva(){ return S.planDiaFecha || today(); }
+function _planDiaSplit(fecha){
+  var abiertas=S.abiertas||[];
+  var f=fecha || today();
+  var esHoy=(f===today());
+  // marcadasHoy SOLO aplica al día de hoy; para otro día nada está "marcado hoy"
+  var marc=esHoy ? (S.marcadasHoy||{}) : {};
+  var delDia=abiertas.filter(function(a){return (a.fecha_plan||'').slice(0,10)===f;});
   var pend=delDia.filter(function(a){return !marc[String(a.id)];});
   var done=delDia.filter(function(a){return marc[String(a.id)];});
   pend.sort(function(a,b){
@@ -2429,7 +2434,7 @@ function _planDiaSplit(){
     if(db!==da) return db-da;                                   // mayor atraso primero
     return (a.fecha_fin||'9999').localeCompare(b.fecha_fin||'9999'); // luego fecha_fin asc
   });
-  return {delDia:delDia,pend:pend,done:done};
+  return {delDia:delDia,pend:pend,done:done,fecha:f,esHoy:esHoy};
 }
 // Filtros del Plan del día (estado + tipo + búsqueda)
 function _planFiltroAplica(list){
@@ -2456,7 +2461,9 @@ function _planFiltroBuscar(v){
   var el=document.getElementById('plan-search'); if(el){ el.focus(); try{el.setSelectionRange(v.length,v.length);}catch(e){} }
 }
 function renderPlanDia(){
-  var sp=_planDiaSplit();
+  var f=_planFechaActiva();
+  var sp=_planDiaSplit(f);
+  var esHoy=sp.esHoy;
   var editable=canEdit();
   var dupMap=_planDupSet(sp.delDia||[]);
   var pf=S.planFiltro||{estados:[],tipos:[],q:''};
@@ -2464,11 +2471,25 @@ function renderPlanDia(){
   var filtroActivo=_planFiltroActivo();
   var nContr=Object.keys((sp.delDia||[]).reduce(function(m,a){var k=(a.personal_nombre||'').trim();if(k)m[k]=1;return m;},{})).length;
   var countLbl=filtroActivo?(pend.length+' de '+sp.delDia.length):(''+sp.delDia.length);
-  var h='<div class="sec-title" style="margin:16px 0 8px">📋 Plan del día'+
+  // Etiquetas de día
+  var ddSel=f.slice(8,10)+'/'+f.slice(5,7);
+  var diaTag=esHoy?'HOY':('MAÑANA ('+ddSel+')');
+  // Conteos para el selector
+  var nHoy=(S.abiertas||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===today();}).length;
+  var nMan=(S.abiertas||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===tomorrow();}).length;
+  var h='<div class="sec-title" style="margin:16px 0 8px">📋 Plan del día · '+diaTag+
     '<span style="font-weight:400;color:var(--text3);margin-left:8px;font-size:10px;">actividades asignadas · <span id="plan-dia-count">'+countLbl+'</span></span></div>';
+  // Selector de día HOY / MAÑANA (visible también para view)
+  var _selBtn=function(active,label,onclick){
+    return '<button onclick="'+onclick+'" style="flex:1;padding:8px 6px;border:1.5px solid '+(active?'var(--accent)':'var(--border2)')+';background:'+(active?'var(--accent)':'var(--bg2)')+';color:'+(active?'#fff':'var(--text2)')+';font-size:12px;font-weight:800;cursor:pointer;font-family:var(--font);border-radius:8px;white-space:nowrap">'+label+'</button>';
+  };
+  h+='<div style="display:flex;gap:6px;margin-bottom:10px">'+
+     _selBtn(esHoy,'📅 HOY ('+nHoy+')',"planVerDia('hoy')")+
+     _selBtn(!esHoy,'📅 MAÑANA ('+nMan+')',"planVerDia('manana')")+
+     '</div>';
   // Barra PDF / WhatsApp (arriba)
   h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:13px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;box-shadow:var(--shadow-xs)">'+
-     '<div><div style="font-size:13px;font-weight:700;color:var(--text)">📄 Plan del día</div>'+
+     '<div><div style="font-size:13px;font-weight:700;color:var(--text)">📄 Plan del día · '+diaTag+'</div>'+
      '<div style="font-size:11px;color:var(--text3);margin-top:2px;" id="plan-pdf-subtitle">'+sp.delDia.length+' actividad'+(sp.delDia.length!==1?'es':'')+' · '+nContr+' contratista'+(nContr!==1?'s':'')+'</div></div>'+
      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
        '<button onclick="generarPDFPlan()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);box-shadow:0 4px 12px rgba(124,58,237,.25)">Generar PDF</button>'+
@@ -2496,19 +2517,20 @@ function renderPlanDia(){
   // Tarjetas pendientes (filtradas), agrupadas
   _planAgruparlista(pend).forEach(function(g){
     if(g.titulo) h+='<div style="font-size:11px;font-weight:800;color:var(--accent);margin:10px 0 5px;padding:3px 0;border-bottom:1px solid var(--border2)">'+esc(g.titulo)+' <span style="color:var(--text3);font-weight:600">('+g.items.length+')</span></div>';
-    g.items.forEach(function(a){ h+=_planDiaCard(a,editable,!!dupMap[a.id]); });
+    g.items.forEach(function(a){ h+=_planDiaCard(a,editable,!!dupMap[a.id],esHoy); });
   });
   if(sp.delDia.length && !pend.length){
     h+='<div style="padding:14px;text-align:center;font-size:12px;color:var(--text3)">'+(filtroActivo?'Sin resultados con ese filtro.':'Todo lo del plan ya fue marcado ✓')+'</div>';
   }
   // ⚡ Sugeridas — vencen hoy o están vencidas (abiertas), NO en el plan y sin marcar hoy
+  // Solo tiene sentido en la vista de HOY.
   var _marcS=S.marcadasHoy||{}, _hoyS=today();
-  var sugeridas=(S.abiertas||[]).filter(function(a){
+  var sugeridas=esHoy ? (S.abiertas||[]).filter(function(a){
     if(!_hoyEsDelDia(a)) return false;
     if((a.fecha_plan||'').slice(0,10)===_hoyS) return false;   // ya en el plan
     if(_marcS[String(a.id)]) return false;                     // ya marcada hoy
     return true;
-  });
+  }) : [];
   sugeridas.sort(function(a,b){ return _hoyDiasAtraso(b)-_hoyDiasAtraso(a); });
   if(sugeridas.length){
     if(S._planSugOpen===undefined) S._planSugOpen=false;
@@ -2546,10 +2568,10 @@ function renderPlanDia(){
          '<input id="plan-add-search" type="search" value="'+esc(_addQ)+'" placeholder="Buscar actividad para agregar al plan…" oninput="_planAddBuscar(this.value)" style="flex:1;border:none;outline:none;background:transparent;font-size:13px;font-family:var(--font);color:var(--text)">'+
        '</div>';
     if(_addQ.trim().length>=2){
-      var _q=_addQ.toLowerCase().trim(), _hoy=today();
+      var _q=_addQ.toLowerCase().trim();
       var _cand=(S.abiertas||[]).filter(function(a){
         if(a.estado==='completado') return false;
-        if((a.fecha_plan||'').slice(0,10)===_hoy) return false;
+        if((a.fecha_plan||'').slice(0,10)===f) return false;   // ya en el plan del día mostrado
         var hay=((a.descripcion||'')+' '+(a.area||'')+' '+(a.personal_nombre||'')+' '+(a.ingeniero_nombre||'')).toLowerCase();
         return hay.indexOf(_q)>=0;
       }).slice(0,8);
@@ -2562,14 +2584,14 @@ function renderPlanDia(){
           h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;'+(i?'border-top:1px solid var(--border2);':'')+'background:var(--bg2)">'+
              '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;color:var(--text)">'+esc(a.descripcion||'(sin descripción)')+'</div>'+
              '<div style="font-size:10px;color:var(--text3);margin-top:1px">'+[a.area?esc(a.area):null,asig?esc(asig):null].filter(Boolean).join(' · ')+'</div></div>'+
-             '<button onclick="planAddDesdeBuscador(\''+a.id+'\')" style="flex-shrink:0;padding:5px 10px;background:var(--accent-soft);color:var(--accent);border:1.5px solid var(--accent);border-radius:var(--r);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">＋ Plan hoy</button>'+
+             '<button onclick="planAddDesdeBuscador(\''+a.id+'\')" style="flex-shrink:0;padding:5px 10px;background:var(--accent-soft);color:var(--accent);border:1.5px solid var(--accent);border-radius:var(--r);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">＋ Plan '+(esHoy?'hoy':'mañana')+'</button>'+
              '</div>';
         });
       }
       h+='</div>';
     }
     h+='</div>';
-    h+='<button onclick="planDiaNuevaAct()" style="width:100%;padding:10px;background:var(--bg3);border:1.5px dashed var(--border2);border-radius:var(--r2);color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:8px;">＋ Nueva actividad para hoy</button>';
+    h+='<button onclick="planDiaNuevaAct()" style="width:100%;padding:10px;background:var(--bg3);border:1.5px dashed var(--border2);border-radius:var(--r2);color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:8px;">＋ Nueva actividad para '+(esHoy?'hoy':'mañana')+'</button>';
   }
   return h;
 }
@@ -2580,11 +2602,17 @@ function _planAddBuscar(v){
   if(el){ el.focus(); try{el.setSelectionRange(v.length,v.length);}catch(e){} }
 }
 function planAddDesdeBuscador(id){
-  planAgregar(id,'hoy');   // PATCH fecha_plan=hoy + updateMem + rerender + toast
+  planAgregar(id, _planFechaActiva()===today()?'hoy':'manana');   // agrega al día mostrado
   S.planAddQ='';
   if(S.currentTab==='hoy') renderHoy();
 }
-function _planDiaCard(a,editable,esDup){
+// Cambia el día mostrado del Plan del día ('' = hoy, tomorrow() = mañana)
+function planVerDia(d){
+  S.planDiaFecha=(d==='manana')?tomorrow():'';
+  if(S.currentTab==='hoy') renderHoy();
+}
+function _planDiaCard(a,editable,esDup,esHoy){
+  if(esHoy===undefined) esHoy=true;   // compat: por defecto vista de hoy
   var atraso=_hoyDiasAtraso(a); var venc=atraso>0;
   var asignado=a.personal_nombre||a.ingeniero_nombre||'';
   var pct=a.porcentaje||0;
@@ -2598,9 +2626,11 @@ function _planDiaCard(a,editable,esDup){
   if(editable){
     h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'+
        '<select onchange="planDiaAsignar(\''+a.id+'\', this.value)" style="font-size:11px;color:var(--text2);background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:4px 8px;font-family:var(--font)">'+_planDiaPersonalOpts(a.personal_nombre)+'</select>'+
-       '<input type="number" min="0" max="100" value="'+pct+'" id="pct-'+a.id+'" style="width:52px;font-size:12px;text-align:center;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:5px 6px;color:var(--text);font-family:var(--font)">'+
-       '<button onclick="planDiaGuardar(\''+a.id+'\')" style="padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--r);font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--font)">Guardar</button>'+
-       '<button onclick="planDiaSinCambios(\''+a.id+'\')" style="padding:5px 10px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:var(--r);font-size:11px;cursor:pointer;font-family:var(--font)">Sin cambios hoy</button>'+
+       (esHoy
+         ? '<input type="number" min="0" max="100" value="'+pct+'" id="pct-'+a.id+'" style="width:52px;font-size:12px;text-align:center;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:5px 6px;color:var(--text);font-family:var(--font)">'+
+           '<button onclick="planDiaGuardar(\''+a.id+'\')" style="padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--r);font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--font)">Guardar</button>'+
+           '<button onclick="planDiaSinCambios(\''+a.id+'\')" style="padding:5px 10px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:var(--r);font-size:11px;cursor:pointer;font-family:var(--font)">Sin cambios hoy</button>'
+         : '<button onclick="planQuitar(\''+a.id+'\')" title="Quitar del plan" style="padding:5px 10px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:var(--r);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">✕ Quitar del plan</button>')+
        (isAdmin()?'<button onclick="planDiaEliminar(\''+a.id+'\')" title="Eliminar (duplicada)" style="margin-left:auto;padding:5px 10px;background:#fff5f5;color:var(--red);border:1px solid #ffc9c9;border-radius:var(--r);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">🗑</button>':'')+
        '</div>';
   }
@@ -2656,11 +2686,13 @@ async function planDiaEliminar(id){
 }
 function planDiaNuevaAct(){
   if(!canEdit())return;
-  var h=today();
+  var pf=_planFechaActiva();
+  var esManana=(pf!==today());
+  var h=pf;   // fecha de inicio/fin por defecto = día del plan mostrado
   var lbl='display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;font-family:var(--font)';
   var inp='width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:var(--r);background:#fff;font-size:13px;font-family:var(--font);color:var(--text)';
   document.getElementById('mcontent').innerHTML=
-    '<div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:14px">＋ Nueva actividad para hoy</div>'+
+    '<div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:14px">＋ Nueva actividad para '+(esManana?'mañana':'hoy')+'</div>'+
     '<div style="display:flex;flex-direction:column;gap:10px">'+
       '<div><label style="'+lbl+'">Descripción</label><input id="pd-desc" type="text" placeholder="Ej: Colocación de cerámica baño" style="'+inp+'"></div>'+
       '<div><label style="'+lbl+'">Área</label>'+ubicacionSelect('pd-area','')+'</div>'+
@@ -2691,10 +2723,11 @@ async function planDiaCrearAct(){
   var ff=(document.getElementById('pd-ff')||{}).value||today();
   var pObj=(S.personal||[]).find(function(x){return x.nombre===pers;});
   var tipo=pObj?(pObj.tipo==='propio'?'propio':'contratista'):'contratista';
+  var planF=_planFechaActiva();   // agrega la nueva actividad al plan del día mostrado
   var act={
     id:uid(), descripcion:desc, area:area, estado:'en-progreso', tipo_personal:tipo,
     personal_nombre:pers, ingeniero_nombre:(S.user&&S.user.nombre)||'', ingeniero_id:(S.user&&S.user.id)||'',
-    porcentaje:pct, prioridad:prio, fecha_inicio:fi, fecha_fin:ff, fecha:today(), foto_pendiente:false
+    porcentaje:pct, prioridad:prio, fecha_inicio:fi, fecha_fin:ff, fecha_plan:planF, fecha:today(), foto_pendiente:false
   };
   try{
     await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(act)});
@@ -2705,10 +2738,30 @@ async function planDiaCrearAct(){
     loadAbiertas().then(function(){renderHoy();});
   }catch(e){ showToast('Error: '+e.message,'err'); }
 }
+// Personal involucrado en el plan de un día (derivado de las actividades, NO de asistencia)
+function _planPersonalConvocado(lista){
+  var m={};
+  (lista||[]).forEach(function(a){
+    var k=(a.personal_nombre||'').trim() || '⚠️ Sin asignar';
+    (m[k]=m[k]||{n:0,areas:{}});
+    m[k].n++;
+    if(a.area) m[k].areas[a.area]=1;
+  });
+  return Object.keys(m).sort(function(a,b){
+    // "Sin asignar" siempre al final (alerta)
+    var sa=a==='⚠️ Sin asignar', sb=b==='⚠️ Sin asignar';
+    if(sa!==sb) return sa?1:-1;
+    return a.localeCompare(b);
+  }).map(function(k){
+    return {nombre:k, n:m[k].n, areas:Object.keys(m[k].areas)};
+  });
+}
 function generarPDFPlan(opts){
   opts=opts||{};
   if(!window.jspdf||!window.jspdf.jsPDF){ setSS('err','PDF no disponible'); return; }
-  var sp=_planDiaSplit();
+  var f=opts.fecha || _planFechaActiva();
+  var esHoy=(f===today());
+  var sp=_planDiaSplit(f);
   var delDia=sp.delDia.slice();
   var progr=delDia.slice().sort(function(a,b){
     var da=_hoyDiasAtraso(a),db=_hoyDiasAtraso(b);
@@ -2720,8 +2773,9 @@ function generarPDFPlan(opts){
   var presentes=(S.asist||[]).filter(function(x){return presentSet.indexOf(x.estado)>=0;})
     .map(function(x){var p=(S.personal||[]).find(function(pp){return pp.id===x.personal_id;});return p?p.nombre:(x.personal_nombre||'');})
     .filter(Boolean);
-  var hoyISO=today();
-  var dd=hoyISO.slice(8,10)+'/'+hoyISO.slice(5,7)+'/'+hoyISO.slice(0,4);
+  var iso=f;
+  var dd=iso.slice(8,10)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4);
+  var tituloPDF=esHoy?'PLAN DEL DIA':'PLAN DEL DIA - MANANA';
   var ingNom=(S.user&&S.user.nombre)||'';
   try{
     var jsPDFp=window.jspdf.jsPDF;
@@ -2743,7 +2797,7 @@ function generarPDFPlan(opts){
       _tc(WHT);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('B',M+4.7,13.5);
       _tc(BDX_GRN);doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('BRIDEX',M+17,13);
       var ix=W-M;
-      _tc(TXT);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text('PLAN DEL DIA',ix,8,{align:'right'});
+      _tc(esHoy?TXT:RED);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text(tituloPDF,ix,8,{align:'right'});
       _tc(BDX_GRN);doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.text('MECCA RESIDENCE 2026 · '+dd,ix,12.5,{align:'right'});
       if(ingNom){_tc(MUT);doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.text(_s(ingNom),ix,16.5,{align:'right'});}
       _fc(BDX_GRN);doc.rect(0,22,W,1,'F');_fc(BDX_PUR);doc.rect(0,23,W,0.4,'F');
@@ -2761,7 +2815,7 @@ function generarPDFPlan(opts){
     _tc(MUT);doc.setFontSize(6);doc.setFont('helvetica','bold');
     doc.text('AREA',cA,y+3.4);doc.text('DESCRIPCION',cD,y+3.4);doc.text('ASIGNADO',cP,y+3.4);doc.text('%',cPct,y+3.4);doc.text('ESTADO',cE,y+3.4);
     y+=5.5;
-    if(!progr.length){ _tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','italic');doc.text('Sin actividades programadas para hoy.',M+3,y+4);y+=7; }
+    if(!progr.length){ _tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','italic');doc.text('Sin actividades programadas para '+(esHoy?'hoy':'mañana')+'.',M+3,y+4);y+=7; }
     var drawFila=function(a,i){
       chkY(6.5);
       _fc(i%2===0?WHT:LGRAY);doc.rect(M,y,RW,6,'F');_fc(BLUE);doc.rect(M,y,1.4,6,'F');
@@ -2785,15 +2839,34 @@ function generarPDFPlan(opts){
       items.forEach(drawFila);
     });
     y+=3;
-    // PERSONAL EN OBRA (gris)
-    chkY(8);
-    _fc([80,80,80]);doc.rect(M,y,RW,6,'F');
-    _tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text('PERSONAL EN OBRA HOY ('+presentes.length+')',M+3,y+4);
-    y+=7;
-    _tc(TXT);doc.setFontSize(7);doc.setFont('helvetica','normal');
-    var pTxt=presentes.length?presentes.join(', '):'Sin asistencia registrada';
-    doc.splitTextToSize(_s(pTxt),RW-6).forEach(function(ln){ chkY(5); doc.text(ln,M+3,y+3.5); y+=4.5; });
-    y+=4;
+    // PERSONAL (gris) — HOY: asistencia registrada · MAÑANA: convocado desde el plan
+    if(esHoy){
+      chkY(8);
+      _fc([80,80,80]);doc.rect(M,y,RW,6,'F');
+      _tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text('PERSONAL EN OBRA HOY ('+presentes.length+')',M+3,y+4);
+      y+=7;
+      _tc(TXT);doc.setFontSize(7);doc.setFont('helvetica','normal');
+      var pTxt=presentes.length?presentes.join(', '):'Sin asistencia registrada';
+      doc.splitTextToSize(_s(pTxt),RW-6).forEach(function(ln){ chkY(5); doc.text(ln,M+3,y+3.5); y+=4.5; });
+      y+=4;
+    } else {
+      var conv=_planPersonalConvocado(delDia);
+      chkY(8);
+      _fc([80,80,80]);doc.rect(M,y,RW,6,'F');
+      _tc(WHT);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text('PERSONAL CONVOCADO ('+conv.length+')',M+3,y+4);
+      y+=7;
+      if(!conv.length){ _tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','italic');doc.text('Sin personal en el plan.',M+3,y+3.5); y+=5; }
+      conv.forEach(function(p){
+        var sinAsig=(p.nombre==='⚠️ Sin asignar');
+        var nom=sinAsig?'SIN ASIGNAR':p.nombre;
+        var line=nom+' — '+p.n+' actividad'+(p.n!==1?'es':'')+(p.areas.length?' · áreas: '+p.areas.join(', '):'');
+        _tc(sinAsig?RED:TXT);doc.setFontSize(7);doc.setFont('helvetica',sinAsig?'bold':'normal');
+        var lns=doc.splitTextToSize(_s(line),RW-6);
+        lns.forEach(function(ln){ chkY(5); doc.text(ln,M+3,y+3.5); y+=4.2; });
+        y+=1.2;
+      });
+      y+=3;
+    }
     // NOTAS + firma
     chkY(24);
     _tc(MUT);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text('NOTAS:',M,y+3);
@@ -2803,18 +2876,20 @@ function generarPDFPlan(opts){
     doc.text('Firma Ing. Residente: ______________________________',M,y+3);
     foot();
     if(opts.returnBlob){ return doc.output('blob'); }
-    doc.save('Plan_'+hoyISO+'.pdf');
-    setSS('ok','✓ Plan del día generado');
+    doc.save('Plan_'+iso+'.pdf');
+    setSS('ok','✓ Plan '+(esHoy?'del día':'de mañana')+' generado');
   }catch(e){ console.error(e); setSS('err','Error al generar PDF'); }
 }
-async function compartirPlanWA(){
-  var blob=generarPDFPlan({returnBlob:true});
+async function compartirPlanWA(fecha){
+  var f=fecha || _planFechaActiva();
+  var esHoy=(f===today());
+  var blob=generarPDFPlan({returnBlob:true, fecha:f});
   if(!blob){ return; }
-  var fname='Plan_Mecca_'+today()+'.pdf';
+  var fname='Plan_Mecca_'+f+'.pdf';
   try{
     var file=new File([blob],fname,{type:'application/pdf'});
     if(navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({files:[file],title:'Plan del Día · Mecca Residence'});
+      await navigator.share({files:[file],title:'Plan '+(esHoy?'del Día':'de Mañana')+' · Mecca Residence'});
       return;
     }
   }catch(e){ /* cae al fallback */ }
