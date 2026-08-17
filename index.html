@@ -97,6 +97,7 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .cp-pcts button{padding:14px 2px;border-radius:11px;border:1.5px solid var(--border2);background:var(--bg3);
   color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;min-height:52px}
 .cp-pcts button.on{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}
+.cp-full{display:block;width:100%;margin-top:26px;padding:14px;border-radius:12px;background:transparent;border:1.5px solid var(--border2);color:var(--text2);font-family:var(--font);font-size:14px;font-weight:650;cursor:pointer}
 .cp-pie{text-align:center;font-size:12px;color:var(--text3);margin-top:28px;line-height:1.6}
 
 /* ── HEADER ── */
@@ -1898,6 +1899,8 @@ function doLogin(){
   S._undoStack=[]; S._redoStack=[];
   try{sessionStorage.setItem('mecca_user',JSON.stringify(S.user));}catch(e){}
   closeModal();
+  try{ sessionStorage.removeItem('mecca_vista'); }catch(e){}
+  if(typeof debeAbrirCampo==='function' && debeAbrirCampo()){ iniciarModoCampo(); return; }
   updateUserUI();
   renderAll();
   _renderUndoBar();
@@ -13014,23 +13017,36 @@ function renderAptoReport(){
 // Pantalla única para el ingeniero en obra: solo sus pendientes
 // y tres botones. Sin PIN, sin menús, sin la app completa.
 // ══════════════════════════════════════════════════════════════
-function _campoParam(){
-  try{ return new URLSearchParams(location.search).get('campo'); }catch(e){ return null; }
+// El ingeniero entra con su PIN de siempre y cae en su lista.
+// El administrador entra a la app completa. Un solo enlace para todos.
+function _campoPref(){
+  try{ return sessionStorage.getItem('mecca_vista'); }catch(e){ return null; }
 }
-function esModoCampo(){ var c=_campoParam(); return !!(c && USERS[c]); }
-
+function debeAbrirCampo(){
+  if(!S.user) return false;
+  if(_campoPref()==='completa') return false;
+  if(_campoPref()==='campo') return true;
+  return S.user.rol==='ing';   // ingenieros residentes por defecto
+}
 function iniciarModoCampo(){
-  var k=_campoParam();
-  if(!k || !USERS[k]) return false;
-  S.user={...USERS[k], id:k};
+  if(!S.user) return false;
   document.documentElement.setAttribute('data-campo','1');
-  try{ hideLockScreen(); }catch(e){}
-  var host=document.createElement('div');
-  host.id='campo-root';
-  document.body.appendChild(host);
+  try{ hideLockScreen(); closeModal(); }catch(e){}
+  var host=document.getElementById('campo-root');
+  if(!host){ host=document.createElement('div'); host.id='campo-root'; document.body.appendChild(host); }
   renderCampo();
-  loadActsAll().then(function(){ renderCampo(); }).catch(function(){});
+  if(!(S.acts||[]).length) loadActsAll().then(function(){ renderCampo(); }).catch(function(){});
   return true;
+}
+function salirModoCampo(){
+  try{ sessionStorage.setItem('mecca_vista','completa'); }catch(e){}
+  document.documentElement.removeAttribute('data-campo');
+  var h=document.getElementById('campo-root'); if(h) h.remove();
+  try{ updateUserUI(); renderAll(); goTab('hoy'); }catch(e){}
+}
+function volverModoCampo(){
+  try{ sessionStorage.setItem('mecca_vista','campo'); }catch(e){}
+  iniciarModoCampo();
 }
 
 function _campoMias(){
@@ -13092,7 +13108,8 @@ function renderCampo(){
       +bloque('Empezadas', enCurso, 'Nada empezado ahora mismo.')
       +bloque('Vencidas', vencidas, 'Nada vencido. Bien ahí.')
       +bloque('Para hoy', deHoy, 'Sin actividades programadas para hoy.')
-      +'<div class="cp-pie">Lo que marques entra directo a Mecca Agenda.<br>Ing. '+esc((S.user.nombre||'').replace('Ing. ',''))+' · '+fmtF(hoy)+'</div>'
+      +'<button class="cp-full" onclick="salirModoCampo()">Abrir la app completa</button>'
+      +'<div class="cp-pie">Lo que marques entra directo a Mecca Agenda.<br>'+esc(S.user.nombre||'')+' · '+fmtF(hoy)+'</div>'
     +'</div>';
 }
 
@@ -13585,7 +13602,6 @@ function closeModal(){
 }
 
 // ── INITIALIZATION ────────────────────────────────
-if(typeof iniciarModoCampo==='function' && iniciarModoCampo()){ /* modo campo activo */ } else {
 try{
   var _saved=sessionStorage.getItem('mecca_user');
   if(_saved){
@@ -13602,7 +13618,7 @@ try{
     showLockScreen();
   }
 }catch(e){ showLockScreen(); }
-}
+try{ if(typeof debeAbrirCampo==='function' && debeAbrirCampo()) iniciarModoCampo(); }catch(e){}
 
 setInterval(async function(){
   if(_actSaving) return; // skip auto-refresh while a save is in flight to avoid overwriting optimistic state
