@@ -3919,8 +3919,8 @@ function renderActs(){
 function _actVistaToggle(){
   var apto=S.actVista==='apto';
   return '<div style="display:flex;gap:8px;margin-bottom:12px">'+
-    '<button onclick="S.actVista=\'lista\';renderActs()" style="flex:1;padding:9px;border-radius:10px;border:2px solid '+(apto?'var(--border2)':'var(--blue)')+';background:'+(apto?'#fff':'var(--blue-light)')+';color:'+(apto?'var(--text2)':'var(--blue)')+';font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Lista</button>'+
-    '<button onclick="S.actVista=\'apto\';renderActs()" style="flex:1;padding:9px;border-radius:10px;border:2px solid '+(apto?'var(--green)':'var(--border2)')+';background:'+(apto?'var(--green-light)':'#fff')+';color:'+(apto?'var(--green)':'var(--text2)')+';font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Por Apto</button>'+
+    '<button onclick="S.actVista=\'lista\';renderActs()" style="flex:1;padding:9px;border-radius:10px;border:2px solid '+(apto?'var(--border2)':'var(--blue)')+';background:'+(apto?'var(--bg2)':'var(--blue-light)')+';color:'+(apto?'var(--text2)':'var(--blue)')+';font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Lista</button>'+
+    '<button onclick="S.actVista=\'apto\';renderActs()" style="flex:1;padding:9px;border-radius:10px;border:2px solid '+(apto?'var(--green)':'var(--border2)')+';background:'+(apto?'var(--green-light)':'var(--bg2)')+';color:'+(apto?'var(--green)':'var(--text2)')+';font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Por Apto</button>'+
   '</div>';
 }
 async function loadAptoActs(area){
@@ -10250,7 +10250,7 @@ function applyKbf(acts){
 
 function kbfChip(label, active, onclick, danger){
   var ac=danger?'var(--red)':'var(--accent)';
-  var abg=danger?'var(--red-light)':'var(--accent)';
+  var abg=danger?'var(--red-light)':'var(--accent-fill)';
   return '<button onclick="'+onclick+'" style="flex-shrink:0;padding:6px 13px;border-radius:20px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:var(--font);border:1.5px solid '+(active?ac:'var(--border2)')+';background:'+(active?abg:'var(--bg2)')+';color:'+(active?'#fff':'var(--text2)')+';white-space:nowrap;transition:all .12s">'+label+'</button>';
 }
 
@@ -10322,7 +10322,7 @@ function renderKanban(){
     niveles.forEach(function(n){
       filterBar+=kbfChip(n,f.nivel===n,"S.kbf.nivel=S.kbf.nivel==='"+n+"'?'':'"+n+"';renderKanban()");
     });
-    filterBar+='<span style="color:var(--border);flex-shrink:0">|</span>';
+    filterBar+='<span aria-hidden="true" style="color:var(--border2);flex-shrink:0">|</span>';
   }
   if(retCnt) filterBar+=kbfChip('⏰ '+retCnt+' retrasadas',f.retrasadas,"S.kbf.retrasadas=!S.kbf.retrasadas;renderKanban()",f.retrasadas);
   if(urgCnt) filterBar+=kbfChip(''+urgCnt+' urgentes',f.urgentes,"S.kbf.urgentes=!S.kbf.urgentes;renderKanban()",f.urgentes);
@@ -10334,9 +10334,9 @@ function renderKanban(){
   // ── Columns ──
   var cols=[
     {id:'pendiente',   label:'Pendiente',   color:'var(--text3)', bg:'var(--bg3)', border:'var(--border2)'},
-    {id:'en-progreso', label:'En progreso', color:'var(--blue)', bg:'#dbe4ff', border:'#748ffc'},
-    {id:'pausada',     label:'Pausada',      color:'var(--amber)', bg:'var(--amber-light)', border:'#fcc419'},
-    {id:'completado',  label:'Completado',  color:'var(--green)', bg:'var(--green-light)', border:'#69db7c'},
+    {id:'en-progreso', label:'En progreso', color:'var(--blue)', bg:'var(--blue-light)', border:'var(--blue)'},
+    {id:'pausada',     label:'Pausada',      color:'var(--amber)', bg:'var(--amber-light)', border:'var(--amber)'},
+    {id:'completado',  label:'Completado',  color:'var(--green)', bg:'var(--green-light)', border:'var(--green)'},
   ];
 
   function kanbanCard(a){
@@ -10346,7 +10346,7 @@ function renderKanban(){
     var TIPO_ICON={propio:'👷',contratista:'🔨',ingeniero:'👤'};
     var icon=TIPO_ICON[a.tipo_personal]||'';
     var ai=S.acts.indexOf(a);
-    return '<div style="background:'+(sinCont?'#fffdf0':'#fff')+';border:1.5px solid '+bc+';border-radius:10px;padding:10px 11px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s" onclick="editAct(\''+a.id+'\')" onmouseover="this.style.boxShadow=\'0 3px 10px rgba(0,0,0,.12)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,.06)\'">'
+    return '<div style="background:'+(sinCont?'var(--amber-light)':'var(--bg2)')+';border:1.5px solid '+bc+';border-radius:10px;padding:10px 11px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .15s" onclick="editAct(\''+a.id+'\')" onmouseover="this.style.boxShadow=\'0 3px 10px rgba(0,0,0,.12)\'" onmouseout="this.style.boxShadow=\'0 1px 4px rgba(0,0,0,.06)\'">'
       +(sinCont?'<div style="font-size:9px;color:var(--amber);font-weight:700;margin-bottom:3px">SIN CONTRATISTA — toca para asignar</div>':'')
       +(retrasada?'<div style="font-size:9px;color:var(--red);font-weight:700;margin-bottom:3px">RETRASADA</div>':'')
       +(!retrasada&&isProximaRetraso(a)?'<div style="font-size:9px;color:var(--amber);font-weight:700;margin-bottom:3px">'+(()=>{var d=Math.round((new Date(fechaVenc(a)+'T12:00:00')-new Date(today()+'T12:00:00'))/864e5);return d===0?'Vence hoy':d===1?'Vence mañana':'Vence en '+d+'d';})()+'</div>':'')
