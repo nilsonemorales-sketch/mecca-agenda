@@ -2547,7 +2547,7 @@ function renderPlanDia(){
        chip('⏳ Pendiente',(pf.estados||[]).indexOf('pendiente')>=0,"_planFiltroToggle('estados','pendiente')")+
        chip('⏸ Pausada',(pf.estados||[]).indexOf('pausada')>=0,"_planFiltroToggle('estados','pausada')")+
        '<div style="width:1px;background:var(--border);align-self:stretch;margin:0 2px"></div>'+
-       chip('👷 Propio',(pf.tipos||[]).indexOf('propio')>=0,"_planFiltroToggle('tipos','propio')")+
+       chip('Propio',(pf.tipos||[]).indexOf('propio')>=0,"_planFiltroToggle('tipos','propio')")+
        chip('🔨 Contratista',(pf.tipos||[]).indexOf('contratista')>=0,"_planFiltroToggle('tipos','contratista')")+
        '</div>'+
        '<input id="plan-search" type="search" value="'+esc(pf.q||'')+'" placeholder="Buscar en el plan…" oninput="_planFiltroBuscar(this.value)" style="width:100%;padding:8px 11px;border:1.5px solid var(--border2);border-radius:var(--r);font-size:13px;font-family:var(--font);background:var(--bg);color:var(--text);margin-bottom:10px">';
@@ -3243,12 +3243,13 @@ function _findActAny(id){ return (S.acts||[]).find(function(x){return x.id===id;
 function _refreshVistasPend(){ try{if(S.currentTab==='hoy')renderHoy();}catch(e){} try{renderActs();}catch(e){} try{loadAbiertas();}catch(e){} }
 function pendBadge(a){
   var n=_pendAbiertos(a).length;
-  return '<button onclick="event.stopPropagation();abrirPendientes(\''+a.id+'\')" title="Pendientes" style="background:'+(n?'#f5f3ff':'none')+';border:'+(n?'1px solid #d0bfff':'none')+';color:#7048e8;cursor:pointer;font-size:11px;font-weight:800;padding:'+(n?'2px 7px':'0 2px')+';border-radius:6px;line-height:1;white-space:nowrap">⏳'+(n?' '+n:'')+'</button>';
+  if(!n) return '';
+  return '<button onclick="event.stopPropagation();abrirPendientes(\''+a.id+'\')" title="Pendientes" style="background:var(--accent-soft);border:1px solid var(--accent);color:var(--accent);cursor:pointer;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;line-height:1;white-space:nowrap;display:inline-flex;align-items:center;gap:4px">'+_ic('reloj',11)+n+' pend.</button>';
 }
 // Marca "Requiere Arq. Miguel" — chip morado distintivo
 function arqBadge(a){
   if(!a||!a.requiere_arq) return '';
-  return '<span title="Requiere apoyo del Arq. Miguel" style="font-size:10px;background:#f3f0ff;color:#7048e8;border:1px solid #d0bfff;padding:2px 7px;border-radius:6px;font-weight:800;white-space:nowrap;line-height:1.4">🏛 Arq.</span>';
+  return '<span title="Requiere apoyo del Arq. Miguel" style="font-size:11px;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent);padding:3px 9px;border-radius:99px;font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;gap:4px">'+_ic('banco',11)+'Arq.</span>';
 }
 async function toggleArqAct(id){
   if(!canEdit())return;
@@ -3882,7 +3883,7 @@ function getActGroups(){
   if(f==='tipo'){
     return[
       {titulo:'👷 Personal x la casa',items:acts.filter(a=>a.tipo_personal==='propio')},
-      {titulo:'🔨 Contratistas',items:acts.filter(a=>a.tipo_personal==='contratista')},
+      {titulo:'Contratistas',items:acts.filter(a=>a.tipo_personal==='contratista')},
     ];
   }
   if(f==='nivel'){
@@ -4071,52 +4072,160 @@ function buildActsFiltros(){
   return h;
 }
 
+// ══════════════════════════════════════════════════════════════
+// ACTIVIDADES — buscador primero, filtros plegados, panel de avance
+// ══════════════════════════════════════════════════════════════
+
+// Resumen real de la obra (una sola lectura, se cachea en S)
+async function cargarResumenObra(force){
+  if(S._resumenObra && !force) return S._resumenObra;
+  if(S._resumenCargando) return null;
+  S._resumenCargando=true;
+  try{
+    var rows=await sb('obra_actividades?select=estado,fecha_fin&limit=5000');
+    var hoy=today(), t=rows.length, done=0, prog=0, venc=0;
+    rows.forEach(function(a){
+      if(a.estado==='completado'){ done++; return; }
+      if(a.estado==='en-progreso') prog++;
+      if(a.fecha_fin && a.fecha_fin<hoy) venc++;
+    });
+    S._resumenObra={total:t, completadas:done, enCurso:prog, vencidas:venc,
+                    pct: t?Math.round(done/t*100):0};
+  }catch(e){ S._resumenObra=null; }
+  S._resumenCargando=false;
+  if(S.currentTab==='obra' && S.obraVista==='todas') renderActs();
+  return S._resumenObra;
+}
+
+// Cuántos filtros hay puestos ahora mismo
+function _actFiltrosActivos(){
+  var n=0;
+  if((S.actFiltroRapidos||[]).length) n+=S.actFiltroRapidos.length;
+  if(S.actFiltroPlan) n++;
+  var av=S.actFiltroAvanzado||{};
+  Object.keys(av).forEach(function(k){
+    var v=av[k];
+    if(Array.isArray(v)? v.length>0 : !!v) n++;
+  });
+  if(S.actMostrarTodas) n++;
+  return n;
+}
+
+function _panelAvanceHTML(){
+  var r=S._resumenObra;
+  if(!r){
+    cargarResumenObra();
+    return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);'+
+      'padding:16px;margin-bottom:16px;color:var(--text3);font-size:12px">Calculando el avance de la obra…</div>';
+  }
+  var kpi=function(v,l,c){
+    return '<div style="background:var(--bg2);padding:11px 8px;text-align:center">'+
+      '<div style="font-size:19px;font-weight:700;letter-spacing:-.5px;font-family:var(--mono);color:'+c+'">'+v+'</div>'+
+      '<div style="font-size:10px;color:var(--text3);margin-top:2px;font-weight:600">'+l+'</div></div>';
+  };
+  // Áreas más rezagadas, calculadas sobre lo que está cargado
+  var porArea={};
+  (S.acts||[]).forEach(function(a){
+    var k=a.area||'Sin área';
+    if(!porArea[k]) porArea[k]={t:0,d:0};
+    porArea[k].t++;
+    if(a.estado==='completado') porArea[k].d++;
+  });
+  var rez=Object.keys(porArea).filter(function(k){return porArea[k].t>=3;})
+    .map(function(k){return {a:k, p:Math.round(porArea[k].d/porArea[k].t*100)};})
+    .sort(function(x,y){return x.p-y.p;}).slice(0,4);
+
+  return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px;margin-bottom:16px">'+
+    '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px">'+
+      '<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.7px;text-transform:uppercase">Avance de obra</div>'+
+      '<div style="font-size:30px;font-weight:800;letter-spacing:-1.2px;font-family:var(--mono)">'+r.pct+
+        '<span style="font-size:15px;font-weight:600;color:var(--text3)">%</span></div>'+
+    '</div>'+
+    '<div style="height:8px;background:var(--bg3);border-radius:99px;overflow:hidden;margin-bottom:14px">'+
+      '<div style="height:100%;width:'+r.pct+'%;background:var(--accent);border-radius:99px;transition:width .4s"></div></div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-radius:11px;overflow:hidden">'+
+      kpi(r.vencidas,'Vencidas','var(--red)')+
+      kpi(r.enCurso,'En curso','var(--amber)')+
+      kpi(r.completadas,'Cerradas','var(--green)')+
+    '</div>'+
+    (rez.length?'<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">'+
+      '<div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.7px;text-transform:uppercase;margin-bottom:9px">Lo que más arrastra</div>'+
+      rez.map(function(x){
+        return '<div style="display:grid;grid-template-columns:92px 1fr 36px;align-items:center;gap:10px;margin-bottom:7px">'+
+          '<span style="font-size:12px;color:var(--text2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.a.replace(/^N\d+ — /,''))+'</span>'+
+          '<div style="height:6px;background:var(--bg3);border-radius:99px;overflow:hidden"><div style="height:100%;width:'+x.p+'%;background:var(--accent);border-radius:99px"></div></div>'+
+          '<b style="font-size:11.5px;text-align:right;color:var(--text2);font-family:var(--mono)">'+x.p+'%</b></div>';
+      }).join('')+'</div>':'')+
+  '</div>';
+}
+
+function toggleActFiltros(){
+  S.actFiltrosOpen=!S.actFiltrosOpen;
+  renderActs();
+}
+
 function renderActs(){
   if(S.actVista==='apto'){ renderActsPorApto(); return; }
   const allActs = S.acts;
   const filtered = applyActFilters(allActs);
   const groups = getActGroupsFromActs(filtered);
+  const nF = _actFiltrosActivos();
+  const abierto = !!S.actFiltrosOpen;
 
   const grupoPills = [
-    {id:'tipo',       label:'📊 Tipo'},
-    {id:'personal',   label:'👷 Personal'},
-    {id:'contratista',label:'🔨 Contratista'},
-    {id:'nivel',      label:'📍 Ubicación'},
-    {id:'responsable',label:'👤 Responsable'},
-    {id:'critico',    label:'🚦 Estado'},
-  ].map(p=>`<button onclick="S.actFiltro='${p.id}';renderActs()" style="flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);border:1.5px solid ${S.actFiltro===p.id?'var(--accent)':'var(--border2)'};background:${S.actFiltro===p.id?'var(--accent)':'var(--bg2)'};color:${S.actFiltro===p.id?'#fff':'var(--text2)'}">
-    ${p.label}
-  </button>`).join('');
+    {id:'tipo',       label:'Tipo'},
+    {id:'personal',   label:'Personal'},
+    {id:'contratista',label:'Contratista'},
+    {id:'nivel',      label:'Ubicación'},
+    {id:'responsable',label:'Responsable'},
+    {id:'critico',    label:'Estado'},
+  ].map(p=>`<button onclick="S.actFiltro='${p.id}';renderActs()" style="flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);border:1.5px solid ${S.actFiltro===p.id?'var(--accent)':'var(--border2)'};background:${S.actFiltro===p.id?'var(--accent)':'var(--bg2)'};color:${S.actFiltro===p.id?'var(--accent-on)':'var(--text2)'}">${p.label}</button>`).join('');
+
+  const ICO_LUPA='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+  const ICO_FILT='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg>';
 
   document.getElementById('c-act').innerHTML=`
-    ${dateNavHTML()}
-    ${_actVistaToggle()}
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button onclick="S.actMostrarTodas=false;loadActsAll().then(()=>renderActs())" style="flex:1;padding:10px;border-radius:10px;border:2px solid ${!S.actMostrarTodas?'#1a56db':'#dee2e6'};background:${!S.actMostrarTodas?'#e8f0fe':'#fff'};color:${!S.actMostrarTodas?'#1a56db':'#495057'};font-size:13px;font-weight:600;cursor:pointer">
-        ⚡ Solo activas
-      </button>
-      <button onclick="S.actMostrarTodas=true;loadActsAll().then(()=>renderActs())" style="flex:1;padding:10px;border-radius:10px;border:2px solid ${S.actMostrarTodas?'#2f9e44':'#dee2e6'};background:${S.actMostrarTodas?'#d3f9d8':'#fff'};color:${S.actMostrarTodas?'#2f9e44':'#495057'};font-size:13px;font-weight:600;cursor:pointer">
-        📋 Todas
-      </button>
+    <!-- BUSCADOR — primero, siempre visible -->
+    <div style="display:flex;align-items:center;gap:9px;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r2);padding:11px 13px;margin-bottom:10px">
+      <span style="color:var(--text3);display:flex">${ICO_LUPA}</span>
+      <input id="act-search" type="search" value="${esc(S.actFiltroTexto||'')}" placeholder="Buscar actividad, apartamento o contratista" oninput="_actBuscar(this.value)" style="flex:1;border:none;outline:none;font-size:14px;font-family:var(--font);background:transparent;color:var(--text)">
+      ${S.actFiltroTexto?`<button onclick="_actBuscar('')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0;line-height:1">×</button>`:''}
     </div>
-    <div style="display:flex;align-items:center;gap:8px;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r2);padding:8px 12px;margin-bottom:10px">
-      <span style="color:var(--text3)">🔎</span>
-      <input id="act-search" type="search" value="${esc(S.actFiltroTexto||'')}" placeholder="Buscar actividad, área, persona..." oninput="_actBuscar(this.value)" style="flex:1;border:none;outline:none;font-size:13px;font-family:var(--font);background:transparent;color:var(--text)">
-      ${S.actFiltroTexto?`<button onclick="_actBuscar('')" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:0;line-height:1">×</button>`:''}
+
+    <!-- UNA FILA: filtros plegados + atajos -->
+    <div style="display:flex;gap:7px;margin-bottom:16px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px">
+      <button onclick="toggleActFiltros()" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid ${abierto||nF?'var(--accent)':'var(--border2)'};background:${abierto?'var(--accent)':'var(--bg2)'};color:${abierto?'var(--accent-on)':'var(--text2)'}">
+        ${ICO_FILT} Filtros${nF?` <span style="background:var(--accent);color:var(--accent-on);border-radius:99px;padding:0 6px;font-size:11px;line-height:16px;font-weight:700">${nF}</span>`:''}
+      </button>
+      <button onclick="S.actFiltroRapidos=['retrasadas'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--red);background:var(--red-light);color:var(--red)">${(S.acts||[]).filter(isRetrasada).length} vencidas</button>
+      <button onclick="S.actFiltroRapidos=['en-progreso'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">${(S.acts||[]).filter(a=>a.estado==='en-progreso').length} en curso</button>
+      ${nF?`<button onclick="S.actFiltroRapidos=[];S.actFiltroPlan='';S.actFiltroAvanzado={};S.actMostrarTodas=false;renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Limpiar</button>`:''}
     </div>
-    ${planModoToggleHTML('renderActs()')}
-    <div style="margin-bottom:12px">
-      <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Agrupar por</div>
-      <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px">
-        ${grupoPills}
+
+    <!-- PANEL DE FILTROS (plegado por defecto) -->
+    <div style="${abierto?'':'display:none'};background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:16px">
+      ${dateNavHTML()}
+      ${_actVistaToggle()}
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button onclick="S.actMostrarTodas=false;loadActsAll().then(()=>renderActs())" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid ${!S.actMostrarTodas?'var(--accent)':'var(--border2)'};background:${!S.actMostrarTodas?'var(--accent-soft)':'var(--bg2)'};color:${!S.actMostrarTodas?'var(--accent)':'var(--text2)'};font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Solo activas</button>
+        <button onclick="S.actMostrarTodas=true;loadActsAll().then(()=>renderActs())" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid ${S.actMostrarTodas?'var(--green)':'var(--border2)'};background:${S.actMostrarTodas?'var(--green-light)':'var(--bg2)'};color:${S.actMostrarTodas?'var(--green)':'var(--text2)'};font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Todas</button>
+      </div>
+      ${planModoToggleHTML('renderActs()')}
+      <div style="margin-bottom:12px">
+        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Agrupar por</div>
+        <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px">${grupoPills}</div>
+      </div>
+      ${buildActsFiltros()}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--amber-light);border:1px solid var(--amber);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--amber)">
+        <span>${allActs.length} cargadas${_actsRango(allActs)}</span>
+        ${S.actLimitAll?'<span style="color:var(--green);font-weight:700">Todas ✓</span>':`<button onclick="S.actLimitAll=true;loadActsAll().then(function(){renderActs();})" style="padding:4px 10px;border:1.5px solid var(--amber);background:var(--bg2);color:var(--amber);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">Cargar todas</button>`}
       </div>
     </div>
-    ${buildActsFiltros()}
-    <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">${filtered.length} actividad${filtered.length!==1?'es':''} ${(S.actFiltroRapidos||[]).length||S.actFiltroPlan||S.actFiltroTexto||Object.values(S.actFiltroAvanzado||{}).some(v=>Array.isArray(v)?v.length>0:!!v)?'filtradas':'total'}</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff8eb;border:1px solid #ffe066;border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:11px;color:#856404">
-      <span>📅 ${allActs.length} cargadas${_actsRango(allActs)}</span>
-      ${S.actLimitAll?'<span style="color:#2f9e44;font-weight:700">Todas cargadas ✓</span>':`<button onclick="S.actLimitAll=true;loadActsAll().then(function(){renderActs();})" style="padding:4px 10px;border:1.5px solid #f08c00;background:#fff;color:#e67700;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">⤓ Cargar todas</button>`}
-    </div>
+
+    <!-- CÓMO VA LA OBRA -->
+    ${_panelAvanceHTML()}
+
+    <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">${filtered.length} actividad${filtered.length!==1?'es':''} ${nF||S.actFiltroTexto?'filtradas':'en lista'}</div>
 
     ${groups.length===0
       ?`<div class="empty">Sin actividades para los filtros seleccionados</div>`
@@ -4145,8 +4254,10 @@ function renderActs(){
           : g.items.map(a=>actHTML(a,S.acts.indexOf(a),a.tipo_personal)).join('')}
         <div class="sep"></div>`;
       }).join('')}
-    <div style="height:80px"></div>`;
+    <div style="height:120px"></div>`;
 }
+
+
 
 // ══════════════════════════════════════════════════════════════
 // ACTIVIDADES — MODO POR APARTAMENTO
@@ -4298,7 +4409,7 @@ function getActGroupsFromActs(acts){
   if(f==='tipo'){
     return[
       {titulo:'👷 Personal x la casa',items:acts.filter(a=>a.tipo_personal==='propio')},
-      {titulo:'🔨 Contratistas',items:acts.filter(a=>a.tipo_personal==='contratista')},
+      {titulo:'Contratistas',items:acts.filter(a=>a.tipo_personal==='contratista')},
       {titulo:'👤 Tareas administrativas',items:acts.filter(a=>a.tipo_personal==='ingeniero')},
     ].filter(g=>g.items.length);
   }
@@ -4338,7 +4449,7 @@ function getActGroupsFromActs(acts){
     const grouped=workers.map(w=>({titulo:'👷 '+w,items:acts.filter(a=>a.tipo_personal==='propio'&&(a.personal_nombre||'Sin asignar')===w)}));
     const conts=acts.filter(a=>a.tipo_personal==='contratista');
     const ings=acts.filter(a=>a.tipo_personal==='ingeniero');
-    if(conts.length) grouped.push({titulo:'🔨 Contratistas',items:conts});
+    if(conts.length) grouped.push({titulo:'Contratistas',items:conts});
     if(ings.length) grouped.push({titulo:'👤 Tareas admin',items:ings});
     return grouped.filter(g=>g.items.length);
   }
@@ -4484,6 +4595,30 @@ function actsDesktopTable(acts, showDate){
   return html;
 }
 
+// ── Iconos de línea (Lucide) para las tarjetas ────────
+var _IC={
+  pin:'<circle cx="12" cy="10" r="3"/><path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/>',
+  casco:'<path d="M4 15a8 8 0 0116 0"/><path d="M10 15V7a2 2 0 014 0v8"/><rect x="2" y="15" width="20" height="4" rx="1"/>',
+  user:'<path d="M18 20v-1.5a4 4 0 00-4-4h-4a4 4 0 00-4 4V20"/><circle cx="12" cy="7" r="3.5"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/>',
+  caja:'<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  reloj:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  alerta:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16.2v.1"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+  checkc:'<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
+  lapiz:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>',
+  cam:'<path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><circle cx="12" cy="12.5" r="3.2"/>',
+  play:'<path d="M6 4l14 8-14 8z"/>',
+  stop:'<rect x="5" y="5" width="14" height="14" rx="2"/>',
+  banco:'<path d="M3 10l9-6 9 6"/><path d="M5 10v9M19 10v9M9 10v9M15 10v9M3 21h18"/>',
+  lock:'<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/>',
+  lista:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'
+};
+function _ic(n,s,c){
+  return '<svg width="'+(s||13)+'" height="'+(s||13)+'" viewBox="0 0 24 24" fill="none" stroke="'+(c||'currentColor')+
+    '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;flex-shrink:0">'+_IC[n]+'</svg>';
+}
+
 function actHTML(a, ai, tipo){
   const fotos=fotoUrls(a.fotos);
   const hoy=today();
@@ -4494,45 +4629,52 @@ function actHTML(a, ai, tipo){
   var urgente=a.prioridad==='urgente';
   var blocked=isBlocked(a)&&a.estado!=='completado';
 
-  var ec=retrasada?'#c92a2a':a.estado==='en-progreso'?'#1a56db':a.estado==='pausada'?'#f08c00':a.estado==='completado'?'#2f9e44':'#868e96';
-  var eb=retrasada?'#ffe3e3':a.estado==='en-progreso'?'#e8f0fe':a.estado==='pausada'?'#fff3bf':a.estado==='completado'?'#d3f9d8':'#f1f3f5';
-  var el=retrasada?'⏰ '+Math.round((new Date(hoy)-new Date(a.fecha))/(1000*60*60*24))+'d retrasada'
-       :proxima?'⚠️ Vence '+(diasFv===0?'hoy':diasFv===1?'mañana':'en '+diasFv+'d')
-       :a.estado;
-  var bleft=retrasada?'#e03131':a.estado==='en-progreso'?'#1a56db':a.estado==='pausada'?'#f08c00':tipo==='contratista'?'var(--blue)':'var(--accent)';
-  var bborder=retrasada?'rgba(220,50,50,.3)':a.estado==='en-progreso'?'rgba(26,86,219,.2)':'var(--border)';
+  var ec=retrasada?'var(--red)':a.estado==='en-progreso'?'var(--amber)':a.estado==='pausada'?'var(--amber)':a.estado==='completado'?'var(--green)':'var(--text3)';
+  var eb=retrasada?'var(--red-light)':a.estado==='en-progreso'?'var(--amber-light)':a.estado==='pausada'?'var(--amber-light)':a.estado==='completado'?'var(--green-light)':'var(--bg3)';
+  var el=retrasada?Math.round((new Date(hoy)-new Date(a.fecha))/(1000*60*60*24))+'d vencida'
+       :proxima?'Vence '+(diasFv===0?'hoy':diasFv===1?'mañana':'en '+diasFv+'d')
+       :a.estado==='en-progreso'?'en proceso '+(parseInt(a.porcentaje)||0)+'%'
+       :a.estado==='pendiente'?'sin empezar':a.estado;
+  var bleft=retrasada?'var(--red)':a.estado==='en-progreso'?'var(--amber)':a.estado==='pausada'?'var(--amber)':tipo==='contratista'?'var(--blue)':'var(--accent)';
 
-  // Modo plan: tarjeta compacta clickeable (agregar/quitar del plan)
+  // Modo plan: tarjeta compacta clickeable
   if(canEdit() && S.planMode){
     var _enPlan=_planEnPlanActivo(a);
-    return '<div onclick="planToggleDia(\''+a.id+'\')" style="padding:10px 12px;margin-bottom:6px;border-radius:var(--r2);cursor:pointer;border:'+(_enPlan?'2px solid var(--accent);background:var(--accent-soft)':'1.5px solid var(--border)')+'">'+
-      (_enPlan?'<div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:4px">✓ En plan '+(S.planMode==='manana'?'MAÑANA':'HOY')+'</div>':'')+
-      '<div style="font-size:13px;font-weight:600;color:var(--text)">'+(urgente?'🔴 ':'')+esc(a.descripcion)+'</div>'+
-      '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+[a.area?'📍 '+esc(a.area):null,a.personal_nombre?'👷 '+esc(a.personal_nombre):null,esc(a.estado),(a.porcentaje||0)+'%'].filter(Boolean).join(' · ')+'</div>'+
+    return '<div onclick="planToggleDia(\''+a.id+'\')" style="padding:10px 12px;margin-bottom:6px;border-radius:var(--r2);cursor:pointer;background:var(--bg2);border:'+(_enPlan?'2px solid var(--accent)':'1.5px solid var(--border)')+(_enPlan?';background:var(--accent-soft)':'')+'">'+
+      (_enPlan?'<div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:4px">'+_ic('check',12)+' En plan '+(S.planMode==='manana'?'MAÑANA':'HOY')+'</div>':'')+
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">'+(urgente?_ic('alerta',13,'var(--red)')+' ':'')+esc(a.descripcion)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+[a.area?esc(a.area):null,a.personal_nombre?esc(a.personal_nombre):null,esc(a.estado),(a.porcentaje||0)+'%'].filter(Boolean).join(' · ')+'</div>'+
       '<div style="font-size:11px;color:var(--accent);font-weight:700;margin-top:6px">'+(_enPlan?'Tocar para quitar del plan':'Tocar para agregar al plan')+'</div>'+
     '</div>';
   }
 
-  return`<div class="act-item ${tipo}" style="padding:8px 10px;margin-bottom:6px;border:1.5px solid ${bborder};border-left:4px solid ${bleft};${retrasada?'background:#fffafa;':''}">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:3px">
-      <div style="font-size:13px;font-weight:600;flex:1;min-width:0;line-height:1.3">${urgente?'🔴 ':''}${esc(a.descripcion)}${blocked?' 🔒':''}</div>
-      <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
-        <span style="font-size:10px;background:${eb};color:${ec};padding:2px 7px;border-radius:6px;font-weight:700;border:1px solid ${ec}44;white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();cycleEstado('${a.id}')">${el} ▸</span>
-        ${arqBadge(a)}
-        ${pendBadge(a)}
-        ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 2px;line-height:1" onclick="editAct('${a.id}')">✏️</button>`:''}
-      </div>
+  var btn='padding:8px 10px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;justify-content:center;gap:5px';
+  var ibtn='width:38px;height:34px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0';
+
+  return`<div class="act-item ${tipo}" style="padding:12px;margin-bottom:8px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${bleft};border-radius:var(--r2)">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      <div style="font-size:14px;font-weight:600;flex:1;min-width:0;line-height:1.35;color:var(--text)">${urgente?_ic('alerta',14,'var(--red)')+' ':''}${esc(a.descripcion)}${blocked?' '+_ic('lock',13,'var(--text3)'):''}</div>
+      ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0" onclick="editAct('${a.id}')">${_ic('lapiz',15)}</button>`:''}
     </div>
-    <div style="font-size:11px;color:var(--text3);display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-      ${a.area?`<span style="color:var(--accent);font-weight:600">📍 ${esc(a.area)}</span>`:`<span style="color:#e67700;cursor:pointer;font-weight:600" onclick="setArea('${a.id}')">⚠️ Sin área</span>`}
-      ${a.ingeniero_nombre?`<span style="opacity:.35">·</span><span>👤 ${esc(a.ingeniero_nombre)}</span>`:''}
-      ${a.personal_nombre?`<span style="opacity:.35">·</span><span>👷 ${esc(a.personal_nombre)}</span>`:''}
-      ${a.fecha?`<span style="opacity:.35">·</span><span>📅 ${a.fecha}${a.fecha_fin?' →'+a.fecha_fin:''}</span>`:''}
-      ${a.cantidad_plan>0?`<span style="opacity:.35">·</span><span>📦 ${a.cantidad_real||0}/${a.cantidad_plan} ${esc(a.unidad||'')}</span>`:''}
+
+    <div style="font-size:11.5px;color:var(--text3);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+      ${a.area?`<span style="color:var(--accent);font-weight:600;display:inline-flex;align-items:center;gap:3px">${_ic('pin',12)}${esc(a.area)}</span>`:`<span style="color:var(--amber);cursor:pointer;font-weight:600" onclick="setArea('${a.id}')">Sin área</span>`}
+      ${a.personal_nombre?`<span style="opacity:.35">·</span><span style="display:inline-flex;align-items:center;gap:3px">${_ic('casco',12)}${esc(a.personal_nombre)}</span>`:''}
+      ${a.ingeniero_nombre?`<span style="opacity:.35">·</span><span style="display:inline-flex;align-items:center;gap:3px">${_ic('user',12)}${esc(a.ingeniero_nombre)}</span>`:''}
+      ${a.fecha?`<span style="opacity:.35">·</span><span style="display:inline-flex;align-items:center;gap:3px;font-family:var(--mono)">${_ic('cal',12)}${a.fecha_fin||a.fecha}</span>`:''}
+      ${a.cantidad_plan>0?`<span style="opacity:.35">·</span><span style="display:inline-flex;align-items:center;gap:3px">${_ic('caja',12)}${a.cantidad_real||0}/${a.cantidad_plan} ${esc(a.unidad||'')}</span>`:''}
     </div>
-    ${a.porcentaje>0?`<div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin:4px 0"><div style="height:100%;width:${Math.min(100,a.porcentaje)}%;background:${vencida?'#e03131':'var(--accent)'};border-radius:2px"></div></div>`:''}
-    ${a.notas?`<div style="font-size:11px;color:var(--text2);padding:3px 7px;background:var(--bg3);border-radius:5px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.notas)}</div>`:''}
-    ${fotos.length?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:5px">${fotos.map(f=>`<img src="${f}" style="width:44px;height:44px;object-fit:cover;border-radius:5px;cursor:pointer;border:1px solid var(--border2)" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${a.fecha}','','','','${a.id}')">`).join('')}</div>`:''}
+
+    <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:8px">
+      <span style="font-size:11px;background:${eb};color:${ec};padding:3px 9px;border-radius:99px;font-weight:700;white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();cycleEstado('${a.id}')">${el}</span>
+      ${arqBadge(a)}
+      ${pendBadge(a)}
+    </div>
+
+    ${a.porcentaje>0?`<div style="height:5px;background:var(--bg3);border-radius:99px;overflow:hidden;margin:9px 0 0"><div style="height:100%;width:${Math.min(100,a.porcentaje)}%;background:${vencida?'var(--red)':'var(--amber)'};border-radius:99px"></div></div>`:''}
+    ${a.notas?`<div style="font-size:11.5px;color:var(--text2);padding:6px 9px;background:var(--bg3);border-radius:8px;margin-top:8px;border-left:2px solid var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.notas)}</div>`:''}
+    ${fotos.length?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">${fotos.map(f=>`<img src="${f}" style="width:46px;height:46px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border)" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${a.fecha}','','','','${a.id}')">`).join('')}</div>`:''}
+
     ${(function(){
       var ti=a.hora_inicio?fmt12h(a.hora_inicio):'';
       var tf=a.hora_fin?fmt12h(a.hora_fin):'';
@@ -4543,23 +4685,24 @@ function actHTML(a, ai, tipo){
         var mins=(parseInt(p2[0])*60+parseInt(p2[1]))-(parseInt(p1[0])*60+parseInt(p1[1]));
         if(mins>0){var hh=Math.floor(mins/60),mm=mins%60;durStr=' · '+hh+'h'+(mm?' '+mm+'m':'');}
       }
-      var out='<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">';
-      if(ti||tf) out+='<span style="font-size:11px;background:#ede9fe;color:var(--accent);border-radius:5px;padding:2px 7px;font-weight:600">⏱ '+(ti||'–')+' → '+(tf||'–')+(durStr)+'</span>';
-      if(a.verificado) out+='<span style="font-size:11px;background:#ecfdf5;color:#059669;border-radius:5px;padding:2px 7px;font-weight:600">✅ '+esc(a.verificado_por||'verificado')+'</span>';
+      var out='<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;align-items:center">';
+      if(ti||tf) out+='<span style="font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:3px 9px;font-weight:600;display:inline-flex;align-items:center;gap:4px">'+_ic('reloj',12)+(ti||'–')+' → '+(tf||'–')+durStr+'</span>';
+      if(a.verificado) out+='<span style="font-size:11px;background:var(--green-light);color:var(--green);border-radius:99px;padding:3px 9px;font-weight:600;display:inline-flex;align-items:center;gap:4px">'+_ic('checkc',12)+esc(a.verificado_por||'verificado')+'</span>';
       out+='</div>';
       return out;
     })()}
+
     ${(function(){
       var reg=getRegistro(a);
       if(!reg.length) return '';
-      var ICONS={inicio:'▶',pausa:'⏸',retoma:'↺',fin:'⏹'};
-      var COLORS={inicio:'#1a56db',pausa:'#e67700',retoma:'#2f9e44',fin:'#868e96'};
-      var out='<div style="margin-top:5px;border-top:1px solid var(--border);padding-top:5px">';
-      out+='<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">📋 Registro</div>';
+      var ICONS={inicio:'▶',pausa:'❚❚',retoma:'↺',fin:'■'};
+      var COLORS={inicio:'var(--blue)',pausa:'var(--amber)',retoma:'var(--green)',fin:'var(--text3)'};
+      var out='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px">';
+      out+='<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;display:flex;align-items:center;gap:4px">'+_ic('lista',11)+'Registro</div>';
       reg.forEach(function(r){
         var ic=ICONS[r.tipo]||'•'; var cl=COLORS[r.tipo]||'var(--text3)';
-        out+='<div style="display:flex;gap:5px;align-items:center;font-size:11px;line-height:1.7">';
-        out+='<span style="color:'+cl+';font-weight:700;width:12px;text-align:center">'+ic+'</span>';
+        out+='<div style="display:flex;gap:6px;align-items:center;font-size:11px;line-height:1.75">';
+        out+='<span style="color:'+cl+';font-weight:700;width:14px;text-align:center;font-size:9px">'+ic+'</span>';
         out+='<span style="color:var(--text3);font-family:var(--mono)">'+fmt12h(r.hora)+'</span>';
         if(r.fecha) out+='<span style="color:var(--text3);opacity:.55">'+r.fecha.slice(5)+'</span>';
         if(r.motivo) out+='<span style="color:var(--text2)">'+esc(r.motivo)+'</span>';
@@ -4569,18 +4712,18 @@ function actHTML(a, ai, tipo){
       out+='</div>';
       return out;
     })()}
-    ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);flex-wrap:wrap">
-      <button onclick="marcarActCompletada('${a.id}')" style="flex:1;padding:7px 6px;border-radius:8px;border:1.5px solid #2f9e44;background:#d3f9d8;color:#2f9e44;font-size:12px;font-weight:600;cursor:pointer">✓ Completar</button>
-      <button onclick="togglePrioridadAct('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid ${urgente?'#e03131':'var(--border2)'};background:${urgente?'#ffe3e3':'var(--bg)'};font-size:12px;cursor:pointer">${urgente?'🔴':'⚪'}</button>
-      <button title="${a.requiere_arq?'Quitar marca Arq. Miguel':'Requiere Arq. Miguel'}" onclick="toggleArqAct('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid ${a.requiere_arq?'#7048e8':'var(--border2)'};background:${a.requiere_arq?'#f3f0ff':'var(--bg)'};font-size:12px;cursor:pointer">🏛</button>
-      ${canEdit()?`<button onclick="abrirFotoUpload('${a.id}')" style="padding:7px 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg);color:var(--text3);font-size:12px;cursor:pointer">📸</button>`:''}
-      ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="flex:1;padding:7px 6px;border-radius:8px;border:1.5px solid var(--accent);background:#e8f0fe;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">▶ Iniciar</button>`:''}
-      ${!a.hora_inicio?`<button onclick="stampHora('${a.id}','hora_inicio')" style="padding:7px 10px;border-radius:8px;border:1.5px solid #1a56db;background:#e8f0fe;color:#1a56db;font-size:12px;font-weight:700;cursor:pointer" title="Registrar hora de inicio">▶ Inicio</button>`:`<button onclick="stampHora('${a.id}','hora_fin')" style="padding:7px 10px;border-radius:8px;border:1.5px solid #e67700;background:#fff3bf;color:#e67700;font-size:12px;font-weight:700;cursor:pointer" title="Registrar hora de fin">⏹ Fin</button>`}
+
+    ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
+      <button onclick="marcarActCompletada('${a.id}')" style="${btn};flex:1;border:none;background:var(--accent);color:var(--accent-on);font-size:13px;padding:10px">${_ic('check',14)} Completar</button>
+      ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="${ibtn}" title="Iniciar actividad">${_ic('play',14)}</button>`:''}
+      ${!a.hora_inicio?`<button onclick="stampHora('${a.id}','hora_inicio')" style="${ibtn};color:var(--blue);border-color:var(--blue)" title="Registrar hora de inicio">${_ic('reloj',14)}</button>`:`<button onclick="stampHora('${a.id}','hora_fin')" style="${ibtn};color:var(--amber);border-color:var(--amber)" title="Registrar hora de fin">${_ic('stop',13)}</button>`}
+      <button onclick="abrirFotoUpload('${a.id}')" style="${ibtn}" title="Adjuntar foto">${_ic('cam',14)}</button>
+      <button onclick="togglePrioridadAct('${a.id}')" style="${ibtn}${urgente?';color:var(--red);border-color:var(--red);background:var(--red-light)':''}" title="${urgente?'Quitar urgente':'Marcar urgente'}">${_ic('alerta',14)}</button>
+      <button onclick="toggleArqAct('${a.id}')" style="${ibtn}${a.requiere_arq?';color:var(--accent);border-color:var(--accent);background:var(--accent-soft)':''}" title="${a.requiere_arq?'Quitar marca Arq. Miguel':'Requiere Arq. Miguel'}">${_ic('banco',14)}</button>
     </div>`:''}
-    ${(canEdit()||S.user?.rol==='ing')&&!a.verificado&&a.estado!=='pendiente'?`<div style="margin-top:4px"><button onclick="verificarAct('${a.id}')" style="width:100%;padding:6px;border-radius:8px;border:1.5px solid #059669;background:#ecfdf5;color:#059669;font-size:11px;font-weight:600;cursor:pointer">✅ Verificar trabajo</button></div>`:''}
+    ${(canEdit()||S.user?.rol==='ing')&&!a.verificado&&a.estado!=='pendiente'?`<div style="margin-top:6px"><button onclick="verificarAct('${a.id}')" style="${btn};width:100%;border:1.5px solid var(--green);background:var(--green-light);color:var(--green);font-size:12px">${_ic('checkc',13)} Verificar trabajo</button></div>`:''}
   </div>`;
 }
-
 
 // ── FOTO REQUERIDA PARA COMPLETAR ────────────────────
 function tieneFoto(a){ return a&&a.fotos&&a.fotos.split('||').filter(Boolean).length>0; }
@@ -6286,7 +6429,7 @@ async function delPlan(pid){
 const FILTROS_PEN=[
   {id:'todos',        label:'Todos'},
   {id:'propio',       label:'👷 X la casa'},
-  {id:'contratista',  label:'🔨 Contratistas'},
+  {id:'contratista',  label:'Contratistas'},
   {id:'ingeniero',    label:'👤 Ingenieros'},
 ];
 
@@ -9354,7 +9497,7 @@ function buildEnObraFiltros(){
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
     h+='<div><div style="font-size:10px;color:#868e96;font-weight:600;margin-bottom:4px">Tipo</div>';
     h+=filtroDropdown('fo-tipo', S.enObraFiltroTipo,
-      [{val:'propio',label:'👷 X la casa'},{val:'contratista',label:'🔨 Contratistas'},{val:'ingeniero',label:'📋 Administrativas'}],
+      [{val:'propio',label:'👷 X la casa'},{val:'contratista',label:'Contratistas'},{val:'ingeniero',label:'📋 Administrativas'}],
       'Todos ('+totalActs+')',
       "S.enObraFiltroTipo=this.value;S.enObraFiltroContratista='';S.enObraFiltroPersonal='';renderEnObra()");
     h+='</div>';
@@ -9406,7 +9549,7 @@ function buildEnObraFiltros(){
   } else if(hasFilters){
     // Show active filter chips inline when panel is closed
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">';
-    if(S.enObraFiltroTipo) h+='<span style="background:#e7f5ff;color:#1c7ed6;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">'+esc(S.enObraFiltroTipo==='propio'?'👷 Propio':S.enObraFiltroTipo==='contratista'?'🔨 Contratistas':'📋 Admin')+'</span>';
+    if(S.enObraFiltroTipo) h+='<span style="background:#e7f5ff;color:#1c7ed6;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">'+esc(S.enObraFiltroTipo==='propio'?'Propio':S.enObraFiltroTipo==='contratista'?'Contratistas':'📋 Admin')+'</span>';
     if(S.enObraFiltroContratista) h+='<span style="background:#f3d9fa;color:#7048e8;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">🔨 '+esc(S.enObraFiltroContratista)+'</span>';
     if(S.enObraFiltroEstado) h+='<span style="background:#e8f0fe;color:var(--accent);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">'+esc(S.enObraFiltroEstado)+'</span>';
     if(S.enObraFiltroUbic) h+='<span style="background:#e8f0fe;color:var(--accent);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">📍 '+esc(S.enObraFiltroUbic)+'</span>';
@@ -9516,12 +9659,12 @@ function buildEnObraGrupos(acts){
     });
   } else if(ag==='contratista'){
     var conts=[...new Set(acts.map(function(a){
-      return a.tipo_personal==='contratista'?(a.personal_nombre||'Sin asignar'):'👷 Personal propio';
+      return a.tipo_personal==='contratista'?(a.personal_nombre||'Sin asignar'):'Personal propio';
     }))].sort();
     grupos=conts.map(function(c){
-      return{key:c,label:c==='👷 Personal propio'?c:'🔨 '+c,items:acts.filter(function(a){
-        return (a.tipo_personal==='contratista'?(a.personal_nombre||'Sin asignar'):'👷 Personal propio')===c;
-      }),color:c==='👷 Personal propio'?'#1c7ed6':'#7048e8',bg:c==='👷 Personal propio'?'#e7f5ff':'#f3d9fa'};
+      return{key:c,label:c==='Personal propio'?c:'🔨 '+c,items:acts.filter(function(a){
+        return (a.tipo_personal==='contratista'?(a.personal_nombre||'Sin asignar'):'Personal propio')===c;
+      }),color:c==='Personal propio'?'#1c7ed6':'#7048e8',bg:c==='Personal propio'?'#e7f5ff':'#f3d9fa'};
     });
   } else if(ag==='estado'){
     var eMap={pendiente:{l:'⏳ Pendiente',c:'#868e96',bg:'#f1f3f5'},'en-progreso':{l:'▶ En progreso',c:'#1a56db',bg:'#dbe4ff'},pausada:{l:'⏸ Pausada',c:'#e67700',bg:'#fff3bf'}};
@@ -10538,7 +10681,7 @@ function renderKanban(){
   filterBar+='<div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:6px">';
   filterBar+=kbfChip('Todos',!f.tipo,"S.kbf.tipo='';S.kbf.persona='';renderKanban()");
   filterBar+=kbfChip('👷 Personal',f.tipo==='propio',"S.kbf.tipo=S.kbf.tipo==='propio'?'':'propio';S.kbf.persona='';renderKanban()");
-  filterBar+=kbfChip('🔨 Contratistas',f.tipo==='contratista',"S.kbf.tipo=S.kbf.tipo==='contratista'?'':'contratista';S.kbf.persona='';renderKanban()");
+  filterBar+=kbfChip('Contratistas',f.tipo==='contratista',"S.kbf.tipo=S.kbf.tipo==='contratista'?'':'contratista';S.kbf.persona='';renderKanban()");
   filterBar+=kbfChip('👤 Admin',f.tipo==='ingeniero',"S.kbf.tipo=S.kbf.tipo==='ingeniero'?'':'ingeniero';S.kbf.persona='';renderKanban()");
   filterBar+='</div>';
 
@@ -10633,7 +10776,7 @@ function renderObra(){
   var subnav = document.getElementById('c-obra-subnav');
   if(subnav){
     subnav.style.cssText = subNavStyle();
-    subnav.style.display='';
+    subnav.style.display = (S.obraVista==='todas') ? 'none' : '';
     var navPills = S.obraVista==='todas' ? '' :
       subNavBtn('⚡ En Progreso', S.obraVista==='activa', "S.obraVista='activa';renderObra()")+
       subNavBtn('🗂️ Kanban',      S.obraVista==='kanban', "S.obraVista='kanban';renderObra()")+
@@ -11428,7 +11571,7 @@ function renderEquipo(){
     subnav.style.cssText = subNavStyle();
     subnav.innerHTML =
       subNavBtn('👷 P. Propio',   S.equipoVista==='asistencia',      "S.equipoVista='asistencia';renderEquipo()")+
-      subNavBtn('🔨 Contratistas',S.equipoVista==='contratistas',     "S.equipoVista='contratistas';renderEquipo()")+
+      subNavBtn('Contratistas',S.equipoVista==='contratistas',     "S.equipoVista='contratistas';renderEquipo()")+
       subNavBtn('👥 Personal',    S.equipoVista==='personal',         "S.equipoVista='personal';renderEquipo()")+
       subNavBtn('⚠️ Penalidades', S.equipoVista==='penalidades',      "S.equipoVista='penalidades';renderEquipo()")+
       (isAdmin()?subNavBtn('🏆 Bonificaciones',S.equipoVista==='bonificaciones',"S.equipoVista='bonificaciones';renderEquipo()"):'');
@@ -11778,7 +11921,7 @@ function renderRepPersonalizado(){
   // Group acts
   var grupos=[];
   if(F.agrupar==='tipo'){
-    var tiposMap={'propio':{t:'👷 Personal x la casa',c:'#1c7ed6',b:'#e7f5ff'},'contratista':{t:'🔨 Contratistas',c:'#7048e8',b:'#f3d9fa'},'ingeniero':{t:'📋 Administrativas',c:'#1a56db',b:'#dbe4ff'}};
+    var tiposMap={'propio':{t:'👷 Personal x la casa',c:'#1c7ed6',b:'#e7f5ff'},'contratista':{t:'Contratistas',c:'#7048e8',b:'#f3d9fa'},'ingeniero':{t:'📋 Administrativas',c:'#1a56db',b:'#dbe4ff'}};
     ['propio','contratista','ingeniero'].forEach(function(k){
       var items=acts.filter(function(a){return a.tipo_personal===k;});
       if(items.length) grupos.push({titulo:tiposMap[k].t,items:items,color:tiposMap[k].c,bg:tiposMap[k].b});
@@ -11799,7 +11942,7 @@ function renderRepPersonalizado(){
       if(items.length) grupos.push({titulo:'🔨 '+c,items:items,color:'#7048e8',bg:'#f3d9fa'});
     });
     var propios=acts.filter(function(a){return a.tipo_personal==='propio';});
-    if(propios.length) grupos.push({titulo:'👷 Personal propio',items:propios,color:'#1c7ed6',bg:'#e7f5ff'});
+    if(propios.length) grupos.push({titulo:'Personal propio',items:propios,color:'#1c7ed6',bg:'#e7f5ff'});
   } else if(F.agrupar==='ubicacion'){
     var ubics=[...new Set(acts.map(function(a){return a.area||'Sin ubicación';}))].sort();
     ubics.forEach(function(u){
@@ -12066,7 +12209,7 @@ function renderReporteUrgentes(){
       return{titulo:'📍 '+u, items:urgentes.filter(function(a){return(a.area||'Sin ubicación')===u;}), color:'#1a56db', bg:'#dbe4ff'};
     });
   } else {
-    if(contratistas.length) grupos.push({titulo:'🔨 Contratistas', items:contratistas, color:'#7048e8', bg:'#f3d9fa'});
+    if(contratistas.length) grupos.push({titulo:'Contratistas', items:contratistas, color:'#7048e8', bg:'#f3d9fa'});
     if(propios.length)      grupos.push({titulo:'👷 Personal x la casa', items:propios, color:'#1c7ed6', bg:'#e7f5ff'});
     if(admin.length)        grupos.push({titulo:'📋 Administrativas', items:admin, color:'#1a56db', bg:'#dbe4ff'});
   }
@@ -13846,7 +13989,7 @@ function renderCompras(){
     ${filtered.length===0
       ?`<div class="empty">${S.comprasEstadoFiltro?'No hay órdenes con ese estado':'Sin órdenes de compra registradas'}<br><br>${canEdit()?'<button class="ibtn primary" onclick="showAddOrden()" style="margin:0 auto">+ Nueva orden</button>':''}</div>`
       :filtered.map(o=>ordenHTML(o)).join('')}
-    <div style="height:80px"></div>`;
+    <div style="height:120px"></div>`;
 }
 
 function showAddOrden(id){
