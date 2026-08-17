@@ -97,6 +97,31 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .cp-pcts button{padding:14px 2px;border-radius:11px;border:1.5px solid var(--border2);background:var(--bg3);
   color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;min-height:52px}
 .cp-pcts button.on{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}
+.cp-nueva{display:block;width:100%;padding:16px;border-radius:14px;background:var(--accent-fill);color:#fff;
+  border:0;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px}
+.cp-filtro{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+.cp-filtro button{padding:11px;border-radius:11px;border:1.5px solid var(--border2);background:var(--bg2);
+  color:var(--text2);font-family:var(--font);font-size:13.5px;font-weight:650;cursor:pointer}
+.cp-filtro button.on{background:var(--bg4);border-color:var(--accent);color:var(--text)}
+.cp-nv{position:fixed;inset:0;background:rgba(5,4,10,.75);z-index:9999;display:flex;
+  align-items:flex-end;justify-content:center;padding:0}
+.cp-nv-box{background:var(--bg2);border-radius:22px 22px 0 0;padding:22px 18px calc(24px + var(--sb));
+  width:100%;max-width:520px;max-height:92vh;overflow:auto}
+.cp-nv-t{font-size:20px;font-weight:800;margin-bottom:16px}
+.cp-nv-box label{display:block;font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.8px;
+  text-transform:uppercase;margin:14px 0 6px}
+.cp-nv-box textarea,.cp-nv-box select,.cp-nv-box input{width:100%;padding:14px;border-radius:12px;
+  border:1.5px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);
+  font-size:16px;outline:none}
+.cp-nv-box textarea{resize:vertical;line-height:1.4}
+.cp-nv-sug{display:none;margin-top:8px;padding:10px 12px;background:var(--accent-soft);
+  border-left:3px solid var(--accent);border-radius:8px;font-size:13px;color:var(--text2)}
+.cp-nv-sug b{color:var(--accent)}
+.cp-nv-btns{display:grid;grid-template-columns:1fr 1.6fr;gap:9px;margin-top:22px}
+.cp-nv-btns button{padding:16px;border-radius:12px;font-family:var(--font);font-size:15px;
+  font-weight:700;cursor:pointer;border:0}
+.cp-nv-x{background:var(--bg3);color:var(--text2);border:1.5px solid var(--border2)!important}
+.cp-nv-ok{background:var(--green);color:#fff}
 .cp-full{display:block;width:100%;margin-top:26px;padding:14px;border-radius:12px;background:transparent;border:1.5px solid var(--border2);color:var(--text2);font-family:var(--font);font-size:14px;font-weight:650;cursor:pointer}
 .cp-pie{text-align:center;font-size:12px;color:var(--text3);margin-top:28px;line-height:1.6}
 
@@ -13051,21 +13076,24 @@ function volverModoCampo(){
 
 function _campoMias(){
   var yo=(S.user&&S.user.nombre)||'';
-  return (S.acts||[]).filter(function(a){
-    return a.estado!=='completado' && (a.ingeniero_nombre||'').indexOf(yo)>=0;
-  });
+  var abiertas=(S.acts||[]).filter(function(a){return a.estado!=='completado';});
+  if(S._campoSoloMio) return abiertas.filter(function(a){return (a.ingeniero_nombre||'').indexOf(yo)>=0;});
+  return abiertas;
 }
+function campoToggleMio(){ S._campoSoloMio=!S._campoSoloMio; renderCampo(); }
 
 function renderCampo(){
   var host=document.getElementById('campo-root'); if(!host) return;
   var mias=_campoMias(), hoy=today();
-  var enCurso=[], vencidas=[], deHoy=[];
+  var enCurso=[], vencidas=[], deHoy=[], luego=[];
   mias.forEach(function(a){
     var f=fechaVenc(a);
     if(a.estado==='en-progreso'||a.estado==='pausada') enCurso.push(a);
     else if(f && f<hoy) vencidas.push(a);
     else if((a.fecha_plan&&String(a.fecha_plan).slice(0,10)===hoy)||f===hoy) deHoy.push(a);
+    else luego.push(a);
   });
+  luego.sort(function(x,y){return (fechaVenc(x)||'zzz').localeCompare(fechaVenc(y)||'zzz');});
   vencidas.sort(function(x,y){return (fechaVenc(x)||'').localeCompare(fechaVenc(y)||'');});
   var hechas=(S._campoHechas=S._campoHechas||{});
   var nHechas=Object.keys(hechas).length;
@@ -13105,9 +13133,15 @@ function renderCampo(){
         +'<span>'+nHechas+' de '+totalDia+' marcadas hoy</span></div>':'')
     +'</div>'
     +'<div class="cp-body">'
+      +'<button class="cp-nueva" onclick="campoNueva()">+ Nueva actividad</button>'
+      +'<div class="cp-filtro">'
+        +'<button class="'+(S._campoSoloMio?'':'on')+'" onclick="if(S._campoSoloMio)campoToggleMio()">Toda la obra</button>'
+        +'<button class="'+(S._campoSoloMio?'on':'')+'" onclick="if(!S._campoSoloMio)campoToggleMio()">Solo lo mío</button>'
+      +'</div>'
       +bloque('Empezadas', enCurso, 'Nada empezado ahora mismo.')
       +bloque('Vencidas', vencidas, 'Nada vencido. Bien ahí.')
       +bloque('Para hoy', deHoy, 'Sin actividades programadas para hoy.')
+      +bloque('Más adelante', luego, 'Nada más por ahora.')
       +'<button class="cp-full" onclick="salirModoCampo()">Abrir la app completa</button>'
       +'<div class="cp-pie">Lo que marques entra directo a Mecca Agenda.<br>'+esc(S.user.nombre||'')+' · '+fmtF(hoy)+'</div>'
     +'</div>';
@@ -13134,6 +13168,109 @@ async function campoMarcar(id, accion, pct){
     if(card){ card.style.opacity=''; card.style.pointerEvents=''; }
     showToast('No se pudo guardar — revisa la señal','err',5000);
   }
+}
+
+// ── Diccionario aprendido de las 1.625 actividades de la obra ──
+// palabra distintiva -> contratista que la ejecuta (pureza >= 75%)
+var OFICIO_DIC = {};
+(function(){
+  var d="puertas|Dimedes Estebez (Niño),prueba|Daniel Espinal,sheetrock|Secre,desag|Daniel Espinal,lijado|Dimedes Estebez (Niño),gabinetes|Dimedes Estebez (Niño),pintado|Dimedes Estebez (Niño),patinillos|Secre,derretido|Yelson Jimenez,salida|Alexander Ramos,pisos|Yelson Jimenez,panete|Felix y Jefrey,alimentacion|Alexander Ramos,muebles|Dimedes Estebez (Niño),zocalos|Yelson Jimenez,closets|Dimedes Estebez (Niño),tomacorrientes|Alexander Ramos,resane|Felix y Jefrey,brakers|Alexander Ramos,puerta|Dimedes Estebez (Niño),luces|Alexander Ramos,porcelanato|Yelson Jimenez,fregadero|Daniel Espinal,refuerzos|Secre,escalera|Felix y Jefrey,alambrado|Alexander Ramos,tuberias|Daniel Espinal,ajustar|Dimedes Estebez (Niño),fraguache|Felix y Jefrey,blocks|Felix y Jefrey,marcos|Dimedes Estebez (Niño),electricos|Alexander Ramos,electrica|Alexander Ramos,perforacion|Dimedes Estebez (Niño),corredera|Dimedes Estebez (Niño),closet|Dimedes Estebez (Niño),nichos|Yelson Jimenez,cerraduras|Dimedes Estebez (Niño),estuco|Eddy,munecos|Daniel Espinal,perfil|Jose Lantigua,sellado|Jordy,ranura|Alexander Ramos,lavadero|Daniel Espinal,lavamanos|Daniel Espinal,hormigon|Juan Carlos ORS,inodoros|Daniel Espinal,conexion|Alexander Ramos,interruptores|Alexander Ramos,placas|Alexander Ramos,fisuras|Jordy,alambre|Alexander Ramos,accesorios|Alexander Ramos,aparatos|Daniel Espinal,pintar|Jordy,topes|Dimedes Estebez (Niño),pintadas|Jordy,jardineras|Daniel Espinal,masillados|Jordy,denglass|Secre,jardinera|Daniel Espinal,nevera|Dimedes Estebez (Niño),verde|Secre,habitaciones|Dimedes Estebez (Niño),secadoras|Daniel Espinal,iluminacion|Alexander Ramos,desague|Felix y Jefrey,extractores|Daniel Espinal,acondicionados|Daniel Espinal,vertederos|Felix y Jefrey,calientes|Secre,gabinete|Dimedes Estebez (Niño),impermeabilizacion|Jordy,lavaplato|Dimedes Estebez (Niño),refuerzo|Secre,acero|Orlando Martin,repintado|Dimedes Estebez (Niño),protectores|Alejandro,mocheta|Felix y Jefrey,andamios|Olivin Summers (Coge),estucar|Secre,cemento|Yelson Jimenez,bajante|Daniel Espinal,masillado|Secre,revestimiento|Yelson Jimenez,regillas|Yelson Jimenez,rejillas|Yelson Jimenez,goteros|Felix y Jefrey,pegacol|Yelson Jimenez,ruedos|Yelson Jimenez,ceramica|Yelson Jimenez,ceramicas|Yelson Jimenez,glass|Secre,arrastre|Alexander Ramos,pintura|Jordy,plomeria|Daniel Espinal,ventanas|Jose Lantigua,ventana|Jose Lantigua";
+  d.split(',').forEach(function(par){
+    var p=par.split('|'); if(p.length===2) OFICIO_DIC[p[0]]=p[1];
+  });
+})();
+
+function _norm(s){
+  return (s||'').toLowerCase()
+    .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
+    .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').replace(/ñ/g,'n');
+}
+// Sugiere el contratista según lo que se escribió
+function sugerirResponsable(texto){
+  var pal=_norm(texto).split(/[^a-z]+/).filter(function(w){return w.length>=5;});
+  var votos={};
+  pal.forEach(function(w){
+    var c=OFICIO_DIC[w];
+    if(!c) { // plural/singular simple
+      if(w.slice(-1)==='s') c=OFICIO_DIC[w.slice(0,-1)];
+      else c=OFICIO_DIC[w+'s'];
+    }
+    if(c) votos[c]=(votos[c]||0)+1;
+  });
+  var mejor=null, max=0;
+  Object.keys(votos).forEach(function(c){ if(votos[c]>max){max=votos[c];mejor=c;} });
+  return mejor ? {nombre:mejor, fuerza:max} : null;
+}
+
+// ── Alta de actividad desde el modo campo ──────────────
+function campoNueva(){
+  var areas=[...new Set((S.acts||[]).map(function(a){return a.area;}).filter(Boolean))].sort();
+  var conts=[...new Set((S.acts||[]).filter(function(a){return a.tipo_personal==='contratista';})
+             .map(function(a){return a.personal_nombre;}).filter(Boolean))].sort();
+  var f=new Date(); f.setDate(f.getDate()+3);
+  var host=document.getElementById('campo-root');
+  host.insertAdjacentHTML('afterbegin',
+    '<div id="cp-nueva" class="cp-nv">'
+    +'<div class="cp-nv-box">'
+      +'<div class="cp-nv-t">Nueva actividad</div>'
+      +'<label>¿Qué hay que hacer?</label>'
+      +'<textarea id="nv-desc" rows="2" placeholder="Ej: Instalar rejillas de piso de baños" oninput="_nvSugerir()"></textarea>'
+      +'<div id="nv-sug" class="cp-nv-sug"></div>'
+      +'<label>¿Dónde?</label>'
+      +'<select id="nv-area">'+areas.map(function(a){return '<option>'+esc(a)+'</option>';}).join('')+'</select>'
+      +'<label>¿Quién lo hace?</label>'
+      +'<select id="nv-resp"><option value="">— elegir —</option>'
+        +conts.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select>'
+      +'<label>¿Para cuándo?</label>'
+      +'<input id="nv-fecha" type="date" value="'+f.toISOString().slice(0,10)+'">'
+      +'<div class="cp-nv-btns">'
+        +'<button class="cp-nv-x" onclick="document.getElementById(\'cp-nueva\').remove()">Cancelar</button>'
+        +'<button class="cp-nv-ok" onclick="campoGuardarNueva()">Crear</button>'
+      +'</div>'
+    +'</div></div>');
+  setTimeout(function(){ var d=document.getElementById('nv-desc'); if(d) d.focus(); },100);
+}
+
+function _nvSugerir(){
+  var t=document.getElementById('nv-desc').value;
+  var s=sugerirResponsable(t);
+  var caja=document.getElementById('nv-sug');
+  var sel=document.getElementById('nv-resp');
+  if(s && sel){
+    var existe=[...sel.options].some(function(o){return o.value===s.nombre||o.text===s.nombre;});
+    if(existe){
+      sel.value=s.nombre;
+      caja.innerHTML='Sugerido por lo que escribiste: <b>'+esc(s.nombre)+'</b>. Cámbialo si no es.';
+      caja.style.display='block';
+      return;
+    }
+  }
+  caja.style.display='none';
+}
+
+async function campoGuardarNueva(){
+  var desc=(document.getElementById('nv-desc').value||'').trim();
+  var area=document.getElementById('nv-area').value;
+  var resp=document.getElementById('nv-resp').value;
+  var fecha=document.getElementById('nv-fecha').value;
+  if(!desc){ showToast('Escribe qué hay que hacer','warn'); return; }
+  if(!resp){ showToast('Elige quién lo hace','warn'); return; }
+  var nueva={
+    id: uid(), fecha: today(), tipo:'diaria', area: area,
+    descripcion: desc, personal_nombre: resp, tipo_personal:'contratista',
+    ingeniero_nombre: (S.user&&S.user.nombre)||'',
+    porcentaje:0, estado:'pendiente', prioridad:'normal',
+    fecha_fin: fecha, fecha_plan: fecha, foto_pendiente:false,
+    notas:'Creada en obra por '+((S.user&&S.user.nombre)||'')
+  };
+  try{
+    await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(nueva)});
+    S.acts.unshift(nueva);
+    logCambio('creado','actividad',nueva.id,desc,'creada desde el celular en '+area);
+    document.getElementById('cp-nueva').remove();
+    showToast('Actividad creada ✓');
+    renderCampo();
+  }catch(e){ showToast('No se pudo crear — revisa la señal','err',5000); }
 }
 
 // ══════════════════════════════════════════════════════════════
