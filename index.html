@@ -1374,6 +1374,7 @@ let S={
   fotosBusca:'', fotosFiltrosOpen:false,
   histModo:'ingeniero',     // 'ingeniero' | 'contratista'
   histFiltroCont:'',
+  guiaQ:'', guiaCat:'', guiaAbiertas:{},   // buscador de la guía (Metodología)
   equipoVista:'asistencia', // 'asistencia' | 'contratistas' | 'personal' | 'penalidades' | 'bonificaciones'
   reportesVista:'dashboard',// 'dashboard' | 'proyeccion' | 'apto' | 'semana' | 'historial'
   repAptoSel:'',
@@ -9971,143 +9972,478 @@ function mostrarPausaObra(id, desc){
   };
 }
 // ── NAVIGATION ────────────────────────────────────────────────
-// ── MÓDULO METODOLOGÍA — guía de uso estática (sin fetch) ──────────────────
+// ── MÓDULO METODOLOGÍA — guía de uso buscable (sin fetch) ──────────────────
+// Todo el contenido vive en fichas {cat, t, k, c} para que se pueda buscar.
+// cat = categoría · t = título · k = palabras clave extra · c = cuerpo (HTML)
+var GUIA_CATS=[
+  {id:'como',     label:'¿Cómo hago…?'},
+  {id:'flujo',    label:'El día a día'},
+  {id:'modulos',  label:'Los módulos'},
+  {id:'pdf',      label:'Reportes y PDF'},
+  {id:'reglas',   label:'Reglas del proyecto'},
+  {id:'roles',    label:'Roles y permisos'},
+  {id:'tecnica',  label:'Secuencias constructivas'},
+  {id:'problemas',label:'Si algo falla'}
+];
+function _gB(t){ return '<b style="color:var(--text)">'+t+'</b>'; }
+function _gPasos(arr){
+  return '<ol style="margin:6px 0 0;padding-left:20px">'+arr.map(function(x){
+    return '<li style="margin-bottom:5px">'+x+'</li>';}).join('')+'</ol>';
+}
+function _gLista(arr){
+  return '<ul style="margin:6px 0 0;padding-left:18px">'+arr.map(function(x){
+    return '<li style="margin-bottom:4px">'+x+'</li>';}).join('')+'</ul>';
+}
+function _gNota(t){
+  return '<div style="margin-top:9px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r);padding:8px 11px;font-size:12.5px;color:var(--accent);font-weight:600">'+t+'</div>';
+}
+function _gOjo(t){
+  return '<div style="margin-top:9px;background:var(--amber-light);border:1px solid #ffc107;border-radius:var(--r);padding:8px 11px;font-size:12.5px;color:var(--amber);font-weight:600">'+t+'</div>';
+}
+function _gRuta(t){
+  return '<div style="display:inline-block;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:2px 9px;font-size:12px;font-family:var(--mono);color:var(--text2);margin:2px 0">'+t+'</div>';
+}
+
+function guiaFichas(){ return [
+
+// ══ ¿CÓMO HAGO…? ═══════════════════════════════════════════
+{cat:'como',t:'Marcar la asistencia del personal x la casa',k:'presente ausente tarde entrada salida horas extra medio dia justificado',
+ c:_gRuta('Equipo → P. Propio')+_gPasos([
+  'Confirma arriba que la fecha sea la correcta. Con las flechas ‹ › te mueves de día.',
+  'Busca a la persona por su nombre en el buscador si la lista es larga.',
+  'Toca el estado: '+_gB('✓ Presente')+', '+_gB('Tarde')+', '+_gB('½ Medio día')+', '+_gB('Ausente')+' o '+_gB('Justificado')+'.',
+  'Si quedó presente, revisa la entrada (7:30) y la salida (5:00, sábados 12:00) y corrígelas si fue distinto.',
+  'Las '+_gB('horas extra')+' se escriben en su casilla. Solo el personal x la casa tiene horas extra.'])+
+ _gOjo('Si tocas otra vez el mismo estado, lo desmarca. No se puede modificar asistencia de más de 2 días atrás — eso solo lo hace el administrador.')},
+
+{cat:'como',t:'Marcar la asistencia de un contratista',k:'contratista cuadrilla trabajadores en obra cantidad presente ausente',
+ c:_gRuta('Equipo → Contratistas → Diaria')+_gPasos([
+  'Revisa la fecha arriba.',
+  'En la tarjeta del contratista toca '+_gB('✓ Presente')+', '+_gB('Ausente')+' o '+_gB('Justificado')+'.',
+  'Si vino, escribe cuántos '+_gB('trabajadores en obra')+' trajo ese día.',
+  'Usa '+_gB('Observaciones')+' para dejar constancia de algo puntual.'])+
+ _gNota('Los contratistas no llevan horas extra: trabajan por ajuste. Por eso solo se registra si vinieron y cuánta gente trajeron.')},
+
+{cat:'como',t:'Ver quién está en obra hoy',k:'presentes ausentes sin registrar filtro asistencia quien vino',
+ c:'En '+_gRuta('Equipo')+', tanto en '+_gB('P. Propio')+' como en '+_gB('Contratistas')+', arriba de la lista hay una fila de botones con el conteo:'+
+ _gLista([_gB('Todos')+' — la lista completa.',
+  _gB('En obra')+' — los que están presentes o a medio día.',
+  _gB('Tarde')+' — solo en P. Propio.',
+  _gB('Ausentes')+' — ausentes y justificados.',
+  _gB('Sin registrar')+' — a los que todavía nadie les marcó nada. Estos son los que hay que perseguir.'])+
+ '<div style="margin-top:8px">El buscador de arriba filtra por nombre o por oficio.</div>'},
+
+{cat:'como',t:'Registrar el avance de una tarea (%)',k:'porcentaje avance guardar actualizar progreso',
+ c:_gRuta('En Obra')+' — es la pantalla hecha para el celular en la mano.'+_gPasos([
+  'Filtra con los chips: '+_gB('👷 Mi frente')+', '+_gB('📝 Sin marcar hoy')+', '+_gB('⏰ Vencidas')+', '+_gB('▶ En progreso')+'.',
+  'Toca la tarjeta para abrir el detalle.',
+  'Escribe el porcentaje en la casilla y toca '+_gB('Guardar')+'.'])+
+ _gNota('La meta del día es que el contador «Registradas hoy» llegue a X de X.')},
+
+{cat:'como',t:'Marcar una tarea como terminada',k:'completar completada terminar 100% cerrar',
+ c:'En la tarjeta de la actividad toca '+_gB('✓ Completar')+'. Queda en 100% y sale de las pendientes.'+
+ _gOjo('Antes de completar, asegúrate de que el trabajo esté realmente terminado en el sitio. Una partida madre marcada como completa esconde los remates que faltan — eso fue lo que infló el avance en el pasado. Si falta un remate, no completes: crea la actividad del remate.')},
+
+{cat:'como',t:'Decir que una tarea no avanzó hoy',k:'sin cambios hoy no avanzo estancada parada',
+ c:'Usa el botón '+_gB('Sin cambios hoy')+' en la tarjeta. La saca de «pendientes de marcar» sin tocar el porcentaje, y deja constancia de que sí la revisaste.'+
+ _gNota('Es preferible marcar «sin cambios» que dejarla en blanco: en blanco parece que nadie la miró.')},
+
+{cat:'como',t:'Crear una actividad nueva',k:'agregar nueva tarea partida crear + boton',
+ c:_gPasos([
+  'Toca el botón '+_gB('＋')+' redondo (abajo a la derecha) o '+_gB('+ Nueva')+'.',
+  'Escribe la '+_gB('descripción')+' — mientras escribes, la app te sugiere el contratista que suele hacer ese trabajo.',
+  'Elige la '+_gB('ubicación')+' (nivel y apartamento). Sin ubicación no se puede exigir el trabajo en sitio.',
+  'Pon '+_gB('fecha de inicio y fecha de fin')+'.',
+  'Asigna al '+_gB('contratista o al personal')+' y al '+_gB('ingeniero responsable')+'.'])+
+ _gOjo('Toda tarea nueva lleva fecha de fin. Si no la lleva, nadie la reclama.')},
+
+{cat:'como',t:'Poner una actividad en el plan de hoy',k:'plan del dia agregar al plan sugeridas manana',
+ c:_gLista([
+  'En '+_gRuta('Hoy')+', el bloque '+_gB('Sugeridas — vencen hoy o están vencidas')+' te muestra lo que falta; toca '+_gB('＋ Al plan')+'.',
+  'En '+_gRuta('En Obra')+', cada tarjeta tiene '+_gB('＋ Plan hoy')+' o '+_gB('＋ Plan mañana')+'.',
+  'También puedes buscarla en el campo «Agregar actividad al plan».'])},
+
+{cat:'como',t:'Pasar al día siguiente lo que quedó sin terminar',k:'reprogramar manana mover cierre replanificar',
+ c:_gRuta('Reportes → Cierre del día')+_gPasos([
+  'Repasa las que están en progreso y ajusta el % o marca «sin cambios».',
+  'En '+_gB('Plan de mañana')+' toca '+_gB('→ Mañana')+' en cada una, o '+_gB('→ Todas a mañana')+'.',
+  'Genera el PDF del cierre si lo vas a compartir.'])},
+
+{cat:'como',t:'Escanear el código QR pegado en el apartamento',k:'qr camara escanear codigo area recorrido celular iphone android',
+ c:'Cada apartamento tiene su hoja pegada con un código QR. Al escanearlo, la app te abre directamente las actividades de ese apartamento.'+
+ _gPasos([
+  'Abre el '+_gB('menú lateral')+' (☰ arriba a la izquierda).',
+  'En la sección '+_gB('RECORRIDO')+' toca '+_gB('Escanear código del área')+'.',
+  'Permite el uso de la cámara la primera vez.',
+  'Apunta al código. Se abre solo, no hay que tocar nada más.'])+
+ _gOjo('El escáner es de la propia app: no uses la cámara del teléfono ni un lector externo. Si dice «Ese código no es de esta obra», es un QR de otra cosa.')},
+
+{cat:'como',t:'Hacer el recorrido de un apartamento',k:'recorrido levantamiento pendientes area caminar obra',
+ c:_gRuta('En Obra → Recorrido')+' o escaneando el QR del apartamento.'+_gPasos([
+  'Elige el área de la lista, o escanea el código pegado en la puerta.',
+  'Verás solo lo pendiente de ese apartamento, agrupado por contratista.',
+  'En cada partida marca '+_gB('Avance')+' o '+_gB('Terminada')+' según lo que veas.',
+  'Lo que encuentres y no esté en la lista, agrégalo con '+_gB('＋ Levantar un detalle nuevo aquí')+'.'])+
+ _gNota('La referencia de cada taller es su ubicación dentro del apartamento. Sé específico: «mocheta de ventana — habitación secundaria 1» se puede exigir; «terminaciones» no.')},
+
+{cat:'como',t:'Levantar un detalle nuevo durante el recorrido',k:'nuevo detalle agregar en sitio pendiente encontrado',
+ c:'Dentro del recorrido de un área, toca '+_gB('＋ Levantar un detalle nuevo aquí')+'. El apartamento ya viene puesto; solo escribes qué falta y a quién le toca. La app te sugiere el contratista según la descripción.'+
+ _gNota('Si el trabajo aparece «completado» pero le falta el remate, no lo reabras: levanta el remate como partida aparte. Así se ve el trabajo real que queda.')},
+
+{cat:'como',t:'Buscar una actividad',k:'buscar buscador filtrar texto encontrar',
+ c:'En '+_gRuta('Actividades')+' el buscador de arriba encuentra por '+_gB('descripción, apartamento o contratista')+' al mismo tiempo. Escribe una palabra suelta («zócalo», «2B», «Félix») y la lista se reduce sola.'+
+ '<div style="margin-top:8px">El botón '+_gB('Filtros')+' abre el resto: estado, tipo, ubicación, plan y fechas. El número al lado del botón te dice cuántos filtros tienes puestos.</div>'},
+
+{cat:'como',t:'Cambiar cómo se agrupan las actividades',k:'agrupar agrupador apartamento contratista semana ingeniero orden organizar',
+ c:'En '+_gRuta('Actividades')+', arriba a la derecha de la lista está el selector '+_gB('Agrupar')+':'+
+ _gLista([
+  _gB('Apartamento')+' — para trabajar apartamento por apartamento.',
+  _gB('Contratista')+' — para reclamarle a cada uno lo suyo.',
+  _gB('Semana')+' — muestra Vencida, Esta semana, y las semanas que vienen.',
+  _gB('Ingeniero')+' — para repartir por responsable.',
+  _gB('Nivel')+', '+_gB('Estado')+', '+_gB('Tipo de personal')+' y '+_gB('Personal x la casa')+'.'])+
+ _gNota('La app recuerda el último agrupador que usaste, aunque cierres y vuelvas a abrir.')},
+
+{cat:'como',t:'Ver todas las actividades de un contratista',k:'contratista pendientes lista reclamar taller',
+ c:_gLista([
+  'En '+_gRuta('Actividades')+' pon el agrupador en '+_gB('Contratista')+', o escribe su nombre en el buscador.',
+  'En '+_gRuta('Reportes → Historial')+' toca '+_gB('Por contratista')+' para ver su avance del período con todo lo que hizo y lo que le falta.',
+  'En '+_gRuta('En Obra')+' usa el chip '+_gB('👷 Mi frente')+' si eres el responsable.'])},
+
+{cat:'como',t:'Ver las fotos de un apartamento',k:'fotos galeria imagenes evidencia apartamento fecha buscar',
+ c:_gRuta('Fotos')+_gPasos([
+  'Elige el apartamento en el selector de arriba.',
+  'Acota la fecha con los atajos '+_gB('Hoy')+', '+_gB('7 días')+', '+_gB('30 días')+' o '+_gB('Todo')+'.',
+  'El buscador también encuentra por actividad o por contratista.',
+  'Con '+_gB('↓ Bajar todas')+' te llevas las fotos del día para mandarlas por WhatsApp.'])},
+
+{cat:'como',t:'Subir una foto a una actividad',k:'foto camara adjuntar evidencia drive subir',
+ c:'Abre el detalle de la actividad y usa el botón de foto. La imagen se guarda sola en '+_gB('Google Drive')+' y queda ligada a esa actividad, con la fecha y quién la subió.'+
+ _gOjo('Si en Fotos aparece «Google Drive no configurado», hay que pegar la URL de Drive una sola vez con el botón Configurar. Sin eso las fotos no se guardan.')},
+
+{cat:'como',t:'Generar el PDF del plan del día y mandarlo por WhatsApp',k:'pdf plan matutino whatsapp compartir grupo enviar',
+ c:_gRuta('Hoy → Generar PDF')+' arma el plan del día, liviano y sin fotos, para el grupo. Al lado, el botón '+_gB('WhatsApp')+' lo comparte directo.'+
+ _gNota('Manda el plan temprano. Cada contratista tiene que saber en qué apartamento y en qué punto trabaja hoy.')},
+
+{cat:'como',t:'Hacer el cierre del día',k:'cierre tarde final jornada resumen',
+ c:_gRuta('Reportes → Cierre del día')+_gPasos([
+  'Repasa lo que quedó en progreso y ajusta porcentajes.',
+  'Sube las fotos de los frentes activos.',
+  'Pasa a mañana lo que no se completó.',
+  'Genera el PDF del cierre.'])},
+
+{cat:'como',t:'Ver el historial de un contratista',k:'historial periodo rendimiento cumplimiento situaciones penalidades',
+ c:_gRuta('Reportes → Historial → Por contratista')+
+ '<div style="margin-top:6px">Te lista a cada contratista del período con su porcentaje de avance, cuántas actividades tiene, cuántas completó y las situaciones que se le hayan registrado. Toca su nombre para ver el detalle.</div>'+
+ '<div style="margin-top:8px">Con '+_gB('Filtros')+' cambias el rango de fechas.</div>'},
+
+{cat:'como',t:'Reprogramar una actividad vencida',k:'vencida atrasada retrasada cambiar fecha reprogramar',
+ c:_gPasos([
+  'Ábrela desde el chip '+_gB('⏰ Vencidas')+' en En Obra, o desde el botón rojo de vencidas en Actividades.',
+  'Averigua por qué no se hizo — casi siempre hay una dependencia sin resolver.',
+  'Cambia la fecha de fin a una fecha real, no a la de mañana por costumbre.',
+  'Si está trancada por otro trabajo, anótalo en las notas para que se vea la causa.'])+
+ _gOjo('Una tarea vencida sin fecha nueva desaparece de la vista de todos. Se reprograma o se resuelve, no se deja.')},
+
+{cat:'como',t:'Registrar una situación o penalidad',k:'penalidad situacion falta inactividad sancion reporte',
+ c:_gRuta('Equipo → Penalidades')+' — se registra el tipo, la fecha y la descripción. Queda en el historial de esa persona o contratista y se refleja en sus indicadores del mes.'},
+
+{cat:'como',t:'Crear una orden de compra',k:'compras oc orden material pedido bridex',
+ c:_gRuta('Compras')+' — las órdenes se arman en el formato BRIDEX y se pueden exportar en PDF para enviar al suplidor.'},
+
+{cat:'como',t:'Cambiar de usuario',k:'usuario sesion entrar salir login clave ingeniero',
+ c:'Toca tu nombre arriba a la derecha. Cada quien debe entrar con su propio usuario: los registros quedan firmados con el nombre de quien los hizo.'},
+
+// ══ EL DÍA A DÍA ═══════════════════════════════════════════
+{cat:'flujo',t:'El flujo de un día completo',k:'rutina manana tarde jornada resumen dia',
+ c:_gLista([
+  _gB('🌅 Mañana')+' — revisar el plan del día, asignar los talleres y mandar el PDF al grupo de WhatsApp.',
+  _gB('☀️ Durante el día')+' — marcar asistencia, actualizar porcentajes, completar lo que se termine, subir fotos.',
+  _gB('🌆 Tarde')+' — cierre del día: avances finales, fotos y plan de mañana.',
+  _gB('📄 Automático')+' — la bitácora arma el reporte del período cuando lo pidas.'])+
+ _gNota('Regla de oro: el que ve el trabajo, lo registra el mismo día.')},
+
+{cat:'flujo',t:'Qué revisar cada mañana',k:'checklist manana arranque prioridades',
+ c:_gLista([
+  'Las '+_gB('vencidas')+' — el botón rojo te las muestra de una.',
+  'Las '+_gB('sugeridas')+' de Hoy: lo que vence hoy y todavía no está en el plan.',
+  'Quién '+_gB('no marcó asistencia')+' todavía.',
+  'Qué '+_gB('trabajos dependen')+' de otro que aún no termina, para no mandar gente a esperar.'])},
+
+{cat:'flujo',t:'El contador «Registradas hoy: X de Y»',k:'registradas contador meta marcadas pendientes de marcar',
+ c:'Arriba de En Obra aparece cuántas actividades del día ya tienen registro. La meta es llegar a '+_gB('X de X')+'. Si una no avanzó, márcala igual con '+_gB('Sin cambios hoy')+'.'},
+
+{cat:'flujo',t:'Dependencias: qué va después de qué',k:'dependencia bloqueo secuencia orden antes despues trancado',
+ c:'Muchos trabajos no se pueden empezar hasta que otro termine. Antes de mandar a un contratista, revisa qué está esperando:'+
+ _gLista([
+  'Cantos y mochetas de Félix y Jefrey → después el pintor sella fisuras y da primer → después el eléctrico instala accesorios.',
+  'Estuco → masillado y primer → accesorios.',
+  'Jambas y madera → después los zócalos.',
+  'Cerraduras de puertas de paso → después inodoros, grifería y accesorios de baño.',
+  'Fachada armada y pintada → instalación → desmontaje de andamios → ventanas.'])+
+ _gOjo('Mandar a alguien a trabajar sobre algo que todavía no está listo es la forma más cara de perder un día: se hace y hay que repetirlo.')},
+
+// ══ LOS MÓDULOS ════════════════════════════════════════════
+{cat:'modulos',t:'Hoy — el arranque del día',k:'modulo hoy plan del dia inicio',
+ c:'Muestra el '+_gB('plan del día')+' con lo planificado para hoy, agrupado por contratista, área o ingeniero. Debajo, el bloque de '+_gB('sugeridas')+' con lo que vence hoy o está vencido. Desde aquí sale el PDF matutino.'},
+
+{cat:'modulos',t:'En Obra — para el celular en la mano',k:'modulo en obra campo registro rapido chips',
+ c:'La pantalla de campo. Chips de filtro rápido ('+_gB('Mi frente')+', '+_gB('Sin marcar hoy')+', '+_gB('Vencidas')+', '+_gB('En progreso')+') y registro directo en cada tarjeta: porcentaje, completar o «sin cambios hoy».'},
+
+{cat:'modulos',t:'Actividades — el listado completo',k:'modulo actividades lista general todas buscar agrupar',
+ c:'Todo lo que existe en la obra, con buscador, filtros y el selector de '+_gB('agrupador')+' (apartamento, contratista, semana, ingeniero, nivel, estado, tipo). Es donde se gestiona y se reparte el trabajo.'},
+
+{cat:'modulos',t:'Recorrido — levantamiento por apartamento',k:'modulo recorrido qr area levantamiento pendientes',
+ c:'Se abre escaneando el código QR pegado en el apartamento o eligiendo el área de la lista. Muestra solo lo pendiente de ese apartamento, agrupado por contratista, y permite levantar detalles nuevos en el sitio.'},
+
+{cat:'modulos',t:'Kanban — el tablero por estado',k:'modulo kanban tablero columnas pendiente progreso pausada completado',
+ c:'Cuatro columnas: '+_gB('Pendiente')+', '+_gB('En progreso')+', '+_gB('Pausada')+' y '+_gB('Completado')+'. Se desliza de lado. Sirve para ver de un golpe dónde está trancado el trabajo. El botón '+_gB('Filtros')+' abre el filtro por persona y por nivel.'},
+
+{cat:'modulos',t:'Equipo — asistencia y gente',k:'modulo equipo personal contratistas asistencia penalidades bonificaciones',
+ c:_gLista([
+  _gB('P. Propio')+' — asistencia del personal x la casa con entrada, salida y horas extra.',
+  _gB('Contratistas')+' — presente/ausente y cuántos trabajadores trajo cada uno.',
+  _gB('Personal')+' — la ficha de cada quien y los indicadores de desempeño del mes.',
+  _gB('Penalidades')+' y '+_gB('Bonificaciones')+' — el registro de situaciones.'])},
+
+{cat:'modulos',t:'Reportes — la vista de control',k:'modulo reportes dashboard semana cierre historial apto',
+ c:'Dashboard de avance, plan semanal, cierre del día, reporte por apartamento e historial (por ingeniero o por contratista).'},
+
+{cat:'modulos',t:'Fotos — la evidencia visual',k:'modulo fotos galeria drive evidencia',
+ c:'Todas las fotos por apartamento, fecha e ingeniero, con buscador y descarga en lote. Se guardan solas en Google Drive.'},
+
+{cat:'modulos',t:'Planos y Compras',k:'modulo planos documentos pines compras ordenes bridex',
+ c:_gB('Planos')+' guarda los planos y documentos de la obra con pines de ubicación. '+_gB('Compras')+' arma las órdenes de compra en formato BRIDEX.'},
+
+{cat:'modulos',t:'Gantt — el cronograma',k:'modulo gantt planificacion cronograma etapas fechas plan',
+ c:'El cronograma del proyecto para ver la secuencia y las fechas de las etapas. Es uno solo para toda la obra.'},
+
+{cat:'modulos',t:'Gerencia — solo el administrador',k:'modulo gerencia ejecutivo dueños inversionistas informe admin',
+ c:'Panel de solo lectura con el avance por nivel, el ritmo semanal, los riesgos y el informe ejecutivo en PDF para dueños e inversionistas. Solo lo ve el administrador.'},
+
+// ══ REPORTES Y PDF ═════════════════════════════════════════
+{cat:'pdf',t:'PDF — Plan del día',k:'pdf plan matutino hoy whatsapp',
+ c:_gRuta('Hoy → Generar PDF')+'<div style="margin-top:6px">Plan matutino liviano, sin fotos, para mandar al grupo de WhatsApp.</div>'},
+{cat:'pdf',t:'PDF — Cierre del día',k:'pdf cierre resumen jornada',
+ c:_gRuta('Reportes → Cierre del día')+'<div style="margin-top:6px">Resumen de lo que quedó registrado en la jornada.</div>'},
+{cat:'pdf',t:'PDF — Bitácora',k:'pdf bitacora oficial rango periodo asistencia fotos',
+ c:_gRuta('Reportes → Bitácora')+'<div style="margin-top:6px">El reporte oficial, por día o por rango de fechas, con asistencia, avances, fotos y urgentes.</div>'},
+{cat:'pdf',t:'PDF — Asistencia de contratistas',k:'pdf asistencia contratistas semana dia reporte',
+ c:_gRuta('Equipo → Contratistas → Reporte')+'<div style="margin-top:6px">Asistencia del día o de la semana elegida: presentes, ausentes y trabajadores en obra. Ingeniero y administrador.</div>'},
+{cat:'pdf',t:'PDF — Informe ejecutivo',k:'pdf gerencia ejecutivo dueños inversionistas admin',
+ c:_gRuta('Gerencia → Generar PDF')+'<div style="margin-top:6px">Resumen ejecutivo para dueños e inversionistas. Solo el administrador.</div>'},
+{cat:'pdf',t:'Cada reporte tiene un solo lugar',k:'donde esta el pdf duplicado boton',
+ c:'No hay botones duplicados: cada PDF se genera desde un único sitio. Si buscas uno y no lo encuentras, busca aquí por su nombre.'},
+
+// ══ REGLAS DEL PROYECTO ════════════════════════════════════
+{cat:'reglas',t:'Regla de asistencia',k:'regla asistencia horas extra ajuste contratista personal',
+ c:'El personal x la casa marca '+_gB('entrada, salida y horas extra')+'. Los contratistas solo '+_gB('presente o ausente')+' y cuántos trabajadores trajeron: '+_gB('no tienen horas extra')+' porque trabajan por ajuste.'},
+
+{cat:'reglas',t:'Regla de prioridades',k:'regla urgente prioridad quincena etapa rotar',
+ c:'«Urgente» se reserva para la '+_gB('etapa activa de la quincena')+'. Al cambiar de etapa se rota: la nueva sube a urgente y la anterior baja a normal. Si todo es urgente, nada lo es.'},
+
+{cat:'reglas',t:'Regla de fechas',k:'regla fecha inicio fin vencida reprogramar semanal',
+ c:'Toda tarea nueva lleva '+_gB('fecha de inicio y fin')+'. Si vence sin completarse, se reprograma en la revisión semanal — no se deja vencida indefinidamente.'},
+
+{cat:'reglas',t:'Regla de fotos',k:'regla fotos evidencia frentes activos cierre drive',
+ c:'Como mínimo, las fotos de los '+_gB('frentes activos')+' en el cierre del día. Se guardan solas en Drive.'},
+
+{cat:'reglas',t:'Regla de tareas estancadas',k:'regla estancada 3 dias sin registro motivo',
+ c:'Si una tarea en progreso pasa '+_gB('3 días o más sin registro')+', aparece en Estancadas. Hay que ponerle motivo o avanzarla.'},
+
+{cat:'reglas',t:'Regla de ubicación: sin apartamento no se exige',k:'regla ubicacion area apartamento especifico agrupada',
+ c:'Una partida agrupada («terminaciones», «registros de techo») no se le puede exigir a nadie. Cada trabajo va con su '+_gB('apartamento y su punto exacto')+' dentro del apartamento. Si una partida cubre cinco lugares, se parte en cinco.'},
+
+{cat:'reglas',t:'Regla de la partida madre y el remate',k:'regla remate partida madre completada avance inflado',
+ c:'Marcar la partida madre como completada cuando el remate no se hizo '+_gB('infla el avance')+' y esconde trabajo. El remate se levanta como partida aparte, con su ubicación y su responsable.'},
+
+// ══ ROLES Y PERMISOS ═══════════════════════════════════════
+{cat:'roles',t:'Qué puede hacer cada rol',k:'rol admin ingeniero visualizacion permiso editar',
+ c:_gLista([
+  _gB('Administrador')+' — todo, más gestión de usuarios, configuración y el panel Gerencia.',
+  _gB('Ingeniero residente')+' — registra asistencia, avances y fotos, hace el cierre y planifica el día.',
+  _gB('Visualización')+' — consulta todo y genera PDFs, pero no edita.'])},
+
+{cat:'roles',t:'Quién registra qué',k:'quien registra responsable regla de oro',
+ c:_gNota('El que ve el trabajo, lo registra el mismo día.')+
+ '<div style="margin-top:8px">Cada registro queda firmado con el nombre de quien lo hizo y la hora. Por eso cada quien entra con su propio usuario.</div>'},
+
+// ══ SECUENCIAS CONSTRUCTIVAS ═══════════════════════════════
+{cat:'tecnica',t:'Secuencia — acabados por apartamento',k:'secuencia acabados plomeria electrico pañete pintura',
+ c:'plomería → eléctrico → pañete / cerrar → pintura.<div style="margin-top:6px">Puertas y ventanas antes de tapar muros; accesorios eléctricos después de pintar.</div>'},
+{cat:'tecnica',t:'Secuencia — puertas',k:'secuencia puertas calzos ajuste correderas cerraduras topes',
+ c:'montar → calzos → ajustar → correderas → pintar → cerraduras → topes.'},
+{cat:'tecnica',t:'Secuencia — verja',k:'secuencia verja excavacion acero encofrado vaciado blocks pañete',
+ c:'replanteo → excavación → acero → encofrado → vaciado → 2 días de fraguado → blocks → fraguaché → pañete.'},
+{cat:'tecnica',t:'Secuencia — fachadas',k:'secuencia fachada pañete fino mochetas goteros planchas andamios',
+ c:'pañete → fino → mochetas → vuelos / goteros → planchas → pintura → desmontar andamios al final.'},
+{cat:'tecnica',t:'Estrategia de la torre',k:'estrategia niveles piso por piso n2 n3 parqueo escalera meta',
+ c:'Piso por piso: N2 + Parqueo → N3 + N4 → N5 + N6 → N7 + fachadas + escalera.'+
+ '<div style="margin-top:9px;background:var(--green-light);border:1px solid #63e6be;border-radius:var(--r);padding:8px 11px;font-size:13px;color:var(--green);font-weight:700">Meta de entrega: 31 de octubre de 2026.</div>'},
+
+// ══ SI ALGO FALLA ══════════════════════════════════════════
+{cat:'problemas',t:'No veo los cambios nuevos de la app',k:'problema actualizar version vieja cache recargar',
+ c:'La app se actualiza sola en cerca de un minuto al volver a abrirla. Si sigues viendo lo viejo, cierra la app por completo y ábrela de nuevo, o recarga fuerte (Ctrl+Shift+R en computadora).'},
+
+{cat:'problemas',t:'No puedo editar nada',k:'problema permiso solo lectura no guarda bloqueado',
+ c:'Tu usuario es de '+_gB('visualización')+' (solo lectura). Coordina con el administrador para que te dé permisos de edición.'},
+
+{cat:'problemas',t:'La cámara no abre para escanear el QR',k:'problema camara permiso qr no abre iphone android',
+ c:_gLista([
+  'La primera vez el teléfono pide permiso de cámara: hay que aceptarlo.',
+  'Si lo rechazaste antes, hay que habilitarlo en los ajustes del navegador para este sitio.',
+  'Cierra otras apps que estén usando la cámara.',
+  'Si aun así no abre, elige el área a mano en Recorrido — funciona igual.'])},
+
+{cat:'problemas',t:'El código dice «no es de esta obra» o «no encuentro el área»',k:'problema qr invalido codigo area no existe',
+ c:_gLista([
+  _gB('«Ese código no es de esta obra»')+' — el QR que escaneaste es de otra cosa. Los de la obra empiezan con MECCA.',
+  _gB('«No encuentro el área…»')+' — el apartamento del código no existe en la app, o la hoja pegada es de una versión vieja. Avisa para reimprimirla.'])},
+
+{cat:'problemas',t:'Sale «Error de conexión»',k:'problema conexion internet offline reintentar sin señal',
+ c:'Es falta de señal o internet. Toca '+_gB('Reintentar')+'. Lo que hayas marcado se envía cuando vuelva la conexión; no vuelvas a marcarlo dos veces.'},
+
+{cat:'problemas',t:'Se me perdió una actividad',k:'problema no aparece perdida filtro oculta buscar',
+ c:_gPasos([
+  'Casi siempre es un filtro puesto: mira el número al lado del botón '+_gB('Filtros')+' y toca '+_gB('Limpiar')+'.',
+  'Si estás en «Solo activas», cambia a '+_gB('Todas')+' — puede estar completada.',
+  'Búscala por una palabra de su descripción en el buscador.'])},
+
+{cat:'problemas',t:'Me equivoqué en un registro',k:'problema error corregir deshacer bitacora aclaracion',
+ c:'Corrige el dato (porcentaje, estado o asistencia) y deja la aclaración en las '+_gB('notas')+' de la actividad. Todos los cambios quedan guardados en la bitácora con el nombre y la hora, así que la corrección se ve.'+
+ _gOjo('La asistencia de más de 2 días atrás solo la puede corregir el administrador.')},
+
+{cat:'problemas',t:'Un contratista no aparece en la lista',k:'problema contratista sin ficha fantasma registrar renombrar',
+ c:'Si su nombre está en actividades pero no como contratista registrado, aparece en '+_gRuta('Equipo → Personal')+' dentro del bloque '+_gB('Contratistas sin ficha')+'. Desde ahí lo puedes '+_gB('Registrar')+' o '+_gB('Renombrar')+' si está escrito de dos maneras distintas.'}
+
+];}
+
+// ── buscador ──────────────────────────────────────────────
+function _guiaNorm(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+function _guiaTextoDe(f){
+  return _guiaNorm(f.t+' '+(f.k||'')+' '+String(f.c||'').replace(/<[^>]+>/g,' '));
+}
+function _guiaResalta(txt,q){
+  var qn=_guiaNorm(q).trim();
+  if(!qn) return esc(txt);
+  var palabras=qn.split(/\s+/).filter(function(w){return w.length>1;});
+  if(!palabras.length) return esc(txt);
+  var n=_guiaNorm(txt), marcas=new Array(txt.length).fill(false);
+  palabras.forEach(function(w){
+    var i=n.indexOf(w);
+    while(i>=0){ for(var j=i;j<i+w.length&&j<marcas.length;j++) marcas[j]=true; i=n.indexOf(w,i+w.length); }
+  });
+  var out='',dentro=false;
+  for(var k=0;k<txt.length;k++){
+    if(marcas[k]&&!dentro){ out+='<mark style="background:var(--accent-fill);color:var(--accent-on);border-radius:3px;padding:0 1px">'; dentro=true; }
+    else if(!marcas[k]&&dentro){ out+='</mark>'; dentro=false; }
+    out+=esc(txt[k]);
+  }
+  if(dentro) out+='</mark>';
+  return out;
+}
+function guiaBuscar(v){ S.guiaQ=v; renderMetodologia(); }
+function guiaCat(c){ S.guiaCat=(S.guiaCat===c?'':c); renderMetodologia(); }
+function guiaAbrir(id){
+  if(!S.guiaAbiertas) S.guiaAbiertas={};
+  if(S.guiaAbiertas[id]) delete S.guiaAbiertas[id]; else S.guiaAbiertas[id]=1;
+  renderMetodologia();
+}
+function guiaLimpiar(){ S.guiaQ=''; S.guiaCat=''; renderMetodologia(); }
+
 function renderMetodologia(){
   var el=document.getElementById('c-metodologia'); if(!el) return;
-  var det=function(sum,body,open){
-    return '<details'+(open?' open':'')+' style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:8px;box-shadow:var(--shadow-xs)">'+
-      '<summary style="padding:12px 14px;cursor:pointer;font-weight:800;font-size:14px;color:var(--text);user-select:none">'+sum+'</summary>'+
-      '<div style="padding:2px 14px 14px;font-size:13px;color:var(--text2);line-height:1.65">'+body+'</div></details>';
-  };
-  var li=function(arr){ return '<ul style="margin:6px 0 0;padding-left:18px">'+arr.map(function(x){return '<li style="margin-bottom:4px">'+x+'</li>';}).join('')+'</ul>'; };
-  var b=function(t){ return '<b style="color:var(--text)">'+t+'</b>'; };
+  if(!S.guiaAbiertas) S.guiaAbiertas={};
+  var q=(S.guiaQ||'').trim();
+  var qn=_guiaNorm(q);
+  var palabras=qn.split(/\s+/).filter(Boolean);
+  var todas=guiaFichas();
+  todas.forEach(function(f,i){ f._id='g'+i; });
+
+  var porCat={}; todas.forEach(function(f){ porCat[f.cat]=(porCat[f.cat]||0)+1; });
+
+  var lista=todas.filter(function(f){
+    if(S.guiaCat && f.cat!==S.guiaCat) return false;
+    if(!palabras.length) return true;
+    var t=_guiaTextoDe(f);
+    return palabras.every(function(w){ return t.indexOf(w)>=0; });
+  });
+  // los títulos que coinciden van primero
+  if(palabras.length){
+    lista.sort(function(a,b){
+      var ta=_guiaNorm(a.t), tb=_guiaNorm(b.t);
+      var pa=palabras.every(function(w){return ta.indexOf(w)>=0;})?0:1;
+      var pb=palabras.every(function(w){return tb.indexOf(w)>=0;})?0:1;
+      return pa-pb;
+    });
+  }
+  // Al buscar: si hay pocas coincidencias se abren todas; si hay muchas,
+  // se abre la primera (la más relevante) para que la respuesta se lea de una.
+  var abrirTodas = palabras.length>0 && lista.length<=4;
+  var abrirPrimera = palabras.length>0 && lista.length>4;
+
+  var catLabel={}; GUIA_CATS.forEach(function(c){ catLabel[c.id]=c.label; });
 
   var h='<div style="max-width:820px;margin:0 auto;padding-bottom:24px">';
-  h+='<div class="sec-title" style="margin:14px 0 4px">Metodología — Guía de uso</div>';
-  h+='<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Cómo se usa la app y las reglas del proyecto. Onboarding, referencia diaria y transparencia para la gerencia.</div>';
 
-  // ── 1. Flujo diario ──
-  var pasos=[
-    {ic:'🌅',t:'MAÑANA',c:'#7c3aed',items:['Plan del día','· revisar el plan','· asignar tareas','· PDF → WhatsApp']},
-    {ic:'☀️',t:'DURANTE EL DÍA',c:'var(--blue)',items:['Registrar avances','· marcar asistencia','· actualizar %','· completar tareas']},
-    {ic:'🌆',t:'TARDE',c:'var(--amber)',items:['Cierre del día','· avances finales','· fotos del día','· plan de mañana']},
-    {ic:'📄',t:'AUTOMÁTICO',c:'var(--green)',items:['Bitácora / PDF','· se genera el reporte','· se envía al grupo','  de WhatsApp']}
-  ];
-  var diag='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">';
-  pasos.forEach(function(p,i){
-    diag+='<div style="flex:1 1 140px;min-width:140px;background:var(--bg2);border:1px solid var(--border);border-top:3px solid '+p.c+';border-radius:var(--r2);padding:10px 12px;box-shadow:var(--shadow-xs)">'+
-      '<div style="font-size:11px;font-weight:800;color:'+p.c+';letter-spacing:.5px">'+p.ic+' '+p.t+'</div>'+
-      '<div style="font-size:13px;font-weight:700;color:var(--text);margin:4px 0 2px">'+p.items[0]+'</div>'+
-      '<div style="font-size:11px;color:var(--text3);line-height:1.5">'+p.items.slice(1).map(function(x){return esc(x);}).join('<br>')+'</div>'+
-      (i<pasos.length-1?'<div style="text-align:right;color:var(--text3);font-size:14px;margin-top:2px">▸</div>':'')+
-    '</div>';
+  // BUSCADOR
+  h+='<div style="display:flex;align-items:center;gap:9px;background:var(--bg2);border:1.5px solid '+(q?'var(--accent-fill)':'var(--border2)')+';border-radius:var(--r2);padding:10px 12px;margin:10px 0 8px">'+
+     '<span style="color:var(--text3);display:flex"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>'+
+     '<input id="guia-q" type="search" value="'+esc(q)+'" placeholder="¿Qué necesitas saber?" oninput="guiaBuscar(this.value)" style="flex:1;border:none;outline:none;font-size:14px;font-family:var(--font);background:transparent;color:var(--text)">'+
+     (q?'<button onclick="guiaBuscar(\'\')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0;line-height:1">×</button>':'')+
+     '</div>';
+
+  // CATEGORÍAS
+  h+='<div style="display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px">';
+  h+='<button onclick="guiaCat(\'\')" style="flex-shrink:0;padding:6px 12px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:700;border:1.5px solid '+(S.guiaCat?'var(--border2)':'var(--accent-fill)')+';background:'+(S.guiaCat?'var(--bg2)':'var(--accent-fill)')+';color:'+(S.guiaCat?'var(--text2)':'var(--accent-on)')+'">Todo '+todas.length+'</button>';
+  GUIA_CATS.forEach(function(c){
+    if(!porCat[c.id]) return;
+    var on=S.guiaCat===c.id;
+    h+='<button onclick="guiaCat(\''+c.id+'\')" style="flex-shrink:0;padding:6px 12px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:700;border:1.5px solid '+(on?'var(--accent-fill)':'var(--border2)')+';background:'+(on?'var(--accent-soft)':'var(--bg2)')+';color:'+(on?'var(--accent)':'var(--text2)')+'">'+c.label+' '+porCat[c.id]+'</button>';
   });
-  diag+='</div>';
-  var flujoBody=diag+
-    det('Plan del día (Hoy)',
-      'Al abrir la app, la pestaña '+b('Hoy')+' muestra una sola sección — el '+b('Plan del día')+' — con las actividades planificadas para hoy (agrupadas por contratista, área o ingeniero).'+
-      li([
-        'Debajo del plan hay un bloque plegable '+b('Sugeridas — vencen hoy o están vencidas')+': tareas relevantes del día que aún no están en el plan. Con <b>＋ Al plan</b> las agregas al plan de hoy en un toque.',
-        'Para '+b('agregar tareas al plan')+' también puedes usar el botón inteligente de cada tarjeta en '+b('En Obra')+' — <b>＋ Plan hoy</b> o <b>＋ Plan mañana</b> — o el buscador «Agregar actividad al plan».',
-        'Genera el '+b('PDF matutino')+' con <b>Generar PDF</b> y compártelo al grupo de Bitácora con <b>WhatsApp</b>.',
-        'El plan se puede filtrar (estado/tipo/texto) y reorganizar sin perder lo que ya marcaste.'
-      ]))+
-    det('Registrar avances',
-      'Durante el día, marca lo que va pasando. La meta es que el '+b('contador de marcadas llegue a X/X')+' — que todo lo del día quede registrado.'+
-      li([
-        b('Guardar %')+': ajusta el porcentaje de avance de la tarea.',
-        b('✓ Completar')+': la marca como terminada (100%).',
-        b('Sin cambios hoy')+': la saca de «pendientes de marcar» sin tocar el %, cuando no avanzó.',
-        'La '+b('asistencia')+' del personal se marca en '+b('Equipo → Asistencia')+' («Marcar →» desde Hoy).'
-      ]))+
-    det('Cierre del día',
-      'Al final de la jornada, el '+b('Cierre')+' (Reportes → Cierre del día) resume lo registrado y ayuda a cerrar:'+
-      li([
-        b('Actualizar avances')+': repasa las en-progreso y ajusta % o «sin cambios».',
-        b('Plan de mañana')+': mueve las tareas del plan de hoy que quedaron sin completar al día siguiente («→ Mañana» o «→ Todas a mañana»).',
-        'Genera el '+b('PDF del cierre')+' con el resumen del día.'
-      ]))+
-    det('Bitácora',
-      'La '+b('Bitácora')+' arma el reporte oficial de la obra.'+
-      li([
-        'Se genera por '+b('día')+' o por '+b('rango de fechas')+'.',
-        'Incluye '+b('asistencia, avances, fotos y urgentes')+' del período.',
-        'Las fotos se guardan en '+b('Google Drive')+' automáticamente al subirlas.'
-      ]));
-  h+=det('El flujo diario', flujoBody, true);
-
-  // ── 2. Módulos ──
-  var mods=[
-    ['Hoy','El arranque del día: plan del día, asistencia rápida y accesos al cierre. Es donde el ingeniero trabaja la planificación.'],
-    ['En Obra','Optimizado para el celular en la mano. Filtros rápidos de campo en chips (👷 Mi frente, 📝 Sin marcar hoy, ⏰ Vencidas, ▶ En progreso, Todas) y registro rápido inline en cada tarjeta (input % + Guardar, ✓ Completar, «Sin cambios hoy»). Arriba, el indicador «Registradas hoy: X de Y». El buscador y filtros avanzados quedan colapsados como secundarios.'],
-    ['Actividades','El listado completo con filtros por estado, contratista, responsable, ubicación, plan y buscador de texto. Para gestionar y agrupar todo.'],
-    ['Equipo','Asistencia (entrada/salida, horas extra solo del personal de casa), contratistas, personal, penalidades y bonificaciones. Incluye el <b>Reporte de asistencia de contratistas con fecha elegible</b> (día o semana) con PDF y WhatsApp.'],
-    ['Reportes','Dashboard, plan semanal, cierre del día e historial de cambios. La vista de control.'],
-    ['Fotos','Galería de todas las fotos por fecha, ubicación e ingeniero. Evidencia visual del avance.'],
-    ['Planos','Planos y documentos de la obra, con pines de ubicación.'],
-    ['Compras','Órdenes de compra en formato BRIDEX.'],
-    ['Gantt (Planificación)','Cronograma interactivo del proyecto (uno solo) para ver la secuencia y las fechas de las etapas.'],
-    ['Gerencia (solo administrador)','Panel ejecutivo solo lectura: avance por nivel, ritmo semanal, riesgos e informe PDF (para dueños/inversionistas). Solo visible para el administrador.'],
-    ['Metodología','Esta guía: flujo diario, módulos, roles, reglas y secuencias constructivas.']
-  ];
-  h+=det('Los módulos, uno a uno',
-    mods.map(function(m){return '<div style="padding:7px 0;border-bottom:1px solid var(--border)"><div style="font-weight:700;color:var(--text);font-size:13px">'+m[0]+'</div><div style="font-size:12px;color:var(--text3);margin-top:1px">'+m[1]+'</div></div>';}).join(''));
-
-  // ── Mapa de PDFs ──
-  var pdfMap=[
-    ['Plan del día','Hoy → Generar PDF','Plan matutino liviano (sin fotos) para el grupo de WhatsApp.'],
-    ['Cierre del día','Reportes → Cierre del día','Resumen de lo registrado en la jornada.'],
-    ['Bitácora','Reportes → Bitácora','Reporte oficial por día o por rango, con asistencia, avances, fotos y urgentes.'],
-    ['Asistencia Contratistas','Equipo → Contratistas → Reporte','Asistencia de contratistas del día o semana elegidos (presentes/ausentes, trabajadores en obra). Ing./Admin.'],
-    ['Informe Ejecutivo','Gerencia → Generar PDF','Resumen ejecutivo para dueños/inversionistas (solo administrador).']
-  ];
-  var tbl='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'+
-    '<thead><tr style="text-align:left;color:var(--text3)"><th style="padding:6px 8px;border-bottom:1.5px solid var(--border)">PDF</th><th style="padding:6px 8px;border-bottom:1.5px solid var(--border)">Dónde</th><th style="padding:6px 8px;border-bottom:1.5px solid var(--border)">Qué incluye</th></tr></thead><tbody>'+
-    pdfMap.map(function(r){return '<tr><td style="padding:6px 8px;border-bottom:1px solid var(--border);font-weight:700;color:var(--text);white-space:nowrap">'+r[0]+'</td><td style="padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text2);white-space:nowrap">'+r[1]+'</td><td style="padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text3)">'+r[2]+'</td></tr>';}).join('')+
-    '</tbody></table></div>';
-  h+=det('Mapa de PDFs',
-    '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Cada reporte tiene un único lugar. No hay botones duplicados.</div>'+tbl);
-
-  // ── 3. Roles ──
-  h+=det('Roles y responsabilidades',
-    li([
-      b('Admin (Ing. Nilson)')+': todo — más gestión de usuarios, configuración y el panel <b>Gerencia</b> (solo el administrador lo ve).',
-      b('Ingeniero residente')+': registrar asistencia, avances y fotos, hacer el cierre diario y planificar el día.',
-      b('Visualización (view)')+': consulta todo y genera PDFs, pero no edita.'
-    ])+
-    '<div style="margin-top:10px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r);padding:9px 12px;font-size:13px;color:var(--accent);font-weight:700">Regla de oro: el que ve el trabajo, lo registra el mismo día.</div>');
-
-  // ── 4. Reglas ──
-  h+=det('Reglas del proyecto',
-    li([
-      b('Asistencia')+': el personal de casa marca entrada/salida y horas extra; los contratistas solo presente/ausente — <b>no tienen horas extra</b> (trabajan por ajuste).',
-      b('Prioridades')+': «urgente» solo para la etapa activa de la quincena (ej. N2 + Parqueo). Al cambiar de etapa se rota: la nueva sube a urgente y la anterior baja a normal.',
-      b('Fechas')+': toda tarea nueva lleva fecha de inicio y fin. Si vence sin completarse, se reprograma en la revisión semanal — no se deja vencida.',
-      b('Fotos')+': mínimo las de los frentes activos en el cierre; se guardan en Drive automáticamente.',
-      b('Estancadas')+': si una tarea en progreso pasa 3+ días sin registro, aparece en Estancadas — hay que ponerle motivo o avanzarla.'
-    ]));
-
-  // ── 5. Secuencias constructivas ──
-  var seq=function(t,pasos){ return '<div style="margin-bottom:9px"><div style="font-weight:700;color:var(--text);font-size:13px">'+t+'</div><div style="font-size:12px;color:var(--text2);margin-top:2px">'+pasos+'</div></div>'; };
-  h+=det('Secuencias constructivas (referencia técnica)',
-    seq('Acabados por apto','plomería → eléctrico → pañete / cerrar → pintura. Puertas y ventanas antes de tapar muros; accesorios eléctricos después de pintar.')+
-    seq('Puertas','montar → calzos → ajustar → correderas → pintar → cerraduras → topes.')+
-    seq('Verja','replanteo → excavación → acero → encofrado → vaciado → 2 días de fraguado → blocks → fraguaché → pañete.')+
-    seq('Fachadas','pañete → fino → mochetas → vuelos / goteros → planchas → pintura → desmontar andamios al final.')+
-    seq('Estrategia de torre','piso por piso: N2 + Parqueo → N3 + N4 → N5 + N6 → N7 + fachadas + escalera.')+
-    '<div style="margin-top:6px;background:var(--green-light);border:1px solid #63e6be;border-radius:var(--r);padding:8px 12px;font-size:13px;color:var(--green);font-weight:700">Meta: 31 de octubre de 2026.</div>');
-
-  // ── 6. FAQ ──
-  var faq=function(q,a){ return '<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="font-weight:700;color:var(--text);font-size:13px">'+q+'</div><div style="font-size:12px;color:var(--text3);margin-top:2px">'+a+'</div></div>'; };
-  h+=det('Preguntas frecuentes',
-    faq('«No veo los cambios nuevos»','La app ahora se actualiza sola en ~1 min al volver a abrirla. Si aún ves lo viejo, recarga fuerte (Ctrl+Shift+R) o reabre la app.')+
-    faq('«No puedo editar»','Tu usuario es de visualización (solo lectura). Coordina con el administrador para que te dé permisos.')+
-    faq('«Una tarea no aparece en el plan»','Si vence hoy o está vencida, aparece en el bloque ⚡ Sugeridas dentro de Hoy — tócala en ＋ Al plan. También puedes agregarla desde En Obra con ＋ Plan hoy o buscarla en «Agregar actividad al plan».')+
-    faq('«¿Cómo registro rápido en obra?»','En En Obra, filtra por 👷 Mi frente, escribe el % en la tarjeta y toca Guardar. Si no hubo avance, usa «Sin cambios hoy». La meta es que «Registradas hoy» llegue a X/X.')+
-    faq('«Me equivoqué en un registro»','Todos los cambios quedan en la bitácora. Corrige el % de la tarea y anota la aclaración en sus notas.'));
-
   h+='</div>';
+
+  // CONTEO
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">'+
+     '<span style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+lista.length+' de '+todas.length+' '+(q||S.guiaCat?'coinciden':'temas')+'</span>'+
+     ((q||S.guiaCat)?'<button onclick="guiaLimpiar()" style="background:none;border:none;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;padding:0">Ver todo</button>':'')+
+     '</div>';
+
+  // RESULTADOS
+  if(!lista.length){
+    h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:22px 16px;text-align:center">'+
+       '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">No encontré nada con «'+esc(q)+'»</div>'+
+       '<div style="font-size:12.5px;color:var(--text3);line-height:1.6">Prueba con una palabra suelta: <b>asistencia</b>, <b>foto</b>, <b>QR</b>, <b>vencida</b>, <b>PDF</b>, <b>zócalo</b>, <b>permiso</b>.</div>'+
+       '<button onclick="guiaLimpiar()" style="margin-top:12px;padding:8px 16px;border-radius:99px;border:1.5px solid var(--accent-fill);background:var(--accent-soft);color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font)">Ver todos los temas</button>'+
+       '</div>';
+  } else {
+    lista.forEach(function(f,idx){
+      var abierta = abrirTodas || (abrirPrimera && idx===0) || !!S.guiaAbiertas[f._id];
+      h+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:6px;overflow:hidden">'+
+         '<div onclick="guiaAbrir(\''+f._id+'\')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;cursor:pointer">'+
+           '<span style="font-size:15px;color:var(--text3);flex-shrink:0;transform:'+(abierta?'rotate(90deg)':'none')+'">›</span>'+
+           '<div style="flex:1;min-width:0">'+
+             '<div style="font-size:13.5px;font-weight:700;color:var(--text);line-height:1.35">'+_guiaResalta(f.t,q)+'</div>'+
+             (S.guiaCat?'':'<div style="font-size:10.5px;color:var(--text3);margin-top:2px">'+esc(catLabel[f.cat]||'')+'</div>')+
+           '</div>'+
+         '</div>'+
+         (abierta?'<div style="padding:0 13px 13px 34px;font-size:13px;color:var(--text2);line-height:1.65;border-top:1px solid var(--border)"><div style="height:9px"></div>'+f.c+'</div>':'')+
+         '</div>';
+    });
+  }
+
+  h+='<div style="margin-top:14px;background:var(--bg2);border:1px dashed var(--border2);border-radius:var(--r2);padding:12px 14px;font-size:12.5px;color:var(--text3);line-height:1.6">'+
+     '<b style="color:var(--text2)">¿No está aquí lo que buscas?</b><br>Pregúntale al Ing. Nilson y se agrega a esta guía. Si una duda le pasó a uno, le va a pasar a otro.</div>';
+
+  h+='<div style="height:80px"></div></div>';
   el.innerHTML=h;
+  // devolver el cursor al buscador si el usuario estaba escribiendo
+  if(q){
+    var inp=document.getElementById('guia-q');
+    if(inp && document.activeElement!==inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
