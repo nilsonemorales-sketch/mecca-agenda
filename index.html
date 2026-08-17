@@ -1364,6 +1364,8 @@ let S={
   actFiltro:'tipo', // tipo | nivel | apto | responsable | contratista | critico
   penFiltro:'todos', // todos | propio | contratista | ingeniero
   obraVista:'activa',       // 'activa' | 'todas'
+  actAbiertas:{},           // qué tarjetas tienen el detalle abierto
+  avanceOpen:false,         // panel de avance de obra plegado por defecto
   equipoVista:'asistencia', // 'asistencia' | 'contratistas' | 'personal' | 'penalidades' | 'bonificaciones'
   reportesVista:'dashboard',// 'dashboard' | 'proyeccion' | 'apto' | 'semana' | 'historial'
   repAptoSel:'',
@@ -3798,7 +3800,23 @@ function _panelAvanceHTML(){
     .map(function(k){return {a:k, p:Math.round(porArea[k].d/porArea[k].t*100)};})
     .sort(function(x,y){return x.p-y.p;}).slice(0,4);
 
-  return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px;margin-bottom:16px">'+
+  // ── PLEGADO POR DEFECTO ───────────────────────────────────────
+  // Una línea de 40px con el porcentaje y las vencidas. El panel completo
+  // se abre al tocarla. Es información de tablero, no de trabajo diario:
+  // cuando buscas qué falta en el 2B no necesitas el % de toda la obra.
+  var _av=!!S.avanceOpen;
+  var _linea='<div onclick="toggleAvance()" style="display:flex;align-items:center;gap:9px;'+
+    'background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);'+
+    'padding:9px 12px;margin-bottom:'+(_av?'8px':'14px')+';cursor:pointer">'+
+    '<span style="color:var(--text3);font-size:13px;transition:transform .15s;'+(_av?'transform:rotate(90deg)':'')+'">›</span>'+
+    '<b style="font-size:14px;font-family:var(--mono);color:var(--accent)">'+r.pct+'%</b>'+
+    '<div style="flex:1;height:5px;background:var(--bg3);border-radius:99px;overflow:hidden">'+
+      '<div style="height:100%;width:'+r.pct+'%;background:var(--accent-fill);border-radius:99px"></div></div>'+
+    '<span style="font-size:11.5px;font-family:var(--mono);color:'+(r.vencidas?'var(--red)':'var(--text3)')+';font-weight:700">'+
+      r.vencidas+' vencidas</span></div>';
+  if(!_av) return _linea;
+
+  return _linea+'<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:16px;margin-bottom:16px">'+
     '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px">'+
       '<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.7px;text-transform:uppercase">Avance de obra</div>'+
       '<div style="font-size:30px;font-weight:800;letter-spacing:-1.2px;font-family:var(--mono)">'+r.pct+
@@ -3820,6 +3838,11 @@ function _panelAvanceHTML(){
           '<b style="font-size:11.5px;text-align:right;color:var(--text2);font-family:var(--mono)">'+x.p+'%</b></div>';
       }).join('')+'</div>':'')+
   '</div>';
+}
+
+function toggleAvance(){
+  S.avanceOpen=!S.avanceOpen;
+  if(S.obraVista==='todas') renderActs(); else renderEnObra();
 }
 
 function toggleActFiltros(){
@@ -4314,18 +4337,33 @@ function actHTML(a, ai, tipo){
   var btn='padding:8px 10px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;justify-content:center;gap:5px';
   var ibtn='width:38px;height:34px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0';
 
-  return`<div class="act-item ${tipo}" style="padding:12px;margin-bottom:8px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${bleft};border-radius:var(--r2)">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-      <div style="font-size:14px;font-weight:600;flex:1;min-width:0;line-height:1.35;color:var(--text)">${urgente?_ic('alerta',14,'var(--red)')+' ':''}${esc(a.descripcion)}${blocked?' '+_ic('lock',13,'var(--text3)'):''}</div>
-      ${canEdit()?`<button style="background:none;border:none;color:var(--text3);cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0" onclick="editAct('${a.id}')">${_ic('lapiz',15)}</button>`:''}
-    </div>
+  // ── TARJETA COMPACTA ──────────────────────────────────────────
+  // Solo se ve lo imprescindible: qué es, dónde, quién y cómo va.
+  // Todo lo demás (avance, notas, fotos, horas, botones) vive dentro de
+  // #det-<id> y se abre al tocar la tarjeta. Nada se perdió, solo se plegó.
+  var _abierta = !!(S.actAbiertas && S.actAbiertas[a.id]);
+  var _areaCorta = a.area ? esc(String(a.area).replace(/^N\d+\s*—\s*/,'')) : '';
+  var _contCorto = a.personal_nombre ? esc(String(a.personal_nombre).replace(/\s*\(.*\)\s*$/,'')) : '';
 
-    <div style="font-size:11.5px;color:var(--text3);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
-      ${a.area?`<span style="color:var(--accent);font-weight:600;display:inline-flex;align-items:center;gap:3px">${_ic('pin',12)}${esc(a.area)}</span>`:`<span style="color:var(--amber);cursor:pointer;font-weight:600" onclick="setArea('${a.id}')">Sin área</span>`}
+  return`<div class="act-item ${tipo}" style="padding:0;margin-bottom:6px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${bleft};border-radius:var(--r2);overflow:hidden;box-shadow:none">
+    <div onclick="toggleActDet('${a.id}')" style="display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13.5px;font-weight:600;line-height:1.25;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${urgente?_ic('alerta',13,'var(--red)')+' ':''}${esc(a.descripcion)}${blocked?' '+_ic('lock',12,'var(--text3)'):''}</div>
+        <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          ${_areaCorta?`<span style="color:var(--accent);font-weight:700">${_areaCorta}</span>`:`<span style="color:var(--amber);font-weight:700">Sin área</span>`}${_contCorto?` · ${_contCorto}`:''} · <span style="color:${ec};font-weight:700">${el}</span>
+        </div>
+      </div>
+      <span id="chev-${a.id}" style="color:var(--text3);font-size:15px;flex-shrink:0;transition:transform .15s;${_abierta?'transform:rotate(90deg)':''}">›</span>
+    </div>
+    <div id="det-${a.id}" style="display:${_abierta?'block':'none'};padding:2px 11px 11px;border-top:1px solid var(--border)">
+
+    <div style="font-size:11.5px;color:var(--text3);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px">
+      ${a.area?`<span style="color:var(--accent);font-weight:600;display:inline-flex;align-items:center;gap:3px">${_ic('pin',12)}${esc(a.area)}</span>`:`<span style="color:var(--amber);cursor:pointer;font-weight:600" onclick="event.stopPropagation();setArea('${a.id}')">Sin área</span>`}
       ${a.personal_nombre?`<span style="opacity:.35">·</span><span style="display:inline-flex;align-items:center;gap:3px">${_ic('casco',12)}${esc(a.personal_nombre)}</span>`:''}
       ${a.ingeniero_nombre?`<span style="opacity:.35">·</span><span style="display:inline-flex;align-items:center;gap:3px">${_ic('user',12)}${esc(a.ingeniero_nombre)}</span>`:''}
       ${a.fecha?`<span style="opacity:.35">·</span><span style="display:inline-flex;align-items:center;gap:3px;font-family:var(--mono)">${_ic('cal',12)}${a.fecha_fin||a.fecha}</span>`:''}
       ${a.cantidad_plan>0?`<span style="opacity:.35">·</span><span style="display:inline-flex;align-items:center;gap:3px">${_ic('caja',12)}${a.cantidad_real||0}/${a.cantidad_plan} ${esc(a.unidad||'')}</span>`:''}
+      ${canEdit()?`<span style="opacity:.35">·</span><button style="background:none;border:none;color:var(--text3);cursor:pointer;padding:0 2px;line-height:1" onclick="event.stopPropagation();editAct('${a.id}')">${_ic('lapiz',14)}</button>`:''}
     </div>
 
     <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:8px">
@@ -4385,7 +4423,19 @@ function actHTML(a, ai, tipo){
       <button onclick="toggleArqAct('${a.id}')" style="${ibtn}${a.requiere_arq?';color:var(--accent);border-color:var(--accent);background:var(--accent-soft)':''}" title="${a.requiere_arq?'Quitar marca Arq. Miguel':'Requiere Arq. Miguel'}">${_ic('banco',14)}</button>
     </div>`:''}
     ${(canEdit()||S.user?.rol==='ing')&&!a.verificado&&a.estado!=='pendiente'?`<div style="margin-top:6px"><button onclick="verificarAct('${a.id}')" style="${btn};width:100%;border:1.5px solid var(--green);background:var(--green-light);color:var(--green);font-size:12px">${_ic('checkc',13)} Verificar trabajo</button></div>`:''}
+    </div>
   </div>`;
+}
+
+// Abre o cierra el detalle de una actividad sin volver a dibujar la lista.
+function toggleActDet(id){
+  if(!S.actAbiertas) S.actAbiertas={};
+  var d=document.getElementById('det-'+id), c=document.getElementById('chev-'+id);
+  if(!d) return;
+  var abrir = d.style.display==='none';
+  d.style.display = abrir?'block':'none';
+  if(c) c.style.transform = abrir?'rotate(90deg)':'';
+  if(abrir) S.actAbiertas[id]=1; else delete S.actAbiertas[id];
 }
 
 // ── FOTO REQUERIDA PARA COMPLETAR ────────────────────
@@ -9211,27 +9261,18 @@ function renderEnObra(){
   var retrasadas=S.actsActivas.filter(function(a){return isRetrasada(a);});
 
   el.innerHTML=`
-    <!-- HEADER -->
-    <div class="obranow-header">
-      <div>
-        <div style="font-size:14px;font-weight:600">En Obra — ${fmtDia(S.fecha)} ${fmtF(S.fecha)}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">${S.actsActivas.length} actividad${S.actsActivas.length!==1?'es':''} activas</div>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-        ${retrasadas.length?`<span style="background:var(--red-light);color:var(--red);border:1px solid var(--red);font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:8px;font-weight:700">⏰ ${retrasadas.length} retrasada${retrasadas.length>1?'s':''}</span>`:''}
-        ${urgentes.length?`<span style="background:var(--red-light);color:var(--red);border:1px solid var(--red);font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:8px">${urgentes.length} urgente${urgentes.length>1?'s':''}</span>`:''}
-        <button onclick="loadTareas()" style="background:none;border:1.5px solid var(--border2);border-radius:8px;padding:5px 8px;cursor:pointer;color:var(--text2);font-size:13px">&#8635;</button>
-      </div>
-    </div>
-
-    <!-- STATS -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">
-      ${[
-        {v:enProgreso.length, l:'En curso',   c:'var(--accent)'},
-        {v:retrasadas.length, l:'Retrasadas', c:retrasadas.length>0?'var(--red)':'var(--text3)'},
-        {v:pausada.length,    l:'Pausadas',   c:'var(--amber)'},
-        {v:S.actsActivas.length, l:'Total',   c:'var(--text2)'},
-      ].map(s=>`<div class="scard"><div class="v" style="color:${s.c};font-size:18px">${s.v}</div><div class="l">${s.l}</div></div>`).join('')}
+    <!-- ENCABEZADO FUSIONADO ────────────────────────────────────
+         Antes eran dos bloques de 133px que decían lo mismo tres veces:
+         el título con el conteo, las cuatro tarjetas de estado, y luego
+         los chips de filtro. Ahora es una sola línea de 34px. -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:11.5px;font-family:var(--mono);color:var(--text3)">
+      <span style="font-weight:700;color:var(--text2)">${fmtDia(S.fecha)} ${fmtF(S.fecha)}</span>
+      <span style="opacity:.4">·</span>
+      <span><b style="color:var(--text)">${S.actsActivas.length}</b> activas</span>
+      ${enProgreso.length?`<span style="opacity:.4">·</span><span><b style="color:var(--amber)">${enProgreso.length}</b> en curso</span>`:''}
+      ${retrasadas.length?`<span style="opacity:.4">·</span><span><b style="color:var(--red)">${retrasadas.length}</b> retrasadas</span>`:''}
+      ${pausada.length?`<span style="opacity:.4">·</span><span><b style="color:var(--amber)">${pausada.length}</b> pausadas</span>`:''}
+      <button onclick="loadTareas()" style="margin-left:auto;background:none;border:1.5px solid var(--border2);border-radius:8px;padding:4px 8px;cursor:pointer;color:var(--text2);font-size:13px;flex-shrink:0">&#8635;</button>
     </div>
 
     <!-- BUSCADOR — primero, siempre visible -->
@@ -10405,7 +10446,9 @@ function renderObra(){
   var subnav = document.getElementById('c-obra-subnav');
   if(subnav){
     subnav.style.cssText = subNavStyle();
-    subnav.style.display = (S.obraVista==='todas') ? 'none' : '';
+    // OJO: poner '' aquí borraba el display:flex de subNavStyle y las pastillas
+    // se apilaban en dos líneas. Hay que devolverle 'flex', no vacío.
+    subnav.style.display = (S.obraVista==='todas') ? 'none' : 'flex';
     var navPills = S.obraVista==='todas' ? '' :
       subNavBtn('En Progreso', S.obraVista==='activa', "S.obraVista='activa';renderObra()")+
       subNavBtn('Kanban',      S.obraVista==='kanban', "S.obraVista='kanban';renderObra()")+
@@ -10684,15 +10727,14 @@ function recAreaVista(el){
   el.innerHTML=
     '<button onclick="recVolver()" style="background:none;border:0;color:var(--text2);font-size:13px;'+
       'font-weight:600;cursor:pointer;padding:8px 0;font-family:var(--font)">‹ Cambiar de área</button>'+
-    '<div class="obranow-header"><div>'+
-      '<div style="font-size:15px;font-weight:700">'+esc(nm)+'</div>'+
-      '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">'+
-        mias.length+' pendientes'+(venc?' · '+venc+' vencidas':'')+'</div>'+
-    '</div></div>'+
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">'+
-      '<div class="scard"><div class="v" style="font-size:18px">'+mias.length+'</div><div class="l">Pendientes</div></div>'+
-      '<div class="scard"><div class="v" style="font-size:18px;color:'+(venc?'var(--red)':'var(--text3)')+'">'+venc+'</div><div class="l">Vencidas</div></div>'+
-      '<div class="scard"><div class="v" style="font-size:18px;color:'+(sinFoto?'var(--amber)':'var(--green)')+'">'+sinFoto+'</div><div class="l">Sin foto</div></div>'+
+    // Encabezado en una línea: el área, y los tres números al lado.
+    '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+      '<b style="font-size:15px">'+esc(nm)+'</b>'+
+      '<span style="font-size:11.5px;font-family:var(--mono);color:var(--text3)">'+
+        '<b style="color:var(--text)">'+mias.length+'</b> pendientes'+
+        (venc?' · <b style="color:var(--red)">'+venc+'</b> vencidas':'')+
+        (sinFoto?' · <b style="color:var(--amber)">'+sinFoto+'</b> sin foto':'')+
+      '</span>'+
     '</div>'+
     '<button onclick="recNuevo()" style="display:flex;align-items:center;justify-content:center;gap:8px;'+
       'width:100%;padding:14px;margin-bottom:14px;border-radius:12px;border:1.5px dashed var(--accent);'+
