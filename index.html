@@ -9022,10 +9022,10 @@ function buildEnObraRapido(){
   // Indicador de progreso del día
   if(Y>0){
     var pctDia=Math.round(X/Y*100), full=X>=Y;
-    h+='<div style="background:'+(full?'var(--green-light)':'#fff')+';border:1.5px solid '+(full?'var(--green)':'var(--border2)')+';border-radius:12px;padding:9px 13px;margin-bottom:10px">';
+    h+='<div style="background:'+(full?'var(--green-light)':'var(--bg2)')+';border:1.5px solid '+(full?'var(--green)':'var(--border2)')+';border-radius:12px;padding:9px 13px;margin-bottom:10px">';
     h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">';
-    h+='<span style="font-size:12.5px;font-weight:800;color:'+(full?'#2b8a3e':'var(--text)')+'">'+(full?'✅ ':'')+'Registradas hoy: '+X+' de '+Y+'</span>';
-    h+='<span style="font-size:11px;font-weight:700;color:'+(full?'#2b8a3e':'var(--text3)')+';font-family:var(--mono)">'+pctDia+'%</span>';
+    h+='<span style="font-size:12.5px;font-weight:800;color:'+(full?'var(--green)':'var(--text)')+'">'+(full?'✓ ':'')+'Registradas hoy: '+X+' de '+Y+'</span>';
+    h+='<span style="font-size:11px;font-weight:700;color:'+(full?'var(--green)':'var(--text3)')+';font-family:var(--mono)">'+pctDia+'%</span>';
     h+='</div>';
     h+='<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pctDia+'%;background:'+(full?'var(--green)':'var(--accent)')+';border-radius:3px;transition:width .3s"></div></div>';
     h+='</div>';
@@ -9042,7 +9042,7 @@ function buildEnObraRapido(){
   h+='<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;-webkit-overflow-scrolling:touch">';
   chips.forEach(function(c){
     var on=cur===c.v;
-    h+='<button onclick="S.enObraFiltroRapido=\''+c.v+'\';renderEnObra()" style="flex:0 0 auto;padding:8px 12px;border-radius:20px;border:1.5px solid '+(on?'var(--accent-fill)':'var(--border2)')+';background:'+(on?'var(--accent-fill)':'var(--bg2)')+';color:'+(on?'#fff':'var(--text2)')+';font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;min-height:36px">'+c.l+(c.n?' <span style="opacity:.75;font-weight:600">'+c.n+'</span>':'')+'</button>';
+    h+='<button onclick="S.enObraFiltroRapido=\''+c.v+'\';renderEnObra()" style="flex:0 0 auto;padding:8px 12px;border-radius:20px;border:1.5px solid '+(on?'var(--accent-fill)':'var(--border2)')+';background:'+(on?'var(--accent-fill)':'var(--bg2)')+';color:'+(on?'#fff':'var(--text2)')+';font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;min-height:36px">'+c.l+(c.n?' <span style="opacity:.7;font-weight:700;margin-left:5px">'+c.n+'</span>':'')+'</button>';
   });
   h+='</div>';
   return h;
@@ -9370,7 +9370,7 @@ function buildActCardObra(a){
         var active=pct===v;
         return '<button onclick="setAvanceRapido(\''+id+'\','+v+')" '+
           'style="flex:1;padding:6px 0;border-radius:8px;border:1.5px solid '+(active?ec:'var(--border2)')+';'+
-          'background:'+(active?ec:'#fff')+';color:'+(active?'#fff':ec)+';'+
+          'background:'+(active?ec:'var(--bg3)')+';color:'+(active?'var(--accent-on)':'var(--text)')+';'+
           'font-size:11px;font-weight:600;cursor:pointer;min-height:34px;touch-action:manipulation">'+v+'%</button>';
       }).join('')+
     '</div>';
