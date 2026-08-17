@@ -13060,7 +13060,8 @@ function renderReportesHub(){
       subNavBtn('Historial',   S.reportesVista==='historial',   "S.reportesVista='historial';renderReportesHub()")+
       subNavBtn('Modificaciones', S.reportesVista==='cambios', "S.reportesVista='cambios';renderReportesHub()")+
       subNavBtn('Cierre', S.reportesVista==='cierre', "S.reportesVista='cierre';renderReportesHub()")+
-      subNavBtn('Novedades', S.reportesVista==='notif', "S.reportesVista='notif';renderReportesHub()");
+      subNavBtn('Novedades', S.reportesVista==='notif', "S.reportesVista='notif';renderReportesHub()")+
+      subNavBtn('Actividades PDF', false, "abrirReporteActividades()");
   }
   var rep  = document.getElementById('c-rep');
   var proy = document.getElementById('c-proy');
@@ -13390,6 +13391,209 @@ function renderAptoReport(){
 
   h+='</div>';
   el.innerHTML=h;
+}
+
+// ══════════════════════════════════════════════════════════════
+// REPORTE DE ACTIVIDADES — general, por área o por contratista
+// Clasifica el atraso por gravedad y sugiere qué abrir hoy.
+// ══════════════════════════════════════════════════════════════
+var RA_HORIZONTE = 3; // días para "próximas a abrir"
+
+function _raDias(a){
+  var f=fechaVenc(a); if(!f) return null;
+  var d=Math.floor((new Date(today()+'T12:00:00')-new Date(f+'T12:00:00'))/864e5);
+  return isNaN(d)?null:d;
+}
+// Gravedad: critica (>15d vencida) | atrasada (4-15d) | deslizando (1-3d) | null
+function _raGravedad(a){
+  if(a.estado==='completado') return null;
+  var d=_raDias(a);
+  if(d===null||d<=0) return null;
+  if(d>15) return 'critica';
+  if(d>3)  return 'atrasada';
+  return 'deslizando';
+}
+function _raAbiertas(){ return (S.acts||[]).filter(function(a){return a.estado!=='completado';}); }
+
+// Equipos que hoy tienen algo en progreso en cada área
+function _raEnSitio(){
+  var m={};
+  _raAbiertas().forEach(function(a){
+    if(a.estado==='en-progreso'&&a.personal_nombre) m[(a.area||'')+'|'+a.personal_nombre]=1;
+  });
+  return m;
+}
+
+function _raFiltrar(acts, alcance, valor){
+  if(alcance==='area')        return acts.filter(function(a){return (a.area||'')===valor;});
+  if(alcance==='contratista') return acts.filter(function(a){return (a.personal_nombre||'')===valor;});
+  return acts;
+}
+
+// Los cuatro bloques del reporte
+function _raBloques(alcance, valor){
+  var abiertas=_raFiltrar(_raAbiertas(), alcance, valor);
+  var sitio=_raEnSitio();
+  var proceso=[], prox=[], sugeridas=[], criticas=[];
+  abiertas.forEach(function(a){
+    var d=_raDias(a), g=_raGravedad(a);
+    if(a.estado==='en-progreso'||a.estado==='pausada'){ proceso.push(a); }
+    if(g==='critica') criticas.push(a);
+    if(a.estado==='pendiente'&&d!==null&&d<0&&(-d)<=RA_HORIZONTE) prox.push(a);
+    // sugerida: pendiente, el equipo ya está en esa área, y la fecha apremia
+    if(a.estado==='pendiente' && sitio[(a.area||'')+'|'+a.personal_nombre]
+       && d!==null && d>=-RA_HORIZONTE) sugeridas.push(a);
+  });
+  var ord=function(x,y){ return (_raDias(y)||-999)-(_raDias(x)||-999); };
+  proceso.sort(function(x,y){return (parseInt(y.porcentaje)||0)-(parseInt(x.porcentaje)||0);});
+  criticas.sort(ord); sugeridas.sort(ord);
+  prox.sort(function(x,y){return (fechaVenc(x)||'').localeCompare(fechaVenc(y)||'');});
+  return {abiertas:abiertas, proceso:proceso, prox:prox, sugeridas:sugeridas, criticas:criticas};
+}
+
+function _raTabla(titulo, sub, items, cols){
+  if(!items.length) return '<h2>'+titulo+'</h2><p class="vacio">Sin actividades en este bloque.</p>';
+  var h='<h2>'+titulo+' <span class="cnt">'+items.length+'</span></h2>';
+  if(sub) h+='<p class="lead">'+sub+'</p>';
+  h+='<table><thead><tr>'+cols.map(function(c){return '<th'+(c.r?' class="r"':'')+'>'+c.t+'</th>';}).join('')+'</tr></thead><tbody>';
+  items.slice(0,60).forEach(function(a){
+    h+='<tr>'+cols.map(function(c){return '<td'+(c.r?' class="r"':'')+'>'+c.v(a)+'</td>';}).join('')+'</tr>';
+  });
+  h+='</tbody></table>';
+  if(items.length>60) h+='<p class="lead">Se muestran las primeras 60 de '+items.length+'.</p>';
+  return h;
+}
+
+function generarReporteActividades(alcance, valor){
+  var B=_raBloques(alcance||'general', valor);
+  var tit = alcance==='area' ? valor : alcance==='contratista' ? valor : 'Toda la obra';
+  var esc_=function(s){return esc(s==null?'':String(s));};
+  var dias=function(a){ var d=_raDias(a); if(d===null) return '<span class="g">sin fecha</span>';
+    if(d>0) return '<b class="rojo">'+d+'d vencida</b>';
+    if(d===0) return '<b class="amb">vence hoy</b>';
+    return '<span class="g">en '+(-d)+'d</span>'; };
+  var pctBar=function(a){ var p=parseInt(a.porcentaje)||0;
+    return '<div class="bar"><i style="width:'+p+'%"></i></div>'; };
+
+  var C={
+    area:{t:'Área', v:function(a){return esc_(a.area);}},
+    desc:{t:'Actividad', v:function(a){return esc_(a.descripcion);}},
+    quien:{t:'Responsable', v:function(a){return esc_(a.personal_nombre);}},
+    fecha:{t:'Estado', r:true, v:dias},
+    pct:{t:'Avance', r:true, v:function(a){return (parseInt(a.porcentaje)||0)+'%';}},
+    barra:{t:'', v:pctBar}
+  };
+
+  var cuerpo =
+    _raTabla('1. En proceso',
+      'Actividades arrancadas y no terminadas. Hay recurso comprometido en cada una.',
+      B.proceso, [C.area,C.desc,C.quien,C.barra,C.pct,C.fecha]) +
+    _raTabla('2. Sugeridas para abrir ya',
+      'El contratista ya tiene cuadrilla trabajando en esa área y esto está pendiente ahí mismo. Abrirlas no cuesta movilización.',
+      B.sugeridas, [C.area,C.desc,C.quien,C.fecha]) +
+    _raTabla('3. Próximas a abrir — '+RA_HORIZONTE+' días',
+      'Lo que entra en los próximos '+RA_HORIZONTE+' días. Sirve para pedir material y avisar al contratista.',
+      B.prox, [C.area,C.desc,C.quien,C.fecha]) +
+    _raTabla('4. Críticas',
+      'Más de 15 días vencidas. Estas no se recuperan solas: requieren una decisión.',
+      B.criticas, [C.area,C.desc,C.quien,C.fecha]);
+
+  var win=window.open('','_blank','width=1100,height=800');
+  if(!win){ showToast('Permite las ventanas emergentes para generar el reporte','warn',5000); return; }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte de actividades — '+esc_(tit)+'</title><style>'
+    +'@page{size:A4 portrait;margin:11mm 12mm}'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font:10pt/1.4 "Segoe UI",Calibri,Arial,sans-serif;color:#1f2430;background:#fff}'
+    +'.hdr{background:linear-gradient(100deg,#5b1a8c,#8e2489 55%,#b8258c);color:#fff;padding:12px 15px;'
+    +'display:flex;justify-content:space-between;align-items:center;border-radius:4px 4px 0 0}'
+    +'.hdr .lg{font-size:16pt;font-weight:800;letter-spacing:2px}'
+    +'.hdr .lg small{display:block;font-size:6pt;letter-spacing:2.4px;opacity:.85}'
+    +'.hdr .ti{text-align:right}.hdr .ti b{display:block;font-size:12pt}'
+    +'.hdr .ti span{font-size:8pt;opacity:.9}'
+    +'.meta{background:#14532d;color:#fff;display:flex;border-radius:0 0 4px 4px;margin-bottom:13px}'
+    +'.meta div{flex:1;padding:5px 13px;border-right:1px solid rgba(255,255,255,.22);font-size:7.4pt}'
+    +'.meta div:last-child{border-right:0}.meta b{display:block;font-size:8.4pt;margin-top:1px}'
+    +'.res{display:flex;gap:7px;margin-bottom:15px}'
+    +'.res div{flex:1;border:1px solid #d8d3e4;border-radius:4px;padding:8px 6px;text-align:center}'
+    +'.res b{display:block;font-size:15pt;font-weight:800;line-height:1.1}'
+    +'.res span{display:block;font-size:6.8pt;color:#6b6880;text-transform:uppercase;letter-spacing:.4px;margin-top:2px}'
+    +'h2{color:#d2691e;font-size:10.5pt;font-weight:800;margin:15px 0 6px;padding-bottom:3px;'
+    +'border-bottom:1.5px solid #d2691e;page-break-after:avoid}'
+    +'h2 .cnt{background:#d2691e;color:#fff;font-size:7.5pt;padding:1px 7px;border-radius:8px;vertical-align:2px}'
+    +'p.lead{font-size:8.6pt;color:#555;margin-bottom:7px}'
+    +'p.vacio{font-size:8.8pt;color:#888;font-style:italic;margin-bottom:8px}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:5px}'
+    +'thead th{background:#5b1a8c;color:#fff;font-size:7.4pt;font-weight:700;text-transform:uppercase;'
+    +'letter-spacing:.3px;padding:4px 7px;text-align:left}'
+    +'thead th.r{text-align:right}'
+    +'tbody td{padding:4px 7px;font-size:8.5pt;border-bottom:1px solid #e8e5ef}'
+    +'tbody tr:nth-child(even){background:#faf8fc}'
+    +'tbody tr{page-break-inside:avoid}'
+    +'td.r{text-align:right;white-space:nowrap}'
+    +'.rojo{color:#b3261e}.amb{color:#8a6508}.g{color:#8a8798}'
+    +'.bar{height:6px;width:52px;background:#ece8f4;border-radius:3px;overflow:hidden}'
+    +'.bar i{display:block;height:100%;background:#8e2489}'
+    +'.foot{margin-top:14px;padding-top:7px;border-top:1px solid #ddd;font-size:7.2pt;color:#8a8798;'
+    +'display:flex;justify-content:space-between}'
+    +'</style></head><body>'
+    +'<div class="hdr"><div class="lg">BRIDEX<small>COMERCIAL S.R.L.</small></div>'
+    +'<div class="ti"><b>Reporte de Actividades</b><span>'+esc_(tit)+'</span></div></div>'
+    +'<div class="meta"><div>Proyecto<b>Mecca Residence</b></div>'
+    +'<div>Alcance<b>'+esc_(tit)+'</b></div>'
+    +'<div>Abiertas<b>'+B.abiertas.length+'</b></div>'
+    +'<div>Corte<b>'+fmtF(today())+'</b></div></div>'
+    +'<div class="res">'
+    +'<div><b style="color:#8a6508">'+B.proceso.length+'</b><span>En proceso</span></div>'
+    +'<div><b style="color:#5b1a8c">'+B.sugeridas.length+'</b><span>Abrir ya</span></div>'
+    +'<div><b>'+B.prox.length+'</b><span>Próximas '+RA_HORIZONTE+'d</span></div>'
+    +'<div><b style="color:#b3261e">'+B.criticas.length+'</b><span>Críticas</span></div>'
+    +'</div>'
+    + cuerpo
+    +'<div class="foot"><span>Generado desde Mecca Agenda por '+esc_(S.user&&S.user.nombre)+'</span>'
+    +'<span>'+fmtF(today())+'</span></div>'
+    +'<script>window.onload=function(){window.print();}<\/script></body></html>');
+  win.document.close();
+  try{ logCambio('creado','reporte','rep-acts',tit,'Reporte de actividades generado'); }catch(e){}
+}
+
+// ── Selector de alcance ───────────────────────────────
+function abrirReporteActividades(){
+  var areas=[...new Set(_raAbiertas().map(function(a){return a.area;}).filter(Boolean))].sort();
+  var conts=[...new Set(_raAbiertas().filter(function(a){return a.tipo_personal==='contratista';})
+             .map(function(a){return a.personal_nombre;}).filter(Boolean))].sort();
+  var opt=function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';};
+  var st='width:100%;padding:12px 13px;border-radius:10px;border:1.5px solid var(--border2);'
+        +'background:var(--bg2);color:var(--text);font-size:15px;font-family:var(--font);margin-bottom:12px';
+  document.getElementById('mcontent').innerHTML=
+    '<div class="mhandle"></div>'
+    +'<div style="font-size:17px;font-weight:700;margin-bottom:5px">Reporte de actividades</div>'
+    +'<div style="font-size:13px;color:var(--text3);margin-bottom:16px">En proceso, sugeridas para abrir, próximas y críticas.</div>'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:7px">Alcance</div>'
+    +'<select id="ra-alc" style="'+st+'" onchange="_raCambiaAlcance()">'
+    +'<option value="general">Toda la obra</option>'
+    +'<option value="area">Un área o apartamento</option>'
+    +'<option value="contratista">Un contratista</option></select>'
+    +'<select id="ra-area" style="'+st+';display:none">'+areas.map(opt).join('')+'</select>'
+    +'<select id="ra-cont" style="'+st+';display:none">'+conts.map(opt).join('')+'</select>'
+    +'<div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:7px">Próximas a abrir</div>'
+    +'<select id="ra-hor" style="'+st+'"><option value="3">Próximos 3 días</option>'
+    +'<option value="7">Próximos 7 días</option><option value="15">Próximos 15 días</option></select>'
+    +'<div class="mactions"><button class="btn" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn primary" onclick="_raGenerar()">Generar reporte</button></div>';
+  openModal();
+}
+function _raCambiaAlcance(){
+  var v=document.getElementById('ra-alc').value;
+  document.getElementById('ra-area').style.display = v==='area'?'':'none';
+  document.getElementById('ra-cont').style.display = v==='contratista'?'':'none';
+}
+function _raGenerar(){
+  var alc=document.getElementById('ra-alc').value;
+  RA_HORIZONTE=parseInt(document.getElementById('ra-hor').value)||3;
+  var val = alc==='area' ? document.getElementById('ra-area').value
+          : alc==='contratista' ? document.getElementById('ra-cont').value : null;
+  closeModal();
+  setTimeout(function(){ generarReporteActividades(alc,val); },150);
 }
 
 function printAptoReport(apto){
