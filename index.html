@@ -6739,6 +6739,13 @@ function showEditPersonal(pid){
       <div class="fw"><label class="fl">Teléfono</label>
         <input type="tel" id="np-t" value="${esc(p.telefono||'')}"></div>
     </div>
+    <div class="fw"><label class="fl">Tipo</label>
+      <select id="np-tipo" class="sel">
+        <option value="propio" ${p.tipo==='propio'?'selected':''}>Personal x la casa</option>
+        <option value="contratista" ${p.tipo!=='propio'?'selected':''}>Contratista</option>
+      </select>
+      <span style="font-size:11px;color:var(--text3);margin-top:4px;display:block">Solo el personal x la casa aparece en Equipo → Asistencia para marcar entrada, salida y horas extra.</span>
+    </div>
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       ${isAdmin()?`<button class="btn danger" onclick="delPersonal('${p.id}')">Eliminar</button>`:''}
@@ -6789,10 +6796,22 @@ async function updatePersonal(pid){
   p.nombre=newNombre;
   p.oficio=document.getElementById('np-o')?.value.trim()||p.oficio;
   p.telefono=document.getElementById('np-t')?.value.trim()||p.telefono;
+  // El tipo decide si la persona sale en Asistencia (solo el personal x la
+  // casa). Sin esto, alguien archivado como contratista por error no se podía
+  // mover desde el app y desaparecía de la nómina.
+  const oldTipo=p.tipo;
+  const tipoEl=document.getElementById('np-tipo');
+  if(tipoEl) p.tipo=tipoEl.value;
   closeModal();renderPersonal();setSS('syncing','Guardando...');
+  if(p.tipo!==oldTipo){ try{renderAsist();}catch(e){} }
   try{
     await sb('obra_personal?id=eq.'+pid,{method:'PATCH',prefer:'return=minimal',
-      body:JSON.stringify({nombre:p.nombre,oficio:p.oficio,telefono:p.telefono})});
+      body:JSON.stringify({nombre:p.nombre,oficio:p.oficio,telefono:p.telefono,tipo:p.tipo})});
+    if(p.tipo!==oldTipo){
+      logCambio('editado','personal',pid,p.nombre,
+        'Tipo cambiado de '+(oldTipo==='propio'?'personal x la casa':'contratista')+
+        ' a '+(p.tipo==='propio'?'personal x la casa':'contratista'));
+    }
     // Cascade name change to all activities
     if(newNombre!==oldNombre){
       const affected=S.acts.filter(a=>a.personal_nombre===oldNombre);
