@@ -38,6 +38,7 @@
   --accent-light:#1d1830;
   --accent-soft:#251f3d;
   --green:#0ca30c;--green-light:#122a12;
+  --green-fill:#0a7d0a;  /* verde para rellenar con texto blanco encima: #0ca30c solo da 3.35:1 */
   --red:#d03b3b;--red-light:#2c1618;
   --amber:#fab219;--amber-light:#2c2311;
   --blue:#60a5fa;--blue-light:#13203a;
@@ -4495,6 +4496,7 @@ function actHTML(a, ai, tipo){
     </div>
 
     ${a.porcentaje>0?`<div style="height:5px;background:var(--bg3);border-radius:99px;overflow:hidden;margin:9px 0 0"><div style="height:100%;width:${Math.min(100,a.porcentaje)}%;background:${vencida?'var(--red)':'var(--amber)'};border-radius:99px"></div></div>`:''}
+    ${pctFila(a)}
     ${a.notas?`<div style="font-size:11.5px;color:var(--text2);padding:6px 9px;background:var(--bg3);border-radius:8px;margin-top:8px;border-left:2px solid var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.notas)}</div>`:''}
     ${fotos.length?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">${fotos.map(f=>`<img src="${f}" style="width:46px;height:46px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border)" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${a.fecha}','','','','${a.id}')">`).join('')}</div>`:''}
 
@@ -5003,17 +5005,55 @@ async function quickSetPct(actId,pct){
   var prevPct=a.porcentaje, prevEstado=a.estado;
   a.porcentaje=pct;
   var _pctPatch={porcentaje:pct,estado:a.estado};
-  if(pct>0&&a.estado==='pendiente'){
+  if(pct===0){
+    // El 0% es el "volver atrás": si se marcó por error, la actividad
+    // regresa a pendiente y vuelve a aparecer como no empezada.
+    a.estado='pendiente';_pctPatch.estado='pendiente';
+  }else if(a.estado==='pendiente'){
     a.estado='en-progreso';_pctPatch.estado='en-progreso';
     if(!a.hora_inicio){a.hora_inicio=nowHHMM();_pctPatch.hora_inicio=a.hora_inicio;}
+  }else if(a.estado==='completado'){
+    // Bajar de 100% reabre la actividad.
+    a.estado='en-progreso';_pctPatch.estado='en-progreso';
   }
   reRenderActs();
   try{
     await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
       body:JSON.stringify(_pctPatch)});
-    setSS('ok','✓ '+pct+'%');
+    setSS('ok',pct===0?'↺ 0% — vuelve a pendiente':'✓ '+pct+'%');
     _undoPatch(actId,a.descripcion,'% de '+_undoNombre(a)+' → '+pct+'%',{porcentaje:prevPct,estado:prevEstado},{porcentaje:pct,estado:a.estado});
   }catch(e){}
+}
+
+// Fila de avance dentro de la tarjeta: 0 · 25 · 50 · 75 · 100.
+// El ingeniero marca el porcentaje de un toque, sin teclado y sin abrir nada.
+// El 0% devuelve la actividad a pendiente: así se deshace una marca puesta
+// por error, incluso si ya se había completado.
+function pctFila(a){
+  if(!canEdit()) return '';
+  var actual=parseInt(a.porcentaje)||0;
+  var h='<div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--border)">'+
+    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;'+
+    'letter-spacing:.5px;margin-bottom:6px">Avance</div>'+
+    '<div style="display:flex;gap:5px">';
+  [0,25,50,75,100].forEach(function(v){
+    var on = (v===100) ? actual>=100 : actual===v;
+    // Relleno, no el color de texto: --accent y --green son claros y sobre
+    // ellos el blanco no llega a 4.5:1.
+    var col = v===100 ? 'var(--green-fill)' : 'var(--accent-fill)';
+    h+='<button onclick="event.stopPropagation();quickSetPct(\''+a.id+'\','+v+')" '+
+       'title="'+(v===0?'Volver a pendiente':'Marcar '+v+'% de avance')+'" '+
+       'style="flex:1;padding:10px 0;border-radius:9px;font-size:13px;font-weight:700;'+
+       'cursor:pointer;font-family:var(--font);'+
+       (!on
+         ? 'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)'
+         : v===0
+           // El 0% marcado se ve hundido, no encendido: no es un logro.
+           ? 'border:2px solid var(--text2);background:var(--bg3);color:var(--text)'
+           : 'border:1.5px solid '+col+';background:'+col+';color:var(--accent-on)')+
+       '">'+v+'%</button>';
+  });
+  return h+'</div></div>';
 }
 
 function showPctPopover(actId, triggerEl){
