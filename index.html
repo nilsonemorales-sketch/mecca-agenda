@@ -910,6 +910,9 @@ const USERS={
   moises:{nombre:'Ing. Moises Jimenez',rol:'ing',color:'var(--amber)',pin:'2026'},
   luis:{nombre:'Ing. Luis Jimenez',rol:'ing',color:'var(--green)',pin:'1999'},
   karina:{nombre:'Ing. Karina Breton',rol:'ing',color:'#9c36b5',pin:'1996'},
+  // Supervisión de arquitectura: no lleva bitácora diaria de obra, por eso
+  // queda fuera del control automático de inactividad.
+  liamelia:{nombre:'Arq. Liamelia Rosario Reyes',rol:'ing',color:'#22b8cf',pin:'4953',sinPenalidad:true},
 };
 const DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
@@ -1092,7 +1095,9 @@ function checkInactividadIngenieros(){
   if(horaActual < minInicio) return;
   const alertas = [];
   // Check each engineer
-  Object.entries(USERS).filter(([uid_])=>uid_!=='nilson').forEach(([uid_, u])=>{
+  // Fuera del control: el admin, los usuarios archivados y los que no llevan
+  // bitácora diaria de obra.
+  Object.entries(USERS).filter(([uid_,u_])=>uid_!=='nilson'&&!u_.archivado&&!u_.sinPenalidad).forEach(([uid_, u])=>{
     const actsHoy = S.acts.filter(a=>a.fecha===hoy&&_matchIngId(a.ingeniero_id,uid_));
     const actualizaciones = actsHoy.length;
     // Check morning update (should have at least 1 activity registered after 7:30)
@@ -1159,7 +1164,7 @@ async function autoPenalidadInactividad(){
   const horaActual = ahora.getHours()*60+ahora.getMinutes();
   const [hf,mf] = horario.fin.split(':').map(Number);
   if(horaActual < hf*60+mf) return; // Not end of day yet
-  for(const [uid_, u] of Object.entries(USERS).filter(([k])=>k!=='nilson')){
+  for(const [uid_, u] of Object.entries(USERS).filter(([k,u_])=>k!=='nilson'&&!u_.archivado&&!u_.sinPenalidad)){
     const actsHoy = S.acts.filter(a=>a.fecha===hoy&&_matchIngId(a.ingeniero_id,uid_));
     if(actsHoy.length < 2){
       // Check if penalty already registered today
@@ -1978,6 +1983,25 @@ function logout(){
 function showLockScreen(){
   var el=document.getElementById('app-lock');
   if(el){el.style.display='flex';document.getElementById('lock-pin').value='';document.getElementById('lock-err').textContent='';}
+  _llenarUsuariosLock();
+}
+
+// La lista de la pantalla de bloqueo se arma desde USERS. Antes estaba escrita
+// a mano en el HTML, así que un usuario nuevo quedaba sin poder entrar aunque
+// existiera en USERS.
+function _llenarUsuariosLock(){
+  var sel=document.getElementById('lock-user');
+  if(!sel) return;
+  var prev=sel.value;
+  var h='<option value="" style="background:#1a0a2e;color:#fff">Selecciona tu usuario...</option>';
+  Object.entries(USERS).forEach(function(e){
+    var k=e[0], u=e[1];
+    if(u.archivado) return;
+    h+='<option value="'+k+'" style="background:#1a0a2e;color:#fff">'+esc(u.nombre)+
+       (u.rol==='admin'?' — Administrador':'')+'</option>';
+  });
+  sel.innerHTML=h;
+  if(prev&&USERS[prev]&&!USERS[prev].archivado) sel.value=prev;
 }
 
 function hideLockScreen(){
