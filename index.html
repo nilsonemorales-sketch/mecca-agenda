@@ -572,6 +572,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <button id="btn-undo" onclick="undoAction()" title="Deshacer (Ctrl+Z)" style="display:none;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↩</button>
       <button id="btn-redo" onclick="redoAction()" title="Rehacer (Ctrl+Shift+Z)" style="display:none;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↪</button>
       <button id="btn-refresh" onclick="loadAll()" title="Actualizar datos" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:transform .4s ease,background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↺</button>
+      <button id="btn-cmd" onclick="abrirComando()" title="Dar una orden por voz o texto (C)" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">🎤</button>
       <span class="ubadge guest" id="ubadge" onclick="showLogin()">Entrar</span>
       <button class="ibtn primary" onclick="exportarPDF()" style="font-size:11px">PDF</button>
     </div>
@@ -784,7 +785,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260901_9';
+const APP_VERSION='20260901_10';
 // Pinta la version en la barra lateral y en el cajon. El <script> va despues del
 // marcado, asi que los nodos ya existen cuando esto corre.
 (function(){
@@ -5013,6 +5014,453 @@ var Acciones = (function(){
 
 })();
 
+
+/* ---
+   COMANDOS DE VOZ / TEXTO --- sin IA, por reconocimiento de patrones.
+   Traduce una frase dicha en obra a una intencion estructurada. NO ejecuta
+   nada: devuelve que se haria, para que el panel de confirmacion lo muestre
+   y el usuario decida. La ejecucion pasa siempre por la capa Acciones.
+   --- */
+var Comandos = (function(){
+
+  function _norm(s){
+    return (s||'').toString().toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  }
+
+  // Numeros hablados que se usan de verdad para un avance
+  var PALABRA_NUM={
+    'cero':0,'cinco':5,'diez':10,'quince':15,'veinte':20,'veinticinco':25,
+    'treinta':30,'treinta y cinco':35,'cuarenta':40,'cuarenta y cinco':45,
+    'cincuenta':50,'cincuenta y cinco':55,'sesenta':60,'sesenta y cinco':65,
+    'setenta':70,'setenta y cinco':75,'ochenta':80,'ochenta y cinco':85,
+    'noventa':90,'noventa y cinco':95,'cien':100,'ciento':100,
+    'un cuarto':25,'la mitad':50,'medio':50,'media':50,'tres cuartos':75,
+    'completo':100,'completa':100,'todo':100,'nada':0
+  };
+
+  function _numero(txt){
+    var t=_norm(txt);
+    var m=t.match(/(\d{1,3})/);
+    if(m) return Math.min(100,Math.max(0,parseInt(m[1],10)));
+    // las compuestas primero, para que "setenta y cinco" no case con "setenta"
+    var mejor=null;
+    Object.keys(PALABRA_NUM).forEach(function(k){
+      var pos=t.indexOf(k);
+      if(pos<0) return;
+      // gana el que aparece antes; a igual posicion, el mas largo
+      if(!mejor || pos<mejor.pos || (pos===mejor.pos && k.length>mejor.k.length))
+        mejor={pos:pos, k:k};
+    });
+    return mejor?PALABRA_NUM[mejor.k]:null;
+  }
+
+  /* Cada regla: si la frase casa, se saca la accion y lo que sobra es la
+     referencia a la actividad ("el panete del 2A"). El orden importa: las
+     reglas mas especificas van primero. */
+  var REGLAS=[
+    { accion:'completar',
+      re:/^(?:marca(?:r|me)?|pon(?:er|me)?|deja(?:r)?|da(?:r)?)?\s*(?:como\s+)?(?:ya\s+)?(?:esta\s+)?(.*?)\s*(?:como\s+)?(?:esta\s+)?(?:ya\s+)?(?:completad[oa]|completa|terminad[oa]|termina|list[oa]s?|hech[oa]|finalizad[oa]|acabad[oa]|al?\s*cien(?:\s*por\s*ciento)?|100\s*%?)\s*$/ },
+    { accion:'completar',
+      re:/^(?:completa(?:r)?|termina(?:r)?|finaliza(?:r)?|acaba(?:r)?)\s+(?:la\s+|el\s+)?(.+?)\s*$/ },
+
+    // La especifica va primero: si no, la generica se traga "el avance de".
+    { accion:'avance', valor:true,
+      re:/^(?:el\s+)?avance\s+de\s+(.+?)\s+(?:es|va(?:\s+en)?|esta(?:\s+en)?|queda\s+en)\s+(\d{1,3})\s*(?:%|por\s*ciento|porciento)?\s*$/ },
+    // Numero en medio: "ponle 30 por ciento a la pintura"
+    { accion:'avance', valor:true, valorPrimero:true,
+      re:/^(?:pon(?:er|le|me)?|ponle|deja(?:r)?|actualiza(?:r)?|sube(?:le)?|baja(?:le)?)\s+(\d{1,3})\s*(?:%|por\s*ciento|porciento)\s+(?:a|en|al)\s+(.+?)\s*$/ },
+    // Numero al final: "pon el panete del 2A en 50%"
+    { accion:'avance', valor:true,
+      re:/^(?:pon(?:er|le|me)?|ponle|deja(?:r)?|actualiza(?:r)?|sube(?:le)?|baja(?:le)?|marca(?:r)?)?\s*(.*?)\s*(?:en|a|al)?\s*(\d{1,3})\s*(?:%|por\s*ciento|porciento)\s*$/ },
+    { accion:'avance', valor:true, palabras:true,
+      re:/^(?:pon(?:er|le|me)?|ponle|deja(?:r)?|actualiza(?:r)?)\s+(.+?)\s+(?:en|a|al)\s+((?:un\s+cuarto|la\s+mitad|tres\s+cuartos|medi[oa]|cero|cinco|diez|quince|veinte|veinticinco|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento)(?:\s+y\s+cinco)?)\s*(?:por\s*ciento|porciento|%)?\s*$/ },
+
+    { accion:'iniciar',
+      re:/^(?:inicia(?:r)?|empieza(?:r)?|empeza(?:r)?|arranca(?:r)?|comienza(?:r)?|comenza(?:r)?)\s+(?:con\s+)?(?:la\s+|el\s+)?(.+?)\s*$/ },
+
+    { accion:'pausar', motivo:true,
+      re:/^(?:pausa(?:r)?|detene?(?:r)?|deten|para(?:r)?|frena(?:r)?|suspende(?:r)?)\s+(?:la\s+|el\s+)?(.+?)(?:\s+(?:por\s+falta\s+de|porque|por)\s+(.+?))?\s*$/ },
+
+    { accion:'urgente',
+      re:/^(?:marca(?:r)?|pon(?:er)?)?\s*(?:como\s+)?(.*?)\s+(?:como\s+)?urgente\s*$/ },
+    { accion:'normal',
+      re:/^(?:quita(?:r)?|saca(?:r)?)\s+(?:lo\s+)?urgente\s+(?:a|de)\s+(.+?)\s*$/ },
+
+    { accion:'asignar', persona:true,
+      re:/^(?:asigna(?:r|le)?|dale|pasa(?:r|le)?|encarga(?:r|le)?|ponle)\s+(.+?)\s+(?:a|para)\s+([a-z0-9ñáéíóú\s.]+?)\s*$/ },
+    { accion:'asignar', persona:true, invertido:true,
+      re:/^(?:asigna(?:r)?|dale|encarga(?:r)?)\s+(?:a\s+)([a-z0-9ñáéíóú\s.]+?)\s+(?:la\s+|el\s+)?(.+?)\s*$/ },
+
+    { accion:'planificar', fecha:true,
+      re:/^(?:planifica(?:r)?|programa(?:r)?|agenda(?:r)?|pon(?:er)?|mete(?:r)?|pasa(?:r)?)\s+(.+?)\s+(?:para|pa|el|al)\s+(hoy|manana|el\s+dia\s+de\s+hoy)\s*$/ },
+    { accion:'desplanificar',
+      re:/^(?:quita(?:r)?|saca(?:r)?)\s+(.+?)\s+del\s+plan\s*$/ },
+
+    { accion:'crear', area:true,
+      // (.+) greedy: se queda con el ULTIMO 'en', que es donde va el area
+      re:/^(?:agrega(?:r)?|crea(?:r)?|nueva\s+actividad|anade|anadir|mete(?:r)?)\s+(?:la\s+|el\s+|una\s+|un\s+)?(?:actividad\s+)?(.+)\s+(?:en|para)\s+(?:el\s+|la\s+)?(?:area\s+|apartamento\s+|apto\s+|nivel\s+)?(.+?)\s*$/ },
+
+    { accion:'eliminar',
+      re:/^(?:elimina(?:r)?|borra(?:r)?|quita(?:r)?)\s+(?:la\s+|el\s+)?(?:actividad\s+)?(.+?)\s*$/ },
+
+    { accion:'buscar',
+      re:/^(?:busca(?:r|me)?|filtra(?:r|me)?|muestra(?:me)?|ensename|ver|dame|cuales\s+son|que\s+hay\s+(?:de|en))\s+(?:las?\s+|los?\s+)?(.+?)\s*$/ }
+  ];
+
+  // Muletillas que la gente dice y no aportan nada a la busqueda
+  // 'dale' y 'listo' NO van aqui: son verbos de comando, no muletillas.
+  var RUIDO=/^(?:okey|ok|oye|mira|por\s+favor|porfa|a\s+ver|eh+|este|bueno)\s+/;
+  var COLA=/\s+(?:por\s+favor|porfa|ya|gracias)\s*$/;
+
+  function _limpiar(t){
+    var x=_norm(t);
+    var antes;
+    do{ antes=x; x=x.replace(RUIDO,'').replace(COLA,''); }while(x!==antes);
+    return x.replace(/[.,;!?]+$/,'').trim();
+  }
+
+  // La referencia se guarda sin articulos ni sobras, para que buscar dependa
+  // de las palabras que importan y no de como se hable.
+  var ART=/^(?:el|la|los|las|un|una|lo|al|del|de)\s+/;
+  function _ref(t){
+    var x=_norm(t), antes;
+    do{ antes=x; x=x.replace(ART,''); }while(x!==antes);
+    return x.replace(/\s+(?:es|esta|ya)$/,'').trim();
+  }
+
+  /* Una negacion invierte el sentido de la frase: "el 2A NO esta terminado"
+     no puede leerse como completar. Si el nucleo del comando esta negado, se
+     prefiere no entender antes que entender al reves. El motivo se ignora
+     para esto ("pausa X porque NO llego el material" es legitimo). */
+  var NEGACION=/(^|\s)(no|nunca|tampoco|aun|todavia|sin)\s/;
+  function _negada(t){
+    var nucleo=t.split(/\s+(?:porque|por\s+falta\s+de)\s+/)[0];
+    return NEGACION.test(' '+nucleo+' ');
+  }
+
+  /* Devuelve {accion, ref, valor, motivo, persona, fecha, area} o null si no
+     se entendio. 'ref' es el texto con el que hay que buscar la actividad. */
+  function interpretar(frase){
+    var t=_limpiar(frase);
+    if(!t) return null;
+    if(_negada(t)) return null;
+    for(var i=0;i<REGLAS.length;i++){
+      var r=REGLAS[i], m=t.match(r.re);
+      if(!m) continue;
+      var out={accion:r.accion, frase:t};
+      if(r.invertido){ out.persona=(m[1]||'').trim(); out.ref=(m[2]||'').trim(); }
+      else if(r.valorPrimero){ out.ref=(m[2]||'').trim(); }
+      else{ out.ref=(m[1]||'').trim(); }
+      if(r.valor){
+        var crudo=r.valorPrimero?m[1]:m[2];
+        var n=r.palabras?_numero(crudo):parseInt(crudo,10);
+        if(n==null||isNaN(n)) continue;
+        out.valor=Math.min(100,Math.max(0,n));
+      }
+      if(r.motivo && m[2]) out.motivo=(m[2]||'').trim();
+      if(r.persona && !r.invertido) out.persona=(m[2]||'').trim();
+      if(r.fecha)  out.fecha=/manana/.test(m[2])?'manana':'hoy';
+      if(r.area)   out.area=(m[2]||'').trim();
+      out.ref=_ref(out.ref);
+      if(!out.ref) continue;
+      // "completar" y "urgente" tienen regex laxas: si la referencia quedo
+      // vacia de contenido util, no es un comando.
+      if(out.ref.length<2) continue;
+      return out;
+    }
+    return null;
+  }
+
+  /* Busca a que actividad se refiere. Devuelve la lista de candidatas
+     ordenada por que tan bien casa. No decide sola: si hay varias, el panel
+     se las muestra al usuario. */
+  function candidatas(ref, opts){
+    opts=opts||{};
+    var q=_norm(ref);
+    if(!q) return [];
+    var base=(opts.fuente||(S.acts||[]).concat(S.abiertas||[]));
+    var vistos={}, lista=[];
+    base.forEach(function(a){ if(a&&a.id&&!vistos[a.id]){vistos[a.id]=1;lista.push(a);} });
+    var palabras=q.split(' ').filter(function(w){return w.length>2;});
+    var res=lista.map(function(a){
+      var d=_norm(a.descripcion), ar=_norm(a.area), p=_norm(a.personal_nombre);
+      var texto=d+' '+ar+' '+p;
+      var punt=0;
+      if(d===q) punt+=100;
+      if(d.indexOf(q)>=0) punt+=50;
+      if(texto.indexOf(q)>=0) punt+=30;
+      palabras.forEach(function(w){
+        if(d.indexOf(w)>=0) punt+=10;
+        else if(ar.indexOf(w)>=0) punt+=7;
+        else if(p.indexOf(w)>=0) punt+=5;
+      });
+      // lo que esta abierto pesa mas que lo ya terminado
+      if(a.estado!=='completado') punt+=6;
+      if(a.estado==='en-progreso') punt+=3;
+      return {act:a, punt:punt};
+    }).filter(function(x){return x.punt>=10;});
+    res.sort(function(a,b){return b.punt-a.punt;});
+    return res.slice(0,8).map(function(x){return x.act;});
+  }
+
+  /* Texto que ve el usuario en el panel antes de confirmar. */
+  function describir(intencion, act){
+    var n=act?('«'+(act.descripcion||'')+'»'+(act.area?' — '+act.area:'')):'';
+    switch(intencion.accion){
+      case 'completar':     return 'Marcar '+n+' como completada (100%)';
+      case 'avance':        return 'Poner '+n+' en '+intencion.valor+'%';
+      case 'iniciar':       return 'Iniciar '+n;
+      case 'pausar':        return 'Pausar '+n+(intencion.motivo?' — motivo: '+intencion.motivo:'');
+      case 'urgente':       return 'Marcar '+n+' como URGENTE';
+      case 'normal':        return 'Quitar la urgencia de '+n;
+      case 'asignar':       return 'Asignar '+n+' a '+intencion.persona;
+      case 'planificar':    return 'Planificar '+n+' para '+(intencion.fecha==='manana'?'mañana':'hoy');
+      case 'desplanificar': return 'Quitar '+n+' del plan';
+      case 'crear':         return 'Crear la actividad «'+intencion.ref+'» en '+intencion.area;
+      case 'eliminar':      return 'ELIMINAR '+n+' — esto no se puede deshacer';
+      case 'buscar':        return 'Buscar «'+intencion.ref+'»';
+      default:              return 'Acción no reconocida';
+    }
+  }
+
+  // Las que cambian datos necesitan confirmacion; buscar no.
+  function escribe(accion){ return accion!=='buscar'; }
+
+  /* Ejecuta. Todo pasa por la capa Acciones: mismas reglas, misma bitacora. */
+  async function ejecutar(intencion, act){
+    var i=intencion;
+    switch(i.accion){
+      case 'completar':     return Acciones.completar(act.id);
+      case 'avance':        return Acciones.setAvance(act.id, i.valor);
+      case 'iniciar':       return Acciones.setEstado(act.id,'en-progreso');
+      case 'pausar':        return Acciones.pausar(act.id, i.motivo||'');
+      case 'urgente':       return Acciones.setPrioridad(act.id,'urgente');
+      case 'normal':        return Acciones.setPrioridad(act.id,'normal');
+      case 'asignar':       return Acciones.asignar(act.id, i.persona);
+      case 'planificar':    return Acciones.planificar(act.id, i.fecha==='manana'?tomorrow():today());
+      case 'desplanificar': return Acciones.planificar(act.id, null);
+      case 'eliminar':      return Acciones.eliminar(act.id);
+      case 'crear':         return Acciones.crear({descripcion:i.ref, area:i.area, tipo_personal:'propio'},{});
+      default: throw new Error('Acción no soportada: '+i.accion);
+    }
+  }
+
+  return {interpretar:interpretar, candidatas:candidatas, describir:describir,
+          ejecutar:ejecutar, escribe:escribe, _numero:_numero, _limpiar:_limpiar};
+
+})();
+
+
+/* ---
+   BARRA DE COMANDO --- dictar o escribir una orden y confirmarla.
+   El microfono usa el reconocimiento del navegador donde exista (Android/
+   Chrome). En iPhone no hace falta: el teclado trae su propio dictado, y la
+   caja acepta texto venga de donde venga. Nada se ejecuta sin confirmar.
+   --- */
+var _cmd={intencion:null, candidatas:[], elegida:null, escuchando:false, rec:null};
+
+function _cmdSoportaVoz(){
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+function abrirComando(){
+  if(!canEdit()){ requireEdit(abrirComando); return; }
+  var ov=document.getElementById('cmd-ov');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='cmd-ov';
+    ov.style.cssText='position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;padding:14vh 12px 12px';
+    ov.onclick=function(e){ if(e.target===ov) cerrarComando(); };
+    ov.innerHTML=
+      '<div style="width:100%;max-width:560px;background:var(--bg2);border:1px solid var(--border2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.45);overflow:hidden;font-family:var(--font)">'+
+        '<div style="display:flex;gap:8px;align-items:center;padding:12px 12px 10px">'+
+          '<input id="cmd-txt" placeholder="Di o escribe una orden…" autocomplete="off" '+
+            'style="flex:1;height:46px;border:1.5px solid var(--border2);border-radius:11px;background:var(--bg3);color:var(--text);font-size:15px;padding:0 12px;font-family:var(--font)">'+
+          '<button id="cmd-mic" onclick="_cmdVoz()" title="Dictar" '+
+            'style="width:46px;height:46px;flex-shrink:0;border-radius:11px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:19px;cursor:pointer">🎤</button>'+
+        '</div>'+
+        '<div id="cmd-panel" style="padding:0 12px 12px"></div>'+
+        '<div style="padding:9px 14px;border-top:1px solid var(--border);background:var(--bg3);font-size:11px;color:var(--text3);line-height:1.6">'+
+          'Ejemplos: «marca el pañete del 2A como terminado» · «pon la pintura del 3B en 50%» · '+
+          '«asigna el sheetrock del 5A a Secre» · «pausa la plomería por falta de material» · «busca todo lo de Felix»'+
+        '</div>'+
+      '</div>';
+    document.body.appendChild(ov);
+    var inp=document.getElementById('cmd-txt');
+    inp.addEventListener('input',function(){ _cmdAnalizar(this.value); });
+    inp.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){ e.preventDefault(); _cmdConfirmar(); }
+      if(e.key==='Escape'){ cerrarComando(); }
+    });
+    if(!_cmdSoportaVoz()){
+      var b=document.getElementById('cmd-mic');
+      b.title='Este navegador no dicta solo — usa el botón de micrófono de tu teclado';
+      b.style.opacity=.35;
+    }
+  }
+  ov.style.display='flex';
+  var i=document.getElementById('cmd-txt');
+  i.value=''; document.getElementById('cmd-panel').innerHTML='';
+  _cmd.intencion=null; _cmd.candidatas=[]; _cmd.elegida=null;
+  setTimeout(function(){ i.focus(); },50);
+}
+
+function cerrarComando(){
+  _cmdPararVoz();
+  var ov=document.getElementById('cmd-ov'); if(ov) ov.style.display='none';
+}
+
+/* Dictado del navegador. Donde no exista, el boton queda apagado y se usa
+   el dictado del teclado del telefono, que escribe en la misma caja. */
+function _cmdVoz(){
+  if(_cmd.escuchando){ _cmdPararVoz(); return; }
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ showToast('Usa el micrófono del teclado de tu teléfono para dictar','warn',5000); return; }
+  try{
+    var r=new SR();
+    r.lang='es-DO'; r.interimResults=true; r.continuous=false; r.maxAlternatives=1;
+    r.onresult=function(e){
+      var txt='';
+      for(var i=0;i<e.results.length;i++) txt+=e.results[i][0].transcript;
+      var inp=document.getElementById('cmd-txt');
+      if(inp){ inp.value=txt; _cmdAnalizar(txt); }
+    };
+    r.onerror=function(e){
+      _cmdPararVoz();
+      showToast(e.error==='not-allowed'
+        ? 'No diste permiso al micrófono'
+        : 'No se pudo escuchar — escribe la orden','warn',4500);
+    };
+    r.onend=function(){ _cmdPararVoz(); };
+    _cmd.rec=r; _cmd.escuchando=true;
+    var b=document.getElementById('cmd-mic');
+    if(b){ b.style.background='var(--red)'; b.style.color='#fff'; b.textContent='⏹'; }
+    r.start();
+  }catch(e){ showToast('No se pudo iniciar el micrófono','warn',4000); _cmdPararVoz(); }
+}
+
+function _cmdPararVoz(){
+  if(_cmd.rec){ try{_cmd.rec.stop();}catch(e){} _cmd.rec=null; }
+  _cmd.escuchando=false;
+  var b=document.getElementById('cmd-mic');
+  if(b){ b.style.background='var(--bg3)'; b.style.color='var(--text2)'; b.textContent='🎤'; }
+}
+
+/* Interpreta lo escrito y pinta el panel. No ejecuta nada. */
+function _cmdAnalizar(txt){
+  var p=document.getElementById('cmd-panel'); if(!p) return;
+  _cmd.intencion=null; _cmd.candidatas=[]; _cmd.elegida=null;
+  if(!(txt||'').trim()){ p.innerHTML=''; return; }
+
+  var i=Comandos.interpretar(txt);
+  if(!i){
+    p.innerHTML=_cmdAviso('No entendí esa orden','var(--text3)',
+      'Prueba con un verbo al principio: marca, pon, inicia, pausa, asigna, planifica, busca.');
+    return;
+  }
+  _cmd.intencion=i;
+
+  if(i.accion==='buscar'){
+    var r=Acciones.buscar({q:i.ref, limite:12});
+    p.innerHTML=_cmdAviso('Buscar «'+esc(i.ref)+'»','var(--blue)',
+      r.length? r.length+' actividad'+(r.length>1?'es':'')+' — Enter para verlas' : 'Sin resultados')+
+      (r.length?_cmdLista(r,-1,true):'');
+    return;
+  }
+  if(i.accion==='crear'){
+    p.innerHTML=_cmdAviso(Comandos.describir(i,null),'var(--green)','Enter para crearla');
+    return;
+  }
+
+  var cands=Comandos.candidatas(i.ref);
+  _cmd.candidatas=cands;
+  if(!cands.length){
+    p.innerHTML=_cmdAviso('No encontré «'+esc(i.ref)+'»','var(--amber)',
+      'Revisa el nombre, o búscala primero para ver cómo está escrita.');
+    return;
+  }
+  _cmd.elegida=0;
+  var peligro=(i.accion==='eliminar');
+  p.innerHTML=
+    _cmdAviso(Comandos.describir(i,cands[0]), peligro?'var(--red)':'var(--accent)',
+      cands.length>1? 'Hay '+cands.length+' parecidas — toca la correcta' : 'Enter para confirmar')+
+    _cmdLista(cands,0,false)+
+    '<div style="display:flex;gap:8px;margin-top:10px">'+
+      '<button onclick="_cmdConfirmar()" style="flex:1;height:44px;border:none;border-radius:11px;background:'+(peligro?'var(--red)':'var(--accent-fill)')+';color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:var(--font)">'+
+        (peligro?'Sí, eliminar':'Confirmar')+'</button>'+
+      '<button onclick="cerrarComando()" style="height:44px;padding:0 16px;border:1.5px solid var(--border2);border-radius:11px;background:transparent;color:var(--text2);font-size:14px;cursor:pointer;font-family:var(--font)">Cancelar</button>'+
+    '</div>';
+}
+
+function _cmdAviso(titulo,color,sub){
+  return '<div style="padding:11px 12px;border-radius:11px;background:var(--bg3);border-left:3px solid '+color+'">'+
+    '<div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.35">'+esc(titulo)+'</div>'+
+    (sub?'<div style="font-size:11.5px;color:var(--text3);margin-top:3px">'+esc(sub)+'</div>':'')+
+  '</div>';
+}
+
+function _cmdLista(acts,sel,soloVer){
+  return '<div style="margin-top:8px;max-height:170px;overflow-y:auto;display:flex;flex-direction:column;gap:5px">'+
+    acts.map(function(a,k){
+      var act=(k===sel);
+      return '<div '+(soloVer?'':'onclick="_cmdElegir('+k+')"')+' style="padding:8px 10px;border-radius:9px;cursor:'+(soloVer?'default':'pointer')+';'+
+        'border:1.5px solid '+(act?'var(--accent)':'var(--border)')+';background:'+(act?'var(--accent-soft)':'transparent')+'">'+
+        '<div style="font-size:12.5px;font-weight:600;color:var(--text)">'+esc(a.descripcion||'')+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+
+          esc(a.area||'Sin área')+' · '+esc(a.estado||'')+' · '+(a.porcentaje||0)+'%'+
+          (a.personal_nombre?' · '+esc(a.personal_nombre):'')+
+        '</div>'+
+      '</div>';
+    }).join('')+'</div>';
+}
+
+function _cmdElegir(k){
+  _cmd.elegida=k;
+  var i=_cmd.intencion, cands=_cmd.candidatas;
+  var p=document.getElementById('cmd-panel');
+  var peligro=(i.accion==='eliminar');
+  p.innerHTML=
+    _cmdAviso(Comandos.describir(i,cands[k]), peligro?'var(--red)':'var(--accent)','Enter para confirmar')+
+    _cmdLista(cands,k,false)+
+    '<div style="display:flex;gap:8px;margin-top:10px">'+
+      '<button onclick="_cmdConfirmar()" style="flex:1;height:44px;border:none;border-radius:11px;background:'+(peligro?'var(--red)':'var(--accent-fill)')+';color:#fff;font-weight:700;font-size:14px;cursor:pointer;font-family:var(--font)">'+
+        (peligro?'Sí, eliminar':'Confirmar')+'</button>'+
+      '<button onclick="cerrarComando()" style="height:44px;padding:0 16px;border:1.5px solid var(--border2);border-radius:11px;background:transparent;color:var(--text2);font-size:14px;cursor:pointer;font-family:var(--font)">Cancelar</button>'+
+    '</div>';
+}
+
+/* Unico punto que escribe, y solo despues de que el usuario confirma. */
+async function _cmdConfirmar(){
+  var i=_cmd.intencion;
+  if(!i) return;
+
+  if(i.accion==='buscar'){
+    cerrarComando();
+    goTab('acts');
+    // _actBuscar fija S.actFiltroTexto y repinta; el input se llama act-search
+    setTimeout(function(){
+      if(typeof _actBuscar==='function') _actBuscar(i.ref);
+      var c=document.getElementById('act-search'); if(c) c.value=i.ref;
+    },200);
+    return;
+  }
+
+  var act=(i.accion==='crear')?null:_cmd.candidatas[_cmd.elegida];
+  if(i.accion!=='crear' && !act) return;
+
+  var p=document.getElementById('cmd-panel');
+  if(p) p.innerHTML=_cmdAviso('Guardando…','var(--text3)','');
+  try{
+    await Comandos.ejecutar(i, act);
+    cerrarComando();
+    showToast('✓ '+Comandos.describir(i,act).replace(/^ELIMINAR/,'Eliminada'),'ok',3500);
+    reRenderActs();
+    if(typeof loadAbiertas==='function') loadAbiertas();
+  }catch(e){
+    if(p) p.innerHTML=_cmdAviso('No se pudo guardar','var(--red)',String(e.message||e).slice(0,140));
+  }
+}
+
 async function logEvento(tipo, descripcion, ingId){
   var uid_=ingId||(S.user?.id||'');
   var u=USERS[uid_]; if(!u) return;
@@ -5415,7 +5863,8 @@ document.addEventListener('keydown',function(e){
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redoAction();return;}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
   var k=e.key.toLowerCase();
-  if(k==='n'){e.preventDefault();if(canEdit())fabAction();else requireEdit(fabAction);}
+  if(k==='c'){e.preventDefault();abrirComando();}
+  else if(k==='n'){e.preventDefault();if(canEdit())fabAction();else requireEdit(fabAction);}
   else if(k==='escape'){closeModal();}
   else if(k==='h'){goTab('hoy');}
   else if(k==='o'){S.obraVista='activa';goTab('obra');}
