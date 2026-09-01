@@ -785,7 +785,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260901_10';
+const APP_VERSION='20260901_11';
 // Pinta la version en la barra lateral y en el cajon. El <script> va despues del
 // marcado, asi que los nodos ya existen cuando esto corre.
 (function(){
@@ -5258,9 +5258,18 @@ var Comandos = (function(){
    Chrome). En iPhone no hace falta: el teclado trae su propio dictado, y la
    caja acepta texto venga de donde venga. Nada se ejecuta sin confirmar.
    --- */
-var _cmd={intencion:null, candidatas:[], elegida:null, escuchando:false, rec:null};
+var _cmd={intencion:null, candidatas:[], elegida:null, escuchando:false, rec:null, reloj:null};
 
+/* En iOS el objeto de reconocimiento EXISTE pero no devuelve nada ni avisa
+   que termino: el boton se quedaba encendido para siempre. Ahi no se usa;
+   se manda al dictado del teclado, que si funciona. */
+function _cmdEsIOS(){
+  var ua=navigator.userAgent||'';
+  return /iPad|iPhone|iPod/.test(ua) ||
+         (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+}
 function _cmdSoportaVoz(){
+  if(_cmdEsIOS()) return false;
   return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 }
 
@@ -5294,8 +5303,7 @@ function abrirComando(){
     });
     if(!_cmdSoportaVoz()){
       var b=document.getElementById('cmd-mic');
-      b.title='Este navegador no dicta solo — usa el botón de micrófono de tu teclado';
-      b.style.opacity=.35;
+      b.title='Dicta con el micrófono de tu teclado';
     }
   }
   ov.style.display='flex';
@@ -5314,12 +5322,15 @@ function cerrarComando(){
    el dictado del teclado del telefono, que escribe en la misma caja. */
 function _cmdVoz(){
   if(_cmd.escuchando){ _cmdPararVoz(); return; }
+  if(_cmdEsIOS()){ _cmdDictadoTeclado(); return; }
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ showToast('Usa el micrófono del teclado de tu teléfono para dictar','warn',5000); return; }
+  if(!SR){ _cmdDictadoTeclado(); return; }
   try{
     var r=new SR();
     r.lang='es-DO'; r.interimResults=true; r.continuous=false; r.maxAlternatives=1;
+    var llego=false;
     r.onresult=function(e){
+      llego=true;
       var txt='';
       for(var i=0;i<e.results.length;i++) txt+=e.results[i][0].transcript;
       var inp=document.getElementById('cmd-txt');
@@ -5335,12 +5346,31 @@ function _cmdVoz(){
     _cmd.rec=r; _cmd.escuchando=true;
     var b=document.getElementById('cmd-mic');
     if(b){ b.style.background='var(--red)'; b.style.color='#fff'; b.textContent='⏹'; }
+    /* Vigilante: si en 8 segundos no llego nada NI aviso de fin, se corta solo.
+       Sin esto el boton se quedaba encendido para siempre. */
+    _cmd.reloj=setTimeout(function(){
+      if(!llego){ _cmdPararVoz(); _cmdDictadoTeclado(); }
+      else _cmdPararVoz();
+    },8000);
     r.start();
-  }catch(e){ showToast('No se pudo iniciar el micrófono','warn',4000); _cmdPararVoz(); }
+  }catch(e){ _cmdPararVoz(); _cmdDictadoTeclado(); }
+}
+
+/* Camino que siempre funciona: el teclado del telefono trae su propio
+   dictado y escribe en la misma caja. */
+function _cmdDictadoTeclado(){
+  var inp=document.getElementById('cmd-txt');
+  if(inp) inp.focus();
+  var p=document.getElementById('cmd-panel');
+  if(p && !(inp&&inp.value.trim())){
+    p.innerHTML=_cmdAviso('Dicta con el micrófono de tu teclado','var(--blue)',
+      'Toca la caja de arriba y luego el 🎤 del teclado, junto a la barra espaciadora. Lo que digas se escribe aquí.');
+  }
 }
 
 function _cmdPararVoz(){
-  if(_cmd.rec){ try{_cmd.rec.stop();}catch(e){} _cmd.rec=null; }
+  if(_cmd.reloj){ clearTimeout(_cmd.reloj); _cmd.reloj=null; }
+  if(_cmd.rec){ try{_cmd.rec.stop();}catch(e){} try{_cmd.rec.abort&&_cmd.rec.abort();}catch(e){} _cmd.rec=null; }
   _cmd.escuchando=false;
   var b=document.getElementById('cmd-mic');
   if(b){ b.style.background='var(--bg3)'; b.style.color='var(--text2)'; b.textContent='🎤'; }
