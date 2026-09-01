@@ -2545,9 +2545,7 @@ async function planDiaAsignar(actId, nombre){
   if(!canEdit())return;
   var a=_findActAny(actId)||(S.abiertas||[]).find(function(x){return x.id===actId;});
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({personal_nombre:nombre})});
-    if(a) a.personal_nombre=nombre;
-    logCambio('editado','actividad',actId,(a&&a.descripcion)||'','reasignado desde plan del día → '+(nombre||'sin asignar'));
+    await Acciones.asignar(actId,nombre,'reasignado desde plan del día → '+(nombre||'sin asignar'));
     showToast('Reasignado ✓');
     loadAbiertas().then(function(){renderHoy();});
   }catch(e){showToast('Error: '+e.message,'err');}
@@ -2580,11 +2578,10 @@ async function planDiaEliminar(id){
   if(!a){ showToast('Actividad no encontrada','warn'); return; }
   if(!confirm('¿Eliminar PERMANENTEMENTE esta actividad?\n\n"'+(a.descripcion||'')+'"'+(a.area?' — '+a.area:'')+'\n\nEsta acción no se puede deshacer.')) return;
   // Quitar de memoria (todas las vistas)
-  ['abiertas','acts','actsActivas','aptoActs','estancadas'].forEach(function(k){ if(Array.isArray(S[k])) S[k]=S[k].filter(function(x){return x.id!==id;}); });
-  logCambio('eliminado','actividad',id,a.descripcion||'','Eliminada como duplicada desde Plan del día');
-  try{ if(S.currentTab==='hoy') renderHoy(); }catch(e){}
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'DELETE',prefer:'return=minimal'});
+    var _p=Acciones.eliminar(id);
+    try{ if(S.currentTab==='hoy') renderHoy(); }catch(e){}
+    await _p;
     showToast('Actividad eliminada');
   }catch(e){ showToast('Error al eliminar: '+(e.message||''),'err',4000); }
 }
@@ -2824,9 +2821,8 @@ async function _planSet(actId,fecha,detalle){
   if(!canEdit())return;
   var a=_findActAny(actId)||(S.abiertas||[]).find(function(x){return x.id===actId;});
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fecha_plan:fecha})});
+    await Acciones.planificar(actId,fecha,detalle);
     _planUpdateMem(actId,fecha);
-    logCambio('editado','actividad',actId,(a&&a.descripcion)||'',detalle);
     _planRerender();
   }catch(e){ showToast('Error: '+e.message,'err'); }
 }
@@ -2952,9 +2948,8 @@ async function planTodasManana(){
   for(var i=0;i<pend.length;i++){
     var a=pend[i];
     try{
-      await sb('obra_actividades?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fecha_plan:man})});
+      await Acciones.planificar(a.id,man,'movida al plan de mañana');
       _planUpdateMem(a.id,man);
-      logCambio('editado','actividad',a.id,a.descripcion||'','movida al plan de mañana');
     }catch(e){}
   }
   showToast('→ '+pend.length+' movidas a mañana');
@@ -2978,9 +2973,7 @@ async function estancCompletar(id){
   if(!canEdit())return;
   var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100,estancada_motivo:''})});
-    a.estado='completado'; a.porcentaje=100; a.estancada_motivo='';
-    logCambio('completado','actividad',id,a.descripcion||'','completada');
+    await Acciones.completar(id);
     S.estancadas=(S.estancadas||[]).filter(function(x){return x.id!==id;});
     showToast('Completada ✓'); renderHoy();
   }catch(e){showToast('Error: '+e.message,'err');}
@@ -2989,9 +2982,7 @@ async function estancPausar(id){
   if(!canEdit())return;
   var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'pausada',estancada_motivo:''})});
-    a.estado='pausada'; a.estancada_motivo='';
-    logCambio('editado','actividad',id,a.descripcion||'','pausada');
+    await Acciones.pausar(id,'');
     S.estancadas=(S.estancadas||[]).filter(function(x){return x.id!==id;});
     showToast('Pausada'); renderHoy();
   }catch(e){showToast('Error: '+e.message,'err');}
@@ -4136,10 +4127,8 @@ async function aptoGuardarPct(id){
   var a=(S.aptoActs||[]).find(function(x){return x.id===id;}); if(!a) return;
   var prevPct=a.porcentaje, prevEstado=a.estado;
   try{
-    var nuevoEstado=(n>=100)?'completado':(a.estado==='pendiente'?'en-progreso':a.estado);
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:nuevoEstado})});
-    a.porcentaje=n; a.estado=nuevoEstado;
-    logCambio(n>=100?'completado':'avance','actividad',id,a.descripcion||'',n+'%');
+    var _r=await Acciones.setAvance(id,n);
+    var nuevoEstado=(_r.cambios&&_r.cambios.estado)||a.estado;
     _undoPatch(id,a.descripcion,'% de '+_undoNombre(a)+' → '+n+'%',{porcentaje:prevPct,estado:prevEstado},{porcentaje:n,estado:nuevoEstado});
     loadAbiertas(); showToast('Avance guardado ✓'); renderActs();
   }catch(e){ showToast('Error: '+e.message,'err'); }
@@ -4149,9 +4138,7 @@ async function aptoCompletar(id){
   var a=(S.aptoActs||[]).find(function(x){return x.id===id;}); if(!a) return;
   var prevPct=a.porcentaje, prevEstado=a.estado;
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
-    a.estado='completado'; a.porcentaje=100;
-    logCambio('completado','actividad',id,a.descripcion||'','completada');
+    await Acciones.completar(id);
     _undoPatch(id,a.descripcion,'completar '+_undoNombre(a),{estado:prevEstado,porcentaje:prevPct},{estado:'completado',porcentaje:100});
     loadAbiertas(); showToast('Completada ✓'); renderActs();
   }catch(e){ showToast('Error: '+e.message,'err'); }
@@ -4700,7 +4687,7 @@ function logCambio(accion, entidad, entidadId, entidadNombre, detalle){
 var Acciones = (function(){
 
   var ESTADOS = ['pendiente','en-progreso','pausada','completado'];
-  var COLECCIONES = ['acts','abiertas','lpsActs','tareas','aptoActs'];
+  var COLECCIONES = ['acts','actsActivas','abiertas','planActs','aptoActs','lpsActs','estancadas','histActs','tareas'];
 
   /* — helpers internos --- */
 
@@ -4925,9 +4912,9 @@ var Acciones = (function(){
                     'Pausada'+(motivo?': '+motivo:''));
     },
 
-    async asignar(id,personal){
+    async asignar(id,personal,detalle){
       return _patch(id,{personal_nombre:(personal||'').trim()},'editado',
-                    'responsable → '+(personal||'—'));
+                    detalle||('responsable → '+(personal||'—')));
     },
 
     async setPrioridad(id,prioridad){
@@ -4936,9 +4923,9 @@ var Acciones = (function(){
     },
 
     /* fecha=null quita la actividad del plan */
-    async planificar(id,fecha){
+    async planificar(id,fecha,detalle){
       return _patch(id,{fecha_plan:fecha||null},'editado',
-                    fecha?('planificada para '+fecha):'quitada del plan');
+                    detalle||(fecha?('planificada para '+fecha):'quitada del plan'));
     },
 
     async eliminar(id){
@@ -5016,22 +5003,18 @@ async function doMarcarCompletada(actId){
   closeModal();
   var prevEstado=a.estado; var prevPct=a.porcentaje;
   var prevHoraI=a.hora_inicio; var prevHoraF=a.hora_fin;
-  a.estado='completado'; a.porcentaje=100;
-  a.hora_fin=nowHHMM();
-  if(!a.hora_inicio) a.hora_inicio=a.hora_fin;
-  S.actsActivas=S.actsActivas?S.actsActivas.filter(function(x){return x.id!==actId}):[];
-  reRenderActs(); checkSuccessors();
   setSS('syncing','...');
   logEvento('Actividad completada', 'Completó: '+a.descripcion+(a.area?' — '+a.area:''));
-  logCambio('completado','actividad',actId,a.descripcion,'Estado → completado (100%)');
   try{
-    // Estado/porcentaje first — critical operation
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});
+    // La capa sincroniza el estado local antes de salir a la red: por eso se
+    // arranca la promesa, se repinta al instante y se espera la respuesta despues.
+    var _p=Acciones.completar(actId);
+    S.actsActivas=S.actsActivas?S.actsActivas.filter(function(x){return x.id!==actId}):[];
+    reRenderActs(); checkSuccessors();
+    await _p;
     setSS('ok','✓ Completada');
     _undoPatch(actId,a.descripcion,'completar '+_undoNombre(a),{estado:prevEstado,porcentaje:prevPct},{estado:'completado',porcentaje:100});
     _appendRegistro(a,actId,{tipo:'fin'});
-    sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
-      body:JSON.stringify({hora_inicio:a.hora_inicio,hora_fin:a.hora_fin})}).catch(function(){});
   }catch(e){
     a.estado=prevEstado; a.porcentaje=prevPct; a.hora_inicio=prevHoraI; a.hora_fin=prevHoraF;
     if(S.actsActivas) S.actsActivas.unshift(a);
@@ -5435,20 +5418,15 @@ async function togglePrioridadAct(id){
   if(!a) return;
   var prevPrioridad=a.prioridad;
   var nueva=a.prioridad==='urgente'?'normal':'urgente';
-  a.prioridad=nueva;
-  var aa=S.actsActivas?S.actsActivas.find(function(x){return x.id===id;}):null;
-  if(aa) aa.prioridad=nueva;
-  reRenderActs();
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({prioridad:nueva})});
+    var _p=Acciones.setPrioridad(id,nueva);
+    reRenderActs();
+    await _p;
     setSS('ok',nueva==='urgente'?'Marcada urgente':'Prioridad normal');
     _undoPatch(id,a.descripcion,(nueva==='urgente'?'marcar urgente ':'quitar urgente ')+_undoNombre(a),{prioridad:prevPrioridad||'normal'},{prioridad:nueva});
   }catch(e){
     console.error('togglePrioridadAct error:',e.message||e);
-    // Revert local change on failure
-    a.prioridad=a.prioridad==='urgente'?'normal':'urgente';
-    if(aa) aa.prioridad=a.prioridad;
-    reRenderActs();
+    reRenderActs();   // la capa ya revirtio el cambio local
     var msg=String(e.message||e);
     if(msg.includes('column') && msg.includes('prioridad')){
       setSS('err','Columna "prioridad" falta en la BD — agrégala en Supabase');
@@ -5462,23 +5440,18 @@ async function togglePrioridadAct(id){
 async function iniciarActividad(id){
   var a=S.acts.find(function(x){return x.id===id;});
   if(!a) return;
-  var prevEstado=a.estado;
-  a.estado='en-progreso';
-  if(!a.hora_inicio) a.hora_inicio=nowHHMM();
   var ai=S.actsActivas?S.actsActivas.findIndex(function(x){return x.id===id;}):- 1;
-  if(ai<0&&S.actsActivas) S.actsActivas.unshift(a);
-  reRenderActs();
   setSS('syncing','...');
   try{
-    // Estado change is critical — send alone so hora_inicio column missing can't block it
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'en-progreso'})});
+    var _p=Acciones.setEstado(id,'en-progreso');
+    if(ai<0&&S.actsActivas) S.actsActivas.unshift(a);
+    reRenderActs();
+    await _p;
     setSS('ok','✓ Iniciada');
     _appendRegistro(a,id,{tipo:'inicio'});
     loadTareas();
-    sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({hora_inicio:a.hora_inicio})}).catch(function(){});
   }catch(e){
-    // Roll back optimistic update so UI matches DB
-    a.estado=prevEstado; a.hora_inicio=null;
+    // La capa ya revirtio estado y hora; aqui solo se deshace lo de la vista.
     if(ai<0&&S.actsActivas) S.actsActivas.shift();
     reRenderActs();
     setSS('err','Error al iniciar');
@@ -6205,10 +6178,14 @@ async function delAct(ai){
   var editId=(document.getElementById('a-edit-id')||{value:''}).value.trim();
   var realIdx=editId?S.acts.findIndex(function(x){return x.id===editId;}):ai;
   if(realIdx<0)realIdx=ai;
-  const a=S.acts.splice(realIdx,1)[0];
-  logCambio('eliminado','actividad',a.id,a.descripcion||'','Actividad eliminada');
-  closeModal();renderHoy();renderActs();
-  try{await sb('obra_actividades?id=eq.'+a.id,{method:'DELETE',prefer:'return=minimal'});}catch(e){}
+  const a=S.acts[realIdx];
+  if(!a){closeModal();return;}
+  closeModal();
+  try{
+    var _p=Acciones.eliminar(a.id);
+    renderHoy();renderActs();
+    await _p;
+  }catch(e){ renderHoy();renderActs(); showToast('No se pudo eliminar: '+(e.message||''),'err',4000); }
 }
 
 // ── RENDER REPORTES ───────────────────────────────────
@@ -10292,12 +10269,8 @@ async function enObraGuardarPct(actId){
   if(!canEdit())return;
   var el=document.getElementById('eo-pct-'+actId);
   var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
-  var a=(S.actsActivas||[]).find(function(x){return x.id===actId;})||_findActAny(actId);
-  var newEst=(n>=100?'completado':'en-progreso');
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:newEst})});
-    [S.actsActivas,S.acts,S.abiertas].forEach(function(arr){ if(!arr) return; var i=arr.findIndex(function(x){return x.id===actId;}); if(i>=0){ arr[i].porcentaje=n; arr[i].estado=newEst; } });
-    logCambio(n>=100?'completado':'avance','actividad',actId,(a&&a.descripcion)||'',n+'%');
+    await Acciones.setAvance(actId,n);
     _hoyMarcarLocal(actId);
     showToast(n>=100?'Completada ✓':'Avance '+n+'% ✓');
     if(n>=100){ renderActs(); renderHoy(); loadTareas(); }
@@ -15997,8 +15970,7 @@ async function ganttTablePct(inp){
   inp.value=val;
   var act=(S.acts||[]).find(function(a){return a.id===actId;});if(!act) return;
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:val})});
-    act.porcentaje=val;
+    await Acciones.setAvance(actId,val);
     showToast('Avance guardado ✓');
   }catch(e){showToast('Error al guardar: '+e.message,'err');}
 }
@@ -17192,11 +17164,9 @@ async function ganttPanelPct(actId,val){
   var n=Math.min(100,Math.max(0,parseInt(val)||0));
   var a=(S.acts||[]).find(function(x){return x.id===actId;});if(!a) return;
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n})});
-    a.porcentaje=n;
+    await Acciones.setAvance(actId,n);
     ganttPanelPctLive(actId,n);
     showToast('Avance guardado ✓');
-    logCambio('avance','actividad',actId,a.descripcion||'',n+'%');
     _gRender();
   }catch(e){showToast('Error: '+e.message,'err');}
 }
@@ -17493,7 +17463,7 @@ async function lpsMarkDone(actId){
   var a=(S.lpsActs||[]).find(function(x){return x.id===actId;});
   var a2=(S.acts||[]).find(function(x){return x.id===actId;});
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado'})});
+    await Acciones.completar(actId);
     if(a)a.estado='completado';if(a2)a2.estado='completado';
     renderPlan();
   }catch(e){showToast('Error al guardar','err');}
@@ -17501,7 +17471,7 @@ async function lpsMarkDone(actId){
 async function lpsMarkPending(actId){
   var a=(S.lpsActs||[]).find(function(x){return x.id===actId;});
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'pendiente'})});
+    await Acciones.setEstado(actId,'pendiente');
     if(a)a.estado='pendiente';renderPlan();
   }catch(e){showToast('Error al guardar','err');}
 }
