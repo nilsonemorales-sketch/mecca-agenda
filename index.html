@@ -2632,26 +2632,34 @@ async function planDiaCrearAct(){
   if(!desc){ if(descEl){descEl.style.borderColor='var(--red)';descEl.focus();} return; }
   var area=(document.getElementById('pd-area')||{}).value||'';
   var pers=(document.getElementById('pd-pers')||{}).value||'';
-  var prio=(document.getElementById('pd-prio')||{}).value||'normal';
-  var pct=Math.min(100,Math.max(0,parseInt((document.getElementById('pd-pct')||{}).value)||0));
-  var fi=(document.getElementById('pd-fi')||{}).value||today();
-  var ff=(document.getElementById('pd-ff')||{}).value||today();
   var pObj=(S.personal||[]).find(function(x){return x.nombre===pers;});
-  var tipo=pObj?(pObj.tipo==='propio'?'propio':'contratista'):'contratista';
-  var planF=_planFechaActiva();   // agrega la nueva actividad al plan del día mostrado
-  var act={
-    id:uid(), descripcion:desc, area:area, estado:'en-progreso', tipo_personal:tipo,
-    personal_nombre:pers, ingeniero_nombre:(S.user&&S.user.nombre)||'', ingeniero_id:(S.user&&S.user.id)||'',
-    porcentaje:pct, prioridad:prio, fecha_inicio:fi, fecha_fin:ff, fecha_plan:planF, fecha:today(), foto_pendiente:false
+  var datos={
+    descripcion:desc, area:area, estado:'en-progreso',
+    tipo_personal: pObj?(pObj.tipo==='propio'?'propio':'contratista'):'contratista',
+    personal_nombre:pers,
+    porcentaje:Math.min(100,Math.max(0,parseInt((document.getElementById('pd-pct')||{}).value)||0)),
+    prioridad:(document.getElementById('pd-prio')||{}).value||'normal',
+    fecha_inicio:(document.getElementById('pd-fi')||{}).value||today(),
+    fecha_fin:(document.getElementById('pd-ff')||{}).value||today(),
+    fecha_plan:_planFechaActiva(),   // entra al plan del dia que se esta viendo
+    fecha:today()
   };
+  // Antes esta puerta no validaba nada: se podia crear una actividad de
+  // contratista sin contratista asignado, y no detectaba duplicados.
+  // (Las fechas nunca faltaban aqui: pd-fi y pd-ff caen a hoy por defecto.)
+  try{ Acciones.validar(datos,{}); }
+  catch(e){
+    if(e.codigo==='duplicado'){
+      if(!confirm('Ya existe una actividad igual sin completar en esa ubicacion.\n\n"'+desc+'"\n\n¿Crearla de todas formas?')) return;
+    }else{ showToast(e.message,'err',4500); return; }
+  }
   try{
-    await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(act)});
-    logCambio('creado','actividad',act.id,desc+(area?' — '+area:''),'plan del día');
-    (S.abiertas=S.abiertas||[]).unshift(act);
+    var r=await Acciones.crear(datos,{confirmarDuplicado:true});
+    (S.abiertas=S.abiertas||[]).unshift(r.creadas[0]);
     closeModal();
     showToast('Actividad creada');
     loadAbiertas().then(function(){renderHoy();});
-  }catch(e){ showToast('Error: '+e.message,'err'); }
+  }catch(e){ showToast('Error: '+(e.message||''),'err'); }
 }
 // Personal involucrado en el plan de un día (derivado de las actividades, NO de asistencia)
 function _planPersonalConvocado(lista){
@@ -2976,9 +2984,7 @@ async function estancActualizarPct(id){
   var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
   var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:(n>=100?'completado':'en-progreso'),estancada_motivo:''})});
-    a.porcentaje=n; a.estancada_motivo=''; if(n>=100)a.estado='completado';
-    logCambio(n>=100?'completado':'avance','actividad',id,a.descripcion||'',n+'%');
+    await Acciones.editar(id,{porcentaje:n,estancada_motivo:''});
     S.estancadas=(S.estancadas||[]).filter(function(x){return x.id!==id;});
     showToast('Avance guardado ✓'); renderHoy();
   }catch(e){showToast('Error: '+e.message,'err');}
@@ -4162,13 +4168,13 @@ async function aptoCiclarEstado(id){
   var a=(S.aptoActs||[]).find(function(x){return x.id===id;}); if(!a||a.estado==='completado') return;
   var ciclo=(typeof CICLO_ESTADOS!=='undefined'&&CICLO_ESTADOS.length)?CICLO_ESTADOS:['pendiente','en-progreso','pausada'];
   var prev=a.estado; var cur=ciclo.indexOf(a.estado); var next=ciclo[(cur+1)%ciclo.length];
-  a.estado=next; renderActs();
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:next})});
-    logCambio('editado','actividad',id,a.descripcion||'','estado: '+prev+' -> '+next);
+    var _p=Acciones.setEstado(id,next);
+    renderActs();
+    await _p;
     _undoPatch(id,a.descripcion,'estado de '+_undoNombre(a)+' → '+next,{estado:prev},{estado:next});
     loadAbiertas();
-  }catch(e){ a.estado=prev; renderActs(); showToast('Error: '+e.message,'err'); }
+  }catch(e){ renderActs(); showToast('Error: '+(e.message||''),'err'); }
 }
 function aptoNuevaTarea(){
   if(!canEdit())return;
@@ -4799,6 +4805,39 @@ var Acciones = (function(){
     return p;
   }
 
+  /* — validacion de alta: las reglas, sin efectos --- */
+  function _validar(datos,opts){
+    opts=opts||{};
+    var d=Object.assign({},datos);
+
+    d.descripcion=(d.descripcion||'').trim();
+    if(!d.descripcion) throw _err('La actividad necesita una descripción','sin_descripcion');
+
+    d.tipo_personal=d.tipo_personal||'propio';
+    d.personal_nombre=(d.personal_nombre||'').trim();
+    if(d.tipo_personal==='contratista' && !d.personal_nombre)
+      throw _err('Una actividad de contratista necesita un contratista asignado','sin_contratista');
+
+    if(d.tipo_personal!=='propio'){
+      if(!d.fecha_inicio||!d.fecha_fin)
+        throw _err('Las actividades que no son de personal propio requieren fecha de inicio y fecha fin','sin_fechas');
+      if(d.fecha_fin<d.fecha_inicio)
+        throw _err('La fecha fin no puede ser anterior a la fecha de inicio','fechas_invertidas');
+    }
+
+    var ubicaciones=(opts.ubicaciones&&opts.ubicaciones.length)?opts.ubicaciones:[d.area||''];
+
+    if(!opts.confirmarDuplicado){
+      var dn=_norm(d.descripcion);
+      var cand=(S.acts||[]).concat(S.abiertas||[]).filter(function(x){
+        return x && x.estado!=='completado' && _norm(x.descripcion)===dn
+            && ubicaciones.indexOf(x.area||'')>=0;
+      });
+      if(cand.length) throw _err('Ya existe una actividad igual sin completar en esa ubicación','duplicado',{candidatas:cand});
+    }
+    return {datos:d, ubicaciones:ubicaciones};
+  }
+
   /* — motor de escritura: parchea, sincroniza y deja rastro --- */
   async function _patch(id,patch,accion,detalle){
     var actual=_buscarLocal(id);
@@ -4841,35 +4880,15 @@ var Acciones = (function(){
     /* Crea una o varias actividades (una por ubicación).
        opts.confirmarDuplicado omite el aviso de duplicado.
        Lanza error con .codigo='duplicado' y .candidatas si detecta uno. */
+    /* Valida sin tocar la red ni el estado. La interfaz la llama con el modal
+       abierto para poder marcar el campo que falla; crear() la vuelve a llamar
+       por su cuenta, asi nadie puede saltarsela. */
+    validar: _validar,
+
     async crear(datos,opts){
       opts=opts||{};
-      var d=Object.assign({},datos);
-
-      d.descripcion=(d.descripcion||'').trim();
-      if(!d.descripcion) throw _err('La actividad necesita una descripción','sin_descripcion');
-
-      d.tipo_personal=d.tipo_personal||'propio';
-      d.personal_nombre=(d.personal_nombre||'').trim();
-      if(d.tipo_personal==='contratista' && !d.personal_nombre)
-        throw _err('Una actividad de contratista necesita un contratista asignado','sin_contratista');
-
-      if(d.tipo_personal!=='propio'){
-        if(!d.fecha_inicio||!d.fecha_fin)
-          throw _err('Las actividades que no son de personal propio requieren fecha de inicio y fecha fin','sin_fechas');
-        if(d.fecha_fin<d.fecha_inicio)
-          throw _err('La fecha fin no puede ser anterior a la fecha de inicio','fechas_invertidas');
-      }
-
-      var ubicaciones=(opts.ubicaciones&&opts.ubicaciones.length)?opts.ubicaciones:[d.area||''];
-
-      if(!opts.confirmarDuplicado){
-        var dn=_norm(d.descripcion);
-        var cand=(S.acts||[]).concat(S.abiertas||[]).filter(function(x){
-          return x && x.estado!=='completado' && _norm(x.descripcion)===dn
-              && ubicaciones.indexOf(x.area||'')>=0;
-        });
-        if(cand.length) throw _err('Ya existe una actividad igual sin completar en esa ubicación','duplicado',{candidatas:cand});
-      }
+      var _v=_validar(datos,opts);
+      var d=_v.datos, ubicaciones=_v.ubicaciones;
 
       // coherencia al crear: parte de pendiente/0 y aplica solo lo que pidieron
       var dijo={};
@@ -5296,31 +5315,24 @@ async function cycleEstado(actId){
   var a=S.acts.find(function(x){return x.id===actId;});
   if(!a)return;
   var prevEstado=a.estado; var prevPct=a.porcentaje;
-  var prevHoraI=a.hora_inicio; var prevHoraF=a.hora_fin;
   var cur=CICLO_ESTADOS.indexOf(a.estado);
-  a.estado=CICLO_ESTADOS[(cur+1)%CICLO_ESTADOS.length];
-  if(a.estado==='completado')a.porcentaje=100;
-  // Auto-stamp times on state transitions (kept in memory for UI)
-  var horaPatch={};
-  if(a.estado==='en-progreso'&&!a.hora_inicio){a.hora_inicio=nowHHMM();horaPatch.hora_inicio=a.hora_inicio;}
-  if(a.estado==='pausada'||a.estado==='completado'){a.hora_fin=nowHHMM();horaPatch.hora_fin=a.hora_fin;}
-  reRenderActs();
-  checkSuccessors();
+  var sig=CICLO_ESTADOS[(cur+1)%CICLO_ESTADOS.length];
   setSS('syncing','...');
   try{
-    // Estado/porcentaje first — no time fields so column-missing can't block it
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
-      body:JSON.stringify({estado:a.estado,porcentaje:a.porcentaje})});
-    setSS('ok','✓ '+a.estado);
-    _undoPatch(actId,a.descripcion,'estado de '+_undoNombre(a)+' → '+a.estado,{estado:prevEstado,porcentaje:prevPct},{estado:a.estado,porcentaje:a.porcentaje});
-    if(a.estado==='en-progreso') _appendRegistro(a,actId,{tipo:'inicio'});
-    else if(a.estado==='pausada') _appendRegistro(a,actId,{tipo:'pausa'});
-    else if(a.estado==='completado') _appendRegistro(a,actId,{tipo:'fin'});
-    if(Object.keys(horaPatch).length)
-      sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(horaPatch)}).catch(function(){});
-  }catch(e){
-    a.estado=prevEstado; a.porcentaje=prevPct; a.hora_inicio=prevHoraI; a.hora_fin=prevHoraF;
+    // Al pausar se sella la hora de fin (decision de esta pantalla, va explicita).
+    var _p = sig==='pausada'
+      ? Acciones.editar(actId,{estado:'pausada',hora_fin:nowHHMM()})
+      : Acciones.setEstado(actId,sig);
     reRenderActs();
+    checkSuccessors();
+    await _p;
+    setSS('ok','✓ '+sig);
+    _undoPatch(actId,a.descripcion,'estado de '+_undoNombre(a)+' → '+sig,{estado:prevEstado,porcentaje:prevPct},{estado:sig,porcentaje:a.porcentaje});
+    if(sig==='en-progreso') _appendRegistro(a,actId,{tipo:'inicio'});
+    else if(sig==='pausada') _appendRegistro(a,actId,{tipo:'pausa'});
+    else if(sig==='completado') _appendRegistro(a,actId,{tipo:'fin'});
+  }catch(e){
+    reRenderActs();   // la capa ya revirtio estado, % y horas
     setSS('err','Error al cambiar estado');
     showToast('No se pudo cambiar el estado — revisa tu conexión','err',6000);
   }
@@ -5337,26 +5349,17 @@ async function quickSetPct(actId,pct){
     return;
   }
   var prevPct=a.porcentaje, prevEstado=a.estado;
-  a.porcentaje=pct;
-  var _pctPatch={porcentaje:pct,estado:a.estado};
-  if(pct===0){
-    // El 0% es el "volver atrás": si se marcó por error, la actividad
-    // regresa a pendiente y vuelve a aparecer como no empezada.
-    a.estado='pendiente';_pctPatch.estado='pendiente';
-  }else if(a.estado==='pendiente'){
-    a.estado='en-progreso';_pctPatch.estado='en-progreso';
-    if(!a.hora_inicio){a.hora_inicio=nowHHMM();_pctPatch.hora_inicio=a.hora_inicio;}
-  }else if(a.estado==='completado'){
-    // Bajar de 100% reabre la actividad.
-    a.estado='en-progreso';_pctPatch.estado='en-progreso';
-  }
-  reRenderActs();
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',
-      body:JSON.stringify(_pctPatch)});
+    // El 0% es el "volver atras": la actividad regresa a pendiente. Para el
+    // resto, la capa mueve el estado sola segun el avance.
+    var _p = pct===0
+      ? Acciones.editar(actId,{porcentaje:0,estado:'pendiente'})
+      : Acciones.setAvance(actId,pct);
+    reRenderActs();
+    await _p;
     setSS('ok',pct===0?'↺ 0% — vuelve a pendiente':'✓ '+pct+'%');
     _undoPatch(actId,a.descripcion,'% de '+_undoNombre(a)+' → '+pct+'%',{porcentaje:prevPct,estado:prevEstado},{porcentaje:pct,estado:a.estado});
-  }catch(e){}
+  }catch(e){ reRenderActs(); }
 }
 
 // Fila de avance dentro de la tarjeta: 0 · 25 · 50 · 75 · 100.
@@ -5863,7 +5866,7 @@ function showAddActIngeniero(ai, ctx){
 
 async function saveActIngeniero(ai){
   if(_actSaving) return;
-  const desc=document.getElementById('a-d').value.trim(); if(!desc)return;
+  const desc=(document.getElementById('a-d').value||'').trim(); if(!desc)return;
   const ing=document.getElementById('a-ing').value;
   const areaVal=_ubicacionesSeleccionadas.length>0?_ubicacionesSeleccionadas[0]:(document.getElementById('a-area-single')||{value:''}).value.trim();
   const a={
@@ -5883,58 +5886,44 @@ async function saveActIngeniero(ai){
     predecesoras:(document.getElementById('a-preds')||{value:''}).value.trim()||null,
     plan_id:(document.getElementById('sa-plan-id')||{value:''}).value||null,
   };
-  // Only include time fields when they have a value (requires DB migration — safe to omit when null)
   var _hiI=(document.getElementById('a-hi')||{value:''}).value.trim();
   var _hfI=(document.getElementById('a-hf')||{value:''}).value.trim();
   if(_hiI) a.hora_inicio=_hiI;
   if(_hfI) a.hora_fin=_hfI;
   const editIdIng=(document.getElementById('a-edit-id')||{value:''}).value.trim();
-  // Force consistency: pct=100 → completado, completado → pct=100
+  const ubicaciones=_ubicacionesSeleccionadas.length>0?_ubicacionesSeleccionadas.slice():[a.area||''];
+
+  // El formulario manda estado y % juntos: aqui gana el estado.
   if(a.estado==='completado') a.porcentaje=100;
-  if(a.porcentaje>=100) a.estado='completado';
-  // Auto-stamp times when saving with an active state and no manual times set
-  if((a.estado==='en-progreso'||a.estado==='completado')&&!a.hora_inicio){a.hora_inicio=nowHHMM();}
-  if(a.estado==='completado'&&!a.hora_fin){a.hora_fin=nowHHMM();}
+  else if(a.porcentaje>=100) a.estado='completado';
+
+  // Antes esta puerta no detectaba duplicados. Ahora usa las mismas reglas.
+  _actLimpiarAvisos();
+  try{
+    Acciones.validar(a,{ubicaciones:ubicaciones,confirmarDuplicado:_dupConfirmed||!!editIdIng});
+  }catch(e){ _actMostrarError(e,ai,desc,a.area); return; }
+
+  _dupConfirmed=false;
   closeModal(); setSS('syncing','Guardando...');
-  _actSaving = true;
-  const _createdIngActs=[];
+  _actSaving=true;
   try{
     if(!editIdIng){
-      const ubicaciones=_ubicacionesSeleccionadas.length>0?_ubicacionesSeleccionadas:[a.area||''];
-      // Optimistic: push immediately so the activity appears right away
-      for(const ubic of ubicaciones){
-        const act={...a,id:uid(),fotos:'',area:ubic};
-        S.acts.push(act);
-        _createdIngActs.push(act);
-      }
       _ubicacionesSeleccionadas=[];
+      var _pr=Acciones.crear(a,{ubicaciones:ubicaciones,confirmarDuplicado:true});
       reRenderActs();
-      // Then persist to DB
-      for(const act of _createdIngActs){
-        await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(act)});
-        logCambio('creado','actividad',act.id,act.descripcion+(act.area?' — '+act.area:''),'Nueva actividad en '+(act.area||'sin área'));
-      }
-      _undoCreate((_createdIngActs[0]&&_createdIngActs[0].descripcion)||'actividad',_createdIngActs.map(function(x){return Object.assign({},x);}));
+      var _cr=(await _pr).creadas;
+      _undoCreate((_cr[0]&&_cr[0].descripcion)||'actividad',_cr.map(function(x){return Object.assign({},x);}));
     }else{
-      var realIdxIng=S.acts.findIndex(function(x){return x.id===editIdIng;});
-      var oldAIng=realIdxIng>=0?Object.assign({},S.acts[realIdxIng]):{};
-      if(realIdxIng>=0) Object.assign(S.acts[realIdxIng],a);
-      await sb('obra_actividades?id=eq.'+editIdIng,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
-      var diffsIng=[];
-      if((oldAIng.estado||'')!==(a.estado||'')) diffsIng.push('estado: '+(oldAIng.estado||'—')+' → '+a.estado);
-      if((oldAIng.porcentaje||0)!==(a.porcentaje||0)) diffsIng.push('avance: '+(oldAIng.porcentaje||0)+'% → '+(a.porcentaje||0)+'%');
-      logCambio('editado','actividad',editIdIng,a.descripcion,diffsIng.length?diffsIng.join('; '):'Editado');
+      await Acciones.editar(editIdIng,a);
     }
-    _actSaving = false;
+    _actSaving=false;
     setSS('ok','✓ '+hhmm()); reRenderActs();
     if(!editIdIng) showToast('Actividad guardada','ok',3500);
   }catch(e){
-    _actSaving = false;
-    // Roll back optimistic additions if DB save failed
-    _createdIngActs.forEach(function(act){var i=S.acts.indexOf(act);if(i>=0)S.acts.splice(i,1);});
-    if(_createdIngActs.length) reRenderActs();
+    _actSaving=false;
+    reRenderActs();   // la capa ya deshizo el alta optimista
     setSS('err','Error guardando');
-    alert('No se pudo guardar la actividad.\n\n'+e.message.slice(0,120)+'\n\nRevisa tu conexión e inténtalo de nuevo.');
+    alert('No se pudo guardar la actividad.\n\n'+String(e.message||e).slice(0,120)+'\n\nRevisa tu conexion e intentalo de nuevo.');
   }
 }
 
@@ -6028,24 +6017,65 @@ function autoAsignarIng(contratistaNombre){
   }
 }
 
-async function saveAct(ai){
-  if(_actSaving) return;
-  const desc=document.getElementById('a-d').value.trim();if(!desc)return;
-  const getFld=(id,def='')=>{const el=document.getElementById(id);return el?el.value:def;};
-  // Block saving a contratista activity without a contractor assigned
-  if(getFld('a-tipo')==='contratista'&&!getFld('a-pers','').trim()){
-    const sel=document.getElementById('a-pers');
+/* Avisos del formulario de actividad. Aqui SOLO se pinta: las reglas de que es
+   valido viven en Acciones.validar, y son las mismas que aplica Acciones.crear. */
+function _actLimpiarAvisos(){
+  ['a-pers-err','a-fecha-err','a-dup-warn'].forEach(function(id){
+    var e=document.getElementById(id); if(e) e.style.display='none';
+  });
+  ['a-pers','a-fi','a-ff'].forEach(function(id){
+    var e=document.getElementById(id); if(e) e.style.border='';
+  });
+}
+
+function _actMostrarError(e,ai,desc,area){
+  function caja(id,cssTxt,insertar){
+    var el=document.getElementById(id);
+    if(!el){ el=document.createElement('div'); el.id=id; el.style.cssText=cssTxt; insertar(el); }
+    el.style.display='block'; return el;
+  }
+  if(e.codigo==='sin_contratista'){
+    var sel=document.getElementById('a-pers');
     if(sel){sel.style.border='2px solid var(--red)';sel.style.borderRadius='var(--r)';sel.focus();}
-    var errMsg=document.getElementById('a-pers-err');
-    if(!errMsg){
-      errMsg=document.createElement('div');errMsg.id='a-pers-err';
-      errMsg.style.cssText='color:var(--red);font-size:11px;font-weight:600;margin-top:4px';
-      if(sel)sel.parentNode.insertBefore(errMsg,sel.nextSibling);
-    }
-    errMsg.textContent='Debes seleccionar un contratista';
+    caja('a-pers-err','color:var(--red);font-size:11px;font-weight:600;margin-top:4px',
+      function(el){ if(sel&&sel.parentNode) sel.parentNode.insertBefore(el,sel.nextSibling); })
+      .textContent='Debes seleccionar un contratista';
     return;
   }
-  // Area: use the tracked selections array, fallback to the single-select dropdown
+  if(e.codigo==='sin_fechas'||e.codigo==='fechas_invertidas'){
+    caja('a-fecha-err','color:var(--red);font-size:11px;font-weight:600;margin:6px 0 0;padding:6px 10px;background:var(--red-light);border:1px solid var(--red);border-radius:8px',
+      function(el){
+        var fi=document.getElementById('a-fi');
+        if(fi&&fi.parentNode&&fi.parentNode.parentNode){
+          var g=fi.parentNode.parentNode;
+          g.insertBefore(el,g.children[g.children.length-1]);
+        }
+      }).textContent=e.message;
+    var fi=document.getElementById('a-fi'), ff=document.getElementById('a-ff');
+    if(e.codigo==='sin_fechas'){
+      if(fi&&!fi.value) fi.style.border='2px solid var(--red)';
+      if(ff&&!ff.value) ff.style.border='2px solid var(--red)';
+    }else if(ff){ ff.style.border='2px solid var(--red)'; }
+    return;
+  }
+  if(e.codigo==='duplicado'){
+    caja('a-dup-warn','background:var(--amber-light);border:1.5px solid #fd7e14;border-radius:10px;padding:10px 12px;margin:6px 0;font-size:12px;font-family:var(--font)',
+      function(el){ var d=document.getElementById('a-d'); if(d&&d.parentNode) d.parentNode.insertBefore(el,d.nextSibling); })
+      .innerHTML='<div style="font-weight:700;color:var(--amber);margin-bottom:6px">Ya existe una actividad similar sin completar en esta area</div>'+
+        '<div style="color:var(--text2);font-size:11px;margin-bottom:8px">&laquo;'+esc(desc)+'&raquo; &middot; '+esc(area||'Sin area')+'</div>'+
+        '<div style="display:flex;gap:8px">'+
+          '<button onclick="_dupConfirmed=true;saveAct('+ai+')" style="padding:5px 14px;border-radius:8px;border:none;background:#fd7e14;color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:var(--font)">Guardar igual</button>'+
+          '<button onclick="document.getElementById(\'a-dup-warn\').style.display=\'none\'" style="padding:5px 12px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>'+
+        '</div>';
+    return;
+  }
+  showToast(e.message||'No se pudo guardar','err',4000);
+}
+
+async function saveAct(ai){
+  if(_actSaving) return;
+  const getFld=(id,def='')=>{const el=document.getElementById(id);return el?el.value:def;};
+  const desc=getFld('a-d','').trim(); if(!desc) return;
   const areaVal = _ubicacionesSeleccionadas.length>0
     ? _ubicacionesSeleccionadas[0]
     : getFld('a-area-single','').trim() || getFld('a-area','').trim();
@@ -6070,118 +6100,52 @@ async function saveAct(ai){
     predecesoras:getFld('a-preds','').trim()||null,
     plan_id:(document.getElementById('sa-plan-id')||{value:''}).value||null,
   };
-  // Only include time fields when they have a value (requires DB migration — safe to omit when null)
   var _hi=getFld('a-hi','').trim(),_hf=getFld('a-hf','').trim();
   if(_hi) a.hora_inicio=_hi;
   if(_hf) a.hora_fin=_hf;
   const editId = getFld('a-edit-id','').trim();
-  // If setting to completado, force pct=100
+  const ubicaciones = _ubicacionesSeleccionadas.length>0 ? _ubicacionesSeleccionadas.slice() : [a.area||''];
+
+  // Este formulario manda estado y % juntos, asi que aqui se decide cual gana
+  // (el estado) antes de enviar. La capa rechaza pares contradictorios.
   if(a.estado==='completado') a.porcentaje=100;
-  // If pct reaches 100, force estado=completado
-  if(a.porcentaje>=100) a.estado='completado';
-  // Auto-stamp times when saving with an active state and no manual times set
-  if((a.estado==='en-progreso'||a.estado==='completado')&&!a.hora_inicio){a.hora_inicio=nowHHMM();}
-  if(a.estado==='completado'&&!a.hora_fin){a.hora_fin=nowHHMM();}
-  // ── FECHA VALIDATION (non-propio only) ─────────────────
-  if(a.tipo_personal!=='propio'){
-    var _errFecha=document.getElementById('a-fecha-err');
-    if(!_errFecha){
-      _errFecha=document.createElement('div');_errFecha.id='a-fecha-err';
-      _errFecha.style.cssText='color:var(--red);font-size:11px;font-weight:600;margin:6px 0 0;padding:6px 10px;background:var(--red-light);border:1px solid var(--red);border-radius:8px';
-      var _fiEl=document.getElementById('a-fi');
-      if(_fiEl&&_fiEl.parentNode)_fiEl.parentNode.parentNode.insertBefore(_errFecha,_fiEl.parentNode.parentNode.children[_fiEl.parentNode.parentNode.children.length-1]);
-    }
-    if(!a.fecha_inicio||!a.fecha_fin){
-      _errFecha.textContent='Las actividades de contratista requieren fecha de inicio y fecha fin';
-      _errFecha.style.display='block';
-      document.getElementById('a-fi')&&!a.fecha_inicio&&(document.getElementById('a-fi').style.border='2px solid var(--red)');
-      document.getElementById('a-ff')&&!a.fecha_fin&&(document.getElementById('a-ff').style.border='2px solid var(--red)');
-      return;
-    }
-    if(a.fecha_fin<a.fecha_inicio){
-      _errFecha.textContent='La fecha fin no puede ser anterior a la fecha inicio';
-      _errFecha.style.display='block';
-      document.getElementById('a-ff').style.border='2px solid var(--red)';
-      return;
-    }
-    if(_errFecha)_errFecha.style.display='none';
-  }
-  // ── DUPLICATE DETECTION ─────────────────────────────────
-  if(!_dupConfirmed&&!editId){
-    var _descNorm=(desc||'').toLowerCase().trim();
-    var _dupCand=S.acts.filter(function(x){
-      return x.estado!=='completado'&&(x.descripcion||'').toLowerCase().trim()===_descNorm&&(x.area||'')===(a.area||'');
-    });
-    if(_dupCand.length){
-      var _dupEl=document.getElementById('a-dup-warn');
-      if(!_dupEl){
-        _dupEl=document.createElement('div');_dupEl.id='a-dup-warn';
-        _dupEl.style.cssText='background:var(--amber-light);border:1.5px solid #fd7e14;border-radius:10px;padding:10px 12px;margin:6px 0;font-size:12px;font-family:var(--font)';
-        var _dBtn=document.getElementById('a-d');
-        if(_dBtn&&_dBtn.parentNode)_dBtn.parentNode.insertBefore(_dupEl,_dBtn.nextSibling);
-      }
-      _dupEl.innerHTML='<div style="font-weight:700;color:var(--amber);margin-bottom:6px">Ya existe una actividad similar sin completar en esta área</div>'+
-        '<div style="color:var(--text2);font-size:11px;margin-bottom:8px">«'+esc(desc)+'» · '+esc(a.area||'Sin área')+'</div>'+
-        '<div style="display:flex;gap:8px">'+
-          '<button onclick="_dupConfirmed=true;saveAct('+ai+')" style="padding:5px 14px;border-radius:8px;border:none;background:#fd7e14;color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:var(--font)">Guardar igual</button>'+
-          '<button onclick="document.getElementById(\'a-dup-warn\').style.display=\'none\'" style="padding:5px 12px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>'+
-        '</div>';
-      _dupEl.style.display='block';
-      return;
-    }
-  }
+  else if(a.porcentaje>=100) a.estado='completado';
+
+  // Pre-vuelo: las MISMAS reglas de la capa, sin red y con el modal abierto,
+  // para poder marcar el campo que falla.
+  _actLimpiarAvisos();
+  try{
+    Acciones.validar(a,{ubicaciones:ubicaciones,confirmarDuplicado:_dupConfirmed||!!editId});
+  }catch(e){ _actMostrarError(e,ai,desc,a.area); return; }
+
   _dupConfirmed=false;
   closeModal();setSS('syncing','Guardando...');
-  _actSaving = true;
-  const _createdActs=[];
+  _actSaving=true;
+  var _creadas=[];
   try{
     if(!editId){
-      // Multi-location: create one activity per location
-      const ubicaciones = _ubicacionesSeleccionadas.length > 0
-        ? _ubicacionesSeleccionadas
-        : [a.area || ''];
-      // Optimistic: push to S.acts immediately so the activity appears right away
-      for(const ubic of ubicaciones){
-        const act = {...a, id:uid(), fotos:'', foto_pendiente:true, area:ubic};
-        S.acts.push(act);
-        _createdActs.push(act);
-      }
-      _ubicacionesSeleccionadas = [];
+      _ubicacionesSeleccionadas=[];
+      // crear() sincroniza el estado local antes de salir a la red
+      var _pr=Acciones.crear(a,{ubicaciones:ubicaciones,confirmarDuplicado:true});
       reRenderActs();
-      // Then persist to DB
-      for(const act of _createdActs){
-        await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(act)});
-        act.foto_pendiente=false;
-        logCambio('creado','actividad',act.id,act.descripcion+(act.area?' — '+act.area:''),'Nueva actividad en '+(act.area||'sin área'));
-        _pinAct(act);
-      }
-      _undoCreate((_createdActs[0]&&_createdActs[0].descripcion)||'actividad',_createdActs.map(function(x){return Object.assign({},x);}));
+      _creadas=(await _pr).creadas;
+      _creadas.forEach(function(x){ _pinAct(x); });
+      _undoCreate((_creadas[0]&&_creadas[0].descripcion)||'actividad',
+                  _creadas.map(function(x){return Object.assign({},x);}));
     }else{
-      var realIdx=S.acts.findIndex(function(x){return x.id===editId;});
-      var oldA=realIdx>=0?Object.assign({},S.acts[realIdx]):{};
-      if(realIdx>=0) Object.assign(S.acts[realIdx],a);
-      _pinAct(realIdx>=0?S.acts[realIdx]:Object.assign({id:editId},a));
-      await sb('obra_actividades?id=eq.'+editId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(a)});
-      var diffs=[];
-      if((oldA.estado||'')!==(a.estado||'')) diffs.push('estado: '+(oldA.estado||'—')+' → '+a.estado);
-      if((oldA.fecha_inicio||oldA.fecha||'')!==(a.fecha_inicio||'')) diffs.push('inicio: '+(oldA.fecha_inicio||oldA.fecha||'—')+' → '+(a.fecha_inicio||'—'));
-      if((oldA.fecha_fin||'')!==(a.fecha_fin||'')) diffs.push('fin: '+(oldA.fecha_fin||'—')+' → '+(a.fecha_fin||'—'));
-      if((oldA.porcentaje||0)!==(a.porcentaje||0)) diffs.push('avance: '+(oldA.porcentaje||0)+'% → '+(a.porcentaje||0)+'%');
-      if((oldA.personal_nombre||'')!==(a.personal_nombre||'')) diffs.push('responsable: '+(oldA.personal_nombre||'—')+' → '+(a.personal_nombre||'—'));
-      logCambio('editado','actividad',editId,a.descripcion,diffs.length?diffs.join('; '):'Editado');
+      _pinAct(Acciones.porId(editId)||Object.assign({id:editId},a));
+      await Acciones.editar(editId,a);
     }
-    _actSaving = false;
+    _actSaving=false;
     setSS('ok','✓ '+hhmm()); reRenderActs();
     if(!editId) showToast('Actividad guardada','ok',3500);
     if(S.currentTab==='enobra') loadTareas(); else loadAbiertas();
     if(S.actVista==='apto' && S.aptoSel) loadAptoActs(S.aptoSel).then(function(){renderActs();});
   }catch(e){
-    _actSaving = false;
-    // Roll back optimistic additions if DB save failed
-    _createdActs.forEach(function(act){var i=S.acts.indexOf(act);if(i>=0)S.acts.splice(i,1);});
-    if(_createdActs.length) reRenderActs();
+    _actSaving=false;
+    reRenderActs();   // la capa ya deshizo lo que hubiera puesto de forma optimista
     setSS('err','Error guardando');
-    alert('No se pudo guardar la actividad.\n\n'+e.message.slice(0,120)+'\n\nRevisa tu conexión e inténtalo de nuevo.');
+    alert('No se pudo guardar la actividad.\n\n'+String(e.message||e).slice(0,120)+'\n\nRevisa tu conexion e intentalo de nuevo.');
   }
 }
 
@@ -14408,16 +14372,12 @@ function renderCampo(){
 
 async function campoMarcar(id, accion, pct){
   var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
-  var body, acc, det;
-  if(accion==='listo'){ body={estado:'completado',porcentaje:100}; acc='completado'; det='marcada lista desde el celular'; }
-  else if(accion==='pct'){ body={estado:'en-progreso',porcentaje:pct}; acc='avance'; det=pct+'% desde el celular'; }
-  else { body={estado:'pausada'}; acc='editado'; det='reportada como no realizada desde el celular'; }
   var card=document.getElementById('cp-'+id);
   if(card){ card.style.opacity='.45'; card.style.pointerEvents='none'; }
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
-    Object.assign(a, body);
-    logCambio(acc,'actividad',id,a.descripcion||'',det);
+    if(accion==='listo')      await Acciones.completar(id);
+    else if(accion==='pct')   await Acciones.setAvance(id,pct);
+    else                      await Acciones.pausar(id,'reportada como no realizada desde el celular');
     (S._campoHechas=S._campoHechas||{})[id]=1;
     if(accion==='listo') S.acts=S.acts.filter(function(x){return x.id!==id;});
     showToast(accion==='listo'?'Listo ✓':accion==='pct'?(pct+'% guardado ✓'):'Anotado');
@@ -15993,10 +15953,9 @@ async function ganttTableEstado(sel){
   var actId=sel.dataset.aid,estado=sel.value;
   var act=(S.acts||[]).find(function(a){return a.id===actId;});if(!act) return;
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:estado})});
-    act.estado=estado;
+    await Acciones.setEstado(actId,estado);
     var rowEl=document.getElementById('gtrow-'+actId);
-    if(rowEl) rowEl.style.background=estado==='completado'?'var(--green-light)':estado==='en_progreso'?'var(--amber-light)':'#fff';
+    if(rowEl) rowEl.style.background=estado==='completado'?'var(--green-light)':estado==='en-progreso'?'var(--amber-light)':'#fff';
     showToast('Estado guardado ✓');
   }catch(e){showToast('Error al guardar: '+e.message,'err');}
 }
