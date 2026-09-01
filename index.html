@@ -4685,6 +4685,319 @@ function logCambio(accion, entidad, entidadId, entidadNombre, detalle){
   sb('obra_cambios',{method:'POST',prefer:'return=minimal',body:JSON.stringify(rec)}).catch(function(){});
 }
 
+
+/* ---
+   CAPA DE ACCIONES — el único camino para escribir actividades.
+   La interfaz y el asistente llaman aquí; nadie vuelve a escribir directo
+   contra obra_actividades. Lo que queda garantizado en un solo sitio:
+     · coherencia estado ↔ porcentaje (100% ⇔ completado)
+     · sellado de hora_inicio / hora_fin
+     · limpieza de estancada_motivo al reactivar o completar
+     · registro en obra_cambios en el 100% de las escrituras
+     · validación de fechas y detección de duplicados al crear
+   Ninguna función de aquí toca el DOM: devuelve datos y lanza errores.
+   --- */
+var Acciones = (function(){
+
+  var ESTADOS = ['pendiente','en-progreso','pausada','completado'];
+  var COLECCIONES = ['acts','abiertas','lpsActs','tareas','aptoActs'];
+
+  /* — helpers internos --- */
+
+  function _buscarLocal(id){
+    for(var i=0;i<COLECCIONES.length;i++){
+      var col=S[COLECCIONES[i]];
+      if(!Array.isArray(col)) continue;
+      var a=col.find(function(x){return x&&x.id===id;});
+      if(a) return a;
+    }
+    return null;
+  }
+
+  // Aplica el parche a TODAS las copias locales de la actividad
+  function _sincronizar(id,patch){
+    COLECCIONES.forEach(function(k){
+      var col=S[k];
+      if(!Array.isArray(col)) return;
+      col.forEach(function(x){ if(x&&x.id===id) Object.assign(x,patch); });
+    });
+  }
+
+  function _quitarLocal(id){
+    COLECCIONES.forEach(function(k){
+      var col=S[k];
+      if(!Array.isArray(col)) return;
+      for(var i=col.length-1;i>=0;i--){ if(col[i]&&col[i].id===id) col.splice(i,1); }
+    });
+  }
+
+  function _pct(v){
+    var n=parseInt(v,10);
+    if(isNaN(n)) n=0;
+    return Math.min(100,Math.max(0,n));
+  }
+
+  function _err(msg,codigo,extra){
+    var e=new Error(msg);
+    e.codigo=codigo||'validacion';
+    if(extra) Object.assign(e,extra);
+    return e;
+  }
+
+  function _norm(s){
+    return (s||'').toString().toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  }
+
+  /* — LA REGLA ÚNICA de coherencia ---
+     Recibe el estado actual de la actividad y el parche propuesto;
+     devuelve el parche completo y consistente. Todo pasa por aquí.     */
+  function _coherencia(actual,patch){
+    actual = actual || {};
+    var p = Object.assign({},patch);
+
+    if('porcentaje' in p) p.porcentaje=_pct(p.porcentaje);
+
+    if(p.estado && ESTADOS.indexOf(p.estado)<0)
+      throw _err('Estado no válido: '+p.estado);
+
+    var dijoEstado  = ('estado' in p);
+    var dijoPct     = ('porcentaje' in p);
+    var estadoFinal = dijoEstado ? p.estado : actual.estado;
+    var pctFinal    = dijoPct ? p.porcentaje
+                    : (actual.porcentaje==null?0:_pct(actual.porcentaje));
+
+    /* Principio: lo que el llamador dice explícitamente MANDA.
+       La regla solo rellena lo que no dijo. Si dice las dos cosas y se
+       contradicen, se rechaza en vez de adivinar por él. */
+    if(dijoEstado && dijoPct){
+      if(estadoFinal==='completado' && pctFinal<100)
+        throw _err('No se puede marcar completada con '+pctFinal+'% de avance','contradiccion');
+      if(estadoFinal!=='completado' && pctFinal>=100)
+        throw _err('No se puede dejar en "'+estadoFinal+'" con 100% de avance','contradiccion');
+    }else if(dijoEstado){
+      // dijo el estado: el avance se acomoda
+      if(estadoFinal==='completado' && pctFinal<100){ pctFinal=100; p.porcentaje=100; }
+      if(estadoFinal!=='completado' && pctFinal>=100){ pctFinal=99;  p.porcentaje=99;  }
+    }else if(dijoPct){
+      // dijo el avance: el estado se acomoda
+      if(pctFinal>=100 && estadoFinal!=='completado'){ estadoFinal='completado';  p.estado='completado'; }
+      else if(pctFinal>0 && pctFinal<100 && estadoFinal!=='en-progreso'){ estadoFinal='en-progreso'; p.estado='en-progreso'; }
+    }
+
+    // sellado de horas
+    if((estadoFinal==='en-progreso'||estadoFinal==='completado') && !actual.hora_inicio && !p.hora_inicio)
+      p.hora_inicio=nowHHMM();
+    if(estadoFinal==='completado' && !actual.hora_fin && !p.hora_fin)
+      p.hora_fin=nowHHMM();
+
+    // el motivo de estancada solo sobrevive mientras está pausada
+    if('estado' in p && p.estado!=='pausada' && (actual.estancada_motivo||''))
+      p.estancada_motivo='';
+
+    return p;
+  }
+
+  /* — motor de escritura: parchea, sincroniza y deja rastro --- */
+  async function _patch(id,patch,accion,detalle){
+    var actual=_buscarLocal(id);
+    var p=_coherencia(actual,patch);
+    if(!Object.keys(p).length) return {ok:true, sinCambios:true, id:id};
+
+    var previo = actual ? Object.assign({},actual) : {};
+    _sincronizar(id,p);                                   // optimista
+    try{
+      await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(p)});
+    }catch(e){
+      if(actual) _sincronizar(id,previo);                 // revierte
+      throw e;
+    }
+    logCambio(accion||'editado','actividad',id,
+              (actual&&actual.descripcion)||'',
+              detalle||_diffs(previo,p)||'Editado');
+    return {ok:true, id:id, cambios:p, actividad:_buscarLocal(id)};
+  }
+
+  function _diffs(viejo,nuevo){
+    var d=[];
+    var etiq={estado:'estado',porcentaje:'avance',personal_nombre:'responsable',
+              fecha_fin:'fin',fecha_inicio:'inicio',fecha_plan:'plan',
+              prioridad:'prioridad',area:'área',descripcion:'descripción'};
+    Object.keys(nuevo).forEach(function(k){
+      if(!(k in etiq)) return;
+      var a=viejo[k]==null?'—':viejo[k], b=nuevo[k]==null?'—':nuevo[k];
+      if(String(a)!==String(b)) d.push(etiq[k]+': '+a+(k==='porcentaje'?'%':'')+' → '+b+(k==='porcentaje'?'%':''));
+    });
+    return d.join('; ');
+  }
+
+  /* — API pública --- */
+
+  return {
+
+    ESTADOS: ESTADOS,
+
+    /* Crea una o varias actividades (una por ubicación).
+       opts.confirmarDuplicado omite el aviso de duplicado.
+       Lanza error con .codigo='duplicado' y .candidatas si detecta uno. */
+    async crear(datos,opts){
+      opts=opts||{};
+      var d=Object.assign({},datos);
+
+      d.descripcion=(d.descripcion||'').trim();
+      if(!d.descripcion) throw _err('La actividad necesita una descripción','sin_descripcion');
+
+      d.tipo_personal=d.tipo_personal||'propio';
+      d.personal_nombre=(d.personal_nombre||'').trim();
+      if(d.tipo_personal==='contratista' && !d.personal_nombre)
+        throw _err('Una actividad de contratista necesita un contratista asignado','sin_contratista');
+
+      if(d.tipo_personal!=='propio'){
+        if(!d.fecha_inicio||!d.fecha_fin)
+          throw _err('Las actividades que no son de personal propio requieren fecha de inicio y fecha fin','sin_fechas');
+        if(d.fecha_fin<d.fecha_inicio)
+          throw _err('La fecha fin no puede ser anterior a la fecha de inicio','fechas_invertidas');
+      }
+
+      var ubicaciones=(opts.ubicaciones&&opts.ubicaciones.length)?opts.ubicaciones:[d.area||''];
+
+      if(!opts.confirmarDuplicado){
+        var dn=_norm(d.descripcion);
+        var cand=(S.acts||[]).concat(S.abiertas||[]).filter(function(x){
+          return x && x.estado!=='completado' && _norm(x.descripcion)===dn
+              && ubicaciones.indexOf(x.area||'')>=0;
+        });
+        if(cand.length) throw _err('Ya existe una actividad igual sin completar en esa ubicación','duplicado',{candidatas:cand});
+      }
+
+      // coherencia al crear: parte de pendiente/0 y aplica solo lo que pidieron
+      var dijo={};
+      if(datos.estado!=null)     dijo.estado=datos.estado;
+      if(datos.porcentaje!=null) dijo.porcentaje=_pct(datos.porcentaje);
+      var coh=_coherencia({estado:'pendiente',porcentaje:0},dijo);
+      d.estado     = coh.estado     != null ? coh.estado     : (datos.estado||'pendiente');
+      d.porcentaje = coh.porcentaje != null ? coh.porcentaje : _pct(datos.porcentaje);
+      if(coh.hora_inicio && !d.hora_inicio) d.hora_inicio=coh.hora_inicio;
+      if(coh.hora_fin    && !d.hora_fin)    d.hora_fin=coh.hora_fin;
+      d.ingeniero_nombre=d.ingeniero_nombre||(S.user&&S.user.nombre)||'';
+      d.ingeniero_id=d.ingeniero_id||(S.user&&S.user.id)||'';
+      d.fecha=d.fecha||S.fecha||today();
+      if(d.foto_pendiente==null) d.foto_pendiente=false;
+
+      var creadas=[];
+      for(var i=0;i<ubicaciones.length;i++){
+        creadas.push(Object.assign({},d,{id:uid(),area:ubicaciones[i],fotos:d.fotos||''}));
+      }
+      creadas.forEach(function(a){ (S.acts=S.acts||[]).push(a); });   // optimista
+
+      try{
+        for(var j=0;j<creadas.length;j++){
+          await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(creadas[j])});
+          logCambio('creado','actividad',creadas[j].id,
+                    creadas[j].descripcion+(creadas[j].area?' — '+creadas[j].area:''),
+                    'Nueva actividad en '+(creadas[j].area||'sin área'));
+        }
+      }catch(e){
+        creadas.forEach(function(a){ _quitarLocal(a.id); });
+        throw e;
+      }
+      return {ok:true, creadas:creadas};
+    },
+
+    /* Cambios libres sobre una actividad (pasa por la regla de coherencia) */
+    async editar(id,cambios){ return _patch(id,cambios,'editado'); },
+
+    async setAvance(id,pct){
+      var n=_pct(pct);
+      return _patch(id,{porcentaje:n},'avance',n+'%');
+    },
+
+    async completar(id){
+      return _patch(id,{estado:'completado'},'completado','Marcada como completada');
+    },
+
+    async setEstado(id,estado){
+      return _patch(id,{estado:estado},'editado','estado → '+estado);
+    },
+
+    async pausar(id,motivo){
+      return _patch(id,{estado:'pausada',estancada_motivo:motivo||''},'editado',
+                    'Pausada'+(motivo?': '+motivo:''));
+    },
+
+    async asignar(id,personal){
+      return _patch(id,{personal_nombre:(personal||'').trim()},'editado',
+                    'responsable → '+(personal||'—'));
+    },
+
+    async setPrioridad(id,prioridad){
+      if(['normal','urgente'].indexOf(prioridad)<0) throw _err('Prioridad no válida: '+prioridad);
+      return _patch(id,{prioridad:prioridad},'editado','prioridad → '+prioridad);
+    },
+
+    /* fecha=null quita la actividad del plan */
+    async planificar(id,fecha){
+      return _patch(id,{fecha_plan:fecha||null},'editado',
+                    fecha?('planificada para '+fecha):'quitada del plan');
+    },
+
+    async eliminar(id){
+      var a=_buscarLocal(id);
+      var copia=a?Object.assign({},a):null;
+      _quitarLocal(id);
+      try{
+        await sb('obra_actividades?id=eq.'+id,{method:'DELETE',prefer:'return=minimal'});
+      }catch(e){
+        if(copia)(S.acts=S.acts||[]).push(copia);
+        throw e;
+      }
+      logCambio('eliminado','actividad',id,(copia&&copia.descripcion)||'','Actividad eliminada');
+      return {ok:true, id:id, eliminada:copia};
+    },
+
+    /* Búsqueda y filtrado — el único motor.
+       c = {q, estados[], areas[], personal[], ingenieros[], prioridad,
+            tipos[], plan:'YYYY-MM-DD'|'hoy'|'sin', retrasadas:true,
+            desde, hasta, limite}                                      */
+    buscar(c){
+      c=c||{};
+      var hoy=today();
+      var base=(c.fuente&&Array.isArray(c.fuente))?c.fuente:(S.acts||[]);
+      var q=_norm(c.q);
+      var r=base.filter(function(a){
+        if(!a) return false;
+        if(q && _norm(a.descripcion).indexOf(q)<0 && _norm(a.area).indexOf(q)<0
+             && _norm(a.personal_nombre).indexOf(q)<0) return false;
+        if(c.estados&&c.estados.length && c.estados.indexOf(a.estado)<0) return false;
+        if(c.areas&&c.areas.length && c.areas.indexOf(a.area||'')<0) return false;
+        if(c.tipos&&c.tipos.length && c.tipos.indexOf(a.tipo_personal||'')<0) return false;
+        if(c.prioridad && (a.prioridad||'normal')!==c.prioridad) return false;
+        if(c.personal&&c.personal.length){
+          var resp=(a.personal_nombre||'').split(',').map(function(s){return s.trim();});
+          if(!c.personal.some(function(p){return resp.indexOf(p)>=0;})) return false;
+        }
+        if(c.ingenieros&&c.ingenieros.length){
+          var ings=(a.ingeniero_nombre||'').split(',').map(function(s){return s.trim();});
+          if(!c.ingenieros.some(function(p){return ings.indexOf(p)>=0;})) return false;
+        }
+        if(c.plan==='hoy'  && a.fecha_plan!==hoy) return false;
+        if(c.plan==='sin'  && a.fecha_plan) return false;
+        if(c.plan && c.plan!=='hoy' && c.plan!=='sin' && a.fecha_plan!==c.plan) return false;
+        if(c.retrasadas && !(a.estado!=='completado' && a.fecha_fin && a.fecha_fin<hoy)) return false;
+        if(c.desde && (a.fecha_fin||a.fecha||'') < c.desde) return false;
+        if(c.hasta && (a.fecha_fin||a.fecha||'') > c.hasta) return false;
+        return true;
+      });
+      return c.limite ? r.slice(0,c.limite) : r;
+    },
+
+    /* Utilidades que el asistente necesita para hablar de la obra */
+    porId(id){ return _buscarLocal(id); },
+    coherencia(actual,patch){ return _coherencia(actual,patch); }
+  };
+
+})();
+
 async function logEvento(tipo, descripcion, ingId){
   var uid_=ingId||(S.user?.id||'');
   var u=USERS[uid_]; if(!u) return;
