@@ -50,7 +50,7 @@ function json(datos, estado, cors){
   });
 }
 
-/* El modelo puede devolver el JSON envuelto en ```json ... ``` o con texto
+/* El modelo puede devolver el JSON envuelto en bloques de codigo o con texto
    alrededor. Se saca el primer objeto que se pueda parsear. */
 function extraerJSON(txt){
   if(!txt) return null;
@@ -157,7 +157,15 @@ async function entender(peticion, env, cors){
     temperature: 0.1
   });
 
-  const orden = extraerJSON(salida && (salida.response || salida.result || ''));
+  /* Modo diagnostico: devuelve tal cual lo que contesto el modelo. Sirve para
+     ver la forma real de la respuesta sin adivinarla. */
+  if(cuerpo.debug) return json({crudo: JSON.stringify(salida).slice(0,900)}, 200, cors);
+
+  /* OJO: cuando el modelo devuelve JSON, salida.response YA VIENE COMO OBJETO,
+     no como texto. Pasarlo por extraerJSON lo convertia en "[object Object]" y
+     se perdia todo. Solo hay que parsear cuando llega como texto. */
+  const bruto = salida && (salida.response !== undefined ? salida.response : salida.result);
+  const orden = (bruto && typeof bruto === 'object') ? bruto : extraerJSON(bruto || '');
   if(!orden || !orden.accion || ACCIONES.indexOf(orden.accion) < 0){
     return json({orden:null}, 200, cors);
   }
