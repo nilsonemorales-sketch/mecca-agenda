@@ -785,7 +785,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260902_15';
+const APP_VERSION='20260902_16';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1817,6 +1817,7 @@ async function loadDriveUrl(){
 async function loadSecundario(){
   // Each call independent — failure of one doesn't break others
   loadDriveUrl().catch(function(){});
+  cargarVozApi().catch(function(){});   // direccion y clave del Worker de voz
   try{
     const semanas=await sb('obra_semanas?order=fecha_inicio.desc&limit=5');
     S.semanas=semanas;
@@ -5089,7 +5090,7 @@ var Comandos = (function(){
    Chrome). En iPhone no hace falta: el teclado trae su propio dictado, y la
    caja acepta texto venga de donde venga. Nada se ejecuta sin confirmar.
    --- */
-var _cmd={intencion:null, candidatas:[], elegida:null, escuchando:false, rec:null, reloj:null};
+var _cmd={intencion:null, candidatas:[], elegida:null, escuchando:false, rec:null, reloj:null, tecla:null};
 
 /* No se bloquea por telefono ni por si esta instalado. Se comprobo contra la
    app de contabilidad de Martha (contabilidad-martha.pages.dev), que funciona
@@ -5111,6 +5112,109 @@ function _cmdEsInstalado(){
 }
 function _cmdSoportaVoz(){
   return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+/* ── VOZ POR GRABACION ────────────────────────────────────────────────────
+   El reconocedor del navegador no se porta igual en cada telefono. Grabar
+   audio SI lo hace bien cualquiera, asi que si hay API configurada se graba
+   y se manda a transcribir. Sin API configurada, se sigue como antes.
+   La direccion y la clave viven en obra_config, no en este archivo: el repo
+   es publico. */
+var _vozApi = null;               // {url, clave} o null
+var _grab = {rec:null, trozos:[], stream:null, grabando:false};
+
+async function cargarVozApi(){
+  try{
+    var filas = await sb('obra_config?key=in.(voz_api_url,voz_api_clave)');
+    var m = {}; (filas||[]).forEach(function(r){ m[r.key]=r.value; });
+    _vozApi = (m.voz_api_url && m.voz_api_clave) ? {url:m.voz_api_url.replace(/\/+$/,''), clave:m.voz_api_clave} : null;
+  }catch(e){ _vozApi = null; }
+  return _vozApi;
+}
+
+function _hayGrabadora(){
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+}
+
+async function _cmdGrabar(){
+  var b = document.getElementById('cmd-mic');
+  try{
+    _grab.stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  }catch(e){
+    _cmdAviso2(e && e.name==='NotAllowedError'
+      ? 'No diste permiso al micrófono'
+      : 'No se pudo abrir el micrófono', 'var(--red)',
+      'Puedes escribir la orden en la caja de arriba.');
+    return;
+  }
+  _grab.trozos = [];
+  var tipo = '';
+  ['audio/mp4','audio/webm;codecs=opus','audio/webm'].some(function(t){
+    if(window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)){ tipo=t; return true; }
+    return false;
+  });
+  try{ _grab.rec = tipo ? new MediaRecorder(_grab.stream,{mimeType:tipo}) : new MediaRecorder(_grab.stream); }
+  catch(e){ _cmdSoltarMic(); _cmdAviso2('Este teléfono no deja grabar','var(--red)','Escribe la orden.'); return; }
+
+  _grab.rec.ondataavailable = function(ev){ if(ev.data && ev.data.size) _grab.trozos.push(ev.data); };
+  _grab.rec.onstop = _cmdMandarAudio;
+  _grab.rec.start();
+  _grab.grabando = true;
+  if(b){ b.style.background='var(--red)'; b.style.color='#fff'; b.textContent='⏹'; }
+  _cmdAviso2('Escuchando… habla ahora','var(--red)','Toca el ⏹ cuando termines.');
+  /* Corte duro a los 30 s: nadie dicta una orden de obra mas larga. */
+  _grab.reloj = setTimeout(function(){ if(_grab.grabando) _cmdPararGrabar(); }, 30000);
+}
+
+function _cmdPararGrabar(){
+  if(_grab.reloj){ clearTimeout(_grab.reloj); _grab.reloj=null; }
+  if(_grab.rec && _grab.grabando){ try{ _grab.rec.stop(); }catch(e){} }
+  _grab.grabando = false;
+  var b=document.getElementById('cmd-mic');
+  if(b){ b.style.background='var(--bg3)'; b.style.color='var(--text2)'; b.textContent='🎤'; }
+}
+
+function _cmdSoltarMic(){
+  if(_grab.stream){ try{ _grab.stream.getTracks().forEach(function(t){t.stop();}); }catch(e){} _grab.stream=null; }
+  _grab.rec=null; _grab.grabando=false;
+}
+
+async function _cmdMandarAudio(){
+  var trozos=_grab.trozos.slice(); _cmdSoltarMic();
+  if(!trozos.length){ _cmdAviso2('No se grabó nada','var(--amber)','Intenta de nuevo o escribe la orden.'); return; }
+  var blob = new Blob(trozos, {type: trozos[0].type || 'audio/mp4'});
+  _cmdAviso2('Transcribiendo…','var(--text3)','');
+  try{
+    var b64 = await _aBase64(blob);
+    var r = await fetch(_vozApi.url+'/api/transcribir', {
+      method:'POST', headers:{'Content-Type':'application/json','X-Clave':_vozApi.clave},
+      body: JSON.stringify({audio:b64})
+    });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var d = await r.json();
+    var txt = (d.texto||'').trim();
+    if(!txt){ _cmdAviso2('No se entendió nada','var(--amber)','Intenta de nuevo o escríbelo.'); return; }
+    var inp=document.getElementById('cmd-txt');
+    if(inp) inp.value=txt;
+    await _cmdAnalizar(txt, true);
+  }catch(e){
+    _cmdAviso2('No se pudo transcribir','var(--red)','Escribe la orden en la caja de arriba.');
+  }
+}
+
+function _aBase64(blob){
+  return new Promise(function(res, rej){
+    var fr=new FileReader();
+    fr.onload=function(){ var s=String(fr.result||''); res(s.slice(s.indexOf(',')+1)); };
+    fr.onerror=rej;
+    fr.readAsDataURL(blob);
+  });
+}
+
+/* Aviso corto reutilizable en el panel del comando. */
+function _cmdAviso2(titulo,color,sub){
+  var p=document.getElementById('cmd-panel');
+  if(p) p.innerHTML=_cmdAviso(titulo,color,sub||'');
 }
 
 function abrirComando(){
@@ -5136,9 +5240,22 @@ function abrirComando(){
       '</div>';
     document.body.appendChild(ov);
     var inp=document.getElementById('cmd-txt');
-    inp.addEventListener('input',function(){ _cmdAnalizar(this.value); });
+    inp.addEventListener('input',function(){
+      var v=this.value;
+      _cmdAnalizar(v, false);                       // patrones, al instante
+      if(_cmd.tecla) clearTimeout(_cmd.tecla);
+      _cmd.tecla=setTimeout(function(){             // la IA, solo si se detuvo
+        var caja=document.getElementById('cmd-txt');
+        if(caja && caja.value===v && !_cmd.intencion) _cmdAnalizar(v, true);
+      },800);
+    });
     inp.addEventListener('keydown',function(e){
-      if(e.key==='Enter'){ e.preventDefault(); _cmdConfirmar(); }
+      if(e.key==='Enter'){
+        e.preventDefault();
+        if(_cmd.tecla){ clearTimeout(_cmd.tecla); _cmd.tecla=null; }
+        if(!_cmd.intencion && _vozApi){ _cmdAnalizar(this.value, true); return; }
+        _cmdConfirmar();
+      }
       if(e.key==='Escape'){ cerrarComando(); }
     });
     if(!_cmdSoportaVoz()){
@@ -5155,12 +5272,21 @@ function abrirComando(){
 
 function cerrarComando(){
   _cmdPararVoz();
+  if(_grab.grabando) _cmdPararGrabar();
+  _cmdSoltarMic();
+  if(_cmd.tecla){ clearTimeout(_cmd.tecla); _cmd.tecla=null; }
   var ov=document.getElementById('cmd-ov'); if(ov) ov.style.display='none';
 }
 
 /* Dictado del navegador. Donde no exista, el boton queda apagado y se usa
    el dictado del teclado del telefono, que escribe en la misma caja. */
 function _cmdVoz(){
+  /* Camino nuevo: grabar y transcribir. Funciona igual en todos los telefonos. */
+  if(_vozApi && _hayGrabadora()){
+    if(_grab.grabando){ _cmdPararGrabar(); return; }
+    _cmdGrabar();
+    return;
+  }
   if(_cmd.escuchando){ _cmdPararVoz(); return; }
   if(!_cmdSoportaVoz()){ _cmdDictadoTeclado(); return; }
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -5215,13 +5341,40 @@ function _cmdPararVoz(){
   if(b){ b.style.background='var(--bg3)'; b.style.color='var(--text2)'; b.textContent='🎤'; }
 }
 
+/* Le pregunta al Worker que quiso decir. Devuelve la misma forma de objeto
+   que Comandos.interpretar, para que el panel de confirmacion no cambie.
+   Nunca ejecuta: solo propone, y el usuario confirma como siempre. */
+async function _cmdPreguntarIA(frase){
+  try{
+    var r=await fetch(_vozApi.url+'/api/entender',{
+      method:'POST', headers:{'Content-Type':'application/json','X-Clave':_vozApi.clave},
+      body: JSON.stringify({frase:frase})
+    });
+    if(!r.ok) return null;
+    var d=await r.json();
+    return (d && d.orden) ? d.orden : null;
+  }catch(e){ return null; }
+}
+
 /* Interpreta lo escrito y pinta el panel. No ejecuta nada. */
-function _cmdAnalizar(txt){
+async function _cmdAnalizar(txt, conIA){
   var p=document.getElementById('cmd-panel'); if(!p) return;
   _cmd.intencion=null; _cmd.candidatas=[]; _cmd.elegida=null;
   if(!(txt||'').trim()){ p.innerHTML=''; return; }
 
+  /* Primero los patrones: son instantaneos, no gastan nada y no necesitan
+     internet. La IA solo entra cuando los patrones no entienden, y solo
+     cuando el llamador lo permite (al dictar, o tras una pausa al escribir).
+     Sin esto se consultaria en cada tecla. */
   var i=Comandos.interpretar(txt);
+  if(!i && conIA && _vozApi && (txt||'').trim().length>3){
+    p.innerHTML=_cmdAviso('Pensando…','var(--text3)','');
+    i=await _cmdPreguntarIA(txt);
+    /* Si el usuario siguio escribiendo mientras se pensaba, esta respuesta
+       ya no corresponde a lo que hay en la caja: se descarta. */
+    var caja=document.getElementById('cmd-txt');
+    if(caja && caja.value.trim()!==String(txt).trim()) return;
+  }
   if(!i){
     p.innerHTML=_cmdAviso('No entendí esa orden','var(--text3)',
       'Prueba con un verbo al principio: marca, pon, inicia, pausa, asigna, planifica, busca.');
