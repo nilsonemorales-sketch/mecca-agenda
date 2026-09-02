@@ -785,7 +785,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260902_14';
+const APP_VERSION='20260902_15';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5091,12 +5091,15 @@ var Comandos = (function(){
    --- */
 var _cmd={intencion:null, candidatas:[], elegida:null, escuchando:false, rec:null, reloj:null};
 
-/* En iPhone el reconocimiento del navegador SI funciona --- dentro de Safari.
-   Lo que NO funciona es cuando la pagina se abre desde el icono de la pantalla
-   de inicio (modo "instalado"): ahi WebKit expone el objeto, arranca, y no
-   devuelve nada nunca ni avisa que termino. Por eso la decision es por
-   CONTEXTO, no por telefono. En Safari se intenta; con el icono se manda
-   directo al dictado del teclado. */
+/* No se bloquea por telefono ni por si esta instalado. Se comprobo contra la
+   app de contabilidad de Martha (contabilidad-martha.pages.dev), que funciona
+   en el mismo iPhone: usa el mismo webkitSpeechRecognition, lleva la misma
+   etiqueta apple-mobile-web-app-capable, y NO detecta iOS ni el modo instalado.
+   La unica diferencia era el idioma: ella pide 'es' y aqui se pedia 'es-DO'.
+   iOS no reconoce todas las variantes regionales; cuando no la reconoce el
+   objeto arranca y no devuelve nada nunca --- exactamente el congelamiento que
+   se reporto. Ahora se pide 'es' y el vigilante queda solo como red de
+   seguridad, no como excusa para no intentarlo. */
 function _cmdEsIOS(){
   var ua=navigator.userAgent||'';
   return /iPad|iPhone|iPod/.test(ua) ||
@@ -5107,9 +5110,7 @@ function _cmdEsInstalado(){
   try{ return window.matchMedia('(display-mode: standalone)').matches; }catch(e){ return false; }
 }
 function _cmdSoportaVoz(){
-  if(!(window.SpeechRecognition || window.webkitSpeechRecognition)) return false;
-  if(_cmdEsIOS() && _cmdEsInstalado()) return false;
-  return true;
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 }
 
 function abrirComando(){
@@ -5165,7 +5166,7 @@ function _cmdVoz(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   try{
     var r=new SR();
-    r.lang='es-DO'; r.interimResults=true; r.continuous=false; r.maxAlternatives=1;
+    r.lang='es'; r.interimResults=true; r.continuous=false; r.maxAlternatives=1;
     var llego=false;
     r.onresult=function(e){
       llego=true;
@@ -5201,11 +5202,8 @@ function _cmdDictadoTeclado(){
   if(inp) inp.focus();
   var p=document.getElementById('cmd-panel');
   if(p && !(inp&&inp.value.trim())){
-    var extra=(_cmdEsIOS()&&_cmdEsInstalado())
-      ? ' (Abierto desde el ícono, iPhone no deja escuchar al app. En Safari sí funciona el 🎤 de aquí.)'
-      : '';
     p.innerHTML=_cmdAviso('Dicta con el micrófono de tu teclado','var(--blue)',
-      'Toca la caja de arriba y luego el 🎤 del teclado, junto a la barra espaciadora. Lo que digas se escribe aquí.'+extra);
+      'Toca la caja de arriba y luego el 🎤 del teclado, junto a la barra espaciadora. Lo que digas se escribe aquí.');
   }
 }
 
@@ -12106,22 +12104,42 @@ async function revNota(id){
     '<div style="font-size:13px;opacity:.6">Toca la pantalla para terminar</div>';
   document.body.appendChild(ov);
 
-  var r=new SR(), txt='', cerrado=false;
-  r.lang='es-DO'; r.continuous=true; r.interimResults=true;
+  var r=new SR(), txt='', cerrado=false, llego=false, reloj=null;
+  /* 'es' y no 'es-DO': iOS no reconoce todas las variantes regionales y cuando
+     no la reconoce arranca y no devuelve nada nunca. */
+  r.lang='es'; r.continuous=true; r.interimResults=true;
   r.onresult=function(e){
     var fin='',par='';
     for(var i=e.resultIndex;i<e.results.length;i++){
       if(e.results[i].isFinal) fin+=e.results[i][0].transcript; else par+=e.results[i][0].transcript;
     }
     if(fin) txt+=fin;
+    llego=true;
     var d=document.getElementById('rev-dict');
     if(d) d.textContent=(txt+par).trim()||'Escuchando…';
   };
   r.onend=function(){ if(!cerrado) cerrar(); };
-  r.onerror=function(){};
+  r.onerror=function(e){
+    var d=document.getElementById('rev-dict');
+    if(d) d.textContent=(e&&e.error==='not-allowed')
+      ? 'No diste permiso al micrófono'
+      : 'No se pudo escuchar — toca para salir y escríbelo';
+    setTimeout(function(){ if(!cerrado) cerrar(); },1800);
+  };
+  /* Vigilante: si en 8 segundos no llego nada, se cierra solo en vez de dejar
+     la pantalla negra pegada. */
+  reloj=setTimeout(function(){
+    if(!llego && !cerrado){
+      var d=document.getElementById('rev-dict');
+      if(d) d.textContent='El micrófono no respondió — escribe la nota';
+      setTimeout(function(){ if(!cerrado) cerrar(); },1500);
+    }
+  },8000);
   async function cerrar(){
     if(cerrado) return; cerrado=true;
+    if(reloj){ clearTimeout(reloj); reloj=null; }
     try{ r.stop(); }catch(e){}
+    try{ r.abort&&r.abort(); }catch(e){}
     ov.remove();
     var t=txt.trim();
     if(!t){ showToast('No se escuchó nada','warn'); return; }
