@@ -785,7 +785,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260902_16';
+const APP_VERSION='20260905_17';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -2554,7 +2554,11 @@ async function planDiaCrearAct(){
   try{ Acciones.validar(datos,{}); }
   catch(e){
     if(e.codigo==='duplicado'){
-      if(!confirm('Ya existe una actividad igual sin completar en esa ubicacion.\n\n"'+desc+'"\n\n¿Crearla de todas formas?')) return;
+      var _ya=(e.parecidas||[]).map(function(c){
+        var a=c.act||c;
+        return '  \u2022 '+(a.descripcion||'')+'  ('+(a.personal_nombre||'sin asignar')+', '+(a.estado||'')+')';
+      }).join('\n');
+      if(!confirm('Puede que esto ya exista en '+(datos.area||'esa ubicacion')+'.\n\nVas a crear:\n  "'+desc+'"\n\nYa hay:\n'+_ya+'\n\n¿Crearla de todas formas?')) return;
     }else{ showToast(e.message,'err',4500); return; }
   }
   try{
@@ -4521,6 +4525,271 @@ function logCambio(accion, entidad, entidadId, entidadNombre, detalle){
 }
 
 
+/* El aviso de duplicado. Antes solo decia "ya existe algo parecido" sin
+   ensenar QUE, asi que no servia para decidir. Ahora lista hasta tres, con
+   su contratista y su estado, y un boton para ir a verla. */
+function _dupHTML(e, desc, area, alGuardar){
+  var lista = (e && e.parecidas) || [];
+  var filas = lista.map(function(c){
+    var a=c.act||c, pct=Math.round((c.puntaje||0)*100);
+    var col = c.puntaje>=0.9 ? 'var(--red)' : 'var(--amber)';
+    return '<div style="border-top:1px solid #ffd9a8;padding:7px 0">'+
+      '<div style="font-weight:700;color:var(--text);font-size:12px">'+esc(a.descripcion||'')+'</div>'+
+      '<div style="color:var(--text2);font-size:11px;margin-top:2px">'+
+        esc(a.personal_nombre||'sin asignar')+' &middot; '+esc(a.estado||'')+
+        ' &middot; <span style="color:'+col+';font-weight:700">'+pct+'% parecida</span>'+
+      '</div>'+
+      (a.id?('<button onclick="closeModal();setTimeout(function(){editAct(\''+a.id+'\')},60)" '+
+        'style="margin-top:5px;padding:3px 10px;border-radius:7px;border:1px solid var(--border2);'+
+        'background:transparent;color:var(--text2);font-size:11px;cursor:pointer;font-family:var(--font)">Ver esta</button>'):'')+
+    '</div>';
+  }).join('');
+  return '<div style="font-weight:700;color:var(--amber);margin-bottom:4px">Puede que esto ya exista</div>'+
+    '<div style="color:var(--text2);font-size:11px;margin-bottom:4px">Vas a crear &laquo;'+esc(desc)+'&raquo; en '+esc(area||'sin area')+'</div>'+
+    filas+
+    '<div style="display:flex;gap:8px;margin-top:9px;border-top:1px solid #ffd9a8;padding-top:9px">'+
+      '<button onclick="_dupConfirmed=true;'+alGuardar+'" style="padding:5px 14px;border-radius:8px;border:none;background:#fd7e14;color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:var(--font)">Guardar igual</button>'+
+      '<button onclick="var w=document.getElementById(\'a-dup-warn\');if(w)w.style.display=\'none\'" style="padding:5px 12px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>'+
+    '</div>';
+}
+
+/* ---
+   PARECIDO ENTRE ACTIVIDADES — el detector de duplicados.
+   Calibrado el 5-sep-2026 contra las 2,348 actividades reales de Mecca.
+   Acierta 16 de los 18 casos del recorrido del 4-sep. Con el umbral de 0.75
+   avisa en 2 de cada 10 creaciones.
+   --- */
+var Parecido = (function(){
+/* Motor de parecido entre descripciones de obra — Mecca Residence.
+
+   POR QUE ESTA HECHO ASI (dos intentos fallidos antes, escritos para que
+   nadie los repita):
+
+   1. Comparar las palabras de las dos frases y sacar un porcentaje NO sirve.
+      En un apartamento todo se parece: "topes de cuarzo - cocina principal" y
+      "topes de cuarzo - cocina caliente" comparten el 80% de las palabras y
+      son dos trabajos distintos. Medido contra las 2,348 actividades reales,
+      los pares que SI eran duplicados daban 0.31-0.55 y los que NO daban
+      0.67-0.80: los rangos se cruzaban.
+
+   2. Recortar la terminacion de cada palabra con una lista de colas dejaba
+      "masilla" y "masillado" como palabras distintas, y "techo" distinto de
+      "techos". Eso solo se arregla recortando a un largo fijo.
+
+   LO QUE SI FUNCIONA — una actividad de obra son tres cosas:
+     DONDE  el sitio manda. Sitios distintos = trabajos distintos, aunque el
+            texto sea casi igual. Es la regla que mas falsos avisos evita.
+     QUE    y dentro del QUE, el objeto pesa mas que el verbo: en obra el
+            verbo cambia (colocar / instalar / dar / terminar / corregir)
+            pero el objeto no (registro, zocalo, estuco, mocheta).
+     QUIEN  mismo contratista sube la sospecha; contratistas distintos casi
+            siempre son partidas distintas. */
+
+var VACIAS = ('de la el los las un una unos unas y o u en con por para al del a'
+  + ' que se su sus lo le les mas mismo misma donde esta este esa ese eso'
+  + ' sobre luego antes despues tras hasta desde entre cada todo toda todos todas'
+  + ' general generales pendiente pendientes ya solo solamente aun tambien'
+  + ' apartamento apto nivel obra').split(' ');
+
+/* Verbos de obra. Pesan menos: describen la accion, no la partida. */
+var VERBOS = ('insta coloc dar hacer termi corre revis compl poner monta'
+  + ' ajust retoq retoc repar cambi reemp limpi subir subid bajar bajad'
+  + ' pulir pulid lijar lijad resan verif confi aplic pasar quita retir'
+  + ' pinta pintu conclu concl dando').split(' ');
+
+/* Palabras que marcan la ETAPA del trabajo, no la partida. "Instalar la
+   tuberia" y "probar la tuberia" hablan del mismo tubo y son dos talleres
+   distintos, uno detras del otro. Si una frase la lleva y la otra no, hay
+   que bajarle la sospecha. */
+var ETAPAS = ('prueb fabri entre repla levan antid desmo acopi compr pedid'
+  + ' cotiz trasl medic').split(' ');
+
+/* Sitios de un apartamento de Mecca. Lo mas especifico primero: "cocina
+   caliente" tiene que ganarle a "cocina". */
+var SITIOS = [
+  ['cocina-caliente',   [/cocina\s+caliente/]],
+  ['cocina-principal',  [/cocina\s+principal/, /cocina\s+fria/]],
+  ['bano-principal',    [/bano\s+principal/, /bano\s+de\s+la\s+habitacion\s+principal/]],
+  ['bano-comun',        [/bano\s+comun/]],
+  ['bano-visita',       [/bano\s+de\s+visita/, /medio\s+bano/]],
+  ['bano-servicio',     [/bano\s+de\s+servicio/, /bano\s+servicio/]],
+  ['hab-servicio',      [/(habitacion|cuarto|hab)\s+(de\s+)?servicio/]],
+  ['hab-principal',     [/(habitacion|hab)\.?\s+principal/]],
+  ['hab-secundaria-1',  [/(habitacion|hab)\.?\s*(secundaria)?\s*(numero\s*)?1\b/, /secundaria\s+uno/]],
+  ['hab-secundaria-2',  [/(habitacion|hab)\.?\s*(secundaria)?\s*(numero\s*)?2\b/, /secundaria\s+dos/]],
+  ['area-lavado',       [/areas?\s+de\s+lavado/, /lavanderia/]],
+  ['balcon',            [/balcon(es)?/]],
+  ['sala',              [/\bsala\b/]],
+  ['comedor',           [/comedor/]],
+  ['recibidor',         [/recibidor/]],
+  ['pasillo',           [/pasillo/]],
+  ['closet',            [/closets?/]],
+  ['despensa',          [/despensa/]],
+  ['patinillo',         [/patinillo/]],
+  ['jardinera',         [/jardinera/]],
+  ['fachada',           [/fachada/]],
+  ['lobby',             [/lobby/]],
+  ['gym',               [/\bgym\b/, /gimnasio/]],
+  /* Genericos al final: solo agarran lo que no cayo en un sitio concreto. */
+  ['bano',              [/banos?\b/]],
+  ['cocina',            [/cocinas?\b/]],
+  ['habitacion',        [/habitacion(es)?\b/]]
+];
+
+function normalizar(s){
+  return String(s||'')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9 ]+/g,' ')
+    .replace(/\s+/g,' ').trim();
+}
+
+/* Recorta la palabra a su primer trozo, para que "masilla", "masillado" y
+   "masillar" sean la misma. Primero quita el plural, luego corta a 5.
+   Cortar a 6 NO basta: dejaba "ajuste" y "ajusta"(r) como palabras distintas,
+   y por eso "ajuste de puertas" no encontraba "Ajustar puertas de closets".
+   Rustico a proposito: en obra no hace falta gramatica, hace falta que el
+   ingeniero y el app llamen igual a la misma cosa. */
+function raiz(p){
+  if(p.length>4 && p.slice(-2)==='es') p=p.slice(0,-2);
+  else if(p.length>3 && p.slice(-1)==='s') p=p.slice(0,-1);
+  return p.slice(0,5);
+}
+
+/* Que sitios del apartamento nombra la frase. Puede ser ninguno. */
+function sitiosDe(s){
+  var t = normalizar(s), out = [];
+  SITIOS.forEach(function(par){
+    for(var i=0;i<par[1].length;i++){
+      var rx = new RegExp(par[1][i].source);
+      if(rx.test(t)){
+        out.push(par[0]);
+        t = t.replace(new RegExp(par[1][i].source,'g'),' ');
+        break;
+      }
+    }
+  });
+  return out;
+}
+
+/* Las palabras del TRABAJO, sin las que nombran el sitio, con su peso:
+   el objeto vale 1, el verbo vale 0.35. */
+function pesos(s){
+  var t = normalizar(s);
+  SITIOS.forEach(function(par){
+    par[1].forEach(function(rx){ t = t.replace(new RegExp(rx.source,'g'),' '); });
+  });
+  var out = {};
+  t.split(' ').forEach(function(p){
+    if(!p || p.length<3) return;
+    if(VACIAS.indexOf(p)>=0) return;
+    if(/^\d+$/.test(p)) return;
+    var r = raiz(p);
+    out[r] = (VERBOS.indexOf(r)>=0) ? 0.35 : 1;
+  });
+  return out;
+}
+
+function raices(s){ return Object.keys(pesos(s)); }
+
+function _suma(o){ var t=0; for(var k in o) t+=o[k]; return t; }
+
+/* Compara dos actividades. Devuelve 0 a 1.
+   x, y = texto, o {descripcion, personal_nombre}. */
+function parecido(x, y){
+  var dx = typeof x==='string' ? x : (x&&x.descripcion) || '';
+  var dy = typeof y==='string' ? y : (y&&y.descripcion) || '';
+  var px = typeof x==='string' ? '' : normalizar((x&&x.personal_nombre)||'');
+  var py = typeof y==='string' ? '' : normalizar((y&&y.personal_nombre)||'');
+
+  /* 1. El sitio manda: si las dos dicen donde y no coinciden en nada, son
+        partidas distintas por mucho que el texto se parezca. */
+  var sx = sitiosDe(dx), sy = sitiosDe(dy);
+  var mismoSitio = false;
+  if(sx.length && sy.length){
+    mismoSitio = sx.some(function(s){ return sy.indexOf(s)>=0; });
+    if(!mismoSitio) return 0;
+  }
+
+  var A = pesos(dx), B = pesos(dy);
+  var ka = Object.keys(A), kb = Object.keys(B);
+  if(!ka.length || !kb.length) return 0;
+
+  var comun = 0, comunObj = 0, objA = 0, objB = 0;
+  ka.forEach(function(k){
+    if(A[k] === 1) objA++;
+    if(B[k] != null){ comun += Math.min(A[k],B[k]); if(A[k]===1&&B[k]===1) comunObj++; }
+  });
+  kb.forEach(function(k){ if(B[k] === 1) objB++; });
+  if(!comun) return 0;
+
+  var pa = _suma(A), pb = _suma(B);
+  var dice = (2*comun)/(pa+pb);
+  var p = dice;
+
+  /* Contencion: la frase corta cabe entera dentro de la larga. Es lo que
+     atrapa "ajuste de puertas" dentro de "ajustar puertas de closets ...".
+     Exige que la corta traiga al menos UN objeto y que todos sus objetos
+     esten en la larga. Sin esa condicion, "lijado y pintado - closets"
+     (que solo tiene verbos) caia dentro de "lijado y pintado - puertas". */
+  var minObj = Math.min(objA, objB);
+  if(minObj >= 1 && comunObj === minObj){
+    p = Math.max(p, (comun/Math.min(pa,pb)) * 0.92);
+    /* Comparten todos los objetos de la mas corta: sospecha de base. */
+    p = Math.max(p, 0.55 + 0.10*Math.min(comunObj,3));
+  }
+
+  /* Etapa distinta: una dice "prueba" o "fabricacion" y la otra no. Es el
+     mismo objeto en dos momentos del proceso, no la misma partida. */
+  var ex = ka.some(function(k){ return ETAPAS.indexOf(k)>=0; });
+  var ey = kb.some(function(k){ return ETAPAS.indexOf(k)>=0; });
+  if(ex !== ey) p = p*0.72;
+
+  /* Mismo sitio nombrado: coincidencia fuerte. */
+  if(mismoSitio) p = Math.min(1, p*1.15);
+
+  /* El contratista ajusta. */
+  if(px && py){
+    if(px === py) p = Math.min(1, p*1.10);
+    else          p = p*0.70;
+  }
+
+  return Math.min(1, p);
+}
+
+/* Busca lo que se parece a una descripcion dentro de una lista.
+   Devuelve como mucho `tope`, de mas parecida a menos. */
+function buscarParecidas(desc, personal, lista, opts){
+  opts = opts || {};
+  var umbral = opts.umbral != null ? opts.umbral : 0.60;
+  var tope   = opts.tope   != null ? opts.tope   : 3;
+  var yo     = {descripcion:desc, personal_nombre:personal||''};
+  var r = [];
+  (lista||[]).forEach(function(a){
+    if(!a || !a.descripcion) return;
+    if(opts.excluirId && a.id === opts.excluirId) return;
+    if(!opts.incluirCompletadas && a.estado === 'completado') return;
+    if(opts.areas && opts.areas.length && opts.areas.indexOf(a.area||'') < 0) return;
+    var p = parecido(yo, a);
+    if(p >= umbral) r.push({act:a, puntaje:p});
+  });
+  r.sort(function(u,v){ return v.puntaje - u.puntaje; });
+  return r.slice(0, tope);
+}
+
+  return {parecido:parecido, buscarParecidas:buscarParecidas,
+          raices:raices, pesos:pesos, sitiosDe:sitiosDe,
+          normalizar:normalizar, raiz:raiz};
+})();
+
+/* Que tan desconfiado es el app al crear. Subelo para que avise menos,
+   bajalo para que avise mas. Medido contra las 2,348 reales:
+     0.90 -> avisa en 2 de cada 10 creaciones   <- puesto el 5-sep-2026
+     0.75 -> avisa en 3 de cada 10
+     0.60 -> avisa en 4 de cada 10
+   De 0.75 a 0.90 atrapa los mismos casos reales, asi que 0.90 sale gratis. */
+var UMBRAL_DUPLICADO = 0.90;
+
 /* ---
    CAPA DE ACCIONES — el único camino para escribir actividades.
    La interfaz y el asistente llaman aquí; nadie vuelve a escribir directo
@@ -4655,13 +4924,26 @@ var Acciones = (function(){
 
     var ubicaciones=(opts.ubicaciones&&opts.ubicaciones.length)?opts.ubicaciones:[d.area||''];
 
+    /* Duplicados. Antes solo cazaba la descripcion IDENTICA, y por eso no
+       avisaba nunca: nadie escribe dos veces la misma frase. Ahora usa el
+       motor de Parecido, que mira el sitio, el objeto y el contratista.
+       Solo compara contra lo que esta ABIERTO: lo completado no estorba. */
     if(!opts.confirmarDuplicado){
-      var dn=_norm(d.descripcion);
-      var cand=(S.acts||[]).concat(S.abiertas||[]).filter(function(x){
-        return x && x.estado!=='completado' && _norm(x.descripcion)===dn
-            && ubicaciones.indexOf(x.area||'')>=0;
+      var vistos={}, cand=[];
+      (S.acts||[]).concat(S.abiertas||[]).forEach(function(x){
+        if(!x || !x.id || vistos[x.id]) return;
+        vistos[x.id]=1;
+        if(x.estado==='completado') return;
+        if(ubicaciones.indexOf(x.area||'')<0) return;
+        var p=Parecido.parecido({descripcion:d.descripcion, personal_nombre:d.personal_nombre},x);
+        if(p>=UMBRAL_DUPLICADO) cand.push({act:x, puntaje:p});
       });
-      if(cand.length) throw _err('Ya existe una actividad igual sin completar en esa ubicación','duplicado',{candidatas:cand});
+      if(cand.length){
+        cand.sort(function(u,v){ return v.puntaje-u.puntaje; });
+        cand=cand.slice(0,3);
+        throw _err('Puede que esto ya exista en esa ubicación','duplicado',
+                   {candidatas:cand.map(function(c){return c.act;}), parecidas:cand});
+      }
     }
     return {datos:d, ubicaciones:ubicaciones};
   }
@@ -6527,12 +6809,7 @@ function _actMostrarError(e,ai,desc,area){
   if(e.codigo==='duplicado'){
     caja('a-dup-warn','background:var(--amber-light);border:1.5px solid #fd7e14;border-radius:10px;padding:10px 12px;margin:6px 0;font-size:12px;font-family:var(--font)',
       function(el){ var d=document.getElementById('a-d'); if(d&&d.parentNode) d.parentNode.insertBefore(el,d.nextSibling); })
-      .innerHTML='<div style="font-weight:700;color:var(--amber);margin-bottom:6px">Ya existe una actividad similar sin completar en esta area</div>'+
-        '<div style="color:var(--text2);font-size:11px;margin-bottom:8px">&laquo;'+esc(desc)+'&raquo; &middot; '+esc(area||'Sin area')+'</div>'+
-        '<div style="display:flex;gap:8px">'+
-          '<button onclick="_dupConfirmed=true;saveAct('+ai+')" style="padding:5px 14px;border-radius:8px;border:none;background:#fd7e14;color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:var(--font)">Guardar igual</button>'+
-          '<button onclick="document.getElementById(\'a-dup-warn\').style.display=\'none\'" style="padding:5px 12px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--font)">Cancelar</button>'+
-        '</div>';
+      .innerHTML=_dupHTML(e, desc, area, 'saveAct('+ai+')');
     return;
   }
   showToast(e.message||'No se pudo guardar','err',4000);
