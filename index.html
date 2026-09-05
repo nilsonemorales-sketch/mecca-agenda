@@ -13,51 +13,88 @@
 <title>Agenda de Obra — Mecca Residence</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  --r:10px;--r2:14px;--r3:20px;
-  --font:'Plus Jakarta Sans',sans-serif;
-  --mono:'JetBrains Mono',monospace;
+  --r:12px;--r2:18px;--r3:26px;
+  --font:'Outfit','Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif;
+  --tit:'Sora','Outfit',ui-sans-serif,system-ui,sans-serif;
+  --mono:'Sora','JetBrains Mono',ui-monospace,monospace;
   --sb:env(safe-area-inset-bottom,0px);--st:env(safe-area-inset-top,0px);
   --sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px);
 
-  --bg:#0e0d13;
-  --bg2:#17161f;
-  --bg3:#1c1a26;
-  --bg4:#232030;
-  --border:#2a2736;
-  --border2:#3b3752;
-  --text:#f2f0f7;
-  --text1:#f2f0f7;   /* alias: se usa en 20 lugares y no estaba definida */
-  --text2:#b6b1c7;
-  --text3:#8e87a8;   /* subido de #7c7693: no llegaba al mínimo legible (4.5:1) sobre ningún fondo del tema */
-  --accent:#a78bfa;
-  --accent2:#8b5cf6;
-  --accent-light:#1d1830;
-  --accent-soft:#251f3d;
-  --green:#0ca30c;--green-light:#122a12;
-  --green-fill:#0a7d0a;  /* verde para rellenar con texto blanco encima: #0ca30c solo da 3.35:1 */
-  --red:#d03b3b;--red-light:#2c1618;
-  --amber:#fab219;--amber-light:#2c2311;
-  --blue:#60a5fa;--blue-light:#13203a;
+  /* ── Paleta Bridex v2 ──────────────────────────────────────
+     El verde (#326731) y el morado (#8a00b8) del logo sobre fondo
+     NEUTRO, casi negro: cuando el fondo no compite, los dos colores
+     se ven vivos. Sin bordes visibles: la profundidad la da el tono
+     (bg < bg2 < bg3 < bg4), y --border queda como una linea al 7%
+     de blanco para que lo que hoy la usa no desaparezca. Cada par
+     texto/fondo se midio: minimo 4.4:1 en textos, 3:1 en elementos. */
+  --bg:#0e0f10;
+  --bg2:#161719;
+  --bg3:#1d1e21;
+  --bg4:#25262a;
+  --border:rgba(255,255,255,.07);
+  --border2:rgba(255,255,255,.13);
+  --text:#f3f4f2;
+  --text1:#f3f4f2;
+  --text2:#a9adaa;
+  --text3:#8b908c;
+  --accent:#c26cf0;      /* morado claro: texto, bordes, iconos */
+  --accent2:#b345e6;
+  --accent-light:rgba(194,108,240,.10);
+  --accent-soft:rgba(194,108,240,.16);
+  --green:#5cc45a;--green-light:rgba(92,196,90,.14);
+  --green-fill:#3a7c3a;  /* verde de relleno con texto blanco encima: 5.4:1 */
+  --red:#f27878;--red-light:rgba(242,120,120,.13);
+  --amber:#f0b657;--amber-light:rgba(240,182,87,.13);
+  --blue:#6bb0f5;--blue-light:rgba(107,176,245,.13);
   --shadow-xs:0 1px 3px rgba(0,0,0,.5);
-  --shadow:0 2px 8px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.05);
+  --shadow:0 2px 10px rgba(0,0,0,.35);
   --shadow-md:0 6px 20px rgba(0,0,0,.6);
   --shadow-lg:0 16px 40px rgba(0,0,0,.7);
-  --hdr-grad:linear-gradient(135deg,#15131f 0%,#241a3d 60%,#37226b 100%);
+  --hdr-grad:#161719;  /* plana: el titulo grande y el resto en gris hacen la jerarquia */
   --accent-on:#ffffff;
-  --accent-fill:#7c3aed;
+  --accent-fill:#a021d4;  /* morado de relleno con texto blanco: 5.7:1 */
   color-scheme:dark;
   color-scheme:dark;
 }
+
+/* ── CABECERA v2 ──────────────────────────────────────────
+   Siete controles no caben en un telefono. Actualizar ya corre solo
+   al abrir, y el PDF vive en Hoy y en Reportes: en movil se quitan
+   de aqui. Los botones de icono pierden el borde de antes.       */
+.hdr-l{flex:1}
+.hdr-l>div{min-width:0}
+.hdr-l>div>div:last-child{min-width:0}
+.hdr-r button{border:none !important;background:var(--bg3) !important;color:var(--text) !important;border-radius:10px !important}
+@media(max-width:600px){
+  #btn-refresh{display:none !important}
+  .hdr-r .ibtn.primary{display:none !important}
+}
+
+/* ── LETRA Y BOTONES ───────────────────────────────────────
+   Outfit para el texto (redonda, se lee de un golpe en el telefono)
+   y Sora para numeros y titulos (geometrica, los numeros se ven
+   firmes). Los botones suben a 44px de alto minimo: es lo que hace
+   falta para tocarlos con el dedo sucio o con guante. Los de icono
+   quedan fuera de esa regla, que si no se deforman.            */
+h1,h2,h3,.tit,.hdr-t,.kpi-n,.pct,.big-num{font-family:var(--tit);letter-spacing:-.02em}
+button,input,select,textarea{font-family:var(--font)}
+button{border-radius:var(--r);transition:transform .1s ease,filter .14s ease,
+  background .14s ease,border-color .14s ease}
+button:active{transform:scale(.975)}
+/* alto de toque: solo a los botones con texto, no a los de icono */
+button:not([class*="ic"]):not([class*="icon"]):not([data-mini]){min-height:44px}
+.tab,.chip,.pill{border-radius:var(--r)}
 
 /* ── MODO OSCURO ──────────────────────────────────────────
    Mismos nombres de variable, valores para superficie oscura.
    Los colores de estado (verde/rojo/ámbar) son fijos del sistema
    de diseño y pasan contraste sobre fondo oscuro.            */
-.hdr{box-shadow:0 4px 20px rgba(0,0,0,.5) !important}
+.hdr{box-shadow:none !important}
 img,.thumb img{filter:brightness(.92)}
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px}
 body{padding-left:var(--sl);padding-right:var(--sr)}
@@ -130,22 +167,20 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 /* ── HEADER ── */
 .hdr{
   background:var(--hdr-grad) !important;
-  padding:14px 16px;padding-top:calc(14px + var(--st));
+  padding:12px 14px;padding-top:calc(12px + var(--st));
   display:flex;align-items:center;justify-content:space-between;
   flex-shrink:0;gap:8px;
-  box-shadow:0 4px 20px rgba(124,58,237,.35);
+  box-shadow:none;
   position:relative;overflow:hidden;
 }
-.hdr::before{content:'';position:absolute;top:-40px;right:-30px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none}
-.hdr::after{content:'';position:absolute;bottom:-50px;right:60px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.04);pointer-events:none}
 .hdr-l{display:flex;align-items:center;gap:10px;min-width:0;position:relative}
-.menu-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:#fff;font-size:16px;cursor:pointer;padding:7px 10px;line-height:1;flex-shrink:0;border-radius:10px;transition:all .15s}
+.menu-btn{background:var(--bg3);border:none;color:var(--text);font-size:16px;cursor:pointer;padding:7px 10px;line-height:1;flex-shrink:0;border-radius:10px;transition:all .15s}
 .menu-btn:hover{background:rgba(255,255,255,.22)}
-.logo-dot{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.15);flex-shrink:0;backdrop-filter:blur(4px)}
-.hdr-title{font-size:14px;font-weight:800;color:#fff !important;letter-spacing:-.2px}
-.hdr-sub{font-size:11px;color:rgba(255,255,255,.6);font-family:var(--mono)}
+.logo-dot{width:38px;height:38px;border-radius:12px;background:#326731;border:none;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hdr-title{font-size:15px;font-weight:700;color:var(--text) !important;letter-spacing:-.02em;font-family:var(--tit);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-sub{font-size:11px;color:var(--text2);font-family:var(--font);white-space:nowrap}
 .hdr-r{display:flex;gap:6px;flex-shrink:0;align-items:center;position:relative}
-.ibtn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:var(--r);padding:7px 13px;font-size:12px;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:all .15s;font-weight:600}
+.ibtn{background:var(--bg3);border:none;color:var(--text);border-radius:var(--r);padding:7px 13px;font-size:12px;cursor:pointer;font-family:var(--font);white-space:nowrap;transition:all .15s;font-weight:600}
 .ibtn:hover{background:rgba(255,255,255,.22)}
 .ibtn.primary{background:var(--accent-fill) !important;color:#fff !important;border-color:transparent !important;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .ibtn.primary:hover{background:var(--accent)}
@@ -224,7 +259,7 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none}
 
 /* ── FAB ── */
-.add-fab{position:fixed;bottom:calc(78px + var(--sb));right:16px;width:54px;height:54px;border-radius:16px;background:linear-gradient(135deg,var(--accent),#7c3aed);border:none;color:#fff;font-size:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(124,58,237,.45);z-index:50;transition:transform .15s,box-shadow .15s}
+.add-fab{position:fixed;bottom:calc(78px + var(--sb));right:16px;width:54px;height:54px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent-fill));border:none;color:#fff;font-size:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(160,33,212,.42);z-index:50;transition:transform .15s,box-shadow .15s}
 .add-fab:active{transform:scale(.92);box-shadow:0 2px 10px rgba(124,58,237,.3)}
 
 /* ── ASISTENCIA ── */
@@ -313,10 +348,10 @@ select{-webkit-appearance:none;appearance:none;background-image:url("data:image/
 .dw-prog-fill{height:100%;background:var(--accent-fill);border-radius:2px;transition:width .4s}
 
 /* ── USER BADGE ── */
-.ubadge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);padding:5px 10px;border-radius:8px;cursor:pointer;border:1px solid rgba(255,255,255,.2);transition:all .15s;white-space:nowrap;font-weight:700}
-.ubadge.admin{background:rgba(255,255,255,.15);color:var(--text);border-color:rgba(233,213,255,.3)}
-.ubadge.ing{background:rgba(255,255,255,.1);color:var(--text);border-color:rgba(221,214,254,.2)}
-.ubadge.guest{background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.12)}
+.ubadge{display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-family:var(--tit);width:38px;height:38px;border-radius:50%;cursor:pointer;border:none;transition:all .15s;white-space:nowrap;font-weight:700;overflow:hidden}
+.ubadge.admin{background:var(--accent-soft);color:var(--accent)}
+.ubadge.ing{background:var(--green-light);color:var(--green)}
+.ubadge.guest{background:var(--bg3);color:var(--text2);width:auto;padding:0 12px;border-radius:10px;font-family:var(--font);font-size:12px}
 
 /* ── MODAL ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(30,27,75,.6);z-index:300;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px)}
@@ -390,7 +425,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
   #sidebar.sb-collapsed .sb-logout{width:40px;margin:4px 8px 16px;padding:9px;justify-content:center}
   #sidebar.sb-collapsed .sb-toggle{justify-content:center}
   .sb-logo{padding:16px 14px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0}
-  .sb-logo-icon{width:36px;height:36px;border-radius:11px;background:linear-gradient(135deg,#6b238e,#4a1870);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(107,35,142,.4)}
+  .sb-logo-icon{width:36px;height:36px;border-radius:11px;background:#326731;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
   .sb-brand{font-size:12.5px;font-weight:800;color:#fff;letter-spacing:.2px;white-space:nowrap}
   .sb-brand-sub{font-size:10px;color:rgba(255,255,255,.4);font-weight:500;margin-top:1px;white-space:nowrap}
   .sb-toggle{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 4px;flex-shrink:0}
@@ -435,10 +470,10 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 }
 
 /* ── BOTTOM NAV ── */
-.bottom-nav{display:flex;background:var(--bg2);border-top:1px solid var(--border);padding:4px 0 0;padding-bottom:var(--sb);flex-shrink:0;position:fixed;bottom:0;left:0;right:0;z-index:10;box-shadow:0 -4px 20px rgba(124,58,237,.08)}
+.bottom-nav{display:flex;background:var(--bg2);border-top:none;padding:6px 4px 0;padding-bottom:var(--sb);flex-shrink:0;position:fixed;bottom:0;left:0;right:0;z-index:10;box-shadow:none}
 .bnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:6px 4px 6px;background:none;border:none;cursor:pointer;color:var(--text3);font-family:var(--font);min-height:50px;transition:all .15s;border-radius:14px;margin:2px;position:relative}
-.bnav-btn.active{color:var(--accent)}
-.bnav-btn.active::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:28px;height:3px;background:var(--accent-fill);border-radius:0 0 4px 4px}
+.bnav-btn.active{color:var(--green);background:var(--green-light)}
+.bnav-btn.active::before{content:none}
 .bnav-btn .blbl{font-size:10px;font-weight:500;line-height:1}
 .bnav-btn.active .blbl{font-weight:800}
 @media(max-width:600px){.tabs{display:none}}
@@ -452,38 +487,35 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <div id="err-bar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c00;color:#fff;font-size:13px;font-family:monospace;padding:8px 12px;word-break:break-all"></div>
 
 <!-- ── LOCK SCREEN ── -->
-<div id="app-lock" style="display:none;position:fixed;inset:0;z-index:99990;background:linear-gradient(160deg,#1a0a2e 0%,#12082a 50%,#0d1a35 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;font-family:var(--font)">
-  <!-- Decorative circles -->
-  <div style="position:absolute;top:-60px;right:-60px;width:220px;height:220px;border-radius:50%;background:rgba(107,35,142,.25);pointer-events:none"></div>
-  <div style="position:absolute;bottom:-40px;left:-40px;width:160px;height:160px;border-radius:50%;background:rgba(45,110,45,.18);pointer-events:none"></div>
-  <!-- Logo -->
-  <div style="width:64px;height:64px;background:linear-gradient(135deg,#6b238e,#4a1870);border-radius:20px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;box-shadow:0 8px 32px rgba(107,35,142,.5)">
-    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+<div id="app-lock" style="display:none;position:fixed;inset:0;z-index:99990;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;font-family:var(--font)">
+  <!-- Logo: el verde de Bridex, plano -->
+  <div style="width:66px;height:66px;background:#326731;border-radius:20px;display:flex;align-items:center;justify-content:center;margin-bottom:18px">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#eaf5e8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
   </div>
-  <div style="color:#fff;font-size:22px;font-weight:800;letter-spacing:.5px;margin-bottom:4px">BRIDEX SRL</div>
-  <div style="color:rgba(200,180,255,.7);font-size:12px;font-weight:500;letter-spacing:2px;margin-bottom:6px">MECCA RESIDENCE 2026</div>
-  <div style="color:rgba(255,255,255,.35);font-size:11px;margin-bottom:32px">Agenda de Obra</div>
-  <!-- Login card -->
-  <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:28px 24px;width:100%;max-width:360px;backdrop-filter:blur(20px)">
-    <div style="color:rgba(255,255,255,.5);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:10px">USUARIO</div>
-    <select id="lock-user" style="width:100%;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);border-radius:12px;color:#fff;font-size:15px;font-weight:600;padding:13px 14px;margin-bottom:20px;font-family:var(--font);-webkit-appearance:none;appearance:none;cursor:pointer" onchange="document.getElementById('lock-pin').focus()">
-      <option value="" style="background:#1a0a2e;color:#fff">Selecciona tu usuario...</option>
-      <option value="nilson" style="background:#1a0a2e;color:#fff">Ing. Nilson — Administrador</option>
-      <option value="moises" style="background:#1a0a2e;color:#fff">Ing. Moises Jimenez</option>
-      <option value="luis" style="background:#1a0a2e;color:#fff">Ing. Luis Jimenez</option>
-      <option value="karina" style="background:#1a0a2e;color:#fff">Ing. Karina Breton</option>
+  <div style="color:var(--text);font-family:var(--tit);font-size:24px;font-weight:800;letter-spacing:-.03em;margin-bottom:4px">Mecca Agenda</div>
+  <div style="color:var(--text2);font-size:13px;margin-bottom:34px">Bridex Comercial · Mecca Residence</div>
+  <!-- Tarjeta de acceso: sin borde, la profundidad la da el tono -->
+  <div style="background:var(--bg2);border-radius:var(--r3);padding:26px 22px;width:100%;max-width:360px">
+    <div style="color:var(--text3);font-size:11px;font-weight:600;letter-spacing:.08em;margin-bottom:9px">USUARIO</div>
+    <select id="lock-user" style="width:100%;background:var(--bg3);border:1.5px solid transparent;border-radius:var(--r);color:var(--text);font-size:15px;font-weight:600;padding:14px 15px;margin-bottom:18px;font-family:var(--font);-webkit-appearance:none;appearance:none;cursor:pointer;min-height:50px" onchange="document.getElementById('lock-pin').focus()">
+      <option value="" style="background:#1d1e21;color:#f3f4f2">Selecciona tu usuario...</option>
+      <option value="nilson" style="background:#1d1e21;color:#f3f4f2">Ing. Nilson — Administrador</option>
+      <option value="moises" style="background:#1d1e21;color:#f3f4f2">Ing. Moises Jimenez</option>
+      <option value="luis" style="background:#1d1e21;color:#f3f4f2">Ing. Luis Jimenez</option>
+      <option value="karina" style="background:#1d1e21;color:#f3f4f2">Ing. Karina Breton</option>
     </select>
-    <div style="color:rgba(255,255,255,.5);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:10px">CÓDIGO DE ACCESO</div>
+    <div style="color:var(--text3);font-size:11px;font-weight:600;letter-spacing:.08em;margin-bottom:9px">CÓDIGO DE ACCESO</div>
     <input id="lock-pin" type="password" inputmode="numeric" maxlength="10" placeholder="••••••"
-      style="width:100%;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);border-radius:12px;color:#fff;font-size:32px;letter-spacing:12px;text-align:center;padding:14px;font-family:var(--font);box-sizing:border-box;margin-bottom:8px;outline:none"
+      style="width:100%;background:var(--bg3);border:1.5px solid transparent;border-radius:var(--r);color:var(--text);font-size:30px;letter-spacing:10px;text-align:center;padding:13px;font-family:var(--tit);box-sizing:border-box;margin-bottom:8px;outline:none"
+      onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'"
       onkeydown="if(event.key==='Enter')doLockLogin()">
-    <div id="lock-err" style="color:var(--red);font-size:12px;text-align:center;margin-bottom:16px;min-height:18px"></div>
-    <button onclick="doLockLogin()" style="width:100%;background:linear-gradient(135deg,#6b238e,#4a1870);border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;padding:16px;cursor:pointer;font-family:var(--font);box-shadow:0 4px 20px rgba(107,35,142,.4);letter-spacing:.5px">
+    <div id="lock-err" style="color:var(--red);font-size:12.5px;text-align:center;margin-bottom:14px;min-height:18px"></div>
+    <button onclick="doLockLogin()" style="width:100%;background:var(--accent-fill);border:none;border-radius:var(--r);color:#fff;font-size:16px;font-weight:700;padding:15px;cursor:pointer;font-family:var(--font);min-height:52px">
       Ingresar
     </button>
   </div>
-  <div style="color:rgba(255,255,255,.2);font-size:10px;margin-top:28px">Acceso restringido — Solo personal autorizado</div>
-  <div id="login-version" style="color:rgba(255,255,255,.14);font-size:10px;margin-top:6px;letter-spacing:.3px"></div>
+  <div style="color:var(--text3);font-size:11px;margin-top:26px">Solo personal autorizado</div>
+  <div id="login-version" style="color:var(--text3);opacity:.6;font-size:10px;margin-top:6px;letter-spacing:.3px"></div>
 </div>
 
 <div class="app">
@@ -557,7 +589,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
   <div class="main-col">
   <div class="hdr">
     <div class="hdr-l">
-      <button class="menu-btn" onclick="toggleDrawer()">☰</button>
+      <button class="menu-btn" onclick="toggleDrawer()" aria-label="Menú"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div style="display:flex;align-items:center;gap:10px">
         <div id="logo-dot" class="logo-dot">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -572,7 +604,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <button id="btn-undo" onclick="undoAction()" title="Deshacer (Ctrl+Z)" style="display:none;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↩</button>
       <button id="btn-redo" onclick="redoAction()" title="Rehacer (Ctrl+Shift+Z)" style="display:none;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↪</button>
       <button id="btn-refresh" onclick="loadAll()" title="Actualizar datos" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:transform .4s ease,background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↺</button>
-      <button id="btn-cmd" onclick="abrirComando()" title="Dar una orden por voz o texto (C)" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">🎤</button>
+      <button id="btn-cmd" onclick="abrirComando()" title="Dar una orden por voz o texto (C)" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;transition:background .15s;flex-shrink:0" ><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg></button>
       <span class="ubadge guest" id="ubadge" onclick="showLogin()">Entrar</span>
       <button class="ibtn primary" onclick="exportarPDF()" style="font-size:11px">PDF</button>
     </div>
@@ -785,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260905_17';
+const APP_VERSION='20260905_18';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1936,11 +1968,11 @@ function _llenarUsuariosLock(){
   var sel=document.getElementById('lock-user');
   if(!sel) return;
   var prev=sel.value;
-  var h='<option value="" style="background:#1a0a2e;color:#fff">Selecciona tu usuario...</option>';
+  var h='<option value="" style="background:#1d1e21;color:#f3f4f2">Selecciona tu usuario...</option>';
   Object.entries(USERS).forEach(function(e){
     var k=e[0], u=e[1];
     if(u.archivado) return;
-    h+='<option value="'+k+'" style="background:#1a0a2e;color:#fff">'+esc(u.nombre)+
+    h+='<option value="'+k+'" style="background:#1d1e21;color:#f3f4f2">'+esc(u.nombre)+
        (u.rol==='admin'?' — Administrador':'')+'</option>';
   });
   sel.innerHTML=h;
@@ -2028,7 +2060,10 @@ function updateUserUI(){
   const sub=document.getElementById('hdr-sub');
   if(S.user){
     b.className='ubadge '+(S.user.rol==='admin'?'admin':'ing');
-    b.textContent=(S.user.rol==='admin'?'':'')+(S.user.nombre.split(' ')[1]||S.user.nombre);
+    // el badge ahora es un circulo con la inicial, como en cualquier app actual
+    var _nom=(S.user.nombre||'').replace(/^(Ing|Arq|Lic)\.?\s+/i,'').trim();
+    b.textContent=(_nom.charAt(0)||S.user.nombre.charAt(0)).toUpperCase();
+    b.title=S.user.nombre;
     sub.textContent=S.user.nombre;
     document.getElementById('dw-user').textContent=S.user.nombre+' · '+(S.user.rol==='admin'?'Admin':'Ingeniero');
     document.getElementById('dw-login-btn').style.display='none';
@@ -2826,7 +2861,7 @@ function _planBtnEnObra(a){
   var wrap=function(inner){return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">'+inner+'</div>';};
   if(!fp){
     return wrap(
-      '<button onclick="planAgregar(\''+a.id+'\',\'hoy\')" style="'+bs+'#7c3aed;background:var(--accent-soft);color:#7c3aed;flex:1">＋ Plan hoy</button>'+
+      '<button onclick="planAgregar(\''+a.id+'\',\'hoy\')" style="'+bs+'var(--accent);background:var(--accent-soft);color:var(--accent);flex:1">＋ Plan hoy</button>'+
       '<button onclick="planAgregar(\''+a.id+'\',\'manana\')" style="'+bs+'var(--border2);background:var(--bg2);color:var(--text2);flex:1">＋ Plan mañana</button>'
     );
   }
@@ -2981,7 +3016,7 @@ function cierreAvSinCambios(id){
 var PEND_CATS=[
   {k:'material',ic:'🧱',lbl:'Material',color:'#b45309',bg:'var(--amber-light)'},
   {k:'plano',ic:'📐',lbl:'Plano',color:'var(--blue)',bg:'var(--blue-light)'},
-  {k:'decision',ic:'🤔',lbl:'Decisión',color:'#7c3aed',bg:'var(--accent-soft)'},
+  {k:'decision',ic:'🤔',lbl:'Decisión',color:'var(--accent)',bg:'var(--accent-soft)'},
   {k:'inspeccion',ic:'🔍',lbl:'Inspección',color:'#0d9488',bg:'var(--green-light)'},
   {k:'otro',ic:'📝',lbl:'Otro',color:'#6b7280',bg:'#f3f4f6'}
 ];
@@ -9054,7 +9089,7 @@ function renderCambios(){
   var filtered=cambios.slice();
   if(S.cambiosFiltroUser&&S.cambiosFiltroUser!=='todos') filtered=filtered.filter(function(c){return c.usuario_id===S.cambiosFiltroUser;});
   var accionIcon={creado:'➕',editado:'✏️',eliminado:'🗑️',completado:'✅',fecha:'📅',enlace:'🔗',estado:'🔄',avance:'📊',bandeja:'📅'};
-  var accionClr={creado:'var(--green)',editado:'var(--blue)',eliminado:'var(--red)',completado:'var(--green)',fecha:'#7C3AED',enlace:'#0891B2',estado:'var(--amber)',avance:'#6D28D9',bandeja:'#7C3AED'};
+  var accionClr={creado:'var(--green)',editado:'var(--blue)',eliminado:'var(--red)',completado:'var(--green)',fecha:'var(--accent)',enlace:'var(--blue)',estado:'var(--amber)',avance:'var(--accent2)',bandeja:'var(--accent)'};
   var byDate={};
   filtered.forEach(function(c){
     var d=(c.fecha||(c.created_at||'').slice(0,10))||'Sin fecha';
@@ -12284,11 +12319,11 @@ function recEscanear(){
     '<video id="rec-video" playsinline muted autoplay '+
       'style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>'+
     '<div style="position:absolute;inset:0;background:rgba(8,6,16,.55)"></div>'+
-    '<div style="position:relative;width:64vw;max-width:280px;aspect-ratio:1;border:3px solid #a78bfa;'+
+    '<div style="position:relative;width:64vw;max-width:280px;aspect-ratio:1;border:3px solid var(--accent);'+
       'border-radius:20px;box-shadow:0 0 0 100vmax rgba(8,6,16,.45)"></div>'+
     '<div style="position:relative;color:#fff;font-size:15px;margin-top:24px;text-align:center;padding:0 30px;line-height:1.45">'+
       'Apunta al código pegado en el área</div>'+
-    '<div id="rec-scanst" style="position:relative;color:#b6b1c7;font-size:12.5px;margin-top:8px;font-family:var(--mono)">Buscando…</div>'+
+    '<div id="rec-scanst" style="position:relative;color:var(--text2);font-size:12.5px;margin-top:8px;font-family:var(--mono)">Buscando…</div>'+
     '<button id="rec-scanx" style="position:relative;margin-top:28px;padding:13px 30px;border-radius:14px;'+
       'border:1.5px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);color:#fff;'+
       'font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">Cancelar</button>';
@@ -14760,7 +14795,7 @@ async function renderCentroNotif(){
   });
 
   var accionIcon={creado:'➕',editado:'✏️',eliminado:'🗑️',completado:'✅',fecha:'📅',enlace:'🔗',estado:'🔄',avance:'📊',bandeja:'📅'};
-  var accionClr={creado:'var(--green)',editado:'var(--blue)',eliminado:'var(--red)',completado:'var(--green)',fecha:'#7C3AED',enlace:'#0891B2',estado:'var(--amber)',avance:'#6D28D9',bandeja:'#7C3AED'};
+  var accionClr={creado:'var(--green)',editado:'var(--blue)',eliminado:'var(--red)',completado:'var(--green)',fecha:'var(--accent)',enlace:'var(--blue)',estado:'var(--amber)',avance:'var(--accent2)',bandeja:'var(--accent)'};
 
   // Summary cards per user
   var cards='';
@@ -16572,7 +16607,7 @@ function _planCard(p){
   if(open&&subs.length){
     subHtml='<div style="padding:6px 12px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:4px">';
     subs.forEach(function(a){
-      var sc={'completado':'var(--green)','en-progreso':'#7C3AED','pendiente':'#9CA3AF','pausada':'var(--amber)'}[a.estado]||'#9CA3AF';
+      var sc={'completado':'var(--green)','en-progreso':'var(--accent)','pendiente':'var(--text3)','pausada':'var(--amber)'}[a.estado]||'var(--text3)';
       subHtml+='<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--bg2);border-radius:7px">'+
         '<span style="width:7px;height:7px;border-radius:50%;background:'+sc+';flex-shrink:0"></span>'+
         '<span style="flex:1;font-size:11px;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.descripcion||'')+'</span>'+
@@ -16686,7 +16721,7 @@ function _lpsActCard(a){
   var canE=canEdit();
   var planNm='';
   if(a.plan_id){var pl=(S.planActs||[]).find(function(p){return p.id===a.plan_id;});if(pl)planNm=pl.nombre;}
-  var dotClr=done?'var(--green)':restrict?'#F97316':'#9CA3AF';
+  var dotClr=done?'var(--green)':restrict?'#F97316':'var(--text3)';
   var bgClr=done?'var(--green-light)':restrict?'#FFF7ED':'var(--bg2)';
   var brdClr=done?'#86EFAC':restrict?'#FED7AA':'var(--border)';
   return '<div style="background:'+bgClr+';border:1px solid '+brdClr+';border-radius:9px;padding:8px 12px;display:flex;align-items:center;gap:8px">'+
@@ -16711,7 +16746,7 @@ function renderLookahead(){
   var lwActs=_lpsWeekActs(-1);
   var lwDone=lwActs.filter(function(a){return a.estado==='completado';}).length;
   var ppc=lwActs.length?Math.round(lwDone/lwActs.length*100):null;
-  var ppcClr=ppc===null?'#9CA3AF':ppc>=80?'var(--green)':ppc>=50?'var(--amber)':'var(--red)';
+  var ppcClr=ppc===null?'var(--text3)':ppc>=80?'var(--green)':ppc>=50?'var(--amber)':'var(--red)';
   var btnSt='height:32px;padding:0 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0';
   var toolbar='<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2);padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
     _lpsTabButtons()+
@@ -16771,7 +16806,7 @@ function renderPlanSemanal(){
   var lwActs=_lpsWeekActs(-1);
   var lwDone=lwActs.filter(function(a){return a.estado==='completado';}).length;
   var lwPpc=lwActs.length?Math.round(lwDone/lwActs.length*100):null;
-  var lwClr=lwPpc===null?'#9CA3AF':lwPpc>=80?'var(--green)':lwPpc>=50?'var(--amber)':'var(--red)';
+  var lwClr=lwPpc===null?'var(--text3)':lwPpc>=80?'var(--green)':lwPpc>=50?'var(--amber)':'var(--red)';
   var btnSt='height:32px;padding:0 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;flex-shrink:0';
   var toolbar='<div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg2);padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
     _lpsTabButtons()+
