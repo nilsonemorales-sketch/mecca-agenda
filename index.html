@@ -62,6 +62,8 @@
   color-scheme:dark;
 }
 
+@keyframes hojaIn{from{opacity:0}to{opacity:1}}
+@keyframes hojaSube{from{transform:translateY(100%)}to{transform:translateY(0)}}
 /* ── CABECERA v2 ──────────────────────────────────────────
    Siete controles no caben en un telefono. Actualizar ya corre solo
    al abrir, y el PDF vive en Hoy y en Reportes: en movil se quitan
@@ -817,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260905_18';
+const APP_VERSION='20260905_19';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -3114,6 +3116,269 @@ async function pendResolver(actId,pendId){
   }catch(e){ p.resuelto=false; delete p.resueltoPor; delete p.resueltoFecha; showToast('Error: '+e.message,'err'); }
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   LA TORRE — el edificio de un vistazo, arriba en Hoy.
+
+   Alzado de Mecca dibujado en SVG: el nucleo de escaleras al centro
+   que sobresale por encima del techo, las celosias a cada lado, los
+   balcones en voladizo, el penthouse retranqueado y el portico de la
+   entrada abajo. Cada apartamento es un recuadro del dibujo con su
+   avance dentro; al tocarlo sube la hoja con el desglose por
+   contratista.
+
+   Los numeros salen de Supabase en una sola consulta de tres
+   columnas (2,348 filas ~ 70 KB) y se guardan en S._torre para no
+   volver a pedirlos en la sesion.
+   ───────────────────────────────────────────────────────────────── */
+var TORRE_NIV=[['7',0],['6',1],['5',2],['4',3],['3',4],['2',5]];
+
+function _torreArea(nivel,lado){
+  return nivel==='7' ? 'N7 — Penthouse B' : 'N'+nivel+' — Apto '+nivel+lado;
+}
+
+async function cargarTorre(force){
+  if(S._torre && !force) return S._torre;
+  if(S._torreCargando) return null;
+  S._torreCargando=true;
+  try{
+    var filas=await sb('obra_actividades?select=area,estado,personal_nombre&limit=5000');
+    var por={};
+    (filas||[]).forEach(function(a){
+      var ar=a.area||''; if(!ar) return;
+      var d=por[ar]||(por[ar]={total:0,hechas:0,faltan:0,gente:{}});
+      d.total++;
+      if(a.estado==='completado'){ d.hechas++; return; }
+      d.faltan++;
+      var q=(a.personal_nombre||'').trim()||'Sin asignar';
+      d.gente[q]=(d.gente[q]||0)+1;
+    });
+    Object.keys(por).forEach(function(k){
+      var d=por[k];
+      d.pct=d.total?Math.round(d.hechas/d.total*100):0;
+      d.lista=Object.keys(d.gente).map(function(q){return {q:q,n:d.gente[q]};})
+                    .sort(function(a,b){return b.n-a.n;});
+    });
+    /* solo se guarda si de verdad vino algo: si la consulta falla o vuelve
+       vacia no se cachea el vacio, y el proximo Hoy lo vuelve a intentar */
+    S._torre = Object.keys(por).length ? por : null;
+  }catch(e){ S._torre=null; }
+  S._torreCargando=false;
+  if(S.currentTab==='hoy') dibujarTorre();
+  return S._torre;
+}
+
+function torreHTML(){
+  return '<div id="torre-caja" style="background:var(--bg2);border-radius:var(--r2);'+
+    'padding:14px 12px 16px;margin-bottom:10px">'+
+    '<div style="display:flex;align-items:baseline;gap:8px;padding:0 4px 10px">'+
+      '<div style="font-family:var(--tit);font-size:14px;font-weight:700;color:var(--text)">El edificio</div>'+
+      '<div id="torre-sub" style="font-size:11.5px;color:var(--text3)">cargando…</div>'+
+    '</div>'+
+    '<svg id="torre-svg" viewBox="0 0 424 568" style="width:100%;max-width:420px;margin:0 auto;display:block" '+
+      'role="img" aria-label="Avance de cada apartamento"></svg>'+
+  '</div>';
+}
+
+function dibujarTorre(){
+  var svg=document.getElementById('torre-svg');
+  if(!svg) return;
+  var D=S._torre;
+  var sub=document.getElementById('torre-sub');
+  if(!D){ if(sub) sub.textContent='cargando…'; return; }
+
+  svg.innerHTML='';
+  var NS='http://www.w3.org/2000/svg';
+  function el(t,a){var n=document.createElementNS(NS,t);for(var k in a)n.setAttribute(k,a[k]);return n;}
+  function add(t,a,p){var n=el(t,a);(p||svg).appendChild(n);return n;}
+
+  var BALA=34,BALW=16,AX=BALA+BALW,AW=116,CELA=AX+AW,CELW=18,
+      NX=CELA+CELW+4,NW=54,CELB=NX+NW+4,BX=CELB+CELW,BW=116,DER=BX+BW+BALW,
+      H=74,TOP=48;   /* mas apretado: la torre no debe comerse toda la pantalla */
+  function yDe(k){return TOP+k*H;}
+  var yTecho=yDe(0), yPiso=yDe(6);
+
+  /* nucleo de escaleras, que sube por encima del techo */
+  add('rect',{x:NX,y:24,width:NW,height:yPiso-24,fill:'var(--bg3)',rx:6});
+  var cp=add('clipPath',{id:'torre-nuc'});
+  add('rect',{x:NX,y:24,width:NW,height:yPiso-24},cp);
+  var esc=add('g',{'clip-path':'url(#torre-nuc)'});
+  for(var k=0;k<15;k++){
+    var y=28+k*(H/2);
+    add('path',{d:'M'+(NX+7)+' '+(y+30)+' L'+(NX+NW-7)+' '+(y+8),
+      stroke:'var(--border2)','stroke-width':1,fill:'none'},esc);
+  }
+  /* losa que vuela sobre el penthouse */
+  add('path',{d:'M'+(CELB-8)+' '+(yTecho-8)+' L'+(DER+10)+' '+(yTecho-15)+
+    ' L'+(DER+10)+' '+(yTecho-7)+' L'+(CELB-8)+' '+yTecho+' Z',fill:'var(--bg3)'});
+  /* contorno: el penthouse del lado A va retranqueado */
+  add('path',{fill:'none',stroke:'var(--border2)','stroke-width':1.5,
+    d:'M'+BALA+' '+yPiso+' L'+BALA+' '+yDe(1)+' L'+(AX+AW*0.30)+' '+yDe(1)+
+      ' L'+(AX+AW*0.30)+' '+yTecho+' L'+DER+' '+yTecho+' L'+DER+' '+yPiso});
+  /* losas y balcones en voladizo */
+  for(var k2=1;k2<=6;k2++){
+    var yy=yDe(k2);
+    add('line',{x1:BALA,y1:yy,x2:DER,y2:yy,stroke:'var(--border)','stroke-width':1});
+    if(k2<6){
+      [[BALA,-10],[DER,10]].forEach(function(p){
+        add('path',{d:'M'+p[0]+' '+yy+' l'+p[1]+' 0 l0 '+(H*0.44).toFixed(1)+' l'+(-p[1])+' 0',
+          fill:'none',stroke:'var(--border2)','stroke-width':1});
+      });
+    }
+  }
+  /* celosias */
+  [CELA,CELB].forEach(function(x0){
+    for(var k3=1;k3<=5;k3++){
+      var y0=yDe(k3)+11;
+      for(var f=0;f<7;f++) for(var c=0;c<3;c++)
+        add('rect',{x:x0+2+c*5.6,y:y0+f*7.4,width:3.2,height:3.2,rx:.6,
+          fill:'var(--border2)'});
+    }
+  });
+
+  /* los apartamentos */
+  var abiertas=0, hechas=0, total=0;
+  TORRE_NIV.forEach(function(par){
+    var nivel=par[0], k=par[1], y=yDe(k)+8, alto=H-14;
+    add('text',{x:12,y:y+alto/2+4,'font-size':10,'font-weight':700,
+      fill:'var(--text3)','font-family':'var(--tit)'}).textContent='N'+nivel;
+
+    [['A',AX,AW],['B',BX,BW]].forEach(function(l){
+      var L=l[0], x=l[1], w=l[2];
+      if(nivel==='7' && L==='A'){
+        var rx=x+w*0.30, rw=w*0.70;
+        add('rect',{x:rx,y:y,width:rw,height:alto,rx:10,fill:'none',
+          stroke:'var(--border2)','stroke-width':1,'stroke-dasharray':'4 3'});
+        add('text',{x:rx+rw/2,y:y+alto/2-1,'font-size':9,fill:'var(--text3)',
+          'text-anchor':'middle'}).textContent='N7 · áreas';
+        add('text',{x:rx+rw/2,y:y+alto/2+11,'font-size':9,fill:'var(--text3)',
+          'text-anchor':'middle'}).textContent='comunes';
+        return;
+      }
+      var area=_torreArea(nivel,L);
+      var d=D[area];
+      if(!d){ /* sin datos todavia: recuadro vacio */
+        add('rect',{x:x,y:y,width:w,height:alto,rx:10,fill:'var(--bg3)'});
+        return;
+      }
+      total+=d.total; hechas+=d.hechas; abiertas+=d.faltan;
+
+      var g=add('g',{style:'cursor:pointer'});
+      g.addEventListener('click',function(){ abrirAptoTorre(area); });
+      add('rect',{x:x,y:y,width:w,height:alto,rx:10,fill:'var(--bg3)'},g);
+      /* tinte verde proporcional al avance: se lee sin gritar */
+      add('rect',{x:x,y:y,width:w,height:alto,rx:10,fill:'var(--green)',
+        opacity:(0.05+d.pct/100*0.24).toFixed(2)},g);
+      /* el nombre manda arriba, solo; el porcentaje grande a la izquierda y
+         lo que falta en su propia columna a la derecha, en dos lineas.
+         Puesto en una sola linea chocaba con "Penthouse B" y con el 58%. */
+      add('text',{x:x+12,y:y+16,'font-size':10,'font-weight':500,
+        fill:'var(--text2)'},g).textContent = nivel==='7'?'Penthouse B':'Apto '+nivel+L;
+      add('text',{x:x+12,y:y+42,'font-size':21,'font-weight':800,'letter-spacing':'-.03em',
+        fill:'var(--text)','font-family':'var(--tit)'},g).textContent=d.pct+'%';
+      add('text',{x:x+w-12,y:y+33,'font-size':8.5,fill:'var(--text3)',
+        'text-anchor':'end'},g).textContent='faltan';
+      add('text',{x:x+w-12,y:y+45,'font-size':13,'font-weight':700,fill:'var(--text2)',
+        'text-anchor':'end','font-family':'var(--tit)'},g).textContent=d.faltan;
+      add('rect',{x:x+12,y:y+alto-8,width:w-24,height:4,rx:2,fill:'var(--bg4)'},g);
+      add('rect',{x:x+12,y:y+alto-8,width:(w-24)*d.pct/100,height:4,rx:2,
+        fill:'var(--green)'},g);
+    });
+  });
+
+  /* planta baja */
+  var yb=yPiso, hb=46, px=NX-16, pw=NW+32;
+  add('rect',{x:BALA,y:yb,width:DER-BALA,height:hb,rx:10,fill:'var(--bg3)'});
+  for(var f2=0;f2<4;f2++) for(var c2=0;c2<10;c2++)
+    add('rect',{x:px+5+c2*8.2,y:yb+12+f2*9,width:4,height:4,rx:.8,fill:'var(--border2)'});
+  add('text',{x:12,y:yb+hb/2+4,'font-size':10,'font-weight':700,fill:'var(--text3)',
+    'font-family':'var(--tit)'}).textContent='N1';
+  add('text',{x:BALA+(px-BALA)/2,y:yb+hb/2+4,'font-size':9.5,'font-weight':600,
+    fill:'var(--text3)','text-anchor':'middle'}).textContent='lobby';
+  add('text',{x:px+pw+(DER-px-pw)/2,y:yb+hb/2+4,'font-size':9.5,'font-weight':600,
+    fill:'var(--text3)','text-anchor':'middle'}).textContent='parqueo';
+  add('line',{x1:BALA-14,y1:yb+hb+10,x2:DER+14,y2:yb+hb+10,
+    stroke:'var(--border2)','stroke-width':1.5});
+
+  if(sub) sub.textContent = total ?
+    (Math.round(hechas/total*100)+'% · faltan '+abiertas) : 'sin datos';
+}
+
+/* La hoja que sube al tocar un apartamento: el resumen de quien le
+   debe cuanto. Lo que Nilson pidio para no tener que entrar a la lista. */
+function abrirAptoTorre(area){
+  var d=(S._torre||{})[area];
+  if(!d) return;
+  var viejo=document.getElementById('hoja-apto');
+  if(viejo) viejo.remove();
+
+  var nom=area.split('—').pop().trim();
+  var top=d.lista.slice(0,6);
+  var maxN=top.length?top[0].n:1;
+
+  var h='<div id="hoja-apto" onclick="if(event.target===this)cerrarHojaApto()" '+
+    'style="position:fixed;inset:0;z-index:99980;background:rgba(0,0,0,.55);'+
+    'display:flex;align-items:flex-end;justify-content:center;animation:hojaIn .16s ease">'+
+    '<div style="background:var(--bg2);border-radius:var(--r3) var(--r3) 0 0;'+
+      'padding:12px 18px calc(22px + var(--sb));width:100%;max-width:460px;'+
+      'max-height:86vh;overflow:auto;animation:hojaSube .22s cubic-bezier(.2,.8,.3,1)">'+
+      '<div style="width:38px;height:4px;border-radius:2px;background:var(--border2);margin:0 auto 16px"></div>'+
+      '<div style="font-family:var(--tit);font-size:21px;font-weight:800;letter-spacing:-.03em">'+esc(nom)+'</div>'+
+      '<div style="font-size:13px;color:var(--text2);margin-top:3px">'+d.hechas+' hechas de '+d.total+'</div>'+
+      '<div style="display:flex;gap:9px;margin:16px 0">'+
+        '<div style="flex:1;background:var(--bg3);border-radius:14px;padding:12px 13px">'+
+          '<div style="font-family:var(--tit);font-size:23px;font-weight:800;line-height:1;color:var(--green)">'+d.pct+'%</div>'+
+          '<div style="font-size:11.5px;color:var(--text3);margin-top:5px">avance</div></div>'+
+        '<div style="flex:1;background:var(--bg3);border-radius:14px;padding:12px 13px">'+
+          '<div style="font-family:var(--tit);font-size:23px;font-weight:800;line-height:1">'+d.faltan+'</div>'+
+          '<div style="font-size:11.5px;color:var(--text3);margin-top:5px">faltan</div></div>'+
+        '<div style="flex:1;background:var(--bg3);border-radius:14px;padding:12px 13px">'+
+          '<div style="font-family:var(--tit);font-size:23px;font-weight:800;line-height:1;color:var(--accent)">'+d.lista.length+'</div>'+
+          '<div style="font-size:11.5px;color:var(--text3);margin-top:5px">contratistas</div></div>'+
+      '</div>';
+
+  top.forEach(function(g){
+    h+='<div style="display:flex;align-items:center;gap:12px;padding:11px 0;'+
+        'border-top:1px solid var(--border)">'+
+      '<div style="flex:1;font-size:14.5px;font-weight:500">'+esc(g.q)+'</div>'+
+      '<div style="width:96px;height:5px;border-radius:3px;background:var(--bg4);overflow:hidden">'+
+        '<div style="height:100%;width:'+Math.round(g.n/maxN*100)+'%;background:var(--green);border-radius:3px"></div></div>'+
+      '<div style="font-family:var(--tit);font-size:14px;font-weight:700;width:26px;text-align:right">'+g.n+'</div>'+
+    '</div>';
+  });
+  if(d.lista.length>top.length)
+    h+='<div style="font-size:12px;color:var(--text3);padding:9px 0 0">y '+(d.lista.length-top.length)+' más</div>';
+
+  h+='<div style="display:flex;gap:10px;margin-top:18px">'+
+      '<button onclick="cerrarHojaApto()" style="flex:1;min-height:48px;border-radius:var(--r);'+
+        'border:none;background:var(--bg4);color:var(--text);font-family:var(--font);'+
+        'font-size:15px;font-weight:600;cursor:pointer">Cerrar</button>'+
+      '<button onclick="verPendientesApto(\''+area.replace(/'/g,"\\'")+'\')" '+
+        'style="flex:1;min-height:48px;border-radius:var(--r);border:none;'+
+        'background:var(--accent-fill);color:#fff;font-family:var(--font);'+
+        'font-size:15px;font-weight:700;cursor:pointer">Ver pendientes</button>'+
+    '</div></div></div>';
+
+  var wrap=document.createElement('div');
+  wrap.innerHTML=h;
+  document.body.appendChild(wrap.firstChild);
+}
+
+function cerrarHojaApto(){
+  var el=document.getElementById('hoja-apto');
+  if(el) el.remove();
+}
+
+/* Del resumen a la lista filtrada por ese apartamento */
+function verPendientesApto(area){
+  cerrarHojaApto();
+  try{
+    S.fArea=[area];
+    S.fEstado=['pendiente','en-progreso','pausada'];
+    goTab('obra');
+    if(typeof renderActs==='function') renderActs();
+  }catch(e){ goTab('obra'); }
+}
+
 function renderHoy(){
   const propios=S.personal.filter(p=>p.tipo==='propio');
   const pres=S.asist.filter(a=>['presente','tarde','medio día'].includes(a.estado)).length;
@@ -3129,6 +3394,7 @@ function renderHoy(){
   var _planDiaHTML=renderPlanDia();
 
   document.getElementById('c-hoy').innerHTML=`
+    ${torreHTML()}
     ${dateNavHTML()}
     ${(S.user&&S.user.rol==='view')?'<div style="background:#ecfeff;border:1.5px solid #0d9488;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#0f766e;display:flex;align-items:center;gap:6px">Modo solo visualización — puedes ver todo, pero no editar</div>':''}
 
@@ -3144,6 +3410,9 @@ function renderHoy(){
     </div>
 
     ${_planDiaHTML}`;
+
+  // la torre: si los numeros ya estan se dibuja de una, si no se piden
+  if(S._torre) dibujarTorre(); else cargarTorre();
 }
 
 
