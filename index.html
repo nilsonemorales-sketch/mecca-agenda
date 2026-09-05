@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260905_19';
+const APP_VERSION='20260905_20';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1270,6 +1270,9 @@ function renderUbicacionesSeleccionadas(){
 // Get pre-fill context based on active filters
 function getActContext(){
   var ctx={};
+  /* En el recorrido el apartamento esta fijado: es el que el usuario toco
+     en la torre, y gana sobre cualquier filtro de pantalla. */
+  var _rec=(typeof S!=='undefined' && S.recorrido && S.recorrido.area) ? S.recorrido.area : null;
   // goTab() guarda 'obra' tanto para En Obra como para Actividades; la vista
   // real está en S.obraVista. Sin esto el prellenado nunca se activaba.
   var tab=S.currentTab;
@@ -1301,6 +1304,7 @@ function getActContext(){
     if(av.nivel) ctx.area_hint=av.nivel;
   }
 
+  if(_rec) ctx.area=_rec;
   return ctx;
 }
 
@@ -3315,72 +3319,289 @@ function dibujarTorre(){
     (Math.round(hechas/total*100)+'% · faltan '+abiertas) : 'sin datos';
 }
 
-/* La hoja que sube al tocar un apartamento: el resumen de quien le
-   debe cuanto. Lo que Nilson pidio para no tener que entrar a la lista. */
+/* ─────────────────────────────────────────────────────────────────
+   EL RECORRIDO
+   Al tocar un apartamento en la torre se abre esta hoja y el
+   apartamento queda FIJADO en S.recorrido.area. De ahi en adelante:
+     · Dictar     — el area ya esta puesta, no se vuelve a preguntar
+     · Pendientes — agrupados por contratista, se cierran tocando
+     · Quien debe — el resumen de a quien le falta cuanto
+   Las flechas de arriba pasan al apartamento siguiente sin volver
+   a la torre, que es como Nilson camina la obra: piso por piso.
+   ───────────────────────────────────────────────────────────────── */
+var REC_ORDEN=['N2 — Apto 2A','N2 — Apto 2B','N3 — Apto 3A','N3 — Apto 3B',
+  'N4 — Apto 4A','N4 — Apto 4B','N5 — Apto 5A','N5 — Apto 5B',
+  'N6 — Apto 6A','N6 — Apto 6B','N7 — Penthouse B'];
+
+function _recNom(area){ return String(area||'').split('—').pop().trim(); }
+
 function abrirAptoTorre(area){
-  var d=(S._torre||{})[area];
-  if(!d) return;
-  var viejo=document.getElementById('hoja-apto');
-  if(viejo) viejo.remove();
-
-  var nom=area.split('—').pop().trim();
-  var top=d.lista.slice(0,6);
-  var maxN=top.length?top[0].n:1;
-
-  var h='<div id="hoja-apto" onclick="if(event.target===this)cerrarHojaApto()" '+
-    'style="position:fixed;inset:0;z-index:99980;background:rgba(0,0,0,.55);'+
-    'display:flex;align-items:flex-end;justify-content:center;animation:hojaIn .16s ease">'+
-    '<div style="background:var(--bg2);border-radius:var(--r3) var(--r3) 0 0;'+
-      'padding:12px 18px calc(22px + var(--sb));width:100%;max-width:460px;'+
-      'max-height:86vh;overflow:auto;animation:hojaSube .22s cubic-bezier(.2,.8,.3,1)">'+
-      '<div style="width:38px;height:4px;border-radius:2px;background:var(--border2);margin:0 auto 16px"></div>'+
-      '<div style="font-family:var(--tit);font-size:21px;font-weight:800;letter-spacing:-.03em">'+esc(nom)+'</div>'+
-      '<div style="font-size:13px;color:var(--text2);margin-top:3px">'+d.hechas+' hechas de '+d.total+'</div>'+
-      '<div style="display:flex;gap:9px;margin:16px 0">'+
-        '<div style="flex:1;background:var(--bg3);border-radius:14px;padding:12px 13px">'+
-          '<div style="font-family:var(--tit);font-size:23px;font-weight:800;line-height:1;color:var(--green)">'+d.pct+'%</div>'+
-          '<div style="font-size:11.5px;color:var(--text3);margin-top:5px">avance</div></div>'+
-        '<div style="flex:1;background:var(--bg3);border-radius:14px;padding:12px 13px">'+
-          '<div style="font-family:var(--tit);font-size:23px;font-weight:800;line-height:1">'+d.faltan+'</div>'+
-          '<div style="font-size:11.5px;color:var(--text3);margin-top:5px">faltan</div></div>'+
-        '<div style="flex:1;background:var(--bg3);border-radius:14px;padding:12px 13px">'+
-          '<div style="font-family:var(--tit);font-size:23px;font-weight:800;line-height:1;color:var(--accent)">'+d.lista.length+'</div>'+
-          '<div style="font-size:11.5px;color:var(--text3);margin-top:5px">contratistas</div></div>'+
-      '</div>';
-
-  top.forEach(function(g){
-    h+='<div style="display:flex;align-items:center;gap:12px;padding:11px 0;'+
-        'border-top:1px solid var(--border)">'+
-      '<div style="flex:1;font-size:14.5px;font-weight:500">'+esc(g.q)+'</div>'+
-      '<div style="width:96px;height:5px;border-radius:3px;background:var(--bg4);overflow:hidden">'+
-        '<div style="height:100%;width:'+Math.round(g.n/maxN*100)+'%;background:var(--green);border-radius:3px"></div></div>'+
-      '<div style="font-family:var(--tit);font-size:14px;font-weight:700;width:26px;text-align:right">'+g.n+'</div>'+
-    '</div>';
-  });
-  if(d.lista.length>top.length)
-    h+='<div style="font-size:12px;color:var(--text3);padding:9px 0 0">y '+(d.lista.length-top.length)+' más</div>';
-
-  h+='<div style="display:flex;gap:10px;margin-top:18px">'+
-      '<button onclick="cerrarHojaApto()" style="flex:1;min-height:48px;border-radius:var(--r);'+
-        'border:none;background:var(--bg4);color:var(--text);font-family:var(--font);'+
-        'font-size:15px;font-weight:600;cursor:pointer">Cerrar</button>'+
-      '<button onclick="verPendientesApto(\''+area.replace(/'/g,"\\'")+'\')" '+
-        'style="flex:1;min-height:48px;border-radius:var(--r);border:none;'+
-        'background:var(--accent-fill);color:#fff;font-family:var(--font);'+
-        'font-size:15px;font-weight:700;cursor:pointer">Ver pendientes</button>'+
-    '</div></div></div>';
-
-  var wrap=document.createElement('div');
-  wrap.innerHTML=h;
-  document.body.appendChild(wrap.firstChild);
+  S.recorrido={area:area, tab:'dictar', abierto:null, confirmando:null};
+  pintarRecorrido();
+  cargarPendRec(area);
 }
 
 function cerrarHojaApto(){
-  var el=document.getElementById('hoja-apto');
+  S.recorrido=null;
+  var el=document.getElementById('hoja-rec');
   if(el) el.remove();
+  if(S.currentTab==='hoy') dibujarTorre();
 }
 
-/* Del resumen a la lista filtrada por ese apartamento */
+/* Los pendientes del apartamento. Se piden una vez por apartamento y se
+   guardan; cerrar uno actualiza la copia sin volver a pedir la lista. */
+async function cargarPendRec(area, force){
+  S._recPend=S._recPend||{};
+  if(S._recPend[area] && !force) return S._recPend[area];
+  try{
+    var q='obra_actividades?area=eq.'+encodeURIComponent(area)+
+          '&estado=neq.completado&select=id,descripcion,personal_nombre,estado,prioridad'+
+          '&order=personal_nombre.asc&limit=600';
+    S._recPend[area]=await sb(q)||[];
+  }catch(e){ S._recPend[area]=null; }
+  if(S.recorrido && S.recorrido.area===area) pintarRecorrido();
+  return S._recPend[area];
+}
+
+function _recGrupos(area){
+  var filas=(S._recPend||{})[area];
+  if(filas===null) return 'error';   /* la consulta fallo: no es que este cargando */
+  if(!filas) return null;
+  var m={}, orden=[];
+  filas.forEach(function(a){
+    var q=(a.personal_nombre||'').trim()||'Sin asignar';
+    if(!m[q]){ m[q]=[]; orden.push(q); }
+    m[q].push(a);
+  });
+  orden.sort(function(x,y){ return m[y].length-m[x].length; });
+  return orden.map(function(q){ return {q:q, items:m[q]}; });
+}
+
+function _recReintentar(){
+  return '<div style="padding:18px 0;text-align:center">'+
+    '<p style="color:var(--text3);font-size:12.5px;line-height:1.5;margin:0 0 12px">'+
+    'No se pudo traer lo pendiente de este apartamento.</p>'+
+    '<button onclick="recReintentar()" style="border:1px solid var(--border2);background:var(--bg3);'+
+    'color:var(--text);border-radius:10px;padding:11px 18px;font-family:var(--font);'+
+    'font-size:13px;font-weight:600;cursor:pointer;min-height:44px">Intentar otra vez</button></div>';
+}
+function recReintentar(){
+  var a=S.recorrido && S.recorrido.area; if(!a) return;
+  delete (S._recPend||{})[a];
+  pintarRecorrido(); cargarPendRec(a,true);
+}
+
+function pintarRecorrido(){
+  var R=S.recorrido; if(!R) return;
+  var d=(S._torre||{})[R.area]||{pct:0,faltan:0,total:0,hechas:0,lista:[]};
+  var i=REC_ORDEN.indexOf(R.area), ant=REC_ORDEN[i-1], sig=REC_ORDEN[i+1];
+  var grupos=_recGrupos(R.area);
+  var faltan = (grupos && grupos!=='error')
+    ? grupos.reduce(function(s,g){return s+g.items.length;},0) : d.faltan;
+
+  var h='<div style="display:flex;flex-direction:column;height:100%">'+
+    /* cabecera con las flechas: 2A ‹ Apto 2B › 3A */
+    '<div style="padding:12px 15px 0;flex-shrink:0">'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        _recFlecha(ant,'‹ ')+
+        '<div style="text-align:center;flex:1;min-width:0">'+
+          '<div style="font-family:var(--tit);font-size:20px;font-weight:800;letter-spacing:-.025em;'+
+            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(_recNom(R.area))+'</div>'+
+          '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">'+
+            d.pct+'% · faltan '+faltan+'</div>'+
+        '</div>'+
+        _recFlecha(sig,'',' ›')+
+      '</div>'+
+      '<div style="display:flex;gap:5px;background:var(--bg);border-radius:11px;padding:4px;margin-top:12px">'+
+        _recSeg('dictar','Dictar')+
+        _recSeg('pend','Pendientes&nbsp;<b style="font-family:var(--tit)">'+faltan+'</b>')+
+        _recSeg('quien','Quién debe')+
+      '</div>'+
+    '</div>'+
+    '<div id="rec-cuerpo" style="flex:1;overflow-y:auto;padding:13px 15px 14px">'+
+      (R.tab==='dictar'? _recDictar() : R.tab==='pend'? _recPend(grupos) : _recQuien(grupos,d))+
+    '</div>'+
+    '<div style="padding:0 15px calc(13px + var(--sb));flex-shrink:0">'+
+      '<button onclick="cerrarHojaApto()" style="width:100%;min-height:48px;border:none;'+
+        'background:var(--bg3);color:var(--text2);border-radius:var(--r);font-family:var(--font);'+
+        'font-size:14px;font-weight:600;cursor:pointer">Cerrar y volver al edificio</button>'+
+    '</div>'+
+  '</div>';
+
+  var el=document.getElementById('hoja-rec');
+  if(!el){
+    el=document.createElement('div');
+    el.id='hoja-rec';
+    el.style.cssText='position:fixed;inset:0;z-index:99980;background:var(--bg2);'+
+      'animation:hojaSube .22s cubic-bezier(.2,.8,.3,1);display:flex;flex-direction:column';
+    document.body.appendChild(el);
+  }
+  el.innerHTML=h;
+}
+function _recFlecha(area,pre,post){
+  if(!area) return '<div style="width:56px;flex-shrink:0"></div>';
+  return '<button onclick="irApto(\''+String(area).replace(/'/g,"\\'")+'\')" '+
+    'style="flex-shrink:0;border:none;background:var(--bg3);color:var(--text2);border-radius:9px;'+
+    'padding:9px 11px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;'+
+    'white-space:nowrap">'+(pre||'')+esc(_recNom(area).replace('Apto ','').replace('Penthouse B','PH'))+
+    (post||'')+'</button>';
+}
+function _recSeg(k,t){
+  var on=S.recorrido.tab===k;
+  return '<button onclick="recTab(\''+k+'\')" role="tab" aria-selected="'+on+'" '+
+    'style="flex:1;border:none;border-radius:8px;padding:9px 3px;font-family:var(--font);'+
+    'font-size:11.5px;font-weight:600;cursor:pointer;min-height:38px;white-space:nowrap;'+
+    'background:'+(on?'var(--bg3)':'transparent')+';color:'+(on?'var(--text)':'var(--text3)')+'">'+t+'</button>';
+}
+function irApto(area){
+  S.recorrido.area=area; S.recorrido.abierto=null; S.recorrido.confirmando=null;
+  pintarRecorrido(); cargarPendRec(area);
+}
+function recTab(k){ S.recorrido.tab=k; S.recorrido.confirmando=null; pintarRecorrido(); }
+
+/* ── Dictar: el apartamento ya esta puesto ── */
+function _recDictar(){
+  var R=S.recorrido;
+  var hechas=(S._recHoy||[]).filter(function(x){return x.area===R.area;});
+  var h='<div style="display:inline-flex;align-items:center;gap:7px;background:var(--green-light);'+
+      'border:1px solid var(--green);color:var(--green);border-radius:99px;padding:6px 12px;'+
+      'font-size:12px;font-weight:600">📍 '+esc(_recNom(R.area))+
+      ' <span style="color:var(--text3);font-weight:500;font-size:11px">fijado</span></div>'+
+    '<button onclick="dictarEnRecorrido()" style="width:100%;margin-top:13px;border:none;'+
+      'background:var(--accent-fill);color:#fff;border-radius:18px;padding:24px 16px;'+
+      'cursor:pointer;font-family:var(--font);display:flex;flex-direction:column;'+
+      'align-items:center;gap:8px">'+
+      '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
+        'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'+
+        '<rect x="9" y="2" width="6" height="12" rx="3"/>'+
+        '<path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>'+
+      '<span style="font-size:14.5px;font-weight:700">Dictar actividad</span>'+
+      '<span style="font-size:11.5px;opacity:.82">El apartamento ya está puesto</span></button>'+
+    '<button onclick="anotarEnRecorrido()" style="width:100%;margin-top:8px;border:none;'+
+      'background:var(--bg3);color:var(--text2);border-radius:12px;padding:13px;'+
+      'font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;min-height:44px">'+
+      'Anotar a mano</button>';
+
+  h+='<div style="font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;'+
+     'color:var(--text3);margin:18px 0 8px">Anotadas aquí hoy ('+hechas.length+')</div>';
+  if(!hechas.length){
+    h+='<p style="color:var(--text3);font-size:12.5px;line-height:1.5;margin:0;padding:12px 0">'+
+       'Nada todavía. Toca el micrófono y di lo que ves — el apartamento no hay que decirlo.</p>';
+  } else {
+    hechas.slice().reverse().forEach(function(x){
+      h+='<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);'+
+        'align-items:flex-start"><span style="color:var(--green);font-size:13px">✓</span>'+
+        '<div style="flex:1;min-width:0"><div style="font-size:12.5px;line-height:1.35">'+
+        esc(x.descripcion||'')+'</div>'+
+        '<div style="color:var(--text3);font-size:10.5px;margin-top:2px">'+
+        esc(x.personal_nombre||'sin asignar')+'</div></div></div>';
+    });
+  }
+  return h;
+}
+function dictarEnRecorrido(){ abrirComando(); }
+function anotarEnRecorrido(){ showAddActSmart(); }
+
+/* ── Pendientes: tocar y confirmar ── */
+function _recPend(grupos){
+  var R=S.recorrido;
+  if(grupos==='error') return _recReintentar();
+  if(!grupos) return '<p style="color:var(--text3);font-size:12.5px;padding:16px 0">Cargando lo pendiente…</p>';
+  if(!grupos.length) return '<p style="color:var(--text3);font-size:12.5px;padding:16px 0">Aquí no queda nada pendiente.</p>';
+  var h='';
+  grupos.forEach(function(g,gi){
+    var ab=R.abierto===gi;
+    h+='<div style="border-bottom:1px solid var(--border)">'+
+      '<button onclick="recAbrir('+gi+')" aria-expanded="'+ab+'" '+
+        'style="width:100%;background:none;border:none;display:flex;align-items:center;gap:10px;'+
+        'padding:12px 2px;cursor:pointer;font-family:var(--font);color:var(--text);text-align:left;'+
+        'min-height:44px">'+
+        '<span style="color:var(--text3);font-size:10px;width:9px;display:inline-block;'+
+          'transform:rotate('+(ab?'90':'0')+'deg);transition:transform .16s">▶</span>'+
+        '<span style="flex:1;font-size:13.5px;font-weight:600;min-width:0;overflow:hidden;'+
+          'text-overflow:ellipsis;white-space:nowrap">'+esc(g.q)+'</span>'+
+        '<span style="font-family:var(--tit);font-size:13px;font-weight:700;color:var(--text2)">'+
+          g.items.length+'</span></button>';
+    if(ab){
+      h+='<div style="padding:0 0 8px">';
+      g.items.forEach(function(a){
+        var preg=R.confirmando===a.id;
+        h+='<button onclick="recPreguntar(\''+a.id+'\')" '+
+          'style="width:100%;background:'+(preg?'var(--bg4)':'var(--bg3)')+';border:1px solid '+
+          (preg?'var(--border2)':'transparent')+';border-radius:11px'+
+          (preg?' 11px 0 0':'')+';padding:11px 12px;margin-bottom:'+(preg?'0':'7px')+';'+
+          'text-align:left;cursor:pointer;font-family:var(--font);color:var(--text);'+
+          'font-size:12.5px;line-height:1.4;display:flex;gap:10px;align-items:flex-start;'+
+          'justify-content:flex-start;min-height:44px">'+
+          '<span style="width:16px;height:16px;border:1.5px solid var(--border2);border-radius:5px;'+
+            'flex-shrink:0;margin-top:1px"></span>'+
+          '<span>'+esc(a.descripcion||'(sin descripción)')+'</span></button>';
+        if(preg){
+          h+='<div style="background:var(--bg4);border:1px solid var(--border2);border-top:none;'+
+            'border-radius:0 0 11px 11px;padding:10px 12px;margin-bottom:8px;display:flex;'+
+            'align-items:center;gap:9px">'+
+            '<span style="flex:1;font-size:12.5px;font-weight:600">¿Terminada?</span>'+
+            '<button onclick="event.stopPropagation();recCancelar()" style="background:none;border:none;'+
+              'color:var(--text3);font-size:12.5px;font-weight:600;cursor:pointer;'+
+              'font-family:var(--font);padding:9px 6px">No</button>'+
+            '<button onclick="event.stopPropagation();recCerrar(\''+a.id+'\')" '+
+              'style="background:var(--green-fill);border:none;color:#fff;border-radius:9px;'+
+              'padding:10px 15px;font-size:12.5px;font-weight:700;cursor:pointer;'+
+              'font-family:var(--font)">Sí, hecha</button></div>';
+        }
+      });
+      h+='</div>';
+    }
+    h+='</div>';
+  });
+  return h;
+}
+function recAbrir(i){
+  S.recorrido.abierto = S.recorrido.abierto===i ? null : i;
+  S.recorrido.confirmando=null; pintarRecorrido();
+}
+function recPreguntar(id){ S.recorrido.confirmando=id; pintarRecorrido(); }
+function recCancelar(){ S.recorrido.confirmando=null; pintarRecorrido(); }
+
+async function recCerrar(id){
+  var R=S.recorrido, area=R.area;
+  R.confirmando=null;
+  try{
+    await Acciones.completar(id);
+    /* se saca de la copia local: no hace falta volver a pedir la lista */
+    var l=(S._recPend||{})[area]||[];
+    S._recPend[area]=l.filter(function(x){ return x.id!==id; });
+    var d=(S._torre||{})[area];
+    if(d){ d.faltan=Math.max(0,d.faltan-1); d.hechas++;
+           d.pct=d.total?Math.round(d.hechas/d.total*100):0; }
+    if(typeof showToast==='function') showToast('Cerrada','ok');
+  }catch(e){
+    if(typeof showToast==='function') showToast('No se pudo cerrar: '+(e&&e.message||''),'err');
+  }
+  pintarRecorrido();
+}
+
+/* ── Quién debe ── */
+function _recQuien(grupos,d){
+  if(grupos==='error') return _recReintentar();
+  if(!grupos) return '<p style="color:var(--text3);font-size:12.5px;padding:16px 0">Cargando…</p>';
+  if(!grupos.length) return '<p style="color:var(--text3);font-size:12.5px;padding:16px 0">Nadie debe nada aquí.</p>';
+  var max=grupos[0].items.length||1, h='';
+  grupos.forEach(function(g){
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:11px 0;'+
+      'border-bottom:1px solid var(--border)">'+
+      '<span style="flex:1;font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;'+
+        'white-space:nowrap">'+esc(g.q)+'</span>'+
+      '<span style="width:74px;height:5px;background:var(--bg4);border-radius:3px;flex-shrink:0">'+
+        '<span style="display:block;height:100%;border-radius:3px;background:var(--green);'+
+        'width:'+Math.round(g.items.length/max*100)+'%"></span></span>'+
+      '<span style="font-family:var(--tit);font-size:13.5px;font-weight:700;width:26px;'+
+        'text-align:right">'+g.items.length+'</span></div>';
+  });
+  return h;
+}
+
+/* Del recorrido a la lista completa filtrada por ese apartamento */
 function verPendientesApto(area){
   cerrarHojaApto();
   try{
@@ -5335,6 +5556,17 @@ var Acciones = (function(){
         creadas.push(Object.assign({},d,{id:uid(),area:ubicaciones[i],fotos:d.fotos||''}));
       }
       creadas.forEach(function(a){ (S.acts=S.acts||[]).push(a); });   // optimista
+      /* Lo anotado durante un recorrido se guarda aparte para que la hoja
+         pueda mostrarlo, y se le suma al contador del apartamento. */
+      creadas.forEach(function(a){
+        (S._recHoy=S._recHoy||[]).push({area:a.area,descripcion:a.descripcion,
+                                        personal_nombre:a.personal_nombre||''});
+        var t=(S._torre||{})[a.area];
+        if(t){ t.total++; t.faltan++; t.pct=Math.round(t.hechas/t.total*100); }
+        var p=(S._recPend||{})[a.area];
+        if(p) p.push({id:a.id,descripcion:a.descripcion,
+                      personal_nombre:a.personal_nombre||'',estado:a.estado});
+      });
 
       try{
         for(var j=0;j<creadas.length;j++){
@@ -5979,6 +6211,9 @@ async function _cmdAnalizar(txt, conIA){
     return;
   }
   _cmd.intencion=i;
+  /* En el recorrido el apartamento ya esta fijado: si la orden no nombro
+     area, se usa la del apartamento donde esta parado. */
+  if(S.recorrido && S.recorrido.area && !i.area) i.area=S.recorrido.area;
 
   if(i.accion==='buscar'){
     var r=Acciones.buscar({q:i.ref, limite:12});
