@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260905_21';
+const APP_VERSION='20260905_22';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1477,6 +1477,31 @@ function isAdmin(){return S.user?.rol==='admin';}
 // PROTECTED TABLES - never allow accidental full deletes
 const PROTECTED_TABLES=['obra_personal','obra_actividades','obra_asistencia','obra_penalidades','obra_tareas','obra_semanas','obra_plan_semanal'];
 
+/* ─────────────────────────────────────────────────────────────────
+   Supabase corta TODA respuesta en 1000 filas. Poner "limit=5000" en
+   la consulta no lo levanta: el servidor manda 1000 y calla. Con 2 348
+   actividades eso hacia que la torre calculara los porcentajes con el
+   43% de los datos — el 3B salia en 85% cuando de verdad va en 52%.
+   Esta funcion pide por paginas con Range hasta que llegue una
+   incompleta. El order es obligatorio: sin un orden estable las
+   paginas se solapan o se saltan filas.
+   ───────────────────────────────────────────────────────────────── */
+async function sbTodo(path, opts){
+  opts=opts||{};
+  var pagina=opts.pagina||1000, tope=opts.tope||20;
+  if(path.indexOf('order=')<0) path += (path.indexOf('?')<0?'?':'&')+'order=id.asc';
+  var todo=[], desde=0;
+  for(var v=0; v<tope; v++){
+    var lote=await sb(path,{headers:{'Range-Unit':'items',
+      'Range':desde+'-'+(desde+pagina-1)}});
+    if(!lote || !lote.length) break;
+    todo=todo.concat(lote);
+    if(lote.length<pagina) break;
+    desde+=pagina;
+  }
+  return todo;
+}
+
 async function sb(path,opts={}){
   // Solo-visualización: bloquear TODA escritura para usuarios con rol 'view'
   var _m=(opts.method||'GET').toUpperCase();
@@ -1797,7 +1822,7 @@ async function loadAll(){
     const[personal,asist,acts]=await Promise.all([
       sbWithTimeout('obra_personal?activo=eq.true&order=nombre', 10000),
       sbWithTimeout('obra_asistencia?fecha=eq.'+S.fecha, 10000),
-      sbWithTimeout('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=2000', 10000),
+      sbTodo('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc'),
     ]);
     clearTimeout(retryTimer);
     S.personal=personal; S.asist=asist; S.acts=acts; S.estancadas=undefined; S.abiertas=undefined;
@@ -1895,7 +1920,7 @@ async function loadFecha(){
   try{
     const[asist,acts]=await Promise.all([
       sb('obra_asistencia?fecha=eq.'+S.fecha),
-      sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=2000'),
+      sbTodo('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc'),
     ]);
     S.asist=asist;S.acts=acts;S.estancadas=undefined;S.abiertas=undefined;
     fixActsConsistency();
@@ -3145,7 +3170,7 @@ async function cargarTorre(force){
   if(S._torreCargando) return null;
   S._torreCargando=true;
   try{
-    var filas=await sb('obra_actividades?select=area,estado,personal_nombre&limit=5000');
+    var filas=await sbTodo('obra_actividades?select=area,estado,personal_nombre');
     var por={};
     (filas||[]).forEach(function(a){
       var ar=a.area||''; if(!ar) return;
@@ -4221,7 +4246,7 @@ async function cargarResumenObra(force){
   if(S._resumenCargando) return null;
   S._resumenCargando=true;
   try{
-    var rows=await sb('obra_actividades?select=estado,fecha_fin&limit=5000');
+    var rows=await sbTodo('obra_actividades?select=estado,fecha_fin');
     var hoy=today(), t=rows.length, done=0, prog=0, venc=0;
     rows.forEach(function(a){
       if(a.estado==='completado'){ done++; return; }
@@ -10965,7 +10990,7 @@ async function guardarUploaderFoto(actId, fotoUrl){
 // ver también las de fuera del rango cargado en S.acts (p.ej. fechas de agosto).
 async function loadAbiertas(){
   try{
-    var r=await sb('obra_actividades?estado=neq.completado&order=fecha_fin.asc,created_at.desc&limit=2000');
+    var r=await sbTodo('obra_actividades?estado=neq.completado&order=fecha_fin.asc,created_at.desc');
     S.abiertas=Array.isArray(r)?r:[];
   }catch(e){ S.abiertas=S.abiertas||[]; }
   return S.abiertas;
@@ -12136,7 +12161,7 @@ function _gerDias(a){ var ff=(a.fecha_fin||'').slice(0,10); if(!ff) return 0; re
 function _gerColor(pct){ return pct>=60?'var(--green)':pct>=30?'var(--amber)':'var(--red)'; }
 async function loadGerencia(){
   try{
-    var acts=await sb('obra_actividades?select=id,area,estado,porcentaje,prioridad,fecha_fin,fecha_plan,personal_nombre,descripcion,tipo_personal&limit=3000');
+    var acts=await sbTodo('obra_actividades?select=id,area,estado,porcentaje,prioridad,fecha_fin,fecha_plan,personal_nombre,descripcion,tipo_personal');
     var cambios=await sb('obra_cambios?fecha=gte.'+_gerHace(30)+'&select=fecha,accion,entidad_id,entidad_nombre,usuario_nombre&limit=5000');
     var asist=[];
     try{ asist=await sb('obra_asistencia?fecha=gte.'+_gerHace(7)+'&select=fecha,estado,personal_id&limit=5000'); }catch(e){}
@@ -14521,7 +14546,7 @@ async function generarPDFCierre(fecha){
   setSS('syncing','Cargando actividades...');
   var allActs=[];
   try{
-    allActs=await sb('obra_actividades?limit=3000&select=id,area,fotos,porcentaje,fecha_fin,descripcion,estado,personal_nombre,ingeniero_nombre,tipo_personal');
+    allActs=await sbTodo('obra_actividades?select=id,area,fotos,porcentaje,fecha_fin,descripcion,estado,personal_nombre,ingeniero_nombre,tipo_personal');
     if(!Array.isArray(allActs))allActs=[];
   }catch(e){allActs=S.acts||[];}
   var _isValidDate=function(d){return typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d);};
@@ -14940,7 +14965,7 @@ function generarPDFUrgentesPend(){
 async function abrirSelectorUbicaciones(){
   setSS('syncing','Cargando ubicaciones...');
   var allActs=[];
-  try{ allActs=await sb('obra_actividades?order=fecha.asc&limit=3000'); }
+  try{ allActs=await sbTodo('obra_actividades?order=fecha.asc'); }
   catch(e){ setSS('err','Error al cargar actividades'); return; }
   setSS('ok','');
 
@@ -15029,7 +15054,7 @@ async function generarPDFPorApto(selectedAreas){
 
   setSS('syncing','Cargando actividades...');
   var allActs=[];
-  try{ allActs=await sb('obra_actividades?order=fecha.asc&limit=3000'); }
+  try{ allActs=await sbTodo('obra_actividades?order=fecha.asc'); }
   catch(e){ setSS('err','Error al cargar actividades'); return; }
 
   var hoy=today();
@@ -16269,7 +16294,7 @@ setInterval(async function(){
   if(_actSaving) return; // skip auto-refresh while a save is in flight to avoid overwriting optimistic state
   try{
     var asist=await sb('obra_asistencia?fecha=eq.'+S.fecha);
-    var acts=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit=2000');
+    var acts=await sbTodo('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc');
     S.asist=asist; S.acts=acts;
     fixActsConsistency();
     setSS('ok',''+hhmm());
