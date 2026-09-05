@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260905_20';
+const APP_VERSION='20260905_21';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -3401,7 +3401,7 @@ function pintarRecorrido(){
 
   var h='<div style="display:flex;flex-direction:column;height:100%">'+
     /* cabecera con las flechas: 2A ‹ Apto 2B › 3A */
-    '<div style="padding:12px 15px 0;flex-shrink:0">'+
+    '<div style="padding:calc(12px + var(--st)) 15px 0;flex-shrink:0">'+
       '<div style="display:flex;align-items:center;gap:8px">'+
         _recFlecha(ant,'‹ ')+
         '<div style="text-align:center;flex:1;min-width:0">'+
@@ -3432,7 +3432,10 @@ function pintarRecorrido(){
   if(!el){
     el=document.createElement('div');
     el.id='hoja-rec';
-    el.style.cssText='position:fixed;inset:0;z-index:99980;background:var(--bg2);'+
+    /* 250: por encima de la barra de abajo (90) y del cajon (201), pero por
+       DEBAJO del modal (300) y del comando de voz (9500). Con 99980 los
+       botones disparaban pero lo que abrian quedaba detras de esta hoja. */
+    el.style.cssText='position:fixed;inset:0;z-index:250;background:var(--bg2);'+
       'animation:hojaSube .22s cubic-bezier(.2,.8,.3,1);display:flex;flex-direction:column';
     document.body.appendChild(el);
   }
