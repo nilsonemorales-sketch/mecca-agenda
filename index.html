@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260905_22';
+const APP_VERSION='20260905_23';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1489,7 +1489,14 @@ const PROTECTED_TABLES=['obra_personal','obra_actividades','obra_asistencia','ob
 async function sbTodo(path, opts){
   opts=opts||{};
   var pagina=opts.pagina||1000, tope=opts.tope||20;
+  /* El orden tiene que ser UNICO, no solo estar puesto. Con
+     'order=fecha.desc' hay 130 actividades que comparten la misma fecha:
+     Postgres no garantiza que las devuelva igual en dos consultas, asi
+     que un empate a caballo del corte de pagina duplica unas y pierde
+     otras. El id de desempate cierra ese hueco. */
   if(path.indexOf('order=')<0) path += (path.indexOf('?')<0?'?':'&')+'order=id.asc';
+  else if(!/order=[^&]*\bid\./.test(path))
+    path = path.replace(/(order=[^&]*)/, '$1,id.asc');
   var todo=[], desde=0;
   for(var v=0; v<tope; v++){
     var lote=await sb(path,{headers:{'Range-Unit':'items',
