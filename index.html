@@ -3268,17 +3268,29 @@ function dibujarTorre(){
       /* tinte verde proporcional al avance: se lee sin gritar */
       add('rect',{x:x,y:y,width:w,height:alto,rx:10,fill:'var(--green)',
         opacity:(0.05+d.pct/100*0.24).toFixed(2)},g);
-      /* el nombre manda arriba, solo; el porcentaje grande a la izquierda y
-         lo que falta en su propia columna a la derecha, en dos lineas.
-         Puesto en una sola linea chocaba con "Penthouse B" y con el 58%. */
-      add('text',{x:x+12,y:y+16,'font-size':10,'font-weight':500,
-        fill:'var(--text2)'},g).textContent = nivel==='7'?'Penthouse B':'Apto '+nivel+L;
+      /* Arriba, en una sola linea: el nombre a la izquierda y lo que falta a
+         la derecha, como en la muestra. "Penthouse B" es mas largo que los
+         demas, asi que en vez de adivinar se mide el texto de verdad y, si
+         no caben los dos, se encoge el nombre hasta que quepa. */
+      var tNom=add('text',{x:x+12,y:y+16,'font-size':10,'font-weight':500,
+        fill:'var(--text2)'},g);
+      var tFal=add('text',{x:x+w-12,y:y+16,'font-size':9,fill:'var(--text3)',
+        'text-anchor':'end'},g);
+      tFal.textContent='faltan '+d.faltan;
+      /* nombres de mas a menos largo: se queda con el primero que quepa de
+         verdad al lado del "faltan". "Penthouse B" no cabe en 116 px. */
+      var nombres = nivel==='7' ? ['Penthouse B','Penthouse','PH B']
+                                : ['Apto '+nivel+L];
+      tNom.textContent=nombres[0];
+      try{
+        var libre=w-24-tFal.getComputedTextLength()-8;
+        for(var n=0;n<nombres.length;n++){
+          tNom.textContent=nombres[n];
+          if(tNom.getComputedTextLength()<=libre) break;
+        }
+      }catch(e){}
       add('text',{x:x+12,y:y+42,'font-size':21,'font-weight':800,'letter-spacing':'-.03em',
         fill:'var(--text)','font-family':'var(--tit)'},g).textContent=d.pct+'%';
-      add('text',{x:x+w-12,y:y+33,'font-size':8.5,fill:'var(--text3)',
-        'text-anchor':'end'},g).textContent='faltan';
-      add('text',{x:x+w-12,y:y+45,'font-size':13,'font-weight':700,fill:'var(--text2)',
-        'text-anchor':'end','font-family':'var(--tit)'},g).textContent=d.faltan;
       add('rect',{x:x+12,y:y+alto-8,width:w-24,height:4,rx:2,fill:'var(--bg4)'},g);
       add('rect',{x:x+12,y:y+alto-8,width:(w-24)*d.pct/100,height:4,rx:2,
         fill:'var(--green)'},g);
