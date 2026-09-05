@@ -72,9 +72,9 @@
 .hdr-l>div{min-width:0}
 .hdr-l>div>div:last-child{min-width:0}
 .hdr-r button{border:none !important;background:var(--bg3) !important;color:var(--text) !important;border-radius:10px !important}
+/* el de reporte se queda visible: es el que imprime la pantalla donde estas */
 @media(max-width:600px){
   #btn-refresh{display:none !important}
-  .hdr-r .ibtn.primary{display:none !important}
 }
 
 /* ── LETRA Y BOTONES ───────────────────────────────────────
@@ -608,7 +608,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <button id="btn-refresh" onclick="loadAll()" title="Actualizar datos" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:transform .4s ease,background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↺</button>
       <button id="btn-cmd" onclick="abrirComando()" title="Dar una orden por voz o texto (C)" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;transition:background .15s;flex-shrink:0" ><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg></button>
       <span class="ubadge guest" id="ubadge" onclick="showLogin()">Entrar</span>
-      <button class="ibtn primary" onclick="exportarPDF()" style="font-size:11px">PDF</button>
+      <button id="btn-rep" onclick="abrirReporte()" title="Reporte de esta pantalla" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4v-6h16v6h-2"/><rect x="7" y="14" width="10" height="7" rx="1"/></svg></button>
     </div>
   </div>
 
@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260905_23';
+const APP_VERSION='20260905_24';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -3349,6 +3349,371 @@ function dibujarTorre(){
 
   if(sub) sub.textContent = total ?
     (Math.round(hechas/total*100)+'% · faltan '+abiertas) : 'sin datos';
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   EL MOTOR DE REPORTES
+
+   Antes habia 13 funciones distintas armando PDFs — 2 661 lineas — y
+   cada una rehacia su encabezado, su tabla y su pie. Por eso los
+   reportes se sentian aparte del resto del app: cada uno se escribio
+   para una pantalla sola.
+
+   Aqui la pantalla no elige "tipo de reporte". Solo declara tres
+   cosas — que estoy viendo, con que filtros y que filas — y un solo
+   armador las imprime. El boton de arriba las recoge.
+   ═════════════════════════════════════════════════════════════════ */
+var Reporte = (function(){
+
+  var MESES=['enero','febrero','marzo','abril','mayo','junio','julio',
+             'agosto','septiembre','octubre','noviembre','diciembre'];
+  function fechaLarga(){
+    var d=new Date();
+    return d.getDate()+' de '+MESES[d.getMonth()]+' de '+d.getFullYear();
+  }
+  function nomCorto(area){ return String(area||'').split('—').pop().trim(); }
+
+  /* ── 1. QUE ESTOY VIENDO ───────────────────────────────────────
+     Un solo despachador. Cada pantalla devuelve la misma forma:
+       titulo, filtros, kpis, y (tabla) o (grupos + cols).          */
+  function contexto(){
+    if(S.recorrido && S.recorrido.area) return _ctxRecorrido();
+    if(S.currentTab==='hoy')            return _ctxTorre();
+    return _ctxActividades();
+  }
+
+  function _ctxRecorrido(){
+    var R=S.recorrido, area=R.area;
+    var d=(S._torre||{})[area]||{pct:0,total:0,hechas:0};
+    var grupos=(typeof _recGrupos==='function') ? _recGrupos(area) : null;
+    if(grupos==='error' || !grupos) grupos=[];
+
+    /* con un contratista abierto, el reporte es SU hoja — la que se
+       le entrega en mano, con espacio para firmar */
+    if(R.tab==='pend' && R.abierto!==null && grupos[R.abierto]){
+      var g=grupos[R.abierto];
+      return {
+        titulo: nomCorto(area)+' — '+g.q,
+        filtros:['Pendientes de este contratista'],
+        kpis:[{n:g.items.length,t:'pendientes'},{n:d.pct+'%',t:'avance del apto'}],
+        cols:['Actividad','Estado'],
+        tabla:{cols:['Actividad','Estado'],
+               filas:g.items.map(function(a){
+                 return [a.descripcion||'(sin descripción)', _estado(a.estado)];})},
+        firma:true, quien:g.q
+      };
+    }
+    var faltan=grupos.reduce(function(s,g){return s+g.items.length;},0);
+    return {
+      titulo: nomCorto(area),
+      filtros:['Todo lo pendiente del apartamento'],
+      kpis:[{n:d.pct+'%',t:'avance'},{n:faltan,t:'faltan'},
+            {n:grupos.length,t:'contratistas'}],
+      cols:['Actividad','Estado'],
+      grupos:grupos.map(function(g){
+        return {t:g.q, filas:g.items.map(function(a){
+          return [a.descripcion||'(sin descripción)', _estado(a.estado)];})};
+      })
+    };
+  }
+
+  function _ctxTorre(){
+    var D=S._torre||{};
+    var orden=(typeof REC_ORDEN!=='undefined') ? REC_ORDEN : Object.keys(D);
+    var filas=[], tot=0, hechas=0, faltan=0;
+    orden.forEach(function(a){
+      var d=D[a]; if(!d) return;
+      tot+=d.total; hechas+=d.hechas; faltan+=d.faltan;
+      filas.push([nomCorto(a), d.pct+'%', d.faltan]);
+    });
+    return {
+      titulo:'Avance del edificio',
+      filtros:['Los 11 apartamentos'],
+      kpis:[{n:(tot?Math.round(hechas/tot*100):0)+'%',t:'avance'},
+            {n:faltan,t:'faltan'},{n:filas.length,t:'apartamentos'}],
+      tabla:{cols:['Apartamento','Avance','Faltan'],filas:filas}
+    };
+  }
+
+  function _ctxActividades(){
+    var vistas=[];
+    try{ vistas=applyActFilters(S.acts||[])||[]; }catch(e){ vistas=[]; }
+    var abiertas=vistas.filter(function(a){return a.estado!=='completado';});
+    var porQuien={}, orden=[];
+    abiertas.forEach(function(a){
+      var q=(a.personal_nombre||'').trim()||'Sin asignar';
+      if(!porQuien[q]){ porQuien[q]=[]; orden.push(q); }
+      porQuien[q].push(a);
+    });
+    orden.sort(function(x,y){ return porQuien[y].length-porQuien[x].length; });
+    return {
+      titulo:'Actividades',
+      filtros:_filtrosEnPantalla(),
+      kpis:[{n:vistas.length,t:'en pantalla'},{n:abiertas.length,t:'abiertas'},
+            {n:orden.length,t:'contratistas'}],
+      cols:['Actividad','Ubicación','Estado'],
+      grupos:orden.map(function(q){
+        return {t:q, filas:porQuien[q].map(function(a){
+          return [a.descripcion||'(sin descripción)', nomCorto(a.area), _estado(a.estado)];})};
+      })
+    };
+  }
+
+  /* Los filtros que el usuario tiene puestos, en palabras */
+  function _filtrosEnPantalla(){
+    var f=[], av=S.actFiltroAvanzado||{};
+    if(S.actFiltroTexto) f.push('Buscando «'+S.actFiltroTexto+'»');
+    (av.ubicaciones||[]).forEach(function(u){ f.push(nomCorto(u)); });
+    (av.contratistas||[]).forEach(function(c){ f.push(c); });
+    (av.responsables||[]).forEach(function(r){ f.push(r); });
+    if(av.estado) f.push('Estado: '+av.estado);
+    if(av.prioridad) f.push('Prioridad: '+av.prioridad);
+    if(!f.length) f.push('Sin filtros — todo lo que hay');
+    return f;
+  }
+
+  function _estado(e){
+    return e==='completado'?'Hecha': e==='en-progreso'?'En progreso':
+           e==='pausada'?'Pausada':'Pendiente';
+  }
+
+  /* ── 2. LA HOJA ────────────────────────────────────────────────
+     Un solo armador para todos los reportes. 'resumen' deja fuera el
+     detalle linea por linea y sirve para gerencia.                */
+  function hoja(c, nivel){
+    var corto = nivel==='resumen';
+    var h='<div class="rp">'+
+      '<div class="rp-cab">'+
+        '<div class="rp-marca"><div class="rp-logo">B</div>'+
+          '<div><div class="rp-emp">Bridex Comercial S.R.L.</div>'+
+          '<div class="rp-obra">Mecca Residence · Santiago, R.D.</div></div></div>'+
+        '<div class="rp-fecha">'+esc(fechaLarga())+'<br><span>'+
+          esc((S.user&&S.user.nombre)||'')+'</span></div>'+
+      '</div>'+
+      '<h1 class="rp-tit">'+esc(c.titulo)+'</h1>'+
+      '<p class="rp-filtros">'+(c.filtros||[]).map(esc).join(' · ')+'</p>'+
+      '<div class="rp-kpis">'+(c.kpis||[]).map(function(k){
+        return '<div class="rp-kpi"><b>'+esc(k.n)+'</b><span>'+esc(k.t)+'</span></div>';
+      }).join('')+'</div>';
+
+    if(corto){
+      if(c.tabla) h+=_tabla(c.tabla.cols,c.tabla.filas);
+      else if(c.grupos) h+=_tabla(['Contratista','Partidas'],
+        c.grupos.map(function(g){return [g.t,g.filas.length];}));
+    } else {
+      if(c.tabla) h+=_tabla(c.tabla.cols,c.tabla.filas);
+      if(c.grupos){
+        if(!c.grupos.length) h+='<p class="rp-nada">No hay nada que listar con estos filtros.</p>';
+        c.grupos.forEach(function(g){
+          h+='<div class="rp-sec">'+esc(g.t)+' <span>'+g.filas.length+'</span></div>'+
+             _tabla(c.cols,g.filas);
+        });
+      }
+    }
+
+    if(c.firma && !corto)
+      h+='<div class="rp-firmas"><div>Recibido — '+esc(c.quien||'contratista')+'</div>'+
+         '<div>Entregado — '+esc((S.user&&S.user.nombre)||'Bridex')+'</div></div>';
+
+    h+='<div class="rp-pie">Generado desde Mecca Agenda con lo que estaba en '+
+       'pantalla. Los porcentajes salen de las actividades cerradas sobre el '+
+       'total de cada apartamento.</div></div>';
+    return h;
+  }
+
+  function _tabla(cols,filas){
+    if(!filas || !filas.length) return '';
+    var h='<table class="rp-tabla"><thead><tr>';
+    cols.forEach(function(c,i){
+      h+='<th'+(i?' class="der"':'')+'>'+esc(c)+'</th>';
+    });
+    h+='</tr></thead><tbody>';
+    filas.forEach(function(f){
+      h+='<tr>';
+      f.forEach(function(v,i){ h+= i? '<td class="der">'+esc(v)+'</td>' : '<td>'+esc(v)+'</td>'; });
+      h+='</tr>';
+    });
+    return h+'</tbody></table>';
+  }
+
+  /* ── 3. LA VERSION DE WHATSAPP ────────────────────────────────
+     El mismo contenido en texto, para pegar en el chat.           */
+  function texto(c){
+    var t='*'+c.titulo+'*\n'+(c.filtros||[]).join(' · ')+'\n'+fechaLarga()+'\n\n';
+    (c.kpis||[]).forEach(function(k){ t+='• '+k.n+' '+k.t+'\n'; });
+    t+='\n';
+    if(c.tabla) c.tabla.filas.forEach(function(f){
+      var resto=f.slice(1).filter(function(v){return v && v!=='—';}).join(' · ');
+      t+='– '+f[0]+(resto?': '+resto:'')+'\n';
+    });
+    if(c.grupos) c.grupos.forEach(function(g){
+      t+='*'+g.t+'* ('+g.filas.length+')\n';
+      g.filas.forEach(function(f){ t+='  – '+f[0]+'\n'; });
+      t+='\n';
+    });
+    return t+'— Bridex Comercial · Mecca Residence';
+  }
+
+  /* ── 4. ESTILO DE IMPRESION ───────────────────────────────────
+     Membrete y firmas de Bridex, sin el aparato de un contrato:
+     esto es un documento de trabajo, no una propuesta.            */
+  var CSS =
+   '*{box-sizing:border-box}'+
+   'body{margin:0;padding:22px 26px;font:13px/1.45 -apple-system,BlinkMacSystemFont,'+
+     '"Segoe UI",Roboto,sans-serif;color:#17181a;background:#fff}'+
+   '.rp-cab{display:flex;align-items:flex-start;gap:11px;padding-bottom:12px;'+
+     'border-bottom:2px solid #17181a}'+
+   '.rp-logo{width:32px;height:32px;border-radius:8px;background:#326731;color:#fff;'+
+     'display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px}'+
+   '.rp-marca{display:flex;align-items:center;gap:10px;flex:1}'+
+   '.rp-emp{font-size:14px;font-weight:800;letter-spacing:-.2px}'+
+   '.rp-obra{font-size:10.5px;color:#5a5f5c}'+
+   '.rp-fecha{font-size:10px;color:#5a5f5c;text-align:right;line-height:1.5}'+
+   '.rp-fecha span{color:#8a00b8;font-weight:600}'+
+   '.rp-tit{font-size:20px;font-weight:800;letter-spacing:-.5px;margin:15px 0 3px}'+
+   '.rp-filtros{font-size:10.5px;color:#5a5f5c;margin:0 0 14px}'+
+   '.rp-kpis{display:flex;gap:10px;margin-bottom:16px}'+
+   '.rp-kpi{flex:1;border:1px solid #dcdcd8;border-radius:7px;padding:9px 11px}'+
+   '.rp-kpi b{display:block;font-size:20px;font-weight:800;letter-spacing:-.6px;'+
+     'line-height:1;font-variant-numeric:tabular-nums}'+
+   '.rp-kpi span{font-size:9.5px;color:#5a5f5c}'+
+   '.rp-sec{font-size:11.5px;font-weight:700;color:#8a00b8;margin:16px 0 5px;'+
+     'padding-bottom:4px;border-bottom:1.5px solid #8a00b8}'+
+   '.rp-sec span{color:#5a5f5c;font-weight:600}'+
+   '.rp-tabla{width:100%;border-collapse:collapse;font-size:11px;color:#17181a}'+
+   '.rp-tabla th{text-align:left;font-size:8.5px;text-transform:uppercase;'+
+     'letter-spacing:.6px;color:#5a5f5c;padding:0 7px 5px 0;font-weight:700}'+
+   '.rp-tabla th.der,.rp-tabla td.der{text-align:right;white-space:nowrap}'+
+   '.rp-tabla td{padding:6px 7px 6px 0;border-top:1px solid #dcdcd8;vertical-align:top}'+
+   '.rp-tabla tbody tr:nth-child(even){background:#f6f6f4}'+
+   '.rp-nada{font-size:11px;color:#5a5f5c}'+
+   '.rp-firmas{display:flex;gap:26px;margin-top:34px}'+
+   '.rp-firmas div{flex:1;border-top:1px solid #17181a;padding-top:5px;'+
+     'font-size:9.5px;color:#5a5f5c}'+
+   '.rp-pie{margin-top:18px;padding-top:8px;border-top:1px solid #dcdcd8;'+
+     'font-size:8.5px;color:#5a5f5c;line-height:1.5}'+
+   '@media print{body{padding:0}.rp-sec{break-after:avoid}'+
+     '.rp-tabla tr{break-inside:avoid}@page{size:A4;margin:14mm 12mm}}';
+
+  function imprimir(c, nivel){
+    var w=window.open('','_blank');
+    if(!w){ if(typeof showToast==='function') showToast('El navegador bloqueó la ventana','warn'); return; }
+    w.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'+
+      '<title>'+esc(c.titulo)+' — Mecca Residence</title><style>'+CSS+'</style></head>'+
+      '<body>'+hoja(c,nivel)+
+      '<scr'+'ipt>window.onload=function(){window.print()}</scr'+'ipt></body></html>');
+    w.document.close();
+  }
+
+  return {contexto:contexto, hoja:hoja, texto:texto, imprimir:imprimir, css:CSS};
+})();
+
+/* ── LA VISTA PREVIA ───────────────────────────────────────────────
+   Primero se ve la hoja armada y de ahi se decide, como pidio Nilson.
+   Arriba: Resumen (gerencia), Completo (obra) y WhatsApp (el mismo
+   contenido en texto para pegar en el chat).                       */
+var _rep={nivel:'completo', ctx:null};
+
+function abrirReporte(){
+  try{ _rep.ctx=Reporte.contexto(); }
+  catch(e){ if(typeof showToast==='function') showToast('No pude armar el reporte','err'); return; }
+  _rep.nivel='completo';
+  pintarReporte();
+}
+function cerrarReporte(){
+  _rep.ctx=null;
+  var el=document.getElementById('rep-ov'); if(el) el.remove();
+}
+function repNivel(n){ _rep.nivel=n; pintarReporte(); }
+
+function pintarReporte(){
+  var c=_rep.ctx; if(!c) return;
+  var seg=function(k,t){
+    var on=_rep.nivel===k;
+    return '<button onclick="repNivel(\''+k+'\')" role="tab" aria-selected="'+on+'" '+
+      'style="flex:1;border:none;border-radius:7px;padding:9px 4px;font-family:var(--font);'+
+      'font-size:11.5px;font-weight:600;cursor:pointer;min-height:38px;'+
+      'background:'+(on?'var(--bg3)':'transparent')+';color:'+(on?'var(--text)':'var(--text3)')+'">'+t+'</button>';
+  };
+  var cuerpo = _rep.nivel==='wa'
+    ? '<div style="background:#0b1d16;border:1px solid #1d4d38;border-radius:12px;padding:14px;'+
+      'font-size:12px;line-height:1.55;color:#d6efe2;white-space:pre-wrap;font-family:var(--font)">'+
+      esc(Reporte.texto(c))+'</div>'
+    : '<div id="rep-papel">'+Reporte.hoja(c,_rep.nivel)+'</div>';
+
+  var h='<div style="display:flex;flex-direction:column;height:100%">'+
+    '<div style="display:flex;align-items:center;gap:8px;padding:calc(12px + var(--st)) 13px 12px;'+
+      'border-bottom:1px solid var(--border);flex-shrink:0">'+
+      '<button onclick="cerrarReporte()" style="border:none;background:var(--bg3);color:var(--text2);'+
+        'border-radius:9px;padding:9px 12px;font-family:var(--font);font-size:12px;font-weight:600;'+
+        'cursor:pointer;min-height:40px">‹ Volver</button>'+
+      '<div style="font-family:var(--tit);font-size:14px;font-weight:700;flex:1;min-width:0;'+
+        'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Vista previa</div>'+
+    '</div>'+
+    '<div style="flex:1;overflow-y:auto;padding:13px;background:#0a0b0b">'+
+      '<div role="tablist" style="display:flex;gap:5px;background:var(--bg2);border-radius:10px;'+
+        'padding:4px;margin-bottom:12px">'+
+        seg('resumen','Resumen')+seg('completo','Completo')+seg('wa','WhatsApp')+
+      '</div>'+cuerpo+
+    '</div>'+
+    '<div style="display:flex;gap:7px;padding:11px 13px calc(11px + var(--sb));'+
+      'border-top:1px solid var(--border);flex-shrink:0">'+
+      '<button onclick="repImprimir()" style="flex:1;border:none;border-radius:11px;padding:14px 6px;'+
+        'font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;min-height:48px;'+
+        'background:var(--accent-fill);color:#fff">Imprimir</button>'+
+      '<button onclick="repWhatsApp()" style="flex:1;border:none;border-radius:11px;padding:14px 6px;'+
+        'font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;min-height:48px;'+
+        'background:var(--bg3);color:var(--text)">WhatsApp</button>'+
+      '<button onclick="repCopiar()" style="flex:1;border:none;border-radius:11px;padding:14px 6px;'+
+        'font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;min-height:48px;'+
+        'background:var(--bg3);color:var(--text)">Copiar</button>'+
+    '</div>'+
+  '</div>';
+
+  var el=document.getElementById('rep-ov');
+  if(!el){
+    el=document.createElement('div');
+    el.id='rep-ov';
+    /* 260: por encima del recorrido (250), por debajo del modal (300) */
+    el.style.cssText='position:fixed;inset:0;z-index:260;background:var(--bg);'+
+      'animation:hojaSube .22s cubic-bezier(.2,.8,.3,1);display:flex;flex-direction:column';
+    document.body.appendChild(el);
+  }
+  el.innerHTML=h;
+  /* el papel se pinta con el CSS de impresion, dentro del app oscuro */
+  var papel=document.getElementById('rep-papel');
+  if(papel && !document.getElementById('rep-css')){
+    var st=document.createElement('style'); st.id='rep-css';
+    st.textContent='#rep-papel{background:#fff;border-radius:5px;padding:18px 16px;color:#17181a}'+
+      Reporte.css.replace(/body\{[^}]*\}/,'').replace(/@media print\{[\s\S]*$/,'')
+        .replace(/\.rp/g,'#rep-papel .rp');
+    document.head.appendChild(st);
+  }
+}
+
+function repImprimir(){ if(_rep.ctx) Reporte.imprimir(_rep.ctx,_rep.nivel); }
+
+function repWhatsApp(){
+  if(!_rep.ctx) return;
+  var t=Reporte.texto(_rep.ctx);
+  window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank');
+}
+
+function repCopiar(){
+  if(!_rep.ctx) return;
+  var t=Reporte.texto(_rep.ctx);
+  var ok=function(){ if(typeof showToast==='function') showToast('Copiado','ok'); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(ok).catch(_repCopiarViejo.bind(null,t,ok));
+  } else _repCopiarViejo(t,ok);
+}
+function _repCopiarViejo(t,ok){
+  var a=document.createElement('textarea');
+  a.value=t; a.style.position='fixed'; a.style.opacity='0';
+  document.body.appendChild(a); a.select();
+  try{ document.execCommand('copy'); ok(); }
+  catch(e){ if(typeof showToast==='function') showToast('No pude copiar','warn'); }
+  document.body.removeChild(a);
 }
 
 /* ─────────────────────────────────────────────────────────────────
