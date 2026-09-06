@@ -1,7 +1,7 @@
 // Mecca Agenda — Service Worker
 // Network-first para la página principal: siempre carga fresh del servidor.
 
-var CACHE = 'mecca-v12';
+var CACHE = 'mecca-v13';
 
 self.addEventListener('install', function(e) {
   self.skipWaiting(); // Activa inmediatamente sin esperar reload
@@ -33,7 +33,19 @@ self.addEventListener('fetch', function(e) {
     return;
   }
 
-  // Recursos externos (fonts, CDN libs): caché con fallback a red
+  /* NADA QUE NO SEA DE ESTA MISMA DIRECCION.
+     Aqui estaba el segundo fallo: este manejador guardaba CUALQUIER respuesta
+     200, incluidas las de la base de datos, y despues las servia del guardado
+     para siempre. Con eso el app entraba, cargaba el usuario y de ahi mostraba
+     una foto congelada — o cero actividades, si lo que quedo guardado fue una
+     respuesta vacia. Comprobado en el navegador de Nilson: habia 10 respuestas
+     de Supabase en el guardado.
+     La base de datos y las fotos pasan derecho a la red, sin tocar. */
+  var _u; try{ _u = new URL(req.url); }catch(_e){ return; }
+  if (_u.origin !== self.location.origin) return;
+  if (req.method !== 'GET') return;
+
+  // Archivos propios del app: cache con respaldo de red
   e.respondWith(
     caches.match(req).then(function(cached) {
       var network = fetch(req).then(function(res) {
