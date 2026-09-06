@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260906_25';
+const APP_VERSION='20260906_26';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -843,46 +843,48 @@ function aplicarModulosOcultos(){
     });
   }catch(e){}
 })();
-const APP_BUILD='mecca-v8';
-// ── AUTO-ACTUALIZACIÓN ROBUSTA ───────────────────────────────────────────────
-// Detecta cualquier deploy nuevo comparando la firma (ETag/Last-Modified) del
-// index.html servido por GitHub Pages, que cambia en cada push. NO depende de
-// subir versiones a mano. Usa HEAD (no baja los ~950KB) y cache:'reload' para
-// revalidar contra la CDN. Si la firma cambió respecto a la que se cargó, recarga
-// con una URL única (cache-miss garantizado en navegador y CDN). Guard anti-loop
-// con sessionStorage + el parámetro ?_r=.
+const APP_BUILD='mecca-v9';
+// ── AVISO DE VERSIÓN NUEVA ───────────────────────────────────────────────────
+// Antes esto pedía la firma del index.html cada 60 segundos y en cada vuelta al
+// app, y si cambiaba RECARGABA los 1.27 MB enteros. Con GitHub Pages la firma
+// puede cambiar sin que haya versión nueva (servidores distintos de la CDN),
+// así que recargaba sola y el app se quedaba "cargando".
+// Ahora no se pregunta nada por la red: el service worker guarda la página y,
+// cuando de verdad baja una versión distinta, avisa. Aquí solo se muestra el
+// botón. Nadie recarga sin que Nilson lo toque.
 (function(){
   if(/[?&]_r=/.test(location.search)){ try{history.replaceState(null,'',location.pathname);}catch(e){} }
-  var SIG_KEY='mecca_appsig';
-  function firma(){
-    return fetch(location.pathname+'?_sig='+Date.now(), {method:'HEAD', cache:'reload'})
-      .then(function(r){ return (r.headers.get('etag')||r.headers.get('last-modified')||''); })
-      .catch(function(){ return ''; });
+  var avisado=false;
+  window.avisarVersionNueva=function(v){
+    if(avisado || !v || v===APP_VERSION) return;
+    avisado=true;
+    var b=document.createElement('div');
+    b.id='banner-version';
+    b.style.cssText='position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0px));'+
+      'z-index:9400;background:var(--accent-fill);color:#fff;border-radius:13px;'+
+      'padding:12px 14px;display:flex;align-items:center;gap:10px;'+
+      'box-shadow:0 8px 24px rgba(0,0,0,.4);font-family:var(--font,system-ui);'+
+      'animation:hojaSube .22s cubic-bezier(.2,.8,.3,1)';
+    b.innerHTML='<span style="flex:1;font-size:12.5px;line-height:1.35;font-weight:600">'+
+      'Hay una versión nueva lista</span>'+
+      '<button onclick="location.replace(location.pathname+\'?_r=\'+Date.now())" '+
+        'style="border:none;background:#fff;color:var(--accent);border-radius:9px;'+
+        'padding:9px 14px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;'+
+        'min-height:40px">Actualizar</button>'+
+      '<button onclick="this.parentNode.remove()" aria-label="Ahora no" '+
+        'style="border:none;background:transparent;color:#fff;opacity:.7;font-size:18px;'+
+        'line-height:1;cursor:pointer;padding:8px 4px">×</button>';
+    document.body.appendChild(b);
+  };
+  /* Al volver al app se le pide al service worker que mire si hay algo nuevo.
+     Es una sola petición y no bloquea nada: si hay versión, sale el botón. */
+  function pedirChequeo(){
+    try{
+      if(navigator.serviceWorker && navigator.serviceWorker.controller)
+        navigator.serviceWorker.controller.postMessage({tipo:'buscar-version'});
+    }catch(e){}
   }
-  // Baseline = firma del código que se está corriendo. En arranque en frío la
-  // navegación vino fresca (SW usa cache:'reload'), así que la firma actual == la que corre.
-  // Si ya hay baseline en sessionStorage (misma sesión), NO lo pisamos: así una
-  // PWA que quedó abierta con código viejo conserva su baseline viejo y detecta el deploy.
-  (function initBaseline(){
-    var have=null; try{ have=sessionStorage.getItem(SIG_KEY); }catch(e){}
-    if(have) return;
-    firma().then(function(s){ if(s){ try{ sessionStorage.setItem(SIG_KEY,s); }catch(e){} } });
-  })();
-  var _busy=false;
-  function chequear(){
-    if(_busy) return; _busy=true;
-    firma().then(function(s){
-      _busy=false;
-      var base=null; try{ base=sessionStorage.getItem(SIG_KEY); }catch(e){}
-      if(s && base && s!==base){
-        try{ sessionStorage.setItem(SIG_KEY,s); }catch(e){} // evita loop
-        location.replace(location.pathname+'?_r='+Date.now());
-      }
-    });
-  }
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden) chequear(); });
-  window.addEventListener('focus', chequear);
-  setInterval(chequear, 60000); // y cada minuto
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) pedirChequeo(); });
 })();
 // ── AVISOS DE SEGURIDAD ─────────────────────────────
 // URL de tu Apps Script (Web App) — la MISMA que usas para subir fotos.
@@ -18945,16 +18947,16 @@ async function generarPDFBitacora(opts){
 }
 
 if('serviceWorker' in navigator){
-  var _swReloaded=false;
+  /* El service worker avisa cuando guardó una version distinta. NO se recarga
+     solo: recargar solo era lo que dejaba el app dando vueltas. Sale el boton
+     y Nilson decide. */
+  navigator.serviceWorker.addEventListener('message',function(ev){
+    var d=ev.data||{};
+    if(d.tipo==='version' && typeof avisarVersionNueva==='function') avisarVersionNueva(d.version);
+  });
   window.addEventListener('load',function(){
     navigator.serviceWorker.register('./sw.js')
-      .then(function(reg){
-        reg.update();
-        // Auto-reload when a new SW takes control (new version deployed)
-        navigator.serviceWorker.addEventListener('controllerchange',function(){
-          if(!_swReloaded){_swReloaded=true;window.location.reload();}
-        });
-      })
+      .then(function(reg){ reg.update(); })
       .catch(function(err){console.warn('SW:',err);});
   });
 }
