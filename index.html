@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260906_31';
+const APP_VERSION='20260906_32';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -3770,7 +3770,7 @@ async function cargarPendRec(area, force){
   if(S._recPend[area] && !force) return S._recPend[area];
   try{
     var q='obra_actividades?area=eq.'+encodeURIComponent(area)+
-          '&estado=neq.completado&select=id,descripcion,personal_nombre,estado,prioridad'+
+          '&estado=neq.completado&select=id,descripcion,personal_nombre,estado,prioridad,porcentaje,notas'+
           '&order=personal_nombre.asc&limit=600';
     S._recPend[area]=await sb(q)||[];
   }catch(e){ S._recPend[area]=null; }
@@ -3956,17 +3956,7 @@ function _recPend(grupos){
             'flex-shrink:0;margin-top:1px"></span>'+
           '<span>'+esc(a.descripcion||'(sin descripción)')+'</span></button>';
         if(preg){
-          h+='<div style="background:var(--bg4);border:1px solid var(--border2);border-top:none;'+
-            'border-radius:0 0 11px 11px;padding:10px 12px;margin-bottom:8px;display:flex;'+
-            'align-items:center;gap:9px">'+
-            '<span style="flex:1;font-size:12.5px;font-weight:600">¿Terminada?</span>'+
-            '<button onclick="event.stopPropagation();recCancelar()" style="background:none;border:none;'+
-              'color:var(--text3);font-size:12.5px;font-weight:600;cursor:pointer;'+
-              'font-family:var(--font);padding:9px 6px">No</button>'+
-            '<button onclick="event.stopPropagation();recCerrar(\''+a.id+'\')" '+
-              'style="background:var(--green-fill);border:none;color:#fff;border-radius:9px;'+
-              'padding:10px 15px;font-size:12.5px;font-weight:700;cursor:pointer;'+
-              'font-family:var(--font)">Sí, hecha</button></div>';
+          h+=_recPanel(a);
         }
       });
       h+='<button onclick="recVerFaltan(\''+String(g.q).replace(/'/g,"\\\'")+'\')" '+
@@ -3981,6 +3971,100 @@ function _recPend(grupos){
   });
   return h;
 }
+/* ── ANOTAR SIN SALIR DEL RECORRIDO ────────────────────────────────
+   Antes al tocar una actividad solo se podia decir "terminada, si o no".
+   En la obra la mayoria de las cosas no son si o no: el tomacorriente
+   esta puesto pero torcido. Ahora se pone el avance y se escribe la
+   observacion en el mismo sitio, sin abrir otra pantalla.
+
+   El panel NO se vuelve a pintar mientras se escribe: los porcentajes
+   se marcan tocando el DOM directo. Si se repintara, el texto a medio
+   escribir se perderia — y dictando con el microfono del teclado eso
+   significa volver a dictarlo todo.                                   */
+function _recPanel(a){
+  var actual=parseInt(a.porcentaje,10); if(isNaN(actual)) actual=0;
+  S.recorrido.pct=actual;
+  var chip=function(n,t){
+    var on=(n===actual);
+    return '<button id="recp-'+n+'" onclick="event.stopPropagation();recPct('+n+')" '+
+      'style="flex:1;border:1px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(on?'var(--accent-fill)':'transparent')+';color:'+(on?'#fff':'var(--text2)')+';'+
+      'border-radius:9px;padding:9px 2px;font-family:var(--font);font-size:12px;'+
+      'font-weight:700;cursor:pointer;min-height:42px">'+t+'</button>';
+  };
+  return '<div style="background:var(--bg4);border:1px solid var(--border2);border-top:none;'+
+    'border-radius:0 0 11px 11px;padding:11px 12px;margin-bottom:8px">'+
+    '<div style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;'+
+      'color:var(--text3);margin-bottom:7px">Avance — ahora en '+actual+'%</div>'+
+    '<div style="display:flex;gap:5px;margin-bottom:10px">'+
+      chip(0,'0%')+chip(25,'25%')+chip(50,'50%')+chip(75,'75%')+chip(100,'Hecha')+
+    '</div>'+
+    '<textarea id="rec-nota" rows="2" placeholder="Observación… (dicta con el micrófono del teclado)" '+
+      'onclick="event.stopPropagation()" '+
+      'style="width:100%;box-sizing:border-box;background:var(--bg2);color:var(--text);'+
+      'border:1px solid var(--border2);border-radius:9px;padding:10px;font-family:var(--font);'+
+      'font-size:12.5px;line-height:1.4;resize:vertical;-webkit-appearance:none"></textarea>'+
+    (a.notas ? '<div style="color:var(--text3);font-size:10.5px;line-height:1.4;margin-top:7px;'+
+        'max-height:52px;overflow:hidden">'+esc(String(a.notas).slice(-180))+'</div>' : '')+
+    '<div style="display:flex;gap:6px;margin-top:10px">'+
+      '<button onclick="event.stopPropagation();recCancelar()" '+
+        'style="flex:1;border:none;background:var(--bg3);color:var(--text3);border-radius:9px;'+
+        'padding:11px 4px;font-family:var(--font);font-size:12.5px;font-weight:600;'+
+        'cursor:pointer;min-height:44px">Cancelar</button>'+
+      '<button onclick="event.stopPropagation();recGuardar(\''+a.id+'\')" '+
+        'style="flex:2;border:none;background:var(--green-fill);color:#fff;border-radius:9px;'+
+        'padding:11px 4px;font-family:var(--font);font-size:12.5px;font-weight:700;'+
+        'cursor:pointer;min-height:44px">Guardar</button>'+
+    '</div></div>';
+}
+
+/* Marca el porcentaje elegido SIN repintar, para no borrar lo escrito. */
+function recPct(n){
+  if(!S.recorrido) return;
+  S.recorrido.pct=n;
+  [0,25,50,75,100].forEach(function(x){
+    var b=document.getElementById('recp-'+x); if(!b) return;
+    var on=(x===n);
+    b.style.borderColor = on?'var(--accent)':'var(--border2)';
+    b.style.background  = on?'var(--accent-fill)':'transparent';
+    b.style.color       = on?'#fff':'var(--text2)';
+  });
+}
+
+async function recGuardar(id){
+  var R=S.recorrido; if(!R) return;
+  var caja=document.getElementById('rec-nota');
+  var nota=caja?String(caja.value||'').trim():'';
+  var pct=R.pct;
+  var fila=((S._recPend||{})[R.area]||[]).filter(function(x){return x.id===id;})[0]||{};
+  var antes=parseInt(fila.porcentaje,10); if(isNaN(antes)) antes=0;
+
+  if(pct===antes && !nota){ recCancelar(); return; }
+
+  R.confirmando=null; pintarRecorrido();
+  try{
+    if(nota) await Acciones.agregarNota(id,nota);
+    if(pct===100){
+      await Acciones.completar(id);
+      var l=(S._recPend||{})[R.area]||[];
+      S._recPend[R.area]=l.filter(function(x){ return x.id!==id; });
+      var d=(S._torre||{})[R.area];
+      if(d){ d.faltan=Math.max(0,d.faltan-1); d.hechas++;
+             d.pct=d.total?Math.round(d.hechas/d.total*100):0; }
+    } else if(pct!==antes){
+      await Acciones.setAvance(id,pct);
+      fila.porcentaje=String(pct);
+      if(pct>0 && fila.estado==='pendiente') fila.estado='en-progreso';
+    }
+    if(nota) fila.notas=(fila.notas?fila.notas+' | ':'')+nota;
+    if(typeof showToast==='function')
+      showToast(pct===100?'Cerrada':(nota?'Anotado':'Avance guardado'),'ok');
+  }catch(e){
+    if(typeof showToast==='function') showToast('No se pudo guardar: '+(e&&e.message||''),'err');
+  }
+  pintarRecorrido();
+}
+
 function recAbrir(i){
   S.recorrido.abierto = S.recorrido.abierto===i ? null : i;
   S.recorrido.confirmando=null; S.recorrido.faltan=null; pintarRecorrido();
@@ -6225,6 +6309,20 @@ var Acciones = (function(){
     async setAvance(id,pct){
       var n=_pct(pct);
       return _patch(id,{porcentaje:n},'avance',n+'%');
+    },
+
+    /* Una observacion NO pisa lo que ya estaba escrito: se le pega al final,
+       con la fecha y quien la puso. Asi la nota de agosto sigue ahi cuando en
+       septiembre se anota otra cosa, y en la hoja se lee la historia entera. */
+    async agregarNota(id,texto){
+      texto=String(texto||'').trim();
+      if(!texto) throw _err('La observación viene vacía');
+      var a=_buscarLocal(id);
+      var quien=(S.user&&S.user.nombre)||'';
+      var hoy=(typeof today==='function'?today():'').split('-').reverse().join('/');
+      var linea=(quien?quien+' ':'')+hoy+': '+texto;
+      var antes=(a&&a.notas)?String(a.notas):'';
+      return _patch(id,{notas:(antes?antes+' | ':'')+linea},'nota',texto);
     },
 
     async completar(id){
