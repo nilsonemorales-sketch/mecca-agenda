@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260906_29';
+const APP_VERSION='20260906_30';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1540,9 +1540,16 @@ async function sb(path,opts={}){
       }
     }
   }
+  /* OJO CON EL ORDEN. Antes 'headers' iba primero y '...opts' despues, asi que
+     cualquier llamada con encabezados propios BORRABA los de aqui — incluida
+     la llave de acceso. sbTodo manda 'Range' para paginar, o sea que TODAS las
+     consultas paginadas (las actividades, entre ellas) salian sin llave y la
+     base las rechazaba con "No API key found in request". El app entraba,
+     cargaba el usuario, y de ahi no traia nada.
+     '...opts' va PRIMERO y 'headers' al final: asi la llave nunca se pierde. */
   const r=await fetch(SB+'/rest/v1/'+path,{
-    headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})},
-    ...opts
+    ...opts,
+    headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}
   });
   if(!r.ok)throw new Error(await r.text());
   const t=await r.text();return t?JSON.parse(t):[];
