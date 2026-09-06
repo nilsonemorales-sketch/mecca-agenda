@@ -10,7 +10,7 @@
 // el app no abre. Chrome lo perdona; el iPhone no. Por eso aqui se llama
 // arriba del todo, antes de cualquier promesa.
 
-var CACHE = 'mecca-v10';
+var CACHE = 'mecca-v11';
 var PAGINA = './pagina-guardada';
 
 self.addEventListener('install', function(e) {
@@ -78,12 +78,31 @@ self.addEventListener('fetch', function(e) {
     return;
   }
 
-  // Recursos externos (fuentes, librerias): guardado con respaldo de red
+  /* TODO LO DEMAS: el service worker NO SE METE.
+     Aqui estaba el fallo grave. Este manejador guardaba CUALQUIER respuesta
+     200, incluidas las de la base de datos, y despues las servia del guardado.
+     Resultado: el app entraba pero mostraba una foto congelada de la obra y
+     nada de lo que uno tocaba tenia efecto visible.
+     La base de datos, las fotos y todo lo que no sea de esta misma direccion
+     pasan derecho a la red, sin tocar. Solo se guardan las letras y las
+     librerias, que son archivos que no cambian. */
+  var url;
+  try { url = new URL(req.url); } catch (err) { return; }
+
+  var esMio = (url.origin === self.location.origin);
+  var esLetra = /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
+  var esLibreria = /(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)$/.test(url.hostname);
+
+  // Nada de la base de datos ni de ningun servicio: derecho a la red.
+  if (!esMio && !esLetra && !esLibreria) return;
+  // Solo lectura simple. Un POST o un PATCH jamas se guarda.
+  if (req.method !== 'GET') return;
+
   e.respondWith(
     caches.match(req).then(function(cached) {
       if (cached) return cached;
       return fetch(req).then(function(res) {
-        if (res && res.status === 200) {
+        if (res && res.status === 200 && (esLetra || esLibreria)) {
           var clone = res.clone();
           caches.open(CACHE).then(function(c) { c.put(req, clone); }).catch(function(){});
         }
