@@ -1,16 +1,17 @@
 // Mecca Agenda — Service Worker
 //
-// Antes esto bajaba el index.html ENTERO (1.27 MB) en cada apertura, porque
-// pedia la navegacion con cache:'reload'. En el telefono, con datos, eso es
-// la pantalla de "cargando" cada vez que abres el app.
+// El index.html pesa 1.27 MB. Antes se pedia con cache:'reload' en CADA
+// apertura, asi que el telefono lo bajaba entero todas las veces. Ahora lo
+// guardado sale al instante y la version nueva se baja por detras.
 //
-// Ahora: lo guardado sale al instante y la version nueva se baja por detras.
-// Cuando de verdad hay una version distinta, el SW se lo dice a la pagina y
-// la pagina ofrece actualizar con un boton. Nadie espera 1.27 MB para ver
-// lo que ya tiene.
+// OJO con e.waitUntil: hay que llamarlo SINCRONICAMENTE, mientras el evento
+// todavia se esta despachando. Llamarlo dentro de un .then() lo tira con
+// InvalidStateError en Safari (iPhone), y ahi la navegacion entera falla y
+// el app no abre. Chrome lo perdona; el iPhone no. Por eso aqui se llama
+// arriba del todo, antes de cualquier promesa.
 
-var CACHE = 'mecca-v9';
-var PAGINA = 'pagina-principal';
+var CACHE = 'mecca-v10';
+var PAGINA = './pagina-guardada';
 
 self.addEventListener('install', function(e) {
   self.skipWaiting();
@@ -26,39 +27,53 @@ self.addEventListener('activate', function(e) {
   );
 });
 
-/* Le dice a todas las pestañas abiertas que version acaba de guardarse.
-   La pagina compara con la suya y decide si ofrece actualizar. */
+/* Le dice a las pestañas abiertas que version acaba de guardarse. */
 function avisarVersion(texto) {
   var m = /APP_VERSION\s*=\s*'([^']+)'/.exec(texto || '');
   if (!m) return;
-  clients.matchAll({ type: 'window' }).then(function(cs) {
+  return clients.matchAll({ type: 'window' }).then(function(cs) {
     cs.forEach(function(c) { c.postMessage({ tipo: 'version', version: m[1] }); });
+  });
+}
+
+/* Baja la pagina, la guarda y avisa si trae otra version. Devuelve la
+   respuesta de red para poder servirla cuando no hay nada guardado. */
+function bajarYGuardar() {
+  return fetch('./index.html', { cache: 'no-cache' }).then(function(res) {
+    if (!res || res.status !== 200) return res;
+    var paraGuardar = res.clone();
+    var paraLeer = res.clone();
+    return caches.open(CACHE).then(function(c) {
+      return c.put(PAGINA, paraGuardar);
+    }).then(function() {
+      return paraLeer.text().then(avisarVersion).catch(function(){});
+    }).then(function() { return res; });
   });
 }
 
 self.addEventListener('fetch', function(e) {
   var req = e.request;
 
-  // La pagina principal: lo guardado primero, la actualizacion por detras.
   if (req.mode === 'navigate') {
-    e.respondWith(
-      caches.open(CACHE).then(function(c) {
-        return c.match(PAGINA).then(function(guardado) {
-          var red = fetch(req, { cache: 'no-cache' }).then(function(res) {
-            if (res && res.status === 200) {
-              var copia = res.clone();
-              c.put(PAGINA, res.clone());
-              // solo avisamos si ya habia algo antes: en la primera carga no
-              if (guardado) copia.text().then(avisarVersion).catch(function(){});
-            }
-            return res;
-          }).catch(function() { return guardado; });
+    /* SINCRONICO: la actualizacion de fondo se declara aqui, no dentro de
+       una promesa. Si esto se hiciera abajo, el iPhone lanzaria
+       InvalidStateError y la pagina no cargaria. */
+    var fondo = bajarYGuardar().catch(function(){ return null; });
+    e.waitUntil(fondo);
 
-          // Si hay copia guardada sale YA y la red sigue por detras.
-          if (guardado) { e.waitUntil(red); return guardado; }
-          return red;
-        });
-      })
+    e.respondWith(
+      caches.open(CACHE)
+        .then(function(c) { return c.match(PAGINA); })
+        .then(function(guardado) {
+          if (guardado) return guardado;              // sale al instante
+          return fondo.then(function(res) {           // primera vez: de la red
+            return res || fetch(req);
+          });
+        })
+        /* Ultima red de seguridad: pase lo que pase aqui dentro, el app
+           tiene que abrir. Sin esto, un fallo del cache deja pantalla
+           en blanco y no hay forma de entrar a arreglarlo. */
+        .catch(function() { return fetch(req); })
     );
     return;
   }
@@ -66,27 +81,29 @@ self.addEventListener('fetch', function(e) {
   // Recursos externos (fuentes, librerias): guardado con respaldo de red
   e.respondWith(
     caches.match(req).then(function(cached) {
-      var network = fetch(req).then(function(res) {
+      if (cached) return cached;
+      return fetch(req).then(function(res) {
         if (res && res.status === 200) {
           var clone = res.clone();
-          caches.open(CACHE).then(function(c) { c.put(req, clone); });
+          caches.open(CACHE).then(function(c) { c.put(req, clone); }).catch(function(){});
         }
         return res;
       });
-      return cached || network;
-    })
+    }).catch(function() { return fetch(req); })
   );
 });
 
-/* La pagina puede pedir que se baje la version nueva ahora mismo. */
+/* La pagina puede pedir que se mire si hay version nueva. */
 self.addEventListener('message', function(e) {
-  if (!e.data || e.data.tipo !== 'buscar-version') return;
-  caches.open(CACHE).then(function(c) {
-    fetch('./index.html', { cache: 'no-cache' }).then(function(res) {
-      if (!res || res.status !== 200) return;
-      var copia = res.clone();
-      c.put(PAGINA, res);
-      copia.text().then(avisarVersion).catch(function(){});
-    }).catch(function(){});
-  });
+  if (!e.data) return;
+  if (e.data.tipo === 'buscar-version') {
+    e.waitUntil(bajarYGuardar().catch(function(){}));
+  }
+  /* Salida de emergencia: si algo quedara mal guardado, la pagina puede
+     mandar 'limpiar' y el proximo arranque vuelve a bajar todo de la red. */
+  if (e.data.tipo === 'limpiar') {
+    e.waitUntil(caches.keys().then(function(ks) {
+      return Promise.all(ks.map(function(k) { return caches.delete(k); }));
+    }));
+  }
 });
