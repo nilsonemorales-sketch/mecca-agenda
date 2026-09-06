@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260905_24';
+const APP_VERSION='20260906_25';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1241,6 +1241,17 @@ function addUbicacion(){
   }
   _ubicacionesSeleccionadas.push(v);
   sel.value = '';
+  renderUbicacionesSeleccionadas();
+}
+
+/* Los 11 apartamentos de un toque. Antes habia que elegirlos uno por uno
+   en el desplegable, y por eso nadie creaba un taller para toda la torre. */
+function ubicTodosAptos(){
+  var todos=(typeof REC_ORDEN!=='undefined')?REC_ORDEN.slice():[];
+  todos.forEach(function(x){
+    if(_ubicacionesSeleccionadas.indexOf(x)<0) _ubicacionesSeleccionadas.push(x);
+  });
+  var sel=document.getElementById('a-area-single'); if(sel) sel.value='';
   renderUbicacionesSeleccionadas();
 }
 
@@ -3855,6 +3866,7 @@ function _recSeg(k,t){
 }
 function irApto(area){
   S.recorrido.area=area; S.recorrido.abierto=null; S.recorrido.confirmando=null;
+  S.recorrido.faltan=null;
   pintarRecorrido(); cargarPendRec(area);
 }
 function recTab(k){ S.recorrido.tab=k; S.recorrido.confirmando=null; pintarRecorrido(); }
@@ -3950,7 +3962,13 @@ function _recPend(grupos){
               'font-family:var(--font)">Sí, hecha</button></div>';
         }
       });
+      h+='<button onclick="recVerFaltan(\''+String(g.q).replace(/'/g,"\\\'")+'\')" '+
+        'style="width:100%;border:1px dashed var(--border2);background:transparent;'+
+        'color:var(--text2);border-radius:10px;padding:10px;margin-bottom:9px;'+
+        'font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;'+
+        'min-height:42px">¿Qué le falta a '+esc(g.q.split(' ')[0])+' aquí?</button>';
       h+='</div>';
+      if(R.faltan && R.faltan.q===g.q) h+=_faltaHTML();
     }
     h+='</div>';
   });
@@ -3958,7 +3976,7 @@ function _recPend(grupos){
 }
 function recAbrir(i){
   S.recorrido.abierto = S.recorrido.abierto===i ? null : i;
-  S.recorrido.confirmando=null; pintarRecorrido();
+  S.recorrido.confirmando=null; S.recorrido.faltan=null; pintarRecorrido();
 }
 function recPreguntar(id){ S.recorrido.confirmando=id; pintarRecorrido(); }
 function recCancelar(){ S.recorrido.confirmando=null; pintarRecorrido(); }
@@ -4010,6 +4028,218 @@ function verPendientesApto(area){
     goTab('obra');
     if(typeof renderActs==='function') renderActs();
   }catch(e){ goTab('obra'); }
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   ¿QUÉ LE FALTA?
+   La pregunta que hasta ahora había que hacerle a mano a la base:
+   "este contratista, ¿qué talleres tiene en los otros apartamentos
+   que no tiene en éste?".
+
+   No compara texto exacto — eso es justo lo que falla, porque el 2A
+   dice "Lijado y pintura de puerta principal" y el 3A dice "Lijado
+   y pintado — puerta principal", y son lo mismo. Compara con el
+   motor de Parecido, que mira el sitio, el objeto y el verbo.
+
+   Cada fila se resuelve con un toque: Falta / Ya está / No aplica.
+   Y si se marca "en todos los que falten", lo crea de una vez en
+   cada apartamento donde no exista — nunca donde ya está.
+   ───────────────────────────────────────────────────────────────── */
+
+/* Dos talleres son el mismo a partir de aquí. Medido contra la torre:
+   0.72 junta "Lijado y pintura de puerta principal" con "Lijado y
+   pintado — puerta principal" y NO junta "Prueba de gas" con
+   "Tubería de gas" (el filtro de ETAPAS los separa). */
+var FALTA_UMBRAL = 0.72;
+/* Con menos de 4 apartamentos no es un taller de la torre, es algo
+   puntual de esos apartamentos. No vale la pena proponerlo. */
+var FALTA_MINIMO = 4;
+
+/* Solo se usa si el taller no tiene fecha en NINGUN otro apartamento. */
+function _faltaEnDias(n){
+  var d=new Date(today()+'T12:00:00'); d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+
+async function _faltaCargar(q){
+  S._faltaCache = S._faltaCache || {};
+  if(S._faltaCache[q] !== undefined) return S._faltaCache[q];
+  try{
+    var filas = await sbTodo('obra_actividades?personal_nombre=eq.'+
+      encodeURIComponent(q)+'&select=id,area,descripcion,estado,fecha_inicio,fecha_fin');
+    S._faltaCache[q] = filas || [];
+  }catch(e){ S._faltaCache[q] = null; }
+  return S._faltaCache[q];
+}
+
+/* Agrupa los talleres de un contratista y devuelve los que NO están
+   en `area`, de más extendido a menos. */
+function _faltaCalcular(q, area){
+  var filas = (S._faltaCache||{})[q];
+  if(filas === null) return 'error';
+  if(!filas) return null;
+
+  var grupos = [];
+  filas.forEach(function(a){
+    if(!a || !a.descripcion) return;
+    if(REC_ORDEN.indexOf(a.area) < 0) return;      /* solo apartamentos */
+    var g = null;
+    for(var i=0;i<grupos.length;i++){
+      if(Parecido.parecido(grupos[i].rep, a.descripcion) >= FALTA_UMBRAL){ g=grupos[i]; break; }
+    }
+    if(!g){ g = {rep:a.descripcion, areas:{}, ini:'', fin:''}; grupos.push(g); }
+    g.areas[a.area] = 1;
+    /* El app exige fecha de inicio y fin para el trabajo de contratistas.
+       En vez de inventarlas, se toman las que ya tiene ese mismo taller en
+       los otros apartamentos: la mas temprana para empezar y la mas tardia
+       para terminar. */
+    if(a.fecha_inicio && (!g.ini || a.fecha_inicio < g.ini)) g.ini = a.fecha_inicio;
+    if(a.fecha_fin    && (!g.fin || a.fecha_fin    > g.fin)) g.fin = a.fecha_fin;
+    /* se queda con la redacción más larga: suele ser la más explícita */
+    if(String(a.descripcion).length > String(g.rep).length) g.rep = a.descripcion;
+  });
+
+  var omit = (S.recorrido && S.recorrido.faltan && S.recorrido.faltan.omit) || {};
+  return grupos
+    .filter(function(g){ return !g.areas[area]; })
+    .map(function(g){
+      var en = Object.keys(g.areas).length;
+      return {desc:g.rep, en:en, ini:g.ini, fin:g.fin,
+              faltanEn: REC_ORDEN.filter(function(x){ return !g.areas[x]; })};
+    })
+    .filter(function(g){ return g.en >= FALTA_MINIMO && !omit[g.desc]; })
+    .sort(function(u,v){ return v.en - u.en; });
+}
+
+function recVerFaltan(q){
+  var R = S.recorrido; if(!R) return;
+  if(R.faltan && R.faltan.q === q){ R.faltan = null; pintarRecorrido(); return; }
+  R.faltan = {q:q, omit:{}, todos:false, trabajando:null};
+  pintarRecorrido();
+  _faltaCargar(q).then(function(){
+    if(S.recorrido && S.recorrido.faltan && S.recorrido.faltan.q === q) pintarRecorrido();
+  });
+}
+
+function faltaTodos(v){
+  if(S.recorrido && S.recorrido.faltan){ S.recorrido.faltan.todos = !!v; pintarRecorrido(); }
+}
+
+function faltaOmitir(i){
+  var F = S.recorrido && S.recorrido.faltan; if(!F) return;
+  var lista = _faltaCalcular(F.q, S.recorrido.area);
+  if(!lista || lista === 'error' || !lista[i]) return;
+  F.omit[lista[i].desc] = 1;
+  pintarRecorrido();
+}
+
+/* hecho=true -> se crea cerrada al 100%; false -> pendiente en 0% */
+async function faltaCrear(i, hecho){
+  var R = S.recorrido, F = R && R.faltan; if(!F) return;
+  var lista = _faltaCalcular(F.q, R.area);
+  if(!lista || lista === 'error' || !lista[i]) return;
+  var g = lista[i];
+
+  var areas = F.todos ? g.faltanEn.slice() : [R.area];
+  F.trabajando = g.desc; pintarRecorrido();
+
+  try{
+    await Acciones.crear({
+      descripcion: g.desc,
+      personal_nombre: F.q,
+      tipo_personal: 'contratista',
+      area: areas[0],
+      fecha_inicio: g.ini || today(),
+      fecha_fin:    g.fin || _faltaEnDias(30),
+      estado: hecho ? 'completado' : 'pendiente',
+      porcentaje: hecho ? 100 : 0,
+      notas: 'Creada desde «¿Qué le falta?»: este taller existe en '+g.en+
+             ' apartamento(s) y aquí no.'+(hecho?' Se marca como ya ejecutada.':'')
+    }, {ubicaciones: areas, confirmarDuplicado: true});
+
+    /* Se le suman a la cache en vez de borrarla: borrarla dejaba el panel
+       en "Comparando..." para siempre, porque nadie la volvia a pedir. */
+    var c = (S._faltaCache||{})[F.q];
+    if(Array.isArray(c)) areas.forEach(function(ar){
+      c.push({id:'nuevo-'+ar, area:ar, descripcion:g.desc,
+              estado: hecho?'completado':'pendiente',
+              fecha_inicio:g.ini||'', fecha_fin:g.fin||''});
+    });
+    F.omit[g.desc] = 1;
+    if(typeof showToast==='function')
+      showToast(areas.length>1 ? ('Creada en '+areas.length+' apartamentos') : 'Creada','ok');
+  }catch(e){
+    if(typeof showToast==='function')
+      showToast('No se pudo crear: '+(e&&e.message||''),'err');
+  }
+  F.trabajando = null;
+  pintarRecorrido();
+}
+
+function _faltaHTML(){
+  var R = S.recorrido, F = R.faltan;
+  if(!F) return '';
+  var lista = _faltaCalcular(F.q, R.area);
+
+  var caja = function(dentro){
+    return '<div style="background:var(--bg);border:1px solid var(--border2);border-radius:12px;'+
+      'padding:12px;margin:2px 0 10px">'+dentro+'</div>';
+  };
+
+  if(lista === 'error')
+    return caja('<p style="color:var(--text3);font-size:12.5px;margin:0 0 10px">'+
+      'No se pudo traer lo de este contratista.</p>'+
+      '<button onclick="recVerFaltan(\''+esc(F.q).replace(/'/g,"&#39;")+'\')" '+
+      'style="border:1px solid var(--border2);background:var(--bg3);color:var(--text);'+
+      'border-radius:9px;padding:9px 14px;font-family:var(--font);font-size:12.5px;'+
+      'font-weight:600;cursor:pointer;min-height:40px">Intentar otra vez</button>');
+
+  if(!lista)
+    return caja('<p style="color:var(--text3);font-size:12.5px;margin:0">'+
+      'Comparando con los otros apartamentos…</p>');
+
+  if(!lista.length)
+    return caja('<p style="color:var(--text3);font-size:12.5px;line-height:1.5;margin:0">'+
+      'No le falta ningún taller que tenga en los demás apartamentos.</p>');
+
+  var h = '<div style="background:var(--bg);border:1px solid var(--border2);border-radius:12px;'+
+    'padding:12px;margin:2px 0 10px">'+
+    '<div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;'+
+      'color:var(--text3);margin-bottom:4px">Le falta aquí</div>'+
+    '<p style="color:var(--text3);font-size:11.5px;line-height:1.45;margin:0 0 10px">'+
+      lista.length+' taller(es) que '+esc(F.q)+' sí tiene en otros apartamentos.</p>'+
+    '<label style="display:flex;align-items:center;gap:9px;padding:9px 10px;background:var(--bg3);'+
+      'border-radius:9px;margin-bottom:11px;cursor:pointer;min-height:42px">'+
+      '<input type="checkbox" '+(F.todos?'checked':'')+' onchange="faltaTodos(this.checked)" '+
+        'style="width:17px;height:17px;flex-shrink:0;accent-color:var(--accent)">'+
+      '<span style="font-size:12px;line-height:1.35">Crear también en los demás apartamentos '+
+        'donde falte</span></label>';
+
+  lista.forEach(function(g,i){
+    var ocupado = F.trabajando === g.desc;
+    h += '<div style="border-top:1px solid var(--border);padding:11px 0 9px'+
+        (ocupado?';opacity:.5;pointer-events:none':'')+'">'+
+      '<div style="font-size:12.5px;line-height:1.4">'+esc(g.desc)+'</div>'+
+      '<div style="color:var(--text3);font-size:10.5px;margin:3px 0 9px">'+
+        'está en '+g.en+' apartamento'+(g.en===1?'':'s')+
+        (F.todos ? ' · falta en '+g.faltanEn.length : '')+'</div>'+
+      '<div style="display:flex;gap:6px">'+
+        '<button onclick="faltaCrear('+i+',false)" style="flex:1;border:none;'+
+          'background:var(--accent-fill);color:#fff;border-radius:9px;padding:10px 4px;'+
+          'font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;'+
+          'min-height:42px">Falta</button>'+
+        '<button onclick="faltaCrear('+i+',true)" style="flex:1;border:none;'+
+          'background:var(--green-fill);color:#fff;border-radius:9px;padding:10px 4px;'+
+          'font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;'+
+          'min-height:42px">Ya está</button>'+
+        '<button onclick="faltaOmitir('+i+')" style="flex:1;border:none;'+
+          'background:var(--bg3);color:var(--text3);border-radius:9px;padding:10px 4px;'+
+          'font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;'+
+          'min-height:42px">No aplica</button>'+
+      '</div></div>';
+  });
+  return h + '</div>';
 }
 
 function renderHoy(){
@@ -7291,6 +7521,7 @@ function showAddActPropio(ai, ctx){
         ${ubicacionSelect('a-area-single','')}
         <button type="button" id="btn-add-ubic" onclick="addUbicacion()" style="flex-shrink:0;padding:10px 14px;border-radius:var(--r);border:2px solid var(--accent);background:var(--blue-light);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Agregar</button>
       </div>
+      <button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>
     </div>
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
@@ -7388,6 +7619,7 @@ function showAddActContratista(ai, preContratista, ctx){
         ${ubicacionSelect('a-area-single','')}
         <button type="button" id="btn-add-ubic" onclick="addUbicacion()" style="flex-shrink:0;padding:10px 14px;border-radius:var(--r);border:2px solid var(--accent);background:var(--blue-light);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Agregar</button>
       </div>
+      <button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>
     </div>
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
@@ -7501,7 +7733,9 @@ function showAddActIngeniero(ai, ctx){
       <div style="display:flex;gap:8px;align-items:center">
         ${ubicacionSelect('a-area-single','')}
         <button type="button" onclick="addUbicacion()" style="flex-shrink:0;padding:10px 14px;border-radius:var(--r);border:2px solid var(--accent);background:var(--blue-light);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Agregar</button>
-      </div></div>
+      </div>
+      <button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>
+    </div>
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
     <div id="ubicaciones-selected" style="min-height:4px"></div>
