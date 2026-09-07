@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260907_37';
+const APP_VERSION='20260907_38';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1242,6 +1242,171 @@ function addUbicacion(){
   _ubicacionesSeleccionadas.push(v);
   sel.value = '';
   renderUbicacionesSeleccionadas();
+}
+
+/* ── ¿FALTA ALGO EN ESTE APARTAMENTO? ──────────────────────────────
+   En el modulo de Actividades, agrupando por apartamento, cada grupo trae
+   un boton que compara ESE apartamento contra los otros diez y dice que
+   talleres tiene todo el mundo y aqui no.
+
+   Ojo con lo que ya esta HECHO: S.acts solo carga lo abierto, asi que un
+   taller ya terminado aqui pareceria "faltante". Por eso se piden aparte
+   TODAS las actividades del apartamento, completadas incluidas, y contra
+   esa lista se decide si de verdad falta.                               */
+async function revisarFaltantes(area){
+  var caja=document.getElementById('faltan-'+String(area).replace(/[^A-Za-z0-9]/g,''));
+  if(!caja) return;
+  if(caja.style.display!=='none'){ caja.style.display='none'; caja.innerHTML=''; return; }
+
+  caja.style.display='block';
+  caja.innerHTML='<div style="background:var(--bg2);border:1px solid var(--border2);'+
+    'border-radius:10px;padding:12px;font-size:12px;color:var(--text3)">'+
+    'Comparando con los otros apartamentos…</div>';
+
+  var yaTiene;
+  try{
+    yaTiene=await sbTodo('obra_actividades?area=eq.'+encodeURIComponent(area)+
+      '&select=descripcion,personal_nombre,estado');
+  }catch(e){
+    caja.innerHTML='<div style="background:var(--bg2);border:1px solid var(--border2);'+
+      'border-radius:10px;padding:12px;font-size:12px;color:var(--text3)">'+
+      'No se pudo consultar este apartamento. '+
+      '<button onclick="revisarFaltantes(\''+String(area).replace(/'/g,"\\'")+'\')" '+
+      'style="border:1px solid var(--border2);background:var(--bg3);color:var(--text);'+
+      'border-radius:8px;padding:8px 12px;font-family:var(--font);font-size:12px;'+
+      'font-weight:600;cursor:pointer;min-height:40px;margin-left:6px">Reintentar</button></div>';
+    return;
+  }
+
+  var lista=_faltanEnArea(area, yaTiene||[]);
+  S._faltanArea=S._faltanArea||{};
+  S._faltanArea[area]=lista;
+  _pintarFaltantes(area);
+}
+
+/* Agrupa por contratista y por taller las ABIERTAS de los otros
+   apartamentos, y devuelve las que no aparecen en `area` — ni abiertas ni
+   completadas. */
+function _faltanEnArea(area, yaTiene){
+  var mios=(yaTiene||[]).map(function(x){
+    return {descripcion:x.descripcion||'', personal_nombre:x.personal_nombre||''};
+  });
+  var porQ={};
+  (S.acts||[]).concat(S.abiertas||[]).forEach(function(a){
+    if(!a || !a.descripcion) return;
+    if(a.estado==='completado') return;
+    if(a.area===area) return;
+    if(REC_ORDEN.indexOf(a.area)<0) return;
+    var q=(a.personal_nombre||'').trim()||'Sin asignar';
+    (porQ[q]=porQ[q]||[]).push(a);
+  });
+
+  var out=[];
+  Object.keys(porQ).forEach(function(q){
+    var grupos=[];
+    porQ[q].forEach(function(a){
+      var g=null;
+      for(var i=0;i<grupos.length;i++){
+        if(Parecido.parecido(grupos[i].rep,a.descripcion)>=FALTA_UMBRAL){ g=grupos[i]; break; }
+      }
+      if(!g){ g={rep:a.descripcion, areas:{}, ini:'', fin:''}; grupos.push(g); }
+      g.areas[a.area]=1;
+      if(String(a.descripcion).length>String(g.rep).length) g.rep=a.descripcion;
+      if(a.fecha_inicio && (!g.ini || a.fecha_inicio < g.ini)) g.ini=a.fecha_inicio;
+      if(a.fecha_fin    && (!g.fin || a.fecha_fin    > g.fin)) g.fin=a.fecha_fin;
+    });
+    grupos.forEach(function(g){
+      var en=Object.keys(g.areas).length;
+      if(en < FALTA_MINIMO) return;
+      /* ¿lo tiene ya este apartamento, abierto o terminado? */
+      var yo={descripcion:g.rep, personal_nombre:q};
+      var tiene=mios.some(function(m){
+        return Parecido.parecido(yo,m)>=FALTA_UMBRAL;
+      });
+      if(tiene) return;
+      out.push({q:q, desc:g.rep, en:en, ini:g.ini, fin:g.fin});
+    });
+  });
+  out.sort(function(u,v){ return v.en-u.en; });
+  return out;
+}
+
+function _pintarFaltantes(area){
+  var caja=document.getElementById('faltan-'+String(area).replace(/[^A-Za-z0-9]/g,''));
+  if(!caja) return;
+  var lista=((S._faltanArea||{})[area])||[];
+  var esc2=function(x){ return String(area).replace(/'/g,"\\'"); };
+
+  if(!lista.length){
+    caja.innerHTML='<div style="background:var(--bg2);border:1px solid var(--green);'+
+      'border-radius:10px;padding:12px;font-size:12px;color:var(--text2);line-height:1.45">'+
+      '✓ No le falta ningún taller que tengan los otros apartamentos.'+
+      '<div style="margin-top:9px"><button onclick="revisarFaltantes(\''+esc2()+'\')" '+
+      'style="border:none;background:var(--bg3);color:var(--text3);border-radius:8px;'+
+      'padding:9px 14px;font-family:var(--font);font-size:12px;font-weight:600;'+
+      'cursor:pointer;min-height:40px">Cerrar</button></div></div>';
+    return;
+  }
+
+  var h='<div style="background:var(--bg2);border:1px solid var(--amber);border-radius:10px;'+
+    'padding:11px 12px">'+
+    '<div style="font-size:12.5px;font-weight:700;color:var(--amber)">'+
+      'Faltan '+lista.length+' taller'+(lista.length>1?'es':'')+' en '+esc(area)+'</div>'+
+    '<div style="font-size:11px;color:var(--text3);line-height:1.45;margin:3px 0 10px">'+
+      'Están en los otros apartamentos y aquí no aparecen, ni abiertos ni terminados.</div>';
+
+  lista.forEach(function(g,i){
+    h+='<div style="border-top:1px solid var(--border);padding:10px 0 8px">'+
+      '<div style="font-size:12.5px;line-height:1.4">'+esc(g.desc)+'</div>'+
+      '<div style="color:var(--text3);font-size:10.5px;margin:3px 0 8px">'+
+        esc(g.q)+' · está en '+g.en+' apartamento'+(g.en===1?'':'s')+'</div>'+
+      '<div style="display:flex;gap:6px">'+
+        '<button onclick="faltanCrear(\''+esc2()+'\','+i+',false)" style="flex:1;border:none;'+
+          'background:var(--accent-fill);color:#fff;border-radius:9px;padding:10px 4px;'+
+          'font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;'+
+          'min-height:42px">Falta</button>'+
+        '<button onclick="faltanCrear(\''+esc2()+'\','+i+',true)" style="flex:1;border:none;'+
+          'background:var(--green-fill);color:#fff;border-radius:9px;padding:10px 4px;'+
+          'font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;'+
+          'min-height:42px">Ya está</button>'+
+        '<button onclick="faltanOmitir(\''+esc2()+'\','+i+')" style="flex:1;border:none;'+
+          'background:var(--bg3);color:var(--text3);border-radius:9px;padding:10px 4px;'+
+          'font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;'+
+          'min-height:42px">No aplica</button>'+
+      '</div></div>';
+  });
+  h+='<div style="margin-top:10px"><button onclick="revisarFaltantes(\''+esc2()+'\')" '+
+    'style="width:100%;border:none;background:var(--bg3);color:var(--text3);border-radius:9px;'+
+    'padding:10px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;'+
+    'min-height:42px">Cerrar</button></div></div>';
+  caja.innerHTML=h;
+}
+
+function faltanOmitir(area,i){
+  var l=((S._faltanArea||{})[area])||[];
+  l.splice(i,1); _pintarFaltantes(area);
+}
+
+async function faltanCrear(area,i,hecho){
+  var l=((S._faltanArea||{})[area])||[];
+  var g=l[i]; if(!g) return;
+  try{
+    await Acciones.crear({
+      descripcion:g.desc, personal_nombre:g.q, tipo_personal:'contratista',
+      area:area,
+      fecha_inicio:g.ini||today(), fecha_fin:g.fin||_faltaEnDias(30),
+      estado: hecho?'completado':'pendiente',
+      porcentaje: hecho?100:0,
+      notas:'Creada desde «¿Falta algo aquí?»: este taller existe en '+g.en+
+            ' apartamento(s) y aquí no.'+(hecho?' Se marca como ya ejecutada.':'')
+    },{ubicaciones:[area], confirmarDuplicado:true});
+    l.splice(i,1);
+    if(typeof showToast==='function') showToast('Creada en '+area,'ok');
+    _pintarFaltantes(area);
+    if(typeof renderActs==='function') renderActs();
+  }catch(e){
+    if(typeof showToast==='function') showToast('No se pudo crear: '+(e&&e.message||''),'err');
+  }
 }
 
 /* ── LA MISMA ACTIVIDAD EN OTRAS UBICACIONES, DENTRO DEL FORMULARIO ──
@@ -5212,6 +5377,14 @@ function renderActs(){
             <div style="font-size:13px;font-weight:700;color:var(--text)">${g.titulo}</div>
             <div style="font-size:11px;color:var(--text3);margin-top:2px">${g.items.length} actividad${g.items.length!==1?'es':''}${retrasadas>0?` · <span style="color:var(--red);font-weight:600">${retrasadas} retrasada${retrasadas!==1?'s':''}</span>`:''}
             </div>
+            ${/* el titulo del grupo es el area solo cuando se agrupa por
+                  apartamento; con eso basta para saber si aplica */
+              (REC_ORDEN.indexOf(g.titulo)>=0)
+              ? `<button onclick="revisarFaltantes('${String(g.titulo).replace(/'/g,"\\'")}')"
+                   style="margin-top:6px;border:1px dashed var(--border2);background:transparent;
+                   color:var(--text2);border-radius:8px;padding:7px 11px;font-family:var(--font);
+                   font-size:11.5px;font-weight:600;cursor:pointer;min-height:38px">¿Falta algo aquí?</button>`
+              : ''}
           </div>
           <div style="display:flex;align-items:center;gap:8px">
             ${pct===100
@@ -5222,6 +5395,7 @@ function renderActs(){
             }
           </div>
         </div>
+        <div id="faltan-${String(g.titulo).replace(/[^A-Za-z0-9]/g,'')}" style="display:none;margin-bottom:6px"></div>
         ${window.innerWidth>600
           ? actsDesktopTable(g.items, false)
           : g.items.map(a=>actHTML(a,S.acts.indexOf(a),a.tipo_personal)).join('')}
@@ -5847,121 +6021,10 @@ function _mismaEnOtras(a){
   return out;
 }
 
-/* Que se puede copiar. El valor sale SIEMPRE de la actividad que se esta
-   mirando: se copia lo que uno acaba de arreglar aqui. */
-var APLICAR_CAMPOS = [
-  {k:'fecha_fin',      t:'Fecha de fin'},
-  {k:'fecha_inicio',   t:'Fecha de inicio'},
-  {k:'personal_nombre',t:'Contratista'},
-  {k:'prioridad',      t:'Prioridad'},
-  {k:'porcentaje',     t:'Avance'}
-];
-
-function actAplicarOtras(id){
-  var c=document.getElementById('aplicabox-'+id); if(!c) return;
-  if(c.style.display!=='none'){ c.style.display='none'; c.innerHTML=''; return; }
-
-  var a=(S.acts||[]).concat(S.abiertas||[]).filter(function(x){return x&&x.id===id;})[0];
-  var otras=_mismaEnOtras(a);
-  c.style.display='block';
-
-  if(!otras.length){
-    c.innerHTML='<div style="background:var(--bg3);border:1px solid var(--border2);'+
-      'border-radius:10px;padding:12px;font-size:12px;color:var(--text3);line-height:1.45">'+
-      'Esta actividad no aparece abierta en ninguna otra ubicación.'+
-      '<div style="margin-top:8px"><button onclick="actAplicarOtras(\''+id+'\')" '+
-      'style="border:none;background:var(--bg4);color:var(--text2);border-radius:8px;'+
-      'padding:9px 14px;font-family:var(--font);font-size:12px;font-weight:600;'+
-      'cursor:pointer;min-height:40px">Cerrar</button></div></div>';
-    return;
-  }
-
-  var campos=APLICAR_CAMPOS.map(function(f){
-    var v=a[f.k]; var hay=(v!==null && v!==undefined && String(v)!=='');
-    /* solo se ofrece copiar lo que esta puesto aqui: copiar un vacio
-       borraria el dato en las otras y eso nunca es lo que se quiere */
-    if(!hay) return '';
-    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 9px;'+
-      'background:var(--bg2);border-radius:8px;margin-bottom:5px;cursor:pointer;min-height:40px">'+
-      '<input type="checkbox" class="apl-campo" data-k="'+f.k+'" '+
-        (f.k==='fecha_fin'?'checked':'')+' '+
-        'style="width:17px;height:17px;flex-shrink:0;accent-color:var(--accent)">'+
-      '<span style="flex:1;font-size:12px">'+f.t+'</span>'+
-      '<span style="font-size:11.5px;color:var(--text3);font-weight:600">'+
-        esc(String(v))+(f.k==='porcentaje'?'%':'')+'</span></label>';
-  }).join('');
-
-  var filas=otras.map(function(o){
-    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 9px;'+
-      'border-bottom:1px solid var(--border);cursor:pointer;min-height:40px">'+
-      '<input type="checkbox" class="apl-dest" data-id="'+o.act.id+'" checked '+
-        'style="width:17px;height:17px;flex-shrink:0;accent-color:var(--accent)">'+
-      '<span style="flex:1;min-width:0"><span style="font-size:12px;font-weight:600">'+
-        esc(o.act.area||'sin área')+'</span>'+
-      '<span style="display:block;font-size:10.5px;color:var(--text3);overflow:hidden;'+
-        'text-overflow:ellipsis;white-space:nowrap">'+esc(o.act.descripcion||'')+'</span></span>'+
-      '<span style="font-size:10.5px;color:var(--text3);flex-shrink:0">'+
-        Math.round(o.p*100)+'%</span></label>';
-  }).join('');
-
-  c.innerHTML='<div style="background:var(--bg3);border:1px solid var(--border2);'+
-      'border-radius:10px;padding:11px 12px">'+
-    '<div style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;'+
-      'color:var(--text3);margin-bottom:6px">Qué se copia</div>'+
-    campos+
-    '<div style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;'+
-      'color:var(--text3);margin:12px 0 4px">A cuáles ('+otras.length+')</div>'+
-    '<div style="max-height:210px;overflow-y:auto">'+filas+'</div>'+
-    '<div style="display:flex;gap:6px;margin-top:10px">'+
-      '<button onclick="actAplicarOtras(\''+id+'\')" style="flex:1;border:none;'+
-        'background:var(--bg4);color:var(--text3);border-radius:9px;padding:10px 4px;'+
-        'font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;'+
-        'min-height:44px">Cancelar</button>'+
-      '<button id="apl-btn-'+id+'" onclick="actAplicarGuardar(\''+id+'\')" style="flex:2;border:none;'+
-        'background:var(--accent-fill);color:#fff;border-radius:9px;padding:10px 4px;'+
-        'font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;'+
-        'min-height:44px">Aplicar</button>'+
-    '</div></div>';
-}
-
-async function actAplicarGuardar(id){
-  var caja=document.getElementById('aplicabox-'+id); if(!caja) return;
-  var a=(S.acts||[]).concat(S.abiertas||[]).filter(function(x){return x&&x.id===id;})[0];
-  if(!a) return;
-
-  var patch={};
-  [].forEach.call(caja.querySelectorAll('.apl-campo'),function(ch){
-    if(ch.checked) patch[ch.dataset.k]=a[ch.dataset.k];
-  });
-  var destinos=[];
-  [].forEach.call(caja.querySelectorAll('.apl-dest'),function(ch){
-    if(ch.checked) destinos.push(ch.dataset.id);
-  });
-
-  if(!Object.keys(patch).length){
-    if(typeof showToast==='function') showToast('Marca al menos un dato para copiar','warn');
-    return;
-  }
-  if(!destinos.length){
-    if(typeof showToast==='function') showToast('Marca al menos una ubicación','warn');
-    return;
-  }
-
-  var btn=document.getElementById('apl-btn-'+id);
-  if(btn){ btn.disabled=true; btn.textContent='Aplicando…'; btn.style.opacity='.6'; }
-
-  var bien=0, mal=0;
-  for(var i=0;i<destinos.length;i++){
-    try{ await Acciones.editar(destinos[i], patch); bien++; }
-    catch(e){ mal++; }
-  }
-  caja.style.display='none'; caja.innerHTML='';
-  if(typeof showToast==='function'){
-    if(mal) showToast('Aplicado en '+bien+', falló en '+mal,'warn');
-    else    showToast('Aplicado en '+bien+' ubicaciones','ok');
-  }
-  if(typeof renderActs==='function') renderActs();
-}
+/* El panel «Aplicar a las otras ubicaciones» de la tarjeta se quito en v37:
+   Nilson lo probo y no le resulto practico. Lo mismo se hace ahora dentro
+   del formulario de editar, que es donde el cambia la fecha. _mismaEnOtras
+   se queda arriba: es el buscador que usa ese formulario.               */
 
 // Abre o cierra el detalle de una actividad sin volver a dibujar la lista.
 function toggleActDet(id){
