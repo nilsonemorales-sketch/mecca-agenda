@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260907_34';
+const APP_VERSION='20260907_35';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5865,13 +5865,21 @@ function _dupHTML(e, desc, area, alGuardar){
         esc(a.personal_nombre||'sin asignar')+' &middot; '+esc(a.estado||'')+
         ' &middot; <span style="color:'+col+';font-weight:700">'+pct+'% parecida</span>'+
       '</div>'+
+      /* "Ver esta" abria la existente pero se perdia lo que uno acababa de
+         escribir. Ahora se llama "Editar esta": es la salida buena cuando de
+         verdad es la misma partida y solo hay que corregirle el texto o el
+         avance, en vez de quedarse con dos. */
       (a.id?('<button onclick="closeModal();setTimeout(function(){editAct(\''+a.id+'\')},60)" '+
-        'style="margin-top:5px;padding:3px 10px;border-radius:7px;border:1px solid var(--border2);'+
-        'background:transparent;color:var(--text2);font-size:11px;cursor:pointer;font-family:var(--font)">Ver esta</button>'):'')+
+        'style="margin-top:5px;padding:6px 12px;border-radius:8px;border:1px solid var(--accent);'+
+        'background:var(--accent-soft);color:var(--accent);font-size:11.5px;font-weight:700;'+
+        'cursor:pointer;font-family:var(--font);min-height:36px">Editar esta</button>'):'')+
     '</div>';
   }).join('');
   return '<div style="font-weight:700;color:var(--amber);margin-bottom:4px">Puede que esto ya exista</div>'+
     '<div style="color:var(--text2);font-size:11px;margin-bottom:4px">Vas a crear &laquo;'+esc(desc)+'&raquo; en '+esc(area||'sin area')+'</div>'+
+    '<div style="color:var(--text3);font-size:10.5px;line-height:1.45;margin-bottom:2px">'+
+      'Si es la misma, toca <b>Editar esta</b> y corr&iacute;gela. Si de verdad es otra cosa, '+
+      '<b>Guardar igual</b> la crea aparte.</div>'+
     filas+
     '<div style="display:flex;gap:8px;margin-top:9px;border-top:1px solid #ffd9a8;padding-top:9px">'+
       '<button onclick="_dupConfirmed=true;'+alGuardar+'" style="padding:5px 14px;border-radius:8px;border:none;background:#fd7e14;color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:var(--font)">Guardar igual</button>'+
@@ -6022,6 +6030,28 @@ function _suma(o){ var t=0; for(var k in o) t+=o[k]; return t; }
 
 /* Compara dos actividades. Devuelve 0 a 1.
    x, y = texto, o {descripcion, personal_nombre}. */
+/* Los NIVELES y numeros que trae la frase. En obra un numero no es un
+   adorno: "hasta el 4to nivel" y "del 4to al 7mo nivel" son dos alcances
+   distintos, y el motor los daba por identicos porque la frase corta cabia
+   entera dentro de la larga y "nivel" esta en las palabras vacias.
+   Reconoce: 4, 4to, 7mo, 1er, 2do, 3ro, N2..N7, y los ordinales escritos. */
+var ORDINALES = {primer:1,primero:1,primera:1, segund:2,segundo:2,segunda:2,
+  tercer:3,tercero:3,tercera:3, cuart:4,cuarto:4,cuarta:4, quint:5,quinto:5,quinta:5,
+  sext:6,sexto:6,sexta:6, septim:7,septimo:7,septima:7, octav:8,octavo:8,octava:8,
+  noven:9,noveno:9,novena:9, decim:10,decimo:10,decima:10};
+
+function nivelesDe(s){
+  var t = normalizar(s), out = [];
+  var re = /\b(\d{1,2})(er|do|ro|to|mo|no|vo|ma)?\b|\bn(\d)\b/g, m;
+  while((m = re.exec(t))){ out.push(parseInt(m[1]||m[3],10)); }
+  t.split(' ').forEach(function(p){
+    if(ORDINALES[p] != null) out.push(ORDINALES[p]);
+  });
+  /* sin repetidos y ordenados, para poder comparar los dos conjuntos */
+  return out.filter(function(v,i,a){ return !isNaN(v) && a.indexOf(v)===i; })
+            .sort(function(u,v){ return u-v; });
+}
+
 function parecido(x, y){
   var dx = typeof x==='string' ? x : (x&&x.descripcion) || '';
   var dy = typeof y==='string' ? y : (y&&y.descripcion) || '';
@@ -6035,6 +6065,17 @@ function parecido(x, y){
   if(sx.length && sy.length){
     mismoSitio = sx.some(function(s){ return sy.indexOf(s)>=0; });
     if(!mismoSitio) return 0;
+  }
+
+  /* 1-bis. Los niveles mandan igual que el sitio. Solo se comparan cuando
+     LAS DOS frases traen numeros: si una no dice nivel, puede ser la misma
+     partida escrita con mas detalle. Si las dos dicen y no coinciden, son
+     alcances distintos aunque el texto se parezca palabra por palabra. */
+  var nx = nivelesDe(dx), ny = nivelesDe(dy);
+  var mismosNiveles = true;
+  if(nx.length && ny.length){
+    mismosNiveles = nx.length===ny.length &&
+      nx.every(function(v,i){ return v===ny[i]; });
   }
 
   var A = pesos(dx), B = pesos(dy);
@@ -6080,6 +6121,12 @@ function parecido(x, y){
     else          p = p*0.70;
   }
 
+  /* Niveles distintos: por muy parecido que sea el texto, no es la misma
+     partida. Se baja por debajo del umbral de duplicado (0.90) y tambien
+     por debajo del de "¿que le falta?" (0.72), para que los cuente como
+     dos talleres y no como uno. */
+  if(!mismosNiveles) p = Math.min(p, 0.55);
+
   return Math.min(1, p);
 }
 
@@ -6104,7 +6151,7 @@ function buscarParecidas(desc, personal, lista, opts){
 }
 
   return {parecido:parecido, buscarParecidas:buscarParecidas,
-          raices:raices, pesos:pesos, sitiosDe:sitiosDe,
+          raices:raices, pesos:pesos, sitiosDe:sitiosDe, nivelesDe:nivelesDe,
           normalizar:normalizar, raiz:raiz};
 })();
 
