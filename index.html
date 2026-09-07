@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260907_39';
+const APP_VERSION='20260907_40';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1408,11 +1408,20 @@ function faltanOmitir(area,i){
 async function faltanCrear(area,i,hecho){
   var l=((S._faltanArea||{})[area])||[];
   var g=l[i]; if(!g) return;
+  /* Las fechas salen de las otras ubicaciones, y ahi puede venir cualquier
+     cosa: que ninguna tenga fecha de inicio y la de fin ya haya pasado. Si
+     se copian tal cual, el inicio queda en hoy, el fin en agosto, y la
+     validacion la rechaza («la fecha fin no puede ser anterior a la de
+     inicio»). Cuando la fecha de las otras no sirve aqui, se pone un mes
+     de plazo desde hoy y ya. */
+  var _ini = g.ini || today();
+  var _fin = g.fin || '';
+  if(!_fin || _fin < _ini) _fin = _faltaEnDias(30);
   try{
     await Acciones.crear({
       descripcion:g.desc, personal_nombre:g.q, tipo_personal:'contratista',
       area:area,
-      fecha_inicio:g.ini||today(), fecha_fin:g.fin||_faltaEnDias(30),
+      fecha_inicio:_ini, fecha_fin:_fin,
       estado: hecho?'completado':'pendiente',
       porcentaje: hecho?100:0,
       notas:'Creada desde «¿Falta algo aquí?»: este taller existe en '+g.en+
