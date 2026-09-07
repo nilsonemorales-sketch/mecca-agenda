@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260906_32';
+const APP_VERSION='20260907_33';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5667,9 +5667,53 @@ function actHTML(a, ai, tipo){
       <button onclick="togglePrioridadAct('${a.id}')" style="${ibtn}${urgente?';color:var(--red);border-color:var(--red);background:var(--red-light)':''}" title="${urgente?'Quitar urgente':'Marcar urgente'}">${_ic('alerta',14)}</button>
       <button onclick="toggleArqAct('${a.id}')" style="${ibtn}${a.requiere_arq?';color:var(--accent);border-color:var(--accent);background:var(--accent-soft)':''}" title="${a.requiere_arq?'Quitar marca Arq. Miguel':'Requiere Arq. Miguel'}">${_ic('banco',14)}</button>
     </div>`:''}
+    ${canEdit()?`<div style="margin-top:6px"><button onclick="actAbrirNota('${a.id}')" style="${btn};width:100%;border:1px dashed var(--border2);background:transparent;color:var(--text2);font-size:12px">${_ic('lista',13)} Agregar observación</button></div>
+    <div id="notabox-${a.id}" style="display:none;margin-top:7px"></div>`:''}
     ${(canEdit()||S.user?.rol==='ing')&&!a.verificado&&a.estado!=='pendiente'?`<div style="margin-top:6px"><button onclick="verificarAct('${a.id}')" style="${btn};width:100%;border:1.5px solid var(--green);background:var(--green-light);color:var(--green);font-size:12px">${_ic('checkc',13)} Verificar trabajo</button></div>`:''}
     </div>
   </div>`;
+}
+
+/* ── OBSERVACIONES DESDE LA LISTA DE ACTIVIDADES ───────────────────
+   La misma caja que hay en el recorrido, pero aqui, en la tarjeta de la
+   actividad. El texto se pega al final de lo que ya habia, con quien y
+   cuando; nunca pisa lo anterior.
+   La caja se mete con innerHTML SOLO al abrirla, y no se vuelve a tocar
+   mientras se escribe: repintar borraria lo dictado a medias.          */
+function actAbrirNota(id){
+  var c=document.getElementById('notabox-'+id); if(!c) return;
+  if(c.style.display!=='none'){ c.style.display='none'; c.innerHTML=''; return; }
+  c.style.display='block';
+  c.innerHTML=
+    '<textarea id="nota-'+id+'" rows="2" placeholder="Observación… (dicta con el micrófono del teclado)" '+
+      'style="width:100%;box-sizing:border-box;background:var(--bg2);color:var(--text);'+
+      'border:1px solid var(--border2);border-radius:9px;padding:10px;font-family:var(--font);'+
+      'font-size:12.5px;line-height:1.4;resize:vertical;-webkit-appearance:none"></textarea>'+
+    '<div style="display:flex;gap:6px;margin-top:6px">'+
+      '<button onclick="actAbrirNota(\''+id+'\')" style="flex:1;border:none;background:var(--bg3);'+
+        'color:var(--text3);border-radius:9px;padding:10px 4px;font-family:var(--font);'+
+        'font-size:12.5px;font-weight:600;cursor:pointer;min-height:44px">Cancelar</button>'+
+      '<button onclick="actGuardarNota(\''+id+'\')" style="flex:2;border:none;'+
+        'background:var(--green-fill);color:#fff;border-radius:9px;padding:10px 4px;'+
+        'font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;'+
+        'min-height:44px">Guardar observación</button>'+
+    '</div>';
+  var t=document.getElementById('nota-'+id); if(t) t.focus();
+}
+
+async function actGuardarNota(id){
+  var t=document.getElementById('nota-'+id);
+  var texto=t?String(t.value||'').trim():'';
+  if(!texto){ actAbrirNota(id); return; }
+  try{
+    await Acciones.agregarNota(id,texto);
+    var c=document.getElementById('notabox-'+id);
+    if(c){ c.style.display='none'; c.innerHTML=''; }
+    if(typeof showToast==='function') showToast('Observación guardada','ok');
+    if(typeof renderActs==='function') renderActs();   // S.actAbiertas la deja abierta
+  }catch(e){
+    if(typeof showToast==='function') showToast('No se pudo guardar: '+(e&&e.message||''),'err');
+  }
 }
 
 // Abre o cierra el detalle de una actividad sin volver a dibujar la lista.
