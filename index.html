@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260907_33';
+const APP_VERSION='20260907_34';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -4625,9 +4625,33 @@ function buildPredSection(currentId, currentPreds){
     '<div style="font-size:11px;color:var(--text3);padding:4px 0">Escribe para buscar actividades…</div>'+
   '</div>';
   html+='</div></div>';
-  html+='<input type="hidden" id="a-preds" value="'+(count?JSON.stringify([...selSet]):'')+'"/>';
+  /* AQUI ESTABA EL FALLO. JSON.stringify(["a","b"]) trae comillas DOBLES, y
+     esto las metia dentro de un atributo delimitado por comillas dobles: el
+     navegador cortaba el valor en la primera comilla y el campo quedaba con
+     un "[" suelto. Despues, al escribir en el buscador de predecesoras,
+     JSON.parse("[") reventaba:
+       SyntaxError: JSON Parse error: Expected '}'
+     Le pasaba a CUALQUIER actividad que ya tuviera predecesoras. Por eso los
+     tres correos de error de las 11:02 p.m.
+     Se escapan las comillas al meterlas en el atributo. */
+  html+='<input type="hidden" id="a-preds" value="'+
+    (count?JSON.stringify([...selSet]).replace(/"/g,'&quot;'):'')+'"/>';
   html+='</div>';
   return html;
+}
+
+function _predIds(f){
+  if(!f || !f.value) return [];
+  try{
+    var v=JSON.parse(f.value);
+    return Array.isArray(v) ? v.filter(Boolean) : [];
+  }catch(e){
+    /* Si el campo viene roto por lo que sea, se empieza de cero en vez de
+       tumbar la pantalla entera. Perder las predecesoras se ve y se arregla;
+       una pantalla que revienta no. */
+    f.value='';
+    return [];
+  }
 }
 
 function renderPredResults(q){
@@ -4639,7 +4663,7 @@ function renderPredResults(q){
     return;
   }
   var f=document.getElementById('a-preds');
-  var selected=new Set(f&&f.value?JSON.parse(f.value).filter(Boolean):[]);
+  var selected=new Set(_predIds(f));
   var curId=window._predCurrentId||'';
 
   var candidates=(S.acts||[]).filter(function(a){
@@ -4673,7 +4697,7 @@ function renderPredResults(q){
 function addPred(id){
   var f=document.getElementById('a-preds');
   if(!f) return;
-  var ids=f.value?JSON.parse(f.value).filter(Boolean):[];
+  var ids=_predIds(f);
   if(!ids.includes(id)) ids.push(id);
   f.value=ids.length?JSON.stringify(ids):'';
   _syncPredUI(ids);
@@ -4685,7 +4709,7 @@ function addPred(id){
 function removePred(id){
   var f=document.getElementById('a-preds');
   if(!f) return;
-  var ids=(f.value?JSON.parse(f.value):[]).filter(function(x){return x!==id;});
+  var ids=_predIds(f).filter(function(x){return x!==id;});
   f.value=ids.length?JSON.stringify(ids):'';
   _syncPredUI(ids);
 }
