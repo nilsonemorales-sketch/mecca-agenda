@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260907_35';
+const APP_VERSION='20260907_36';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1258,6 +1258,19 @@ function ubicTodosAptos(){
 function renderUbicacionesSeleccionadas(){
   const wrap = document.getElementById('ubicaciones-lista');
   if(!wrap) return;
+  /* Al EDITAR, las ubicaciones extra no hacen nada: saveAct solo parchea la
+     actividad que se abrio. Decir "se creara 1 actividad" era mentira. Para
+     llevar un cambio a las demas ubicaciones esta el boton "Aplicar a las
+     otras ubicaciones" de la tarjeta. */
+  if(window._ubicEdit){
+    wrap.innerHTML='';
+    const l=document.getElementById('ubicaciones-selected');
+    if(l) l.innerHTML='';
+    const m=document.getElementById('ubic-count-msg');
+    if(m){ m.style.display='block';
+      m.textContent='Estás editando solo esta ubicación. Para llevar el cambio a las demás, usa «Aplicar a las otras ubicaciones» en la tarjeta.'; }
+    return;
+  }
   wrap.innerHTML = _ubicacionesSeleccionadas.map(function(u,i){
     return '<div style="display:flex;align-items:center;gap:4px;background:var(--blue-light);border:1.5px solid var(--accent);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--accent);font-weight:500">'+
       ''+esc(u)+
@@ -5692,7 +5705,9 @@ function actHTML(a, ai, tipo){
       <button onclick="toggleArqAct('${a.id}')" style="${ibtn}${a.requiere_arq?';color:var(--accent);border-color:var(--accent);background:var(--accent-soft)':''}" title="${a.requiere_arq?'Quitar marca Arq. Miguel':'Requiere Arq. Miguel'}">${_ic('banco',14)}</button>
     </div>`:''}
     ${canEdit()?`<div style="margin-top:6px"><button onclick="actAbrirNota('${a.id}')" style="${btn};width:100%;border:1px dashed var(--border2);background:transparent;color:var(--text2);font-size:12px">${_ic('lista',13)} Agregar observación</button></div>
-    <div id="notabox-${a.id}" style="display:none;margin-top:7px"></div>`:''}
+    <div id="notabox-${a.id}" style="display:none;margin-top:7px"></div>
+    <div style="margin-top:6px"><button onclick="actAplicarOtras('${a.id}')" style="${btn};width:100%;border:1px dashed var(--border2);background:transparent;color:var(--text2);font-size:12px">${_ic('lista',13)} Aplicar a las otras ubicaciones</button></div>
+    <div id="aplicabox-${a.id}" style="display:none;margin-top:7px"></div>`:''}
     ${(canEdit()||S.user?.rol==='ing')&&!a.verificado&&a.estado!=='pendiente'?`<div style="margin-top:6px"><button onclick="verificarAct('${a.id}')" style="${btn};width:100%;border:1.5px solid var(--green);background:var(--green-light);color:var(--green);font-size:12px">${_ic('checkc',13)} Verificar trabajo</button></div>`:''}
     </div>
   </div>`;
@@ -5738,6 +5753,154 @@ async function actGuardarNota(id){
   }catch(e){
     if(typeof showToast==='function') showToast('No se pudo guardar: '+(e&&e.message||''),'err');
   }
+}
+
+/* ── LA MISMA ACTIVIDAD EN TODAS LAS UBICACIONES ───────────────────
+   El mismo taller esta repetido en los 11 apartamentos, en las escaleras,
+   en el parqueo. Cambiarle la fecha a mano en cada uno son 15 toques y
+   siempre se queda alguno atras. Aqui se cambia una vez y se aplica a las
+   demas: tu eliges QUE campos se copian y A CUALES ubicaciones.
+
+   Solo se buscan las ABIERTAS: lo ya terminado no se toca nunca.
+   El panel no se repinta mientras se elige; los checks se leen del DOM al
+   guardar. Repintar borraria lo que ya se marco.                      */
+
+/* Umbral mas alto que el de duplicados: aqui se va a ESCRIBIR en varias
+   ubicaciones de un golpe, asi que solo entra lo que es claramente el
+   mismo taller. */
+var APLICAR_UMBRAL = 0.80;
+
+function _mismaEnOtras(a){
+  if(!a) return [];
+  var yo={descripcion:a.descripcion||'', personal_nombre:a.personal_nombre||''};
+  var vistos={}, out=[];
+  (S.acts||[]).concat(S.abiertas||[]).forEach(function(x){
+    if(!x || !x.id || vistos[x.id]) return;
+    vistos[x.id]=1;
+    if(x.id===a.id) return;
+    if((x.area||'')===(a.area||'')) return;
+    if(x.estado==='completado') return;
+    var p=Parecido.parecido(yo,x);
+    if(p>=APLICAR_UMBRAL) out.push({act:x, p:p});
+  });
+  out.sort(function(u,v){ return String(u.act.area||'').localeCompare(String(v.act.area||'')); });
+  return out;
+}
+
+/* Que se puede copiar. El valor sale SIEMPRE de la actividad que se esta
+   mirando: se copia lo que uno acaba de arreglar aqui. */
+var APLICAR_CAMPOS = [
+  {k:'fecha_fin',      t:'Fecha de fin'},
+  {k:'fecha_inicio',   t:'Fecha de inicio'},
+  {k:'personal_nombre',t:'Contratista'},
+  {k:'prioridad',      t:'Prioridad'},
+  {k:'porcentaje',     t:'Avance'}
+];
+
+function actAplicarOtras(id){
+  var c=document.getElementById('aplicabox-'+id); if(!c) return;
+  if(c.style.display!=='none'){ c.style.display='none'; c.innerHTML=''; return; }
+
+  var a=(S.acts||[]).concat(S.abiertas||[]).filter(function(x){return x&&x.id===id;})[0];
+  var otras=_mismaEnOtras(a);
+  c.style.display='block';
+
+  if(!otras.length){
+    c.innerHTML='<div style="background:var(--bg3);border:1px solid var(--border2);'+
+      'border-radius:10px;padding:12px;font-size:12px;color:var(--text3);line-height:1.45">'+
+      'Esta actividad no aparece abierta en ninguna otra ubicación.'+
+      '<div style="margin-top:8px"><button onclick="actAplicarOtras(\''+id+'\')" '+
+      'style="border:none;background:var(--bg4);color:var(--text2);border-radius:8px;'+
+      'padding:9px 14px;font-family:var(--font);font-size:12px;font-weight:600;'+
+      'cursor:pointer;min-height:40px">Cerrar</button></div></div>';
+    return;
+  }
+
+  var campos=APLICAR_CAMPOS.map(function(f){
+    var v=a[f.k]; var hay=(v!==null && v!==undefined && String(v)!=='');
+    /* solo se ofrece copiar lo que esta puesto aqui: copiar un vacio
+       borraria el dato en las otras y eso nunca es lo que se quiere */
+    if(!hay) return '';
+    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 9px;'+
+      'background:var(--bg2);border-radius:8px;margin-bottom:5px;cursor:pointer;min-height:40px">'+
+      '<input type="checkbox" class="apl-campo" data-k="'+f.k+'" '+
+        (f.k==='fecha_fin'?'checked':'')+' '+
+        'style="width:17px;height:17px;flex-shrink:0;accent-color:var(--accent)">'+
+      '<span style="flex:1;font-size:12px">'+f.t+'</span>'+
+      '<span style="font-size:11.5px;color:var(--text3);font-weight:600">'+
+        esc(String(v))+(f.k==='porcentaje'?'%':'')+'</span></label>';
+  }).join('');
+
+  var filas=otras.map(function(o){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 9px;'+
+      'border-bottom:1px solid var(--border);cursor:pointer;min-height:40px">'+
+      '<input type="checkbox" class="apl-dest" data-id="'+o.act.id+'" checked '+
+        'style="width:17px;height:17px;flex-shrink:0;accent-color:var(--accent)">'+
+      '<span style="flex:1;min-width:0"><span style="font-size:12px;font-weight:600">'+
+        esc(o.act.area||'sin área')+'</span>'+
+      '<span style="display:block;font-size:10.5px;color:var(--text3);overflow:hidden;'+
+        'text-overflow:ellipsis;white-space:nowrap">'+esc(o.act.descripcion||'')+'</span></span>'+
+      '<span style="font-size:10.5px;color:var(--text3);flex-shrink:0">'+
+        Math.round(o.p*100)+'%</span></label>';
+  }).join('');
+
+  c.innerHTML='<div style="background:var(--bg3);border:1px solid var(--border2);'+
+      'border-radius:10px;padding:11px 12px">'+
+    '<div style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;'+
+      'color:var(--text3);margin-bottom:6px">Qué se copia</div>'+
+    campos+
+    '<div style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;'+
+      'color:var(--text3);margin:12px 0 4px">A cuáles ('+otras.length+')</div>'+
+    '<div style="max-height:210px;overflow-y:auto">'+filas+'</div>'+
+    '<div style="display:flex;gap:6px;margin-top:10px">'+
+      '<button onclick="actAplicarOtras(\''+id+'\')" style="flex:1;border:none;'+
+        'background:var(--bg4);color:var(--text3);border-radius:9px;padding:10px 4px;'+
+        'font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;'+
+        'min-height:44px">Cancelar</button>'+
+      '<button id="apl-btn-'+id+'" onclick="actAplicarGuardar(\''+id+'\')" style="flex:2;border:none;'+
+        'background:var(--accent-fill);color:#fff;border-radius:9px;padding:10px 4px;'+
+        'font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;'+
+        'min-height:44px">Aplicar</button>'+
+    '</div></div>';
+}
+
+async function actAplicarGuardar(id){
+  var caja=document.getElementById('aplicabox-'+id); if(!caja) return;
+  var a=(S.acts||[]).concat(S.abiertas||[]).filter(function(x){return x&&x.id===id;})[0];
+  if(!a) return;
+
+  var patch={};
+  [].forEach.call(caja.querySelectorAll('.apl-campo'),function(ch){
+    if(ch.checked) patch[ch.dataset.k]=a[ch.dataset.k];
+  });
+  var destinos=[];
+  [].forEach.call(caja.querySelectorAll('.apl-dest'),function(ch){
+    if(ch.checked) destinos.push(ch.dataset.id);
+  });
+
+  if(!Object.keys(patch).length){
+    if(typeof showToast==='function') showToast('Marca al menos un dato para copiar','warn');
+    return;
+  }
+  if(!destinos.length){
+    if(typeof showToast==='function') showToast('Marca al menos una ubicación','warn');
+    return;
+  }
+
+  var btn=document.getElementById('apl-btn-'+id);
+  if(btn){ btn.disabled=true; btn.textContent='Aplicando…'; btn.style.opacity='.6'; }
+
+  var bien=0, mal=0;
+  for(var i=0;i<destinos.length;i++){
+    try{ await Acciones.editar(destinos[i], patch); bien++; }
+    catch(e){ mal++; }
+  }
+  caja.style.display='none'; caja.innerHTML='';
+  if(typeof showToast==='function'){
+    if(mal) showToast('Aplicado en '+bien+', falló en '+mal,'warn');
+    else    showToast('Aplicado en '+bien+' ubicaciones','ok');
+  }
+  if(typeof renderActs==='function') renderActs();
 }
 
 // Abre o cierra el detalle de una actividad sin volver a dibujar la lista.
@@ -7741,7 +7904,7 @@ function showAddActPropio(ai, ctx){
         ${ubicacionSelect('a-area-single','')}
         <button type="button" id="btn-add-ubic" onclick="addUbicacion()" style="flex-shrink:0;padding:10px 14px;border-radius:var(--r);border:2px solid var(--accent);background:var(--blue-light);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Agregar</button>
       </div>
-      <button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>
+      ${edit?"":`<button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>`}
     </div>
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
@@ -7806,6 +7969,7 @@ function showAddActPropio(ai, ctx){
       <button class="btn primary" onclick="saveAct(${edit?ai:'undefined'})">${edit?'Guardar':'Agregar'}</button>
     </div>`;
   openModal();
+  window._ubicEdit = !!edit;
   _ubicacionesSeleccionadas = edit && a.area ? [a.area] : ((ctx&&ctx.area)?[ctx.area]:[]);
   setTimeout(()=>{
     var _d=document.getElementById('a-d'); if(!_d) return; _d.focus();
@@ -7839,7 +8003,7 @@ function showAddActContratista(ai, preContratista, ctx){
         ${ubicacionSelect('a-area-single','')}
         <button type="button" id="btn-add-ubic" onclick="addUbicacion()" style="flex-shrink:0;padding:10px 14px;border-radius:var(--r);border:2px solid var(--accent);background:var(--blue-light);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Agregar</button>
       </div>
-      <button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>
+      ${edit?"":`<button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>`}
     </div>
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
@@ -7913,6 +8077,7 @@ function showAddActContratista(ai, preContratista, ctx){
       <button class="btn primary" onclick="saveAct(${edit?ai:'undefined'})">${edit?'Guardar':'Agregar'}</button>
     </div>`;
   openModal();
+  window._ubicEdit = !!edit;
   _ubicacionesSeleccionadas = edit && a.area ? [a.area] : ((ctx&&ctx.area)?[ctx.area]:[]);
   setTimeout(()=>{
     var _d=document.getElementById('a-d'); if(!_d) return; _d.focus();
@@ -7954,7 +8119,7 @@ function showAddActIngeniero(ai, ctx){
         ${ubicacionSelect('a-area-single','')}
         <button type="button" onclick="addUbicacion()" style="flex-shrink:0;padding:10px 14px;border-radius:var(--r);border:2px solid var(--accent);background:var(--blue-light);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Agregar</button>
       </div>
-      <button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>
+      ${edit?"":`<button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>`}
     </div>
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
@@ -8010,6 +8175,7 @@ function showAddActIngeniero(ai, ctx){
       <button class="btn primary" onclick="saveActIngeniero(${edit?ai:'undefined'})">${edit?'Guardar':'Agregar'}</button>
     </div>`;
   openModal();
+  window._ubicEdit = !!edit;
   _ubicacionesSeleccionadas = edit && a.area ? [a.area] : ((ctx&&ctx.area)?[ctx.area]:[]);
   setTimeout(()=>{
     var _d=document.getElementById('a-d'); if(!_d) return; _d.focus();
