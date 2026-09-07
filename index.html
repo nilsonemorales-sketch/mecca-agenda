@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260907_38';
+const APP_VERSION='20260907_39';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1253,6 +1253,14 @@ function addUbicacion(){
    taller ya terminado aqui pareceria "faltante". Por eso se piden aparte
    TODAS las actividades del apartamento, completadas incluidas, y contra
    esa lista se decide si de verdad falta.                               */
+/* Los contratistas marcados en el filtro de la pantalla, o null si no hay
+   filtro puesto (entonces se miran todos). */
+function _faltanFiltroContratistas(){
+  var f=(S.actFiltroAvanzado||{}).contratistas||[];
+  if(!f.length) return null;
+  return f.map(function(x){ return x==='__sin_asignar__' ? 'Sin asignar' : x; });
+}
+
 async function revisarFaltantes(area){
   var caja=document.getElementById('faltan-'+String(area).replace(/[^A-Za-z0-9]/g,''));
   if(!caja) return;
@@ -1291,6 +1299,11 @@ function _faltanEnArea(area, yaTiene){
   var mios=(yaTiene||[]).map(function(x){
     return {descripcion:x.descripcion||'', personal_nombre:x.personal_nombre||''};
   });
+  /* Se respeta el filtro de contratista que este puesto en la pantalla.
+     Si Nilson esta revisando a Dimedes, lo ultimo que quiere es que le
+     salgan los faltantes del peonaje y del electrico mezclados. */
+  var soloQ=_faltanFiltroContratistas();
+
   var porQ={};
   (S.acts||[]).concat(S.abiertas||[]).forEach(function(a){
     if(!a || !a.descripcion) return;
@@ -1298,6 +1311,7 @@ function _faltanEnArea(area, yaTiene){
     if(a.area===area) return;
     if(REC_ORDEN.indexOf(a.area)<0) return;
     var q=(a.personal_nombre||'').trim()||'Sin asignar';
+    if(soloQ && soloQ.indexOf(q)<0) return;
     (porQ[q]=porQ[q]||[]).push(a);
   });
 
@@ -1335,12 +1349,14 @@ function _pintarFaltantes(area){
   var caja=document.getElementById('faltan-'+String(area).replace(/[^A-Za-z0-9]/g,''));
   if(!caja) return;
   var lista=((S._faltanArea||{})[area])||[];
+  var filtro=_faltanFiltroContratistas();
   var esc2=function(x){ return String(area).replace(/'/g,"\\'"); };
 
   if(!lista.length){
     caja.innerHTML='<div style="background:var(--bg2);border:1px solid var(--green);'+
       'border-radius:10px;padding:12px;font-size:12px;color:var(--text2);line-height:1.45">'+
-      '✓ No le falta ningún taller que tengan los otros apartamentos.'+
+      '✓ No le falta ningún taller'+(filtro?' de '+esc(filtro.join(', ')):'')+
+      ' que tengan los otros apartamentos.'+
       '<div style="margin-top:9px"><button onclick="revisarFaltantes(\''+esc2()+'\')" '+
       'style="border:none;background:var(--bg3);color:var(--text3);border-radius:8px;'+
       'padding:9px 14px;font-family:var(--font);font-size:12px;font-weight:600;'+
@@ -1351,9 +1367,11 @@ function _pintarFaltantes(area){
   var h='<div style="background:var(--bg2);border:1px solid var(--amber);border-radius:10px;'+
     'padding:11px 12px">'+
     '<div style="font-size:12.5px;font-weight:700;color:var(--amber)">'+
-      'Faltan '+lista.length+' taller'+(lista.length>1?'es':'')+' en '+esc(area)+'</div>'+
+      'Faltan '+lista.length+' taller'+(lista.length>1?'es':'')+
+      (filtro? ' de '+esc(filtro.join(', ')) : '')+' en '+esc(area)+'</div>'+
     '<div style="font-size:11px;color:var(--text3);line-height:1.45;margin:3px 0 10px">'+
-      'Están en los otros apartamentos y aquí no aparecen, ni abiertos ni terminados.</div>';
+      'Están en los otros apartamentos y aquí no aparecen, ni abiertos ni terminados.'+
+      (filtro? ' Solo se está mirando el contratista del filtro.' : '')+'</div>';
 
   lista.forEach(function(g,i){
     h+='<div style="border-top:1px solid var(--border);padding:10px 0 8px">'+
