@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260907_36';
+const APP_VERSION='20260907_37';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1244,6 +1244,58 @@ function addUbicacion(){
   renderUbicacionesSeleccionadas();
 }
 
+/* ── LA MISMA ACTIVIDAD EN OTRAS UBICACIONES, DENTRO DEL FORMULARIO ──
+   El mismo taller esta repetido en los 11 apartamentos, en las escaleras y
+   en el parqueo. Al editar uno —cambiarle la fecha, por ejemplo— aqui se
+   ve en que otras esta abierto y se marcan las que deben recibir el mismo
+   cambio. Guardar aplica SOLO los campos que de verdad se tocaron.
+   Las completadas no aparecen: lo terminado no se toca. */
+function renderOtrasUbicaciones(){
+  var cont=document.getElementById('otras-ubic');
+  if(!cont) return;
+  var a=window._editActual;
+  if(!a){ cont.innerHTML=''; return; }
+  var otras=(typeof _mismaEnOtras==='function') ? _mismaEnOtras(a) : [];
+  window._otrasUbic=otras;
+  if(!otras.length){ cont.innerHTML=''; return; }
+
+  cont.innerHTML=
+    '<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;'+
+      'padding:11px 12px;margin-top:8px">'+
+      '<div style="font-size:12px;font-weight:700;margin-bottom:3px">'+
+        'Esta actividad también está en '+otras.length+
+        (otras.length>1?' ubicaciones':' ubicación')+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);line-height:1.45;margin-bottom:9px">'+
+        'Marca dónde quieres que se aplique lo que cambies aquí. Solo se copia lo que toques.</div>'+
+      '<div style="display:flex;gap:6px;margin-bottom:8px">'+
+        '<button type="button" onclick="otrasTodas(true)" style="flex:1;border:1px solid var(--border2);'+
+          'background:transparent;color:var(--text2);border-radius:8px;padding:8px 4px;'+
+          'font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;'+
+          'min-height:40px">Marcar todas</button>'+
+        '<button type="button" onclick="otrasTodas(false)" style="flex:1;border:1px solid var(--border2);'+
+          'background:transparent;color:var(--text2);border-radius:8px;padding:8px 4px;'+
+          'font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;'+
+          'min-height:40px">Ninguna</button>'+
+      '</div>'+
+      '<div style="max-height:220px;overflow-y:auto">'+
+      otras.map(function(o){
+        return '<label style="display:flex;align-items:center;gap:8px;padding:8px 2px;'+
+          'border-bottom:1px solid var(--border);cursor:pointer;min-height:42px">'+
+          '<input type="checkbox" class="otra-ubic" data-id="'+o.act.id+'" '+
+            'style="width:18px;height:18px;flex-shrink:0;accent-color:var(--accent)">'+
+          '<span style="flex:1;min-width:0"><span style="font-size:12.5px;font-weight:600">'+
+            esc(o.act.area||'sin área')+'</span>'+
+          '<span style="display:block;font-size:10.5px;color:var(--text3);overflow:hidden;'+
+            'text-overflow:ellipsis;white-space:nowrap">'+esc(o.act.descripcion||'')+
+            ' · '+esc(o.act.estado||'')+'</span></span></label>';
+      }).join('')+
+      '</div></div>';
+}
+
+function otrasTodas(v){
+  document.querySelectorAll('.otra-ubic').forEach(function(c){ c.checked=!!v; });
+}
+
 /* Los 11 apartamentos de un toque. Antes habia que elegirlos uno por uno
    en el desplegable, y por eso nadie creaba un taller para toda la torre. */
 function ubicTodosAptos(){
@@ -1262,13 +1314,22 @@ function renderUbicacionesSeleccionadas(){
      actividad que se abrio. Decir "se creara 1 actividad" era mentira. Para
      llevar un cambio a las demas ubicaciones esta el boton "Aplicar a las
      otras ubicaciones" de la tarjeta. */
+  /* Al EDITAR no se crean copias: se muestra la ubicacion de esta actividad
+     y, debajo, las otras donde el mismo taller esta abierto, para marcar a
+     cuales llevar el cambio. Antes esto decia "se creara 1 actividad", que
+     era mentira, y luego lo escondi entero — con lo que Nilson dejo de ver
+     hasta en que apartamento estaba parado. */
   if(window._ubicEdit){
-    wrap.innerHTML='';
+    wrap.innerHTML = _ubicacionesSeleccionadas.map(function(u){
+      return '<div style="display:inline-flex;align-items:center;gap:4px;'+
+        'background:var(--blue-light);border:1.5px solid var(--accent);border-radius:8px;'+
+        'padding:5px 10px;font-size:12px;color:var(--accent);font-weight:600">'+esc(u)+'</div>';
+    }).join('');
     const l=document.getElementById('ubicaciones-selected');
     if(l) l.innerHTML='';
     const m=document.getElementById('ubic-count-msg');
-    if(m){ m.style.display='block';
-      m.textContent='Estás editando solo esta ubicación. Para llevar el cambio a las demás, usa «Aplicar a las otras ubicaciones» en la tarjeta.'; }
+    if(m){ m.style.display='none'; }
+    renderOtrasUbicaciones();
     return;
   }
   wrap.innerHTML = _ubicacionesSeleccionadas.map(function(u,i){
@@ -5706,8 +5767,7 @@ function actHTML(a, ai, tipo){
     </div>`:''}
     ${canEdit()?`<div style="margin-top:6px"><button onclick="actAbrirNota('${a.id}')" style="${btn};width:100%;border:1px dashed var(--border2);background:transparent;color:var(--text2);font-size:12px">${_ic('lista',13)} Agregar observación</button></div>
     <div id="notabox-${a.id}" style="display:none;margin-top:7px"></div>
-    <div style="margin-top:6px"><button onclick="actAplicarOtras('${a.id}')" style="${btn};width:100%;border:1px dashed var(--border2);background:transparent;color:var(--text2);font-size:12px">${_ic('lista',13)} Aplicar a las otras ubicaciones</button></div>
-    <div id="aplicabox-${a.id}" style="display:none;margin-top:7px"></div>`:''}
+`:''}
     ${(canEdit()||S.user?.rol==='ing')&&!a.verificado&&a.estado!=='pendiente'?`<div style="margin-top:6px"><button onclick="verificarAct('${a.id}')" style="${btn};width:100%;border:1.5px solid var(--green);background:var(--green-light);color:var(--green);font-size:12px">${_ic('checkc',13)} Verificar trabajo</button></div>`:''}
     </div>
   </div>`;
@@ -7909,6 +7969,7 @@ function showAddActPropio(ai, ctx){
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
     <div id="ubicaciones-selected" style="min-height:4px"></div>
+    <div id="otras-ubic"></div>
     <div class="fgrid">
       <div class="fw"><label class="fl">Responsable(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
         ${ingCheckboxes(a, !edit)}</div>
@@ -7970,6 +8031,8 @@ function showAddActPropio(ai, ctx){
     </div>`;
   openModal();
   window._ubicEdit = !!edit;
+  window._editActual = edit ? a : null;
+  window._otrasUbic = [];
   _ubicacionesSeleccionadas = edit && a.area ? [a.area] : ((ctx&&ctx.area)?[ctx.area]:[]);
   setTimeout(()=>{
     var _d=document.getElementById('a-d'); if(!_d) return; _d.focus();
@@ -8008,6 +8071,7 @@ function showAddActContratista(ai, preContratista, ctx){
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
     <div id="ubicaciones-selected" style="min-height:4px"></div>
+    <div id="otras-ubic"></div>
 
     <div class="fgrid">
       <div class="fw"><label class="fl">Responsable(s) (Ing/Arq) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
@@ -8078,6 +8142,8 @@ function showAddActContratista(ai, preContratista, ctx){
     </div>`;
   openModal();
   window._ubicEdit = !!edit;
+  window._editActual = edit ? a : null;
+  window._otrasUbic = [];
   _ubicacionesSeleccionadas = edit && a.area ? [a.area] : ((ctx&&ctx.area)?[ctx.area]:[]);
   setTimeout(()=>{
     var _d=document.getElementById('a-d'); if(!_d) return; _d.focus();
@@ -8124,6 +8190,7 @@ function showAddActIngeniero(ai, ctx){
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
     <div id="ubicaciones-selected" style="min-height:4px"></div>
+    <div id="otras-ubic"></div>
 
     <div class="fw"><label class="fl">Ingeniero(s) responsable(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
       ${ingCheckboxes(a.ingeniero_nombre?a:{ingeniero_nombre:a.personal_nombre||a.ingeniero_nombre}, !edit)}</div>
@@ -8176,6 +8243,8 @@ function showAddActIngeniero(ai, ctx){
     </div>`;
   openModal();
   window._ubicEdit = !!edit;
+  window._editActual = edit ? a : null;
+  window._otrasUbic = [];
   _ubicacionesSeleccionadas = edit && a.area ? [a.area] : ((ctx&&ctx.area)?[ctx.area]:[]);
   setTimeout(()=>{
     var _d=document.getElementById('a-d'); if(!_d) return; _d.focus();
@@ -8223,6 +8292,11 @@ async function saveActIngeniero(ai){
   }catch(e){ _actMostrarError(e,ai,desc,a.area); return; }
 
   _dupConfirmed=false;
+  /* Se leen aqui, con el modal todavia abierto: closeModal borra el DOM. */
+  window.__otrasMarcadas=[];
+  document.querySelectorAll('.otra-ubic').forEach(function(ch){
+    if(ch.checked) window.__otrasMarcadas.push(ch.dataset.id);
+  });
   closeModal(); setSS('syncing','Guardando...');
   _actSaving=true;
   try{
@@ -8233,7 +8307,50 @@ async function saveActIngeniero(ai){
       var _cr=(await _pr).creadas;
       _undoCreate((_cr[0]&&_cr[0].descripcion)||'actividad',_cr.map(function(x){return Object.assign({},x);}));
     }else{
+      /* Las otras ubicaciones marcadas se leen ANTES de cerrar el modal:
+         despues el DOM ya no existe. */
+      var _otras=(window.__otrasMarcadas||[]);
+      /* COPIA, no referencia. _editActual apunta al objeto que vive en
+         S.acts, y Acciones.editar lo modifica de una vez (optimista). Si
+         se guardara la referencia, al comparar despues "antes" y "ahora"
+         serian el mismo objeto y no cambiaria nada nunca. */
+      var _antes=Object.assign({}, window._editActual||{});
       await Acciones.editar(editIdIng,a);
+
+      if(_otras.length){
+        /* Solo se copia lo que de verdad se toco en el formulario. Mandar el
+           objeto entero pisaria el area, la descripcion y el avance de cada
+           una con los de esta, que es justo lo que no se quiere. */
+        var COPIABLES=['fecha_inicio','fecha_fin','fecha_plan','personal_nombre',
+                       'tipo_personal','prioridad','ingeniero_nombre','estado',
+                       'porcentaje','descripcion','requiere_arq'];
+        /* "Sin poner" tiene muchas caras: null, undefined, '', false, 0.
+           Sin esto, requiere_arq pasaba de undefined a false y el app creia
+           que lo habias cambiado, y copiaba a las otras un dato que nunca
+           tocaste. */
+        var _vacio=function(v){
+          return (v===null||v===undefined||v===''||v===false||v===0||v==='0'||v==='false')
+                 ? '' : String(v);
+        };
+        var patch={};
+        COPIABLES.forEach(function(k){
+          if(!(k in a)) return;
+          if(_vacio(a[k]) === _vacio(_antes[k])) return;
+          patch[k]=a[k];
+        });
+        if(Object.keys(patch).length){
+          var bien=0, mal=0;
+          for(var i=0;i<_otras.length;i++){
+            try{ await Acciones.editar(_otras[i],patch); bien++; }catch(e){ mal++; }
+          }
+          showToast(mal ? ('Aplicado en '+bien+', falló en '+mal)
+                        : ('El cambio se aplicó también en '+bien+(bien>1?' ubicaciones':' ubicación')),
+                    mal?'warn':'ok', 4000);
+        } else {
+          showToast('No cambiaste ningún dato que copiar','warn',3500);
+        }
+      }
+      window.__otrasMarcadas=[];
     }
     _actSaving=false;
     setSS('ok','✓ '+hhmm()); reRenderActs();
@@ -8433,6 +8550,11 @@ async function saveAct(ai){
   }catch(e){ _actMostrarError(e,ai,desc,a.area); return; }
 
   _dupConfirmed=false;
+  /* Se leen aqui, con el modal todavia abierto: closeModal borra el DOM. */
+  window.__otrasMarcadas=[];
+  document.querySelectorAll('.otra-ubic').forEach(function(ch){
+    if(ch.checked) window.__otrasMarcadas.push(ch.dataset.id);
+  });
   closeModal();setSS('syncing','Guardando...');
   _actSaving=true;
   var _creadas=[];
@@ -8447,8 +8569,48 @@ async function saveAct(ai){
       _undoCreate((_creadas[0]&&_creadas[0].descripcion)||'actividad',
                   _creadas.map(function(x){return Object.assign({},x);}));
     }else{
+      var _otras=(window.__otrasMarcadas||[]);
+      /* COPIA, no referencia: _editActual apunta al objeto que vive en
+         S.acts y Acciones.editar lo modifica de una vez (optimista). Con la
+         referencia, "antes" y "ahora" serian el mismo objeto y no se
+         detectaria ningun cambio. */
+      var _antes=Object.assign({}, window._editActual||{});
       _pinAct(Acciones.porId(editId)||Object.assign({id:editId},a));
       await Acciones.editar(editId,a);
+
+      if(_otras.length){
+        /* Solo se copia lo que de verdad se toco. Mandar el objeto entero
+           les pisaria el area y la descripcion a las otras. */
+        var COPIABLES=['fecha_inicio','fecha_fin','fecha_plan','personal_nombre',
+                       'tipo_personal','prioridad','ingeniero_nombre','estado',
+                       'porcentaje','descripcion','requiere_arq'];
+        /* "Sin poner" tiene muchas caras: null, undefined, '', false, 0.
+           Sin esto, requiere_arq pasaba de undefined a false y el app creia
+           que lo habias cambiado, y copiaba a las otras un dato que nunca
+           tocaste. */
+        var _vacio=function(v){
+          return (v===null||v===undefined||v===''||v===false||v===0||v==='0'||v==='false')
+                 ? '' : String(v);
+        };
+        var patch={};
+        COPIABLES.forEach(function(k){
+          if(!(k in a)) return;
+          if(_vacio(a[k]) === _vacio(_antes[k])) return;
+          patch[k]=a[k];
+        });
+        if(Object.keys(patch).length){
+          var bien=0, mal=0;
+          for(var _i=0;_i<_otras.length;_i++){
+            try{ await Acciones.editar(_otras[_i],patch); bien++; }catch(e){ mal++; }
+          }
+          showToast(mal ? ('Aplicado en '+bien+', falló en '+mal)
+                        : ('El cambio se aplicó también en '+bien+(bien>1?' ubicaciones':' ubicación')),
+                    mal?'warn':'ok', 4000);
+        } else {
+          showToast('No cambiaste ningún dato que copiar','warn',3500);
+        }
+      }
+      window.__otrasMarcadas=[];
     }
     _actSaving=false;
     setSS('ok','✓ '+hhmm()); reRenderActs();
