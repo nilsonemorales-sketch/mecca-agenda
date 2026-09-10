@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260910_42';
+const APP_VERSION='20260910_43';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5066,7 +5066,9 @@ function applyActFilters(acts){
   const estados = rs.filter(x=>['retrasadas','sinfecha','sincontratista'].indexOf(x)<0);
   if(soloRetrasadas) filtered = filtered.filter(isRetrasada);
   if(soloSinFecha) filtered = filtered.filter(a=>a.estado!=='completado' && !(a.fecha_fin||'').trim());
-  if(soloSinContr) filtered = filtered.filter(a=>a.estado!=='completado' && a.tipo_personal==='contratista' && !(a.personal_nombre||'').trim());
+  // Sin asignar: NO se exige tipo_personal==='contratista'. Las que de verdad no tienen
+  // a nadie vienen marcadas 'propio' o sin tipo, así que pedir 'contratista' daba 0.
+  if(soloSinContr) filtered = filtered.filter(a=>a.estado!=='completado' && !(a.personal_nombre||'').trim());
   if(rs.indexOf('activas')>=0) filtered = filtered.filter(a=>a.estado!=='completado');
   else if(estados.length) filtered = filtered.filter(a=>estados.indexOf(a.estado)>=0);
   // los pedidos especiales ya excluyen las completadas: no re-filtrar por "no completado" o anularía el pedido.
@@ -5374,7 +5376,7 @@ function renderActs(){
       <button onclick="S.actFiltroRapidos=['retrasadas'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--red);background:var(--red-light);color:var(--red)">${(S.acts||[]).filter(isRetrasada).length} vencidas</button>
       <button onclick="S.actFiltroRapidos=['en-progreso'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">${(S.acts||[]).filter(a=>a.estado==='en-progreso').length} en curso</button>
       ${(function(){var n=(S.acts||[]).filter(a=>a.estado!=='completado'&&!(a.fecha_fin||'').trim()).length; return n?`<button onclick="S.actFiltroRapidos=['sinfecha'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--amber);background:var(--bg2);color:var(--amber)">${n} sin fecha</button>`:'';})()}
-      ${(function(){var n=(S.acts||[]).filter(a=>a.estado!=='completado'&&a.tipo_personal==='contratista'&&!(a.personal_nombre||'').trim()).length; return n?`<button onclick="S.actFiltroRapidos=['sincontratista'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">${n} sin contratista</button>`:'';})()}
+      ${(function(){var n=(S.acts||[]).filter(a=>a.estado!=='completado'&&!(a.personal_nombre||'').trim()).length; return n?`<button onclick="S.actFiltroRapidos=['sincontratista'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">${n} sin asignar</button>`:'';})()}
       ${nF?`<button onclick="S.actFiltroRapidos=[];S.actFiltroPlan='';S.actFiltroAvanzado={};S.actMostrarTodas=false;renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Limpiar</button>`:''}
     </div>
 
