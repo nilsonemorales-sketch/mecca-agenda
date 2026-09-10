@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260910_43';
+const APP_VERSION='20260910_44';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5139,6 +5139,98 @@ function _actToggleResponsable(val){
 }
 function _actLimpiarFiltros(){S.actFiltroRapidos=[];S.actFiltroAvanzado={};S.actFiltroPlan='';S.actFiltroTexto='';S.actFiltroOpen=null;renderActs();}
 
+// ══════════════════════════════════════════════════════════════
+// ACTIVIDADES — SELECCIÓN MÚLTIPLE (solo vista Lista)
+// Con cientos de vencidas, reprogramar de una en una abriendo cada
+// formulario es inviable: esto deja marcar varias y ponerles la fecha de
+// entrega de una sola pasada.
+// ══════════════════════════════════════════════════════════════
+// Lo que el usuario está viendo AHORA con los filtros puestos. Las completadas
+// quedan fuera siempre: reprogramar algo ya terminado no tiene sentido.
+function _actSelVisibles(){
+  return applyActFilters(S.acts||[]).filter(function(a){return a.estado!=='completado';});
+}
+function _actSelIds(){ var m=S.actSel||{}; return Object.keys(m).filter(function(id){return m[id];}); }
+// Firma de los filtros puestos. Si cambian con el modo activo hay que soltar lo
+// marcado: si no, se escribiría sobre actividades que ya no están a la vista.
+function _actSelFirma(){
+  return JSON.stringify([S.actFiltroRapidos||[],S.actFiltroAvanzado||{},S.actFiltroPlan||'',S.actFiltroTexto||'',!!S.actMostrarTodas]);
+}
+function actSelModo(){
+  S.actSelModo=!S.actSelModo;
+  S.actSel={};                       // ni al entrar ni al salir queda nada marcado de antes
+  S._actSelFirma=_actSelFirma();
+  renderActs();
+}
+function actSelToggle(id){
+  if(!S.actSel) S.actSel={};
+  var a=(S.acts||[]).find(function(x){return x.id===id;});
+  if(a && a.estado==='completado') return;   // una completada no entra ni por descuido
+  if(S.actSel[id]) delete S.actSel[id]; else S.actSel[id]=true;
+  renderActs();
+}
+function actSelAll(){
+  S.actSel={};
+  _actSelVisibles().forEach(function(a){ S.actSel[a.id]=true; });
+  renderActs();
+}
+function actSelNone(){ S.actSel={}; renderActs(); }
+
+// Pone la misma fecha de entrega a todas las marcadas.
+async function actSelPonerFecha(){
+  if(!canEdit()) return;
+  var el=document.getElementById('act-sel-fecha');
+  var f=((el&&el.value)||'').trim();
+  if(!f){ showToast('Elige una fecha primero','err'); return; }
+  // Se revalida contra el estado actual: entre marcar y guardar alguna pudo
+  // completarse, y una completada no se reprograma.
+  var ids=_actSelIds().filter(function(id){
+    var a=(S.acts||[]).find(function(x){return x.id===id;});
+    return a && a.estado!=='completado';
+  });
+  if(!ids.length){ showToast('No hay actividades seleccionadas','err'); return; }
+  var dd=f.slice(8,10)+'/'+f.slice(5,7)+'/'+f.slice(0,4);
+  if(!confirm('Se le va a poner la fecha '+dd+' a '+ids.length+' actividad'+(ids.length!==1?'es':'')+'. ¿Seguro?')) return;
+
+  var bien=0, mal=0, hechas=0, total=ids.length;
+  setSS('syncing','Guardando 0 de '+total+'...');
+  // De 5 en 5: una por una es lentísimo con cientos, y todas de golpe satura la
+  // conexión del celular en obra. Un fallo suelto no debe tumbar el resto, por
+  // eso cada una lleva su propio catch y se cuentan aparte.
+  for(var i=0;i<ids.length;i+=5){
+    await Promise.all(ids.slice(i,i+5).map(function(id){
+      return Acciones.editar(id,{fecha_fin:f})
+        .then(function(){ bien++; }, function(){ mal++; })
+        .then(function(){ hechas++; setSS('syncing','Guardando '+hechas+' de '+total+'...'); });
+    }));
+  }
+  S.actSel={}; S.actSelModo=false;
+  renderActs();
+  if(mal===0){ setSS('ok','✓'); showToast('Se cambiaron '+bien+'.'); }
+  else if(bien===0){ setSS('err','Error'); showToast('No se pudo cambiar ninguna. Fallaron '+mal+'.','err',6000); }
+  else { setSS('ok','✓'); showToast('Se cambiaron '+bien+'. Fallaron '+mal+'.','err',6000); }
+}
+// Barra de acción: solo asoma cuando hay algo marcado.
+function _actSelBarraHTML(){
+  var ids=_actSelIds();
+  if(!S.actSelModo || !ids.length) return '';
+  var bs='padding:7px 11px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap';
+  return '<div style="position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:var(--accent-soft);border:1.5px solid var(--accent);border-radius:var(--r2);padding:9px 11px;margin-bottom:8px">'+
+    '<span style="font-size:12.5px;font-weight:800;color:var(--accent);white-space:nowrap">'+ids.length+' seleccionada'+(ids.length!==1?'s':'')+'</span>'+
+    '<button onclick="actSelAll()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Todo</button>'+
+    '<button onclick="actSelNone()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Ninguna</button>'+
+    '<input id="act-sel-fecha" type="date" value="'+esc(S.actSelFecha||'')+'" onchange="S.actSelFecha=this.value" style="flex:1;min-width:132px;padding:6px 8px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--font);font-size:12.5px">'+
+    '<button onclick="actSelPonerFecha()" style="'+bs+';border:none;background:var(--accent-fill);color:var(--accent-on)">Poner fecha</button>'+
+    '<button onclick="actSelModo()" title="Salir" style="'+bs+';border:1px solid var(--border2);background:transparent;color:var(--text3)">✕</button>'+
+  '</div>';
+}
+// Casilla de la fila. Se dibuja aparte para que la lista y la tabla usen la misma.
+function _actSelBoxHTML(a){
+  if(!S.actSelModo || a.estado==='completado') return '';
+  var on=!!(S.actSel&&S.actSel[a.id]);
+  return '<span onclick="event.stopPropagation();actSelToggle(\''+a.id+'\')" style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;cursor:pointer;border:2px solid '+(on?'var(--accent)':'var(--border2)')+';background:'+(on?'var(--accent-fill)':'var(--bg)')+';color:var(--accent-on);font-size:13px;font-weight:800;line-height:1">'+(on?'✓':'')+'</span>';
+}
+
 function _actFiltroToggle(key){
   S.actFiltroOpen=S.actFiltroOpen===key?null:key;
   var box=document.getElementById('act-filtros-box');
@@ -5349,6 +5441,13 @@ function toggleActFiltros(){
 
 function renderActs(){
   if(S.actVista==='apto'){ renderActsPorApto(); return; }
+  // Si cambió cualquier filtro con el modo selección puesto, se suelta lo marcado:
+  // guardar sobre actividades que ya no están a la vista sería una sorpresa fea.
+  if(S.actSelModo){
+    var _f=_actSelFirma();
+    if(S._actSelFirma!==undefined && S._actSelFirma!==_f) S.actSel={};
+    S._actSelFirma=_f;
+  }
   const allActs = S.acts;
   const filtered = applyActFilters(allActs);
   const groups = getActGroupsFromActs(filtered);
@@ -5373,6 +5472,7 @@ function renderActs(){
       <button onclick="toggleActFiltros()" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid ${abierto||nF?'var(--accent-fill)':'var(--border2)'};background:${abierto?'var(--accent-fill)':'var(--bg2)'};color:${abierto?'var(--accent-on)':'var(--text2)'}">
         ${ICO_FILT} Filtros${nF?` <span style="background:var(--accent-fill);color:var(--accent-on);border-radius:99px;padding:0 6px;font-size:11px;line-height:16px;font-weight:700">${nF}</span>`:''}
       </button>
+      ${canEdit()?`<button onclick="actSelModo()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid ${S.actSelModo?'var(--accent-fill)':'var(--border2)'};background:${S.actSelModo?'var(--accent-fill)':'var(--bg2)'};color:${S.actSelModo?'var(--accent-on)':'var(--text2)'}">${S.actSelModo?'Salir':'Seleccionar'}</button>`:''}
       <button onclick="S.actFiltroRapidos=['retrasadas'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--red);background:var(--red-light);color:var(--red)">${(S.acts||[]).filter(isRetrasada).length} vencidas</button>
       <button onclick="S.actFiltroRapidos=['en-progreso'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">${(S.acts||[]).filter(a=>a.estado==='en-progreso').length} en curso</button>
       ${(function(){var n=(S.acts||[]).filter(a=>a.estado!=='completado'&&!(a.fecha_fin||'').trim()).length; return n?`<button onclick="S.actFiltroRapidos=['sinfecha'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--amber);background:var(--bg2);color:var(--amber)">${n} sin fecha</button>`:'';})()}
@@ -5402,6 +5502,9 @@ function renderActs(){
 
     <!-- CÓMO VA LA OBRA -->
     ${_panelAvanceHTML()}
+
+    <!-- BARRA DE ACCIÓN DE LA SELECCIÓN -->
+    ${_actSelBarraHTML()}
 
     <!-- CONTEO + AGRUPADOR (una sola línea) -->
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;height:24px">
@@ -5718,6 +5821,7 @@ function actsDesktopTable(acts, showDate){
   var hoy=today();
   var html='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:540px;border-collapse:collapse;font-size:12px;table-layout:fixed">';
   html+='<colgroup>'
+    +(S.actSelModo?'<col style="width:34px">':'')   // casilla de selección
     +'<col style="width:108px">'   // Estado
     +'<col>'                        // Descripción (flex)
     +'<col style="width:130px">'   // Área
@@ -5726,6 +5830,7 @@ function actsDesktopTable(acts, showDate){
     +(canEdit()?'<col style="width:36px"><col style="width:36px"><col style="width:36px">':'')  // 🔴 ✓ 📸
     +'</colgroup>';
   html+='<thead><tr style="background:var(--bg3);border-bottom:2px solid var(--border)">';
+  if(S.actSelModo) html+='<th style="padding:6px 4px"></th>';
   html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">ESTADO</th>';
   html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">DESCRIPCIÓN / FECHAS</th>';
   html+='<th style="padding:6px 8px;text-align:left;font-size:10.5px;color:var(--text3);font-weight:700">UBICACIÓN</th>';
@@ -5770,6 +5875,9 @@ function actsDesktopTable(acts, showDate){
     if(_enPlan) bg='var(--accent-soft)';
     var _rowClick=_planActive?('planToggleDia(\''+a.id+'\')'):('editAct(\''+a.id+'\')');
     html+='<tr style="background:'+bg+';border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s'+(_enPlan?';box-shadow:inset 3px 0 0 var(--accent)':'')+'" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\''+bg+'\'" onclick="'+_rowClick+'">';
+
+    // Casilla de selección
+    if(S.actSelModo) html+='<td style="padding:6px 4px;text-align:center" onclick="event.stopPropagation()">'+_actSelBoxHTML(a)+'</td>';
 
     // Estado
     html+='<td style="padding:6px 8px" onclick="event.stopPropagation()">'
@@ -5907,6 +6015,7 @@ function actHTML(a, ai, tipo){
 
   return`<div class="act-item ${tipo}" style="padding:0;margin-bottom:6px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${bleft};border-radius:var(--r2);overflow:hidden;box-shadow:none">
     <div onclick="toggleActDet('${a.id}')" style="display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer">
+      ${_actSelBoxHTML(a)}
       <div style="flex:1;min-width:0">
         <div style="font-size:13.5px;font-weight:600;line-height:1.25;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${urgente?_ic('alerta',13,'var(--red)')+' ':''}${esc(a.descripcion)}${blocked?' '+_ic('lock',12,'var(--text3)'):''}</div>
         <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
