@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260907_40';
+const APP_VERSION='20260910_41';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5054,10 +5054,16 @@ function sortByPriority(acts){
 
 function applyActFilters(acts){
   let filtered = acts;
-  const rs = S.actFiltroRapidos||[];
+  // 'retrasadas' NO es un estado (los estados son pendiente/en-progreso/completado/pausada);
+  // se resuelve con isRetrasada, si no el filtro no encajaba con nada y la lista salía vacía.
+  const rs = (S.actFiltroRapidos||[]).slice();
+  const soloRetrasadas = rs.indexOf('retrasadas')>=0;
+  const estados = rs.filter(x=>x!=='retrasadas');
+  if(soloRetrasadas) filtered = filtered.filter(isRetrasada);
   if(rs.indexOf('activas')>=0) filtered = filtered.filter(a=>a.estado!=='completado');
-  else if(rs.length) filtered = filtered.filter(a=>rs.indexOf(a.estado)>=0);
-  else if(!S.actMostrarTodas) filtered = filtered.filter(a=>a.estado!=='completado');
+  else if(estados.length) filtered = filtered.filter(a=>estados.indexOf(a.estado)>=0);
+  // isRetrasada ya excluye las completadas: no re-filtrar por "no completado" o anularía el pedido.
+  else if(!soloRetrasadas && !S.actMostrarTodas) filtered = filtered.filter(a=>a.estado!=='completado');
   const av = S.actFiltroAvanzado||{};
   const ubicaciones = av.ubicaciones||[];
   const contratistas = (av.contratistas||[]).filter(c=>c!=='__sin_asignar__');
