@@ -178,7 +178,9 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .hdr-l{display:flex;align-items:center;gap:10px;min-width:0;position:relative}
 .menu-btn{background:var(--bg3);border:none;color:var(--text);font-size:16px;cursor:pointer;padding:7px 10px;line-height:1;flex-shrink:0;border-radius:10px;transition:all .15s}
 .menu-btn:hover{background:rgba(255,255,255,.22)}
-.logo-dot{width:38px;height:38px;border-radius:12px;background:#326731;border:none;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+/* El fondo lo trae la propia marca de Bridex (morado). Antes era un cuadro
+   verde con una casita generica que no era el logo de nadie. */
+.logo-dot{width:38px;height:38px;border-radius:12px;background:transparent;border:none;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
 .hdr-title{font-size:15px;font-weight:700;color:var(--text) !important;letter-spacing:-.02em;font-family:var(--tit);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hdr-sub{font-size:11px;color:var(--text2);font-family:var(--font);white-space:nowrap}
 .hdr-r{display:flex;gap:6px;flex-shrink:0;align-items:center;position:relative}
@@ -491,9 +493,8 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <!-- ── LOCK SCREEN ── -->
 <div id="app-lock" style="display:none;position:fixed;inset:0;z-index:99990;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;font-family:var(--font)">
   <!-- Logo: el verde de Bridex, plano -->
-  <div style="width:66px;height:66px;background:#326731;border-radius:20px;display:flex;align-items:center;justify-content:center;margin-bottom:18px">
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#eaf5e8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-  </div>
+  <img src="./bridex-marca.png" alt="Bridex" width="66" height="66"
+       style="width:66px;height:66px;border-radius:20px;object-fit:cover;margin-bottom:18px;display:block">
   <div style="color:var(--text);font-family:var(--tit);font-size:24px;font-weight:800;letter-spacing:-.03em;margin-bottom:4px">Mecca Agenda</div>
   <div style="color:var(--text2);font-size:13px;margin-bottom:34px">Bridex Comercial · Mecca Residence</div>
   <!-- Tarjeta de acceso: sin borde, la profundidad la da el tono -->
@@ -592,7 +593,8 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <button class="menu-btn" onclick="toggleDrawer()" aria-label="Menú"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div style="display:flex;align-items:center;gap:10px">
         <div id="logo-dot" class="logo-dot">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <img src="./bridex-marca.png" alt="Bridex" width="38" height="38"
+               style="width:100%;height:100%;object-fit:cover;border-radius:12px;display:block">
         </div>
         <div>
           <div class="hdr-title">Mecca Residence</div>
@@ -817,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_69';
+const APP_VERSION='20260911_70';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
