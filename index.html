@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_68';
+const APP_VERSION='20260911_69';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -7567,6 +7567,43 @@ var VERBOS = ('insta coloc dar hacer termi corre revis compl poner monta'
 var ETAPAS = ('prueb fabri entre repla levan antid desmo acopi compr pedid'
   + ' cotiz trasl medic').split(' ');
 
+/* ── ETAPAS QUE SE DISTINGUEN POR EL VERBO ─────────────────────────────────
+   Arriba se explica que el verbo pesa MENOS que el objeto, y para casi todo
+   es cierto: "colocar zocalo" e "instalar zocalo" son el mismo trabajo.
+   Pero hay una familia donde el verbo ES el taller. El mismo objeto pasa por
+   varias manos con meses de diferencia: primero se INSTALA la puerta, mas
+   tarde se AJUSTA, y al final se LIJA y se PINTA. Son tres partidas, tres
+   contratistas y tres fechas.
+
+   Sin esto, "Ajuste de las puertas de los gabinetes de cocina" e "Instalacion
+   de las puertas de los gabinetes de cocina" daban 1.000 — identicas. La
+   Matriz las juntaba en un solo taller y promediaba: el ajuste salia hecho
+   cuando esta en 0% en los once apartamentos. Lo cazo Nilson mirando el app,
+   no una prueba.
+
+   El orden importa: gana la primera que aparezca, asi "Instalacion ... luego
+   de Repintado" cuenta como instalacion y no como acabado. */
+var ETAPA_VERBO = [
+  ['instalar', ('insta monta coloc calzo calza subir subid').split(' ')],
+  ['ajustar',  ('ajust regul nivel').split(' ')],
+  ['acabado',  ('lijad lijar pinta pintu repin barni masil pulir pulid').split(' ')],
+  ['corregir', ('corre repar retoq retoc resan cambi reemp').split(' ')],
+  ['revisar',  ('revis verif').split(' ')],
+  ['limpiar',  ('limpi').split(' ')]
+];
+/* Gana la etapa que aparece PRIMERO en la frase, no la primera de la lista.
+   "Ajustar las puertas instaladas" lleva 'ajust' y tambien 'insta' — pero
+   'insta' viene de "instaladas", que describe a las puertas, no lo que se va
+   a hacer. Recorriendo la lista de arriba salia "instalar" para las dos y el
+   guardian no saltaba. En obra el verbo va delante: el primero manda. */
+function _etapaVerbo(keys){
+  for(var j=0;j<keys.length;j++){
+    for(var i=0;i<ETAPA_VERBO.length;i++)
+      if(ETAPA_VERBO[i][1].indexOf(keys[j])>=0) return ETAPA_VERBO[i][0];
+  }
+  return '';
+}
+
 /* Sitios de un apartamento de Mecca. Lo mas especifico primero: "cocina
    caliente" tiene que ganarle a "cocina". */
 var SITIOS = [
@@ -7740,6 +7777,15 @@ function parecido(x, y){
   var ex = ka.some(function(k){ return ETAPAS.indexOf(k)>=0; });
   var ey = kb.some(function(k){ return ETAPAS.indexOf(k)>=0; });
   if(ex !== ey) p = p*0.72;
+
+  /* Las dos nombran su etapa y son etapas distintas: instalar no es ajustar,
+     y ajustar no es pintar. Se baja a 0.55, igual que con los niveles
+     distintos: por debajo del umbral de duplicado (0.90) y por debajo del de
+     "¿que le falta?" y la Matriz (0.72), para que cuenten como dos talleres.
+     Si solo una nombra etapa, no se toca: de eso ya se encarga la regla de
+     arriba. */
+  var eva=_etapaVerbo(ka), evb=_etapaVerbo(kb);
+  if(eva && evb && eva!==evb) p = Math.min(p, 0.55);
 
   /* Mismo sitio nombrado: coincidencia fuerte. */
   if(mismoSitio) p = Math.min(1, p*1.15);
