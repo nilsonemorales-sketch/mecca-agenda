@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_70';
+const APP_VERSION='20260911_71';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -3592,7 +3592,7 @@ function torreHTML(persona){
       '<div style="font-family:var(--tit);font-size:14px;font-weight:700;color:var(--text)">El edificio</div>'+
       '<div data-torre-sub style="font-size:11.5px;color:var(--text3)">cargando…</div>'+
     '</div>'+
-    '<svg data-torre-svg viewBox="0 0 424 568" style="width:100%;max-width:420px;margin:0 auto;display:block" '+
+    '<svg data-torre-svg viewBox="0 0 424 616" style="width:100%;max-width:420px;margin:0 auto;display:block" '+
       'role="img" aria-label="Avance de cada apartamento"></svg>'+
     '<div data-torre-otras style="padding:4px 4px 0"></div>'+
   '</div>';
@@ -3687,6 +3687,48 @@ function _dibujarTorreEn(caja){
     add('path',{d:'M'+(NX+7)+' '+(y+30)+' L'+(NX+NW-7)+' '+(y+8),
       stroke:'var(--border2)','stroke-width':1,fill:'none'},esc);
   }
+  /* Las dos escaleras SON ese nucleo: hasta ahora era decoracion. La
+     principal a la izquierda y la de emergencia a la derecha, cada una con su
+     mitad. El tinte va con poca opacidad para que las lineas de los peldaños
+     se sigan viendo debajo. */
+  [['Escalera Principal', NX,        NW/2, 'ppal'],
+   ['Escalera de Emergencia', NX+NW/2, NW/2, 'emer']].forEach(function(e){
+    var d=D[e[0]]; if(!d) return;
+    var gE=add('g',{style:'cursor:pointer'});
+    gE.addEventListener('click',function(){ _torreTap(e[0]); });
+    /* Tinte flojo: la columna cruza los seis niveles y con el mismo verde de
+       los apartamentos se comia el dibujo entero. */
+    add('rect',{x:e[1],y:24,width:e[2],height:yPiso-24,fill:'var(--green)',
+      opacity:(0.04+d.pct/100*0.11).toFixed(2)},gE);
+    // Los numeros van DENTRO del edificio, debajo del techo: puestos arriba
+    // quedaban flotando fuera de la silueta.
+    add('text',{x:e[1]+e[2]/2,y:yTecho+20,'font-size':9,'font-weight':800,fill:'var(--text2)',
+      'text-anchor':'middle','font-family':'var(--tit)'},gE).textContent=d.pct+'%';
+    if(d.venc>0){
+      add('text',{x:e[1]+e[2]/2,y:yTecho+32,'font-size':8,'font-weight':800,fill:'var(--red)',
+        'text-anchor':'middle','font-family':'var(--tit)'},gE).textContent=d.venc;
+    }
+    add('text',{x:e[1]+e[2]/2,y:yPiso-6,'font-size':7.5,'font-weight':700,fill:'var(--text3)',
+      'text-anchor':'middle'},gE).textContent=(e[3]==='ppal'?'ppal':'emerg');
+    // zona de toque por encima de todo, transparente
+    add('rect',{x:e[1],y:24,width:e[2],height:yPiso-24,fill:'transparent'},gE);
+  });
+
+  /* La terraza, en el techo. */
+  (function(){
+    var d=D['Terraza']; if(!d) return;
+    var gT=add('g',{style:'cursor:pointer'});
+    gT.addEventListener('click',function(){ _torreTap('Terraza'); });
+    add('rect',{x:BALA,y:2,width:DER-BALA,height:18,rx:5,fill:'var(--bg3)'},gT);
+    add('rect',{x:BALA,y:2,width:DER-BALA,height:18,rx:5,fill:'var(--green)',
+      opacity:(0.05+d.pct/100*0.24).toFixed(2)},gT);
+    add('text',{x:BALA+9,y:15,'font-size':9,'font-weight':600,fill:'var(--text3)'},gT)
+      .textContent='terraza';
+    add('text',{x:DER-9,y:15,'font-size':9,'font-weight':700,fill:'var(--text2)',
+      'text-anchor':'end','font-family':'var(--tit)'},gT)
+      .textContent=d.pct+'% · faltan '+d.faltan+(d.venc>0?' · '+d.venc+' venc.':'');
+  })();
+
   /* losa que vuela sobre el penthouse */
   add('path',{d:'M'+(CELB-8)+' '+(yTecho-8)+' L'+(DER+10)+' '+(yTecho-15)+
     ' L'+(DER+10)+' '+(yTecho-7)+' L'+(CELB-8)+' '+yTecho+' Z',fill:'var(--bg3)'});
@@ -3843,6 +3885,40 @@ function _dibujarTorreEn(caja){
   add('line',{x1:BALA-14,y1:yb+hb+10,x2:DER+14,y2:yb+hb+10,
     stroke:'var(--border2)','stroke-width':1.5});
 
+  /* Las fachadas no caben dentro de un alzado — el dibujo enseña una sola —
+     asi que van en fila debajo de la base, dentro del mismo dibujo. Se sacan
+     de los datos: si mañana aparece otra, sale sola. */
+  (function(){
+    var fach=Object.keys(D).filter(function(k){ return /^fachada/i.test(k); }).sort();
+    if(!fach.length) return;
+    var y0=yb+hb+30, alto=40, hueco=6;
+    var ancho=(DER-BALA-hueco*(fach.length-1))/fach.length;
+    // La etiqueta va encima de la fila: al lado, con el ancho del dibujo, se
+    // salia por la izquierda y aparecia cortada.
+    add('text',{x:BALA,y:y0-6,'font-size':8.5,'font-weight':700,fill:'var(--text3)',
+      'letter-spacing':'.08em'}).textContent='FACHADAS';
+    fach.forEach(function(k,i){
+      var d=D[k], x=BALA+i*(ancho+hueco);
+      var gF=add('g',{style:'cursor:pointer'});
+      gF.addEventListener('click',function(){ _torreTap(k); });
+      add('rect',{x:x,y:y0,width:ancho,height:alto,rx:8,fill:'var(--bg3)'},gF);
+      add('rect',{x:x,y:y0,width:ancho,height:alto,rx:8,fill:'var(--green)',
+        opacity:(0.05+d.pct/100*0.24).toFixed(2)},gF);
+      var nom=k.replace(/^Fachada\s*/i,'')||'general';
+      add('text',{x:x+8,y:y0+15,'font-size':8.5,'font-weight':600,fill:'var(--text3)'},gF)
+        .textContent=nom.toLowerCase();
+      add('text',{x:x+8,y:y0+31,'font-size':13,'font-weight':800,fill:'var(--text)',
+        'font-family':'var(--tit)','letter-spacing':'-.02em'},gF).textContent=d.pct+'%';
+      if(d.venc>0){
+        add('text',{x:x+ancho-8,y:y0+31,'font-size':9,'font-weight':800,fill:'var(--red)',
+          'text-anchor':'end','font-family':'var(--tit)'},gF).textContent=d.venc+' v.';
+      }else if(d.faltan>0){
+        add('text',{x:x+ancho-8,y:y0+31,'font-size':8.5,fill:'var(--text3)',
+          'text-anchor':'end','font-family':'var(--mono)'},gF).textContent='faltan '+d.faltan;
+      }
+    });
+  })();
+
   if(sub) sub.textContent = total
     ? (Math.round(hechas/total*100)+'% · faltan '+abiertas)
     : (persona ? 'sin partidas de '+persona : 'sin datos');
@@ -3858,13 +3934,14 @@ function _dibujarTorreEn(caja){
    abajo en el archivo, asi que arriba todavia viene vacio y los once
    apartamentos se colarian aqui como si estuvieran fuera del dibujo. */
 function _torreEnDibujo(){
-  return ['Parqueo','N7 — Áreas Comunes N7'].concat(REC_ORDEN||[]);
+  return ['Parqueo','N7 — Áreas Comunes N7','Terraza',
+          'Escalera Principal','Escalera de Emergencia'].concat(REC_ORDEN||[]);
 }
 function _torreOtras(D, caja){
   if(!caja) return;
   var dentro=_torreEnDibujo();
   var otras=Object.keys(D||{})
-    .filter(function(a){ return dentro.indexOf(a)<0 && D[a].faltan>0; })
+    .filter(function(a){ return dentro.indexOf(a)<0 && !/^fachada/i.test(a) && D[a].faltan>0; })
     .sort(function(a,b){ return D[b].faltan-D[a].faltan; });
   if(!otras.length){ caja.innerHTML=''; return; }
   caja.innerHTML='<div style="font-size:10.5px;color:var(--text3);margin:2px 0 6px">Fuera del dibujo</div>'+
