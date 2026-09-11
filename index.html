@@ -506,13 +506,13 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <option value="luis" style="background:#1d1e21;color:#f3f4f2">Ing. Luis Jimenez</option>
       <option value="karina" style="background:#1d1e21;color:#f3f4f2">Ing. Karina Breton</option>
     </select>
-    <div style="color:var(--text3);font-size:11px;font-weight:600;letter-spacing:.08em;margin-bottom:9px">CÓDIGO DE ACCESO</div>
-    <input id="lock-pin" type="password" inputmode="numeric" maxlength="10" placeholder="••••••"
-      style="width:100%;background:var(--bg3);border:1.5px solid transparent;border-radius:var(--r);color:var(--text);font-size:30px;letter-spacing:10px;text-align:center;padding:13px;font-family:var(--tit);box-sizing:border-box;margin-bottom:8px;outline:none"
+    <div style="color:var(--text3);font-size:11px;font-weight:600;letter-spacing:.08em;margin-bottom:9px">CONTRASEÑA</div>
+    <input id="lock-pin" type="password" maxlength="72" placeholder="Tu contraseña" autocomplete="current-password"
+      style="width:100%;background:var(--bg3);border:1.5px solid transparent;border-radius:var(--r);color:var(--text);font-size:17px;text-align:center;padding:15px 13px;font-family:var(--font);box-sizing:border-box;margin-bottom:8px;outline:none"
       onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'"
       onkeydown="if(event.key==='Enter')doLockLogin()">
     <div id="lock-err" style="color:var(--red);font-size:12.5px;text-align:center;margin-bottom:14px;min-height:18px"></div>
-    <button onclick="doLockLogin()" style="width:100%;background:var(--accent-fill);border:none;border-radius:var(--r);color:#fff;font-size:16px;font-weight:700;padding:15px;cursor:pointer;font-family:var(--font);min-height:52px">
+    <button id="lock-btn" onclick="doLockLogin()" style="width:100%;background:var(--accent-fill);border:none;border-radius:var(--r);color:#fff;font-size:16px;font-weight:700;padding:15px;cursor:pointer;font-family:var(--font);min-height:52px">
       Ingresar
     </button>
   </div>
@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_48';
+const APP_VERSION='20260911_49';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -960,15 +960,19 @@ function reportAlert(tipo,detalle){
   });
 })();
 
+/* Aqui ya NO hay claves. Solo el nombre, el color y quien esta archivado.
+   La clave la guarda Supabase; el rol de verdad viene firmado en el token
+   (ver el modulo Auth). El 'rol' de esta tabla es solo para pintar la lista
+   de la pantalla de entrada antes de que nadie haya entrado. */
 const USERS={
-  nilson:{nombre:'Ing. Nilson',rol:'admin',color:'var(--blue)',pin:'5349'},
-  edgar:{nombre:'Ing. Edgar Polanco',rol:'ing',color:'var(--blue)',pin:'2025',archivado:true},
-  moises:{nombre:'Ing. Moises Jimenez',rol:'ing',color:'var(--amber)',pin:'2026'},
-  luis:{nombre:'Ing. Luis Jimenez',rol:'ing',color:'var(--green)',pin:'1999'},
-  karina:{nombre:'Ing. Karina Breton',rol:'ing',color:'#9c36b5',pin:'1996'},
+  nilson:{nombre:'Ing. Nilson',rol:'admin',color:'var(--blue)'},
+  edgar:{nombre:'Ing. Edgar Polanco',rol:'ing',color:'var(--blue)',archivado:true},
+  moises:{nombre:'Ing. Moises Jimenez',rol:'ing',color:'var(--amber)'},
+  luis:{nombre:'Ing. Luis Jimenez',rol:'ing',color:'var(--green)'},
+  karina:{nombre:'Ing. Karina Breton',rol:'ing',color:'#9c36b5'},
   // Supervisión de arquitectura: no lleva bitácora diaria de obra, por eso
   // queda fuera del control automático de inactividad.
-  liamelia:{nombre:'Arq. Liamelia Rosario Reyes',rol:'ing',color:'#22b8cf',pin:'4953',sinPenalidad:true},
+  liamelia:{nombre:'Arq. Liamelia Rosario Reyes',rol:'ing',color:'#22b8cf',sinPenalidad:true},
 };
 const DIAS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
@@ -1750,6 +1754,135 @@ function initials(n){return(n||'?').split(' ').filter(w=>/[A-ZÁÉÍÓÚ]/i.test
 function canEdit(){return S.user&&(S.user.rol==='admin'||S.user.rol==='ing');}
 function isAdmin(){return S.user?.rol==='admin';}
 
+/* ─────────────────────────────────────────────────────────────────
+   ACCESO (Supabase Auth)
+   Hasta la v48 cada quien entraba con un PIN de cuatro cifras escrito
+   dentro de ESTE archivo. El archivo es publico, o sea que los seis
+   PIN eran publicos: cualquiera podia entrar como cualquiera y la
+   bitacora dejaba de probar quien hizo que — que es justo para lo que
+   se usa cuando hay que reclamarle a un contratista.
+   Ahora la clave la comprueba Supabase y nunca viaja dentro del app.
+   El rol va firmado dentro del token, en app_metadata. Se pone ahi y
+   no en user_metadata a proposito: user_metadata lo puede reescribir
+   el propio usuario desde el navegador, o sea que se ascenderia solo
+   a administrador. app_metadata no.
+   OJO: esto identifica. Lo que de verdad impide escribir son las
+   politicas RLS de la base, y esas todavia estan abiertas.
+   ───────────────────────────────────────────────────────────────── */
+const AUTH_DOM='@mecca.local';   // correo interno: no existe ni recibe nada
+const Auth=(function(){
+  var CLAVE_SES='mecca_sesion';
+  var ses=null;          // {access_token, refresh_token, vence, user}
+  var refrescando=null;  // evita dos refrescos a la vez
+
+  function _guardar(){
+    try{
+      if(ses) sessionStorage.setItem(CLAVE_SES,JSON.stringify(ses));
+      else sessionStorage.removeItem(CLAVE_SES);
+    }catch(e){}
+  }
+
+  /* Abre el token para leer el rol y la hora de vencimiento. NO valida la
+     firma — eso lo hace Supabase en cada consulta. Aqui solo se mira para
+     saber que pintar y cuando toca renovar. */
+  function _leerToken(tok){
+    try{
+      var p=String(tok).split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length%4) p+='=';
+      var txt=decodeURIComponent(atob(p).split('').map(function(c){
+        return '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(txt);
+    }catch(e){ return null; }
+  }
+
+  function _armar(d){
+    var c=_leerToken(d&&d.access_token);
+    if(!c) return null;
+    var am=c.app_metadata||{}, um=c.user_metadata||{};
+    var uid=am.uid_app||'';
+    var base=USERS[uid]||{};
+    return {
+      access_token:d.access_token,
+      refresh_token:d.refresh_token||'',
+      vence:(c.exp||0)*1000,
+      user:{
+        id:uid,
+        nombre:um.nombre||base.nombre||uid,
+        rol:am.rol||'view',              // sin rol firmado: solo mirar
+        color:base.color||'var(--blue)', // el color es cosmetico, del archivo
+        sinPenalidad:!!base.sinPenalidad
+      }
+    };
+  }
+
+  async function _pedir(cuerpo, tipo){
+    var r=await fetch(SB+'/auth/v1/token?grant_type='+tipo,{
+      method:'POST',
+      headers:{'apikey':KEY,'Content-Type':'application/json'},
+      body:JSON.stringify(cuerpo)
+    });
+    var d=null; try{ d=await r.json(); }catch(e){}
+    if(!r.ok || !d || !d.access_token){
+      var err=new Error((d&&(d.error_description||d.msg||d.error))||('HTTP '+r.status));
+      err.http=r.status;
+      throw err;
+    }
+    return d;
+  }
+
+  return {
+    async entrar(uid, clave){
+      var d=await _pedir({email:uid+AUTH_DOM, password:clave},'password');
+      var s=_armar(d);
+      if(!s||!s.user.id) throw new Error('El token no trae el usuario');
+      ses=s; _guardar();
+      try{ sessionStorage.removeItem('mecca_user'); }catch(e){} // resto del PIN
+      return ses.user;
+    },
+
+    /* Renueva el token antes de que venza (dura una hora).
+       Si falla por falta de red NO cierra la sesion: en obra se cae la
+       señal a cada rato y sacar al ingeniero por eso seria peor que el
+       problema. Solo se cierra si Supabase dice que el refresh ya no vale. */
+    async asegurar(){
+      if(!ses) return null;
+      if(Date.now() < ses.vence-60000) return ses.access_token;
+      if(!ses.refresh_token) return ses.access_token;
+      if(refrescando) return refrescando;
+      refrescando=(async function(){
+        try{
+          var d=await _pedir({refresh_token:ses.refresh_token},'refresh_token');
+          var s=_armar(d);
+          if(s){ ses=s; _guardar(); }
+        }catch(e){
+          if(e.http===400||e.http===401){ ses=null; _guardar(); }
+        }
+        refrescando=null;
+        return ses&&ses.access_token;
+      })();
+      return refrescando;
+    },
+
+    token(){ return ses&&ses.access_token; },
+    usuario(){ return ses&&ses.user; },
+    salir(){
+      ses=null; _guardar();
+      try{ sessionStorage.removeItem('mecca_user'); }catch(e){}
+    },
+    restaurar(){
+      try{
+        var raw=sessionStorage.getItem(CLAVE_SES);
+        if(!raw) return null;
+        var s=JSON.parse(raw);
+        if(!s||!s.access_token||!s.user||!s.user.id) return null;
+        ses=s;
+        return ses.user;
+      }catch(e){ return null; }
+    }
+  };
+})();
+
 // ── SUPABASE ─────────────────────────────────────────
 // PROTECTED TABLES - never allow accidental full deletes
 const PROTECTED_TABLES=['obra_personal','obra_actividades','obra_asistencia','obra_penalidades','obra_tareas','obra_semanas','obra_plan_semanal'];
@@ -1786,6 +1919,17 @@ async function sbTodo(path, opts){
   return todo;
 }
 
+/* Token para hablar con la base: el de la persona si entro, la llave anonima
+   si no. Nunca revienta — si el refresco falla se sigue con lo que haya. */
+async function _sbToken(){
+  try{
+    var t=await Auth.asegurar();
+    return t || Auth.token() || KEY;
+  }catch(e){
+    return Auth.token() || KEY;
+  }
+}
+
 async function sb(path,opts={}){
   // Solo-visualización: bloquear TODA escritura para usuarios con rol 'view'
   var _m=(opts.method||'GET').toUpperCase();
@@ -1813,9 +1957,14 @@ async function sb(path,opts={}){
      base las rechazaba con "No API key found in request". El app entraba,
      cargaba el usuario, y de ahi no traia nada.
      '...opts' va PRIMERO y 'headers' al final: asi la llave nunca se pierde. */
+  /* Si hay sesion abierta se manda el token de esa persona; si no, la llave
+     anonima de siempre. Asi la base sabe QUIEN consulta. Mientras las
+     politicas sigan abiertas las dos funcionan igual, pero el dia que se
+     aprieten (paso 3) el token es lo unico que pasa. */
+  const _tok=await _sbToken();
   const r=await fetch(SB+'/rest/v1/'+path,{
     ...opts,
-    headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}
+    headers:{'apikey':KEY,'Authorization':'Bearer '+_tok,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}
   });
   if(!r.ok)throw new Error(await r.text());
   const t=await r.text();return t?JSON.parse(t):[];
@@ -1828,7 +1977,7 @@ async function sbWithTimeout(path, ms=10000){
   try{
     const r = await fetch(SB+'/rest/v1/'+path,{
       signal: controller.signal,
-      headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      headers:{'apikey':KEY,'Authorization':'Bearer '+(await _sbToken()),'Content-Type':'application/json','Prefer':'return=representation'},
     });
     clearTimeout(timer);
     if(!r.ok) throw new Error(await r.text());
@@ -2230,35 +2379,67 @@ function updateAsistPct(){
 }
 
 // ── AUTH ──────────────────────────────────────────────
+/* La lista de usuarios se arma desde USERS, no a mano. Escrita a mano se
+   quedo fuera la Arq. Liamelia y no podia entrar por aqui aunque existiera. */
+function _opcionesUsuarios(sel){
+  var h='<option value="">Selecciona...</option>';
+  Object.entries(USERS).forEach(function(e){
+    if(e[1].archivado) return;
+    h+='<option value="'+e[0]+'"'+(sel===e[0]?' selected':'')+'>'+esc(e[1].nombre)+
+       (e[1].rol==='admin'?' (Admin)':'')+'</option>';
+  });
+  return h;
+}
+
+// Traduce el error que devuelve Supabase a algo que se entienda en obra.
+function _authMsg(e){
+  var m=String((e&&e.message)||'').toLowerCase();
+  if(m.indexOf('invalid login')>=0||m.indexOf('invalid_grant')>=0||m.indexOf('credentials')>=0)
+    return 'Usuario o contraseña incorrectos';
+  if(m.indexOf('failed to fetch')>=0||m.indexOf('networkerror')>=0||m.indexOf('load failed')>=0)
+    return 'Sin conexión. Revisa los datos o el wifi.';
+  if(m.indexOf('not confirmed')>=0) return 'Este usuario todavía no está activado';
+  if(m.indexOf('too many')>=0||m.indexOf('rate limit')>=0) return 'Demasiados intentos. Espera un momento.';
+  return 'No se pudo entrar. Intenta de nuevo.';
+}
+
 function showLogin(){
   document.getElementById('mcontent').innerHTML=`
     <div class="mhandle"></div><h3>Iniciar sesión</h3>
     <div class="fw"><label class="fl">Usuario</label>
-      <select class="sel" id="lu" style="font-size:15px">
-        <option value="">Selecciona...</option>
-        <option value="nilson">Ing. Nilson (Admin)</option>
-        <option value="moises">Ing. Moises Jimenez</option>
-        <option value="luis">Ing. Luis Jimenez</option>
-        <option value="karina">Ing. Karina Breton</option>
-      </select></div>
-    <div class="fw"><label class="fl">PIN</label>
-      <input type="password" id="lp" placeholder="••••" style="font-size:28px;letter-spacing:10px;text-align:center;min-height:60px" maxlength="10" inputmode="numeric" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-      <div style="color:var(--red);font-size:12px;margin-top:4px;display:none" id="lerr">PIN incorrecto</div></div>
+      <select class="sel" id="lu" style="font-size:15px">${_opcionesUsuarios('')}</select></div>
+    <div class="fw"><label class="fl">Contraseña</label>
+      <input type="password" id="lp" placeholder="Tu contraseña" style="font-size:16px;text-align:center;min-height:52px" maxlength="72" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      <div style="color:var(--red);font-size:12px;margin-top:4px;display:none" id="lerr">Usuario o contraseña incorrectos</div></div>
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
-      <button class="btn primary" onclick="doLogin()">Entrar</button>
+      <button class="btn primary" id="lbtn" onclick="doLogin()">Entrar</button>
     </div>`;
   openModal();setTimeout(()=>document.getElementById('lu').focus(),100);
 }
 
-function doLogin(){
+async function doLogin(){
   const uid_=document.getElementById('lu').value;
-  const pin=document.getElementById('lp').value;
+  const clave=document.getElementById('lp').value;
+  const errEl=document.getElementById('lerr');
+  const btn=document.getElementById('lbtn');
   const u=USERS[uid_];
-  if(!u||pin!==u.pin){document.getElementById('lerr').style.display='block';document.getElementById('lp').value='';return;}
-  S.user={...u,id:uid_};
+  function falla(msg){
+    if(errEl){ errEl.textContent=msg; errEl.style.display='block'; }
+    var lp=document.getElementById('lp'); if(lp){ lp.value=''; lp.focus(); }
+    if(btn){ btn.disabled=false; btn.textContent='Entrar'; }
+  }
+  if(!uid_){ falla('Selecciona un usuario'); return; }
+  if(u&&u.archivado){ falla('Este usuario ya no tiene acceso'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Entrando…'; }
+  try{
+    S.user=await Auth.entrar(uid_,clave);
+  }catch(e){
+    falla(_authMsg(e)); _regLoginFail(uid_); return;
+  }
+  if(btn){ btn.disabled=false; btn.textContent='Entrar'; }
+  _loginFails=0;
   S._undoStack=[]; S._redoStack=[];
-  try{sessionStorage.setItem('mecca_user',JSON.stringify(S.user));}catch(e){}
   closeModal();
   try{ sessionStorage.removeItem('mecca_vista'); }catch(e){}
   if(typeof debeAbrirCampo==='function' && debeAbrirCampo()){ iniciarModoCampo(); return; }
@@ -2271,7 +2452,7 @@ function doLogin(){
 function logout(){
   S.user=null;
   S._undoStack=[]; S._redoStack=[];
-  try{sessionStorage.removeItem('mecca_user');}catch(e){}
+  Auth.salir();
   updateUserUI();renderAll();
   _renderUndoBar();
   showLockScreen();
@@ -2316,23 +2497,32 @@ function _regLoginFail(uid_){
   }
 }
 
-function doLockLogin(){
+async function doLockLogin(){
   var uid_=document.getElementById('lock-user').value;
-  var pin=document.getElementById('lock-pin').value;
+  var clave=document.getElementById('lock-pin').value;
   var errEl=document.getElementById('lock-err');
-  if(!uid_){errEl.textContent='Selecciona un usuario';return;}
-  var u=USERS[uid_];
-  if(u&&u.archivado){errEl.textContent='Este usuario ya no tiene acceso';return;}
-  if(!u||pin!==u.pin){
-    errEl.textContent='Codigo incorrecto, intenta de nuevo';
-    document.getElementById('lock-pin').value='';
-    document.getElementById('lock-pin').focus();
-    _regLoginFail(uid_);
-    return;
+  var btn=document.getElementById('lock-btn');
+  function falla(msg){
+    if(errEl) errEl.textContent=msg;
+    var el=document.getElementById('lock-pin');
+    if(el){ el.value=''; el.focus(); }
+    if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
   }
+  if(!uid_){ falla('Selecciona un usuario'); return; }
+  var u=USERS[uid_];
+  if(u&&u.archivado){ falla('Este usuario ya no tiene acceso'); return; }
+  // Entrar ahora habla con Supabase: hay que avisar que esta trabajando,
+  // porque en obra la señal tarda y un boton mudo invita a tocarlo diez veces.
+  if(btn){ btn.disabled=true; btn.textContent='Entrando…'; }
+  if(errEl) errEl.textContent='';
+  try{
+    S.user=await Auth.entrar(uid_,clave);
+  }catch(e){
+    falla(_authMsg(e)); _regLoginFail(uid_); return;
+  }
+  if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
   _loginFails=0;
-  S.user={...u,id:uid_};
-  try{sessionStorage.setItem('mecca_user',JSON.stringify(S.user));}catch(e){}
+  u=S.user;
   hideLockScreen();
   updateUserUI();
   renderAll();
@@ -2348,32 +2538,40 @@ function requireEdit(action){
     <div class="mhandle"></div>
     <h3>Inicia sesión para editar</h3>
     <div class="fw"><label class="fl">Usuario</label>
-      <select class="sel" id="lu" style="font-size:15px">
-        <option value="">Selecciona...</option>
-        <option value="nilson">Ing. Nilson (Admin)</option>
-        <option value="moises">Ing. Moises Jimenez</option>
-        <option value="luis">Ing. Luis Jimenez</option>
-        <option value="karina">Ing. Karina Breton</option>
-      </select></div>
-    <div class="fw"><label class="fl">PIN</label>
-      <input type="password" id="lp" placeholder="••••" style="font-size:28px;letter-spacing:10px;text-align:center;min-height:60px" inputmode="numeric" maxlength="10" onkeydown="if(event.key==='Enter')doLoginAndRun_cb()">
-      <div style="color:var(--red);font-size:12px;margin-top:4px;display:none" id="lerr">PIN incorrecto</div></div>
+      <select class="sel" id="lu" style="font-size:15px">${_opcionesUsuarios('')}</select></div>
+    <div class="fw"><label class="fl">Contraseña</label>
+      <input type="password" id="lp" placeholder="Tu contraseña" style="font-size:16px;text-align:center;min-height:52px" maxlength="72" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLoginAndRun_cb()">
+      <div style="color:var(--red);font-size:12px;margin-top:4px;display:none" id="lerr">Usuario o contraseña incorrectos</div></div>
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
-      <button class="btn primary" onclick="doLoginAndRun_cb()">Entrar</button>
+      <button class="btn primary" id="lbtn2" onclick="doLoginAndRun_cb()">Entrar</button>
     </div>`;
   window._pendingAction=action;
   openModal();setTimeout(()=>document.getElementById('lp').focus(),200);
 }
 
-function doLoginAndRun_cb(){
+async function doLoginAndRun_cb(){
   const uid_=document.getElementById('lu').value;
-  const pin=document.getElementById('lp').value;
+  const clave=document.getElementById('lp').value;
+  const le=document.getElementById('lerr');
+  const btn=document.getElementById('lbtn2');
   const u=USERS[uid_];
-  if(u&&u.archivado){var le=document.getElementById('lerr');if(le){le.textContent='Este usuario ya no tiene acceso';le.style.display='block';}document.getElementById('lp').value='';return;}
-  if(!u||pin!==u.pin){document.getElementById('lerr').style.display='block';document.getElementById('lp').value='';_regLoginFail(uid_);return;}
+  function falla(msg){
+    if(le){ le.textContent=msg; le.style.display='block'; }
+    var lp=document.getElementById('lp'); if(lp){ lp.value=''; lp.focus(); }
+    if(btn){ btn.disabled=false; btn.textContent='Entrar'; }
+  }
+  if(!uid_){ falla('Selecciona un usuario'); return; }
+  if(u&&u.archivado){ falla('Este usuario ya no tiene acceso'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Entrando…'; }
+  try{
+    S.user=await Auth.entrar(uid_,clave);
+  }catch(e){
+    falla(_authMsg(e)); _regLoginFail(uid_); return;
+  }
+  if(btn){ btn.disabled=false; btn.textContent='Entrar'; }
   _loginFails=0;
-  S.user={...u,id:uid_};closeModal();updateUserUI();renderAll();
+  closeModal();updateUserUI();renderAll();
   if(window._pendingAction){window._pendingAction();window._pendingAction=null;}
 }
 
@@ -18113,19 +18311,25 @@ function closeModal(){
 }
 
 // ── INITIALIZATION ────────────────────────────────
+/* La sesion se recupera del token guardado, no de un objeto suelto.
+   Antes el usuario se leia de sessionStorage tal cual: quien abriera la
+   consola podia escribir ahi {rol:'admin'} y quedaba de administrador.
+   Ahora el rol viene del token firmado por Supabase. */
 try{
-  var _saved=sessionStorage.getItem('mecca_user');
-  if(_saved){
-    S.user=JSON.parse(_saved);
-    if(S.user && S.user.id && USERS[S.user.id] && USERS[S.user.id].archivado){
-      // usuario archivado (p.ej. Edgar): cerrar sesión y pedir login
-      S.user=null; try{sessionStorage.removeItem('mecca_user');}catch(e){}
-      showLockScreen();
+  var _u=Auth.restaurar();
+  if(_u){
+    if(USERS[_u.id] && USERS[_u.id].archivado){
+      Auth.salir(); S.user=null; showLockScreen();
     } else {
+      S.user=_u;
       updateUserUI();
       hideLockScreen();
+      Auth.asegurar();   // renueva en segundo plano si el token esta por vencer
     }
   } else {
+    // Restos de la epoca del PIN: fuera, y a pedir contraseña.
+    try{ sessionStorage.removeItem('mecca_user'); }catch(e){}
+    S.user=null;
     showLockScreen();
   }
 }catch(e){ showLockScreen(); }
@@ -18157,7 +18361,7 @@ setInterval(function(){
   if(!S.user) return;
   if(Date.now()-_lastActivity > INACT_LIMIT){
     S.user=null;
-    try{sessionStorage.removeItem('mecca_user');}catch(e){}
+    Auth.salir();
     updateUserUI(); renderAll(); showLockScreen();
     // Show brief message on lock screen
     var errEl=document.getElementById('lock-err');
