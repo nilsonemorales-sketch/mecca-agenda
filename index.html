@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_63';
+const APP_VERSION='20260911_64';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -6462,6 +6462,26 @@ function _torrePersonas(){
   });
 }
 
+/* Del dibujo a la Revision: se elige a alguien en el Edificio y se pasa a
+   recorrer TODO lo suyo, apartamento por apartamento, marcando el estado real.
+   Antes habia que acordarse de que esa pantalla existia y buscarlo a mano. */
+function torreRevisar(){
+  var n=S.torrePersona; if(!n) return;
+  S.revContratista=n;
+  S.obraVista='revision';
+  renderObra();
+  window.scrollTo(0,0);
+}
+
+/* Y la vuelta: desde la Revision, ver a esa misma persona en el dibujo. */
+function revVerEnEdificio(){
+  var n=S.revContratista; if(!n) return;
+  S.torrePersona=n; S.torreSel='';
+  S.obraVista='todas'; S.actVista='edificio';
+  renderObra();
+  window.scrollTo(0,0);
+}
+
 function torreSetPersona(n){
   S.torrePersona=n||'';
   S.torreSel='';          // el menu abierto era de la vista anterior
@@ -6497,9 +6517,14 @@ function _torreSelectorHTML(){
        (g.vencidas?' · '+g.vencidas+' venc.':'')+'</option>';
   });
   h+='</select>';
-  if(sel) h+='<button onclick="torreSetPersona(\'\')" style="flex:0 0 auto;min-height:44px;padding:11px 14px;'+
-    'border-radius:10px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);'+
-    'font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Quitar</button>';
+  if(sel){
+    h+='<button onclick="torreRevisar()" style="flex:0 0 auto;min-height:44px;padding:11px 13px;'+
+      'border-radius:10px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);'+
+      'font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Revisar</button>';
+    h+='<button onclick="torreSetPersona(\'\')" style="flex:0 0 auto;min-height:44px;padding:11px 13px;'+
+      'border-radius:10px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);'+
+      'font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Quitar</button>';
+  }
   return h+'</div>';
 }
 
@@ -15497,12 +15522,20 @@ function recAplicarFiltro(area, quien, enArea){
 
 function revListaContratistas(el){
   var abiertas=revAbiertas(), g={};
+  /* Se parte por comas, igual que el Edificio y que "¿falta algo aqui?".
+     Antes agrupaba por el texto entero, asi que "Coge, Lantigua" salia como
+     si fuera un contratista aparte y ni Coge ni Lantigua veian esas 248
+     partidas. Conectar esta pantalla con el Edificio sin arreglarlo habria
+     hecho que las dos contaran distinto. */
   abiertas.forEach(function(a){
-    var k=a.personal_nombre||'(sin asignar)';
-    if(!g[k]) g[k]={n:0,v:0,p:0};
-    g[k].n++;
-    if(isRetrasada(a)) g[k].v++;
-    if(a.estado==='en-progreso') g[k].p++;
+    var ns=_responsables(a.personal_nombre);
+    if(!ns.length) ns=['Sin asignar'];
+    ns.forEach(function(k){
+      if(!g[k]) g[k]={n:0,v:0,p:0};
+      g[k].n++;
+      if(isRetrasada(a)) g[k].v++;
+      if(a.estado==='en-progreso') g[k].p++;
+    });
   });
   var lista=Object.keys(g).sort(function(x,y){return g[y].n-g[x].n;});
   var hechas=Object.keys(S.revHechas).length;
@@ -15576,15 +15609,21 @@ function revCard(a){
 
 function revListaActividades(el){
   var nm=S.revContratista;
-  var mias=revAbiertas().filter(function(a){return (a.personal_nombre||'(sin asignar)')===nm;});
+  // Mismo criterio que la lista de arriba: por nombre suelto, no por el texto entero.
+  var mias=revAbiertas().filter(function(a){ return _personaEn(a,nm); });
   var areas={};
   mias.forEach(function(a){ var k=a.area||'(sin área)'; (areas[k]=areas[k]||[]).push(a); });
   var hechas=mias.filter(function(a){return S.revHechas[a.id];}).length;
   var pctBar=mias.length?Math.round(hechas/mias.length*100):0;
 
   el.innerHTML=
-    '<button onclick="revVolver()" style="background:none;border:0;color:var(--text2);font-size:13px;'+
-      'font-weight:600;cursor:pointer;padding:8px 0;font-family:var(--font)">‹ Todos los contratistas</button>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+      '<button onclick="revVolver()" style="background:none;border:0;color:var(--text2);font-size:13px;'+
+        'font-weight:600;cursor:pointer;padding:8px 0;font-family:var(--font);min-height:40px">‹ Todos los contratistas</button>'+
+      '<button onclick="revVerEnEdificio()" style="flex:0 0 auto;min-height:40px;padding:8px 13px;'+
+        'border-radius:9px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);'+
+        'font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font)">Ver en el edificio</button>'+
+    '</div>'+
     '<div class="obranow-header"><div>'+
       '<div style="font-size:14px;font-weight:600">'+esc(nm)+'</div>'+
       '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">'+
