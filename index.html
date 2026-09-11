@@ -73,9 +73,9 @@
 .hdr-l>div>div:last-child{min-width:0}
 .hdr-r button{border:none !important;background:var(--bg3) !important;color:var(--text) !important;border-radius:10px !important}
 /* el de reporte se queda visible: es el que imprime la pantalla donde estas */
-@media(max-width:600px){
-  #btn-refresh{display:none !important}
-}
+/* El de actualizar SE QUEDA tambien en el telefono. Estaba escondido debajo
+   de 600px, justo en el aparato donde se usa el app — y donde mas falta hace
+   saber si ya bajo la version nueva. */
 
 /* ── LETRA Y BOTONES ───────────────────────────────────────
    Outfit para el texto (redonda, se lee de un golpe en el telefono)
@@ -603,7 +603,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="hdr-r">
       <button id="btn-undo" onclick="undoAction()" title="Deshacer (Ctrl+Z)" style="display:none;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↩</button>
       <button id="btn-redo" onclick="redoAction()" title="Rehacer (Ctrl+Shift+Z)" style="display:none;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↪</button>
-      <button id="btn-refresh" onclick="loadAll()" title="Actualizar datos" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:transform .4s ease,background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↺</button>
+      <button id="btn-refresh" onclick="refrescarApp()" title="Actualizar: busca versión nueva y recarga los datos" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:transform .4s ease,background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↺</button>
       <button id="btn-cmd" onclick="abrirComando()" title="Dar una orden por voz o texto (C)" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;transition:background .15s;flex-shrink:0" ><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg></button>
       <span class="ubadge guest" id="ubadge" onclick="showLogin()">Entrar</span>
       <button id="btn-rep" onclick="abrirReporte()" title="Reporte de esta pantalla" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4v-6h16v6h-2"/><rect x="7" y="14" width="10" height="7" rx="1"/></svg></button>
@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_66';
+const APP_VERSION='20260911_68';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -881,6 +881,20 @@ const APP_BUILD='mecca-v13';
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) chequear(); });
   window.addEventListener('focus', chequear);
   setInterval(chequear, 60000); // y cada minuto
+
+  /* El mismo chequeo, pero a mano y diciendo que paso. El automatico es mudo:
+     si no hay version nueva no se entera nadie, y entonces uno no sabe si el
+     app esta al dia o si el boton no hizo nada. Devuelve true si va a recargar. */
+  window.buscarActualizacion=function(){
+    return firma().then(function(s){
+      var base=null; try{ base=sessionStorage.getItem(SIG_KEY); }catch(e){}
+      if(s && base && s!==base){
+        try{ sessionStorage.setItem(SIG_KEY,s); }catch(e){}
+        return true;
+      }
+      return false;
+    }).catch(function(){ return false; });
+  };
 })();
 // ── AVISOS DE SEGURIDAD ─────────────────────────────
 // URL de tu Apps Script (Web App) — la MISMA que usas para subir fotos.
@@ -8451,7 +8465,7 @@ var Comandos = (function(){
    Chrome). En iPhone no hace falta: el teclado trae su propio dictado, y la
    caja acepta texto venga de donde venga. Nada se ejecuta sin confirmar.
    --- */
-var _cmd={intencion:null, candidatas:[], elegida:null, escuchando:false, rec:null, reloj:null, tecla:null};
+var _cmd={intencion:null, candidatas:[], elegida:null, lote:null, escuchando:false, rec:null, reloj:null, tecla:null};
 
 /* No se bloquea por telefono ni por si esta instalado. Se comprobo contra la
    app de contabilidad de Martha (contabilidad-martha.pages.dev), que funciona
@@ -8633,6 +8647,7 @@ function abrirComando(){
       if(e.key==='Enter'){
         e.preventDefault();
         if(_cmd.tecla){ clearTimeout(_cmd.tecla); _cmd.tecla=null; }
+        if(_cmd.lote){ _cmdConfirmarLote(); return; }
         if(!_cmd.intencion && _vozApi){ _cmdAnalizar(this.value, true); return; }
         _cmdConfirmar();
       }
@@ -8738,10 +8753,132 @@ async function _cmdPreguntarIA(frase){
 }
 
 /* Interpreta lo escrito y pinta el panel. No ejecuta nada. */
+/* ── DICTAR EL RECORRIDO ENTERO ────────────────────────────────────────────
+   Hasta ahora se dictaba UNA orden, se confirmaba, y vuelta a empezar. En un
+   recorrido nadie habla asi: se dice "el 2A ya esta, el 3A va por la mitad y
+   el 4B correlo una semana" de un tiron. Con una orden por vez, eso eran tres
+   viajes al microfono.
+
+   Se parte la frase y se intenta entender cada trozo. La regla que lo hace
+   seguro: solo se trata como varias ordenes si DOS O MAS trozos se entienden
+   de verdad Y ademas encuentran a que partida se refieren. Si no, se vuelve
+   al camino de siempre. Asi una orden sola que lleve comas o un "y" dentro
+   — "cocina caliente y area de lavado" — no se parte por accidente: el
+   segundo trozo no es una orden y no hay dos.
+   ────────────────────────────────────────────────────────────────────────── */
+var _CMD_CORTE=/\s*(?:;|,| y luego | luego | despues de eso | despu[eé]s | tambi[eé]n | tambien | adem[aá]s | ademas | y )\s*/i;
+var _CMD_MAX_IA=4;   // tope de consultas al modelo por dictado, por las neuronas
+
+function _cmdPartir(txt){
+  return String(txt||'').split(_CMD_CORTE)
+    .map(function(x){ return String(x||'').trim(); })
+    .filter(function(x){ return x.length>3; });
+}
+
+async function _cmdEntenderVarias(txt, conIA){
+  var frags=_cmdPartir(txt);
+  if(frags.length<2) return null;
+  var out=[], ia=0;
+  for(var k=0;k<frags.length;k++){
+    var it=Comandos.interpretar(frags[k]);
+    if(!it && conIA && _vozApi && ia<_CMD_MAX_IA){ ia++; it=await _cmdPreguntarIA(frags[k]); }
+    if(!it) continue;
+    // crear/buscar/eliminar no van en lote: una pide datos, otra cambia de
+    // pantalla y la tercera no se deshace.
+    if(it.accion==='crear'||it.accion==='buscar'||it.accion==='eliminar') continue;
+    if(S.recorrido && S.recorrido.area && !it.area) it.area=S.recorrido.area;
+    var cands=Comandos.candidatas(it.ref);
+    if(!cands.length) continue;
+    out.push({frag:frags[k], intencion:it, cands:cands, elegida:0});
+  }
+  return out.length>=2 ? out : null;
+}
+
+function _cmdQuitarDeLote(i){
+  if(!_cmd.lote) return;
+  _cmd.lote.splice(i,1);
+  if(_cmd.lote.length<1){ _cmd.lote=null; document.getElementById('cmd-panel').innerHTML=''; return; }
+  _cmdPintarLote();
+}
+
+function _cmdOtraDelLote(i,j){
+  if(!_cmd.lote||!_cmd.lote[i]) return;
+  _cmd.lote[i].elegida=j;
+  _cmdPintarLote();
+}
+
+function _cmdPintarLote(){
+  var p=document.getElementById('cmd-panel'); if(!p||!_cmd.lote) return;
+  var L=_cmd.lote;
+  p.innerHTML=
+    _cmdAviso('Entendí '+L.length+' órdenes','var(--accent)','Revísalas y confirma de una vez')+
+    '<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">'+
+    L.map(function(x,i){
+      var act=x.cands[x.elegida];
+      return '<div style="border:1.5px solid var(--border2);border-radius:11px;padding:9px 10px;background:var(--bg3)">'+
+        '<div style="display:flex;align-items:flex-start;gap:8px">'+
+          '<span style="flex-shrink:0;width:20px;height:20px;border-radius:99px;background:var(--accent-fill);'+
+            'color:var(--accent-on);font-size:11px;font-weight:800;display:flex;align-items:center;'+
+            'justify-content:center;margin-top:1px">'+(i+1)+'</span>'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35">'+
+              esc(Comandos.describir(x.intencion, act))+'</div>'+
+            (x.cands.length>1
+              ? '<div style="font-size:10.5px;color:var(--text3);margin-top:4px">Hay '+x.cands.length+
+                ' parecidas · <button onclick="_cmdOtraDelLote('+i+','+((x.elegida+1)%x.cands.length)+')" '+
+                'style="background:none;border:none;color:var(--accent);font-size:10.5px;font-weight:700;'+
+                'cursor:pointer;padding:0;text-decoration:underline;font-family:var(--font)">probar otra</button></div>'
+              : '')+
+          '</div>'+
+          '<button onclick="_cmdQuitarDeLote('+i+')" aria-label="Quitar" '+
+            'style="flex-shrink:0;width:30px;height:30px;border-radius:8px;border:none;cursor:pointer;'+
+            'background:var(--bg2);color:var(--text3);font-size:15px;font-family:var(--font)">×</button>'+
+        '</div></div>';
+    }).join('')+
+    '</div>'+
+    '<div style="display:flex;gap:8px;margin-top:10px">'+
+      '<button onclick="_cmdConfirmarLote()" style="flex:1;height:44px;border:none;border-radius:11px;'+
+        'background:var(--accent-fill);color:var(--accent-on);font-weight:700;font-size:14px;cursor:pointer;'+
+        'font-family:var(--font)">Confirmar las '+L.length+'</button>'+
+      '<button onclick="cerrarComando()" style="height:44px;padding:0 16px;border:1.5px solid var(--border2);'+
+        'border-radius:11px;background:var(--bg2);color:var(--text2);font-weight:700;font-size:14px;'+
+        'cursor:pointer;font-family:var(--font)">Cancelar</button>'+
+    '</div>';
+}
+
+async function _cmdConfirmarLote(){
+  var L=_cmd.lote; if(!L||!L.length) return;
+  var p=document.getElementById('cmd-panel');
+  var bien=0, mal=0;
+  for(var k=0;k<L.length;k++){
+    if(p) p.innerHTML=_cmdAviso('Guardando '+(k+1)+' de '+L.length+'…','var(--text3)','');
+    try{ await Comandos.ejecutar(L[k].intencion, L[k].cands[L[k].elegida]); bien++; }
+    catch(e){ mal++; }
+  }
+  _cmd.lote=null;
+  cerrarComando();
+  reRenderActs();
+  if(typeof loadAbiertas==='function') loadAbiertas();
+  if(!mal) showToast('Se aplicaron '+bien+' órdenes','ok',3500);
+  else if(!bien) showToast('No se pudo aplicar ninguna. Fallaron '+mal+'.','err',6000);
+  else showToast('Se aplicaron '+bien+'. Fallaron '+mal+'.','err',6000);
+}
+
 async function _cmdAnalizar(txt, conIA){
   var p=document.getElementById('cmd-panel'); if(!p) return;
-  _cmd.intencion=null; _cmd.candidatas=[]; _cmd.elegida=null;
+  _cmd.intencion=null; _cmd.candidatas=[]; _cmd.elegida=null; _cmd.lote=null;
   if(!(txt||'').trim()){ p.innerHTML=''; return; }
+
+  /* ¿Venian varias ordenes en la misma frase? Si si, se muestran todas y se
+     confirman de una vez. Si no, sigue el camino de siempre. */
+  var varias=await _cmdEntenderVarias(txt, conIA);
+  if(varias){
+    var _caja=document.getElementById('cmd-txt');
+    if(_caja && _caja.value.trim()!==String(txt).trim()) return;   // ya escribio otra cosa
+    _cmd.lote=varias;
+    _cmdPintarLote();
+    return;
+  }
 
   /* Primero los patrones: son instantaneos, no gastan nada y no necesitan
      internet. La IA solo entra cuando los patrones no entienden, y solo
@@ -8951,6 +9088,31 @@ function _scrollRestaurar(s){
   // Otra vez cuando el navegador ya midio: recien puesto el HTML, el alto
   // todavia no es el final y el scroll se queda corto.
   if(window.requestAnimationFrame) window.requestAnimationFrame(poner);
+}
+
+/* ── EL BOTON DE ACTUALIZAR ───────────────────────────────────────────────
+   Hace las dos cosas que uno espera al tocarlo, en este orden:
+   1. Busca si hay version nueva del app. Si la hay, recarga y ya.
+   2. Si no la hay, recarga los datos y lo DICE — "ya estás en la última".
+   Antes solo recargaba datos, y encima estaba escondido en el telefono, que
+   es donde se usa el app. Estar esperando sin saber si te bajo la version
+   nueva fue la molestia de todo el dia.
+   ───────────────────────────────────────────────────────────────────────── */
+async function refrescarApp(){
+  var b=document.getElementById('btn-refresh');
+  if(b){ b.disabled=true; b.style.animation='spin 0.7s linear infinite'; }
+  var hayNueva=false;
+  try{
+    if(typeof buscarActualizacion==='function') hayNueva=await buscarActualizacion();
+  }catch(e){}
+  if(hayNueva){
+    showToast('Bajando la versión nueva…','ok',2500);
+    setTimeout(function(){ location.replace(location.pathname+'?_r='+Date.now()); },400);
+    return;   // no se suelta el boton: la pagina se va
+  }
+  try{ await loadAll(); showToast('Ya estás en la última versión · datos al día','ok',3000); }
+  catch(e){ showToast('No se pudieron traer los datos','err',4000); }
+  if(b){ b.disabled=false; b.style.animation=''; }
 }
 
 function reRenderActs(){
