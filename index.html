@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_58';
+const APP_VERSION='20260911_59';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -3464,12 +3464,22 @@ function _torreArea(nivel,lado){
 async function cargarTorre(force){
   if(S._torre && !force) return S._torre;
   if(S._torreCargando) return null;
-  S._torreCargando=true;
+  S._torreCargando=true; S._torreError='';
   try{
     /* Se piden tambien las dos fechas para contar las vencidas por area. Sin
        eso el dibujo solo sabe decir como va, y en un recorrido lo que hace
-       falta es saber donde esta el fuego. */
-    var filas=await sbTodo('obra_actividades?select=area,estado,personal_nombre,fecha_fin,fecha');
+       falta es saber donde esta el fuego.
+
+       Con tope de tiempo: una peticion colgada dejaba S._torreCargando en true
+       para siempre, y entonces CADA intento posterior se salia en la linea de
+       arriba sin hacer nada. El dibujo se quedaba en "cargando…" hasta
+       recargar el app entero, sin decir por que ni dejar reintentar. */
+    var filas=await Promise.race([
+      sbTodo('obra_actividades?select=area,estado,personal_nombre,fecha_fin,fecha'),
+      new Promise(function(_,rechazar){
+        setTimeout(function(){ rechazar(new Error('la consulta tardó demasiado')); }, 25000);
+      })
+    ]);
     var por={};
     (filas||[]).forEach(function(a){
       var ar=a.area||''; if(!ar) return;
@@ -3482,7 +3492,9 @@ async function cargarTorre(force){
          — y 114 vienen vacias. Escrito aparte, el dibujo diria "65 vencidas"
          y la lista mostraria otro numero: el app dejaria de merecer confianza
          justo donde mas se mira. */
-      if(isRetrasada(a)) d.venc++;
+      // Una fila rara no puede tumbar el dibujo entero: si el calculo falla,
+      // esa cuenta como no vencida y se sigue con las demas.
+      try{ if(isRetrasada(a)) d.venc++; }catch(e){}
       var q=(a.personal_nombre||'').trim()||'Sin asignar';
       d.gente[q]=(d.gente[q]||0)+1;
     });
@@ -3495,7 +3507,13 @@ async function cargarTorre(force){
     /* solo se guarda si de verdad vino algo: si la consulta falla o vuelve
        vacia no se cachea el vacio, y el proximo Hoy lo vuelve a intentar */
     S._torre = Object.keys(por).length ? por : null;
-  }catch(e){ S._torre=null; }
+    if(!S._torre) S._torreError='la consulta no trajo ninguna área';
+  }catch(e){
+    S._torre=null;
+    // Se guarda el motivo tal cual. Sin esto solo quedaba "cargando…" y no
+    // habia forma de saber, desde la obra, que fue lo que fallo.
+    S._torreError=String((e&&e.message)||e||'error desconocido').slice(0,300);
+  }
   S._torreCargando=false;
   /* Se repinta donde este la torre, no solo en Hoy: ahora vive tambien en la
      vista Edificio de Actividades, y si esto siguiera mirando la pestaña se
@@ -3522,7 +3540,42 @@ function dibujarTorre(){
   if(!svg) return;
   var D=S._torre;
   var sub=document.getElementById('torre-sub');
-  if(!D){ if(sub) sub.textContent='cargando…'; return; }
+  if(!D){
+    /* Antes esto decia "cargando…" y punto: si la consulta fallaba, el dibujo
+       se quedaba ahi para siempre, sin explicar nada y sin manera de volver a
+       intentarlo que no fuera cerrar el app. */
+    if(sub) sub.textContent = S._torreCargando ? 'cargando…' : 'no se pudo cargar';
+    svg.innerHTML='';
+    var caja=document.getElementById('torre-otras');
+    if(caja){
+      caja.innerHTML='';
+      if(!S._torreCargando){
+        /* Se arma con textContent y no pegando HTML: unas lineas mas abajo hay
+           una variable local llamada 'esc' (la escalera del dibujo) que tapa la
+           funcion esc() en toda esta funcion, asi que escapar aqui reventaba
+           con "esc is not a function". Con textContent no hace falta escapar. */
+        var cont=document.createElement('div');
+        cont.style.cssText='padding:6px 2px 2px';
+        var bt=document.createElement('button');
+        bt.type='button';
+        bt.textContent='Reintentar';
+        bt.setAttribute('onclick','torreReintentar()');
+        bt.style.cssText='min-height:44px;padding:11px 16px;border-radius:10px;'+
+          'border:1.5px solid var(--accent);background:var(--accent-fill);color:var(--accent-on);'+
+          'font-size:13.5px;font-weight:700;cursor:pointer;font-family:var(--font)';
+        cont.appendChild(bt);
+        if(S._torreError){
+          var msg=document.createElement('div');
+          msg.style.cssText='font-size:11px;color:var(--text3);margin-top:8px;'+
+            'line-height:1.5;word-break:break-word';
+          msg.textContent=S._torreError;
+          cont.appendChild(msg);
+        }
+        caja.appendChild(cont);
+      }
+    }
+    return;
+  }
 
   svg.innerHTML='';
   var NS='http://www.w3.org/2000/svg';
@@ -6257,7 +6310,11 @@ function renderActsEdificio(){
     '<div style="font-size:12px;color:var(--text3);text-align:center;padding:2px 6px 4px">'+
       (S.torreSel?'':'Toca un apartamento para ver sus partidas.')+
     '</div>';
-  if(S._torre) dibujarTorre(); else cargarTorre();
+  /* Primero se lanza la carga y despues se pinta. Al reves, la primera entrada
+     encontraba la bandera de "cargando" todavia en false y enseñaba "no se
+     pudo cargar" durante un instante antes de empezar siquiera a pedir. */
+  if(!S._torre) cargarTorre();
+  dibujarTorre();
   _torreMenu();
 }
 
@@ -6278,6 +6335,18 @@ function _torreTap(area){
 }
 
 function torreCerrarMenu(){ S.torreSel=''; renderActs(); }
+
+/* Vuelve a pedir los datos del dibujo. Se suelta la bandera de "cargando" a
+   mano porque el caso que se quiere rescatar es justo ese: una peticion que se
+   quedo colgada y dejo la bandera puesta. */
+function torreReintentar(){
+  S._torreCargando=false; S._torre=null; S._torreError='';
+  var sub=document.getElementById('torre-sub');
+  if(sub) sub.textContent='cargando…';
+  var caja=document.getElementById('torre-otras');
+  if(caja) caja.innerHTML='';
+  cargarTorre(true);
+}
 
 /* Entra a la lista ya filtrada por el area y por lo que se pidio. */
 function torreVer(que){
