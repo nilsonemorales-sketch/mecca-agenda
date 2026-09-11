@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_56';
+const APP_VERSION='20260911_57';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -3466,14 +3466,23 @@ async function cargarTorre(force){
   if(S._torreCargando) return null;
   S._torreCargando=true;
   try{
-    var filas=await sbTodo('obra_actividades?select=area,estado,personal_nombre');
+    /* Se piden tambien las dos fechas para contar las vencidas por area. Sin
+       eso el dibujo solo sabe decir como va, y en un recorrido lo que hace
+       falta es saber donde esta el fuego. */
+    var filas=await sbTodo('obra_actividades?select=area,estado,personal_nombre,fecha_fin,fecha');
     var por={};
     (filas||[]).forEach(function(a){
       var ar=a.area||''; if(!ar) return;
-      var d=por[ar]||(por[ar]={total:0,hechas:0,faltan:0,gente:{}});
+      var d=por[ar]||(por[ar]={total:0,hechas:0,faltan:0,venc:0,gente:{}});
       d.total++;
       if(a.estado==='completado'){ d.hechas++; return; }
       d.faltan++;
+      /* Se llama a isRetrasada, no se repite el criterio. El app cuenta como
+         vencida la que pasó de fecha_fin O de fecha si la primera viene vacia
+         — y 114 vienen vacias. Escrito aparte, el dibujo diria "65 vencidas"
+         y la lista mostraria otro numero: el app dejaria de merecer confianza
+         justo donde mas se mira. */
+      if(isRetrasada(a)) d.venc++;
       var q=(a.personal_nombre||'').trim()||'Sin asignar';
       d.gente[q]=(d.gente[q]||0)+1;
     });
@@ -3638,7 +3647,16 @@ function dibujarTorre(){
            mejor corto que encima. */
         if(!medido || anchoFal===0) tNom.textContent=nombres[nombres.length-1];
       }catch(e){ tNom.textContent=nombres[nombres.length-1]; }
-      add('text',{x:x+12,y:y+42,'font-size':21,'font-weight':800,'letter-spacing':'-.03em',
+      /* Las vencidas, en rojo, debajo del "faltan" y no al lado del avance:
+         ahi el 21 px del porcentaje y el rojo se montaban uno encima del otro
+         en cuanto el numero pasaba de una cifra. El verde dice como va; el
+         rojo dice donde hay que meterse hoy. */
+      if(d.venc>0){
+        add('text',{x:x+w-12,y:y+29,'font-size':10,'font-weight':800,
+          fill:'var(--red)','text-anchor':'end','font-family':'var(--tit)'},g)
+          .textContent=d.venc+' venc.';
+      }
+      add('text',{x:x+12,y:y+46,'font-size':21,'font-weight':800,'letter-spacing':'-.03em',
         fill:'var(--text)','font-family':'var(--tit)'},g).textContent=d.pct+'%';
       add('rect',{x:x+12,y:y+alto-8,width:w-24,height:4,rx:2,fill:'var(--bg4)'},g);
       add('rect',{x:x+12,y:y+alto-8,width:(w-24)*d.pct/100,height:4,rx:2,
@@ -3663,13 +3681,21 @@ function dibujarTorre(){
     'font-family':'var(--tit)'}).textContent='N1';
   add('text',{x:BALA+(px-BALA)/2,y:yb+hb/2+4,'font-size':9.5,'font-weight':600,
     fill:'var(--text3)','text-anchor':'middle'},gPB).textContent='lobby';
+  /* La planta baja mide 46 px: tres lineas solo caben apretadas y subiendo
+     la primera. Con una sola linea de datos se quedan centradas. */
   var cxPq=px+pw+(DER-px-pw)/2;
-  add('text',{x:cxPq,y:yb+hb/2+(dPq?-3:4),'font-size':9.5,'font-weight':600,
+  var tresLineas=!!(dPq && dPq.venc>0);
+  add('text',{x:cxPq,y:yb+hb/2+(dPq?(tresLineas?-9:-3):4),'font-size':9.5,'font-weight':600,
     fill:'var(--text3)','text-anchor':'middle'},gPB).textContent='parqueo';
   if(dPq){
-    add('text',{x:cxPq,y:yb+hb/2+11,'font-size':10,'font-weight':700,
+    add('text',{x:cxPq,y:yb+hb/2+(tresLineas?3:11),'font-size':10,'font-weight':700,
       fill:'var(--text2)','text-anchor':'middle','font-family':'var(--tit)'},gPB)
       .textContent=dPq.pct+'% · faltan '+dPq.faltan;
+    if(tresLineas){
+      add('text',{x:cxPq,y:yb+hb/2+15,'font-size':10,'font-weight':800,
+        fill:'var(--red)','text-anchor':'middle','font-family':'var(--tit)'},gPB)
+        .textContent=dPq.venc+' venc.';
+    }
     total+=dPq.total; hechas+=dPq.hechas; abiertas+=dPq.faltan;
   }
   add('line',{x1:BALA-14,y1:yb+hb+10,x2:DER+14,y2:yb+hb+10,
@@ -3709,7 +3735,9 @@ function _torreOtras(D){
         'font-family:var(--font);text-align:left;line-height:1.3">'+
         esc(a.replace(/^N\d+\s*—\s*/,''))+
         '<span style="display:block;font-size:10px;color:var(--text3);font-weight:500">'+
-        d.pct+'% · faltan '+d.faltan+'</span></button>';
+        d.pct+'% · faltan '+d.faltan+
+        (d.venc>0?' · <span style="color:var(--red);font-weight:700">'+d.venc+' venc.</span>':'')+
+        '</span></button>';
     }).join('')+'</div>';
 }
 
@@ -5780,6 +5808,11 @@ function toggleActFiltros(){
 }
 
 function renderActs(){
+  /* Actividades abre en el Edificio. Abrir en una lista de 1.185 renglones
+     obligaba a buscar antes de decidir; el dibujo contesta primero "donde
+     esta parado esto" y de ahi se entra. Basta tocar "Lista" para volver a
+     lo de antes, y esa eleccion se queda puesta el resto de la sesion. */
+  if(!S.actVista) S.actVista='edificio';
   if(S.actVista==='apto'){ renderActsPorApto(); return; }
   if(S.actVista==='matriz'){ renderActsMatriz(); return; }
   if(S.actVista==='edificio'){ renderActsEdificio(); return; }
@@ -6214,25 +6247,74 @@ function renderActsEdificio(){
   var el=document.getElementById('c-act'); if(!el) return;
   el.innerHTML = _actVistaToggle() +
     torreHTML() +
+    '<div id="torre-menu"></div>'+
     '<div style="font-size:12px;color:var(--text3);text-align:center;padding:2px 6px 4px">'+
-      'Toca un apartamento para ver sus partidas.'+
+      (S.torreSel?'':'Toca un apartamento para ver sus partidas.')+
     '</div>';
   if(S._torre) dibujarTorre(); else cargarTorre();
+  _torreMenu();
 }
 
 /* La misma torre sirve en dos sitios y cada sitio necesita otra cosa:
    en Hoy sube la hoja del recorrido para dictar lo del apartamento; en
-   Actividades se entra a la lista de ese apartamento ya filtrada, con los
-   filtros y las acciones en bloque que ya existen. */
+   Actividades no se entra derecho a la lista completa: primero se pregunta
+   que se quiere ver, porque en un recorrido casi nunca se va a por las 115
+   abiertas del penthouse sino a por sus vencidas. */
 function _torreTap(area){
   if(S.actVista==='edificio'){
-    S.actFiltroAvanzado=S.actFiltroAvanzado||{};
-    S.actFiltroAvanzado.ubicaciones=[area];
-    S.actVista='lista';
-    renderActs();
+    S.torreSel=area;
+    _torreMenu();
+    var m=document.getElementById('torre-menu');
+    if(m && m.scrollIntoView) try{ m.scrollIntoView({block:'nearest'}); }catch(e){}
     return;
   }
   abrirAptoTorre(area);
+}
+
+function torreCerrarMenu(){ S.torreSel=''; renderActs(); }
+
+/* Entra a la lista ya filtrada por el area y por lo que se pidio. */
+function torreVer(que){
+  var area=S.torreSel; if(!area) return;
+  S.actFiltroAvanzado=S.actFiltroAvanzado||{};
+  S.actFiltroAvanzado.ubicaciones=[area];
+  S.actFiltroRapidos = que==='todas' ? [] : [que];
+  S.actFiltroTexto='';
+  S.torreSel='';
+  S.actVista='lista';
+  renderActs();
+}
+
+function _torreMenu(){
+  var caja=document.getElementById('torre-menu');
+  if(!caja) return;
+  var area=S.torreSel, D=S._torre;
+  if(!area || !D || !D[area]){ caja.innerHTML=''; return; }
+  var d=D[area];
+  // Las congeladas salen de S.acts, que es lo abierto que ya tiene el app;
+  // si el historial no cargo, ese boton no se ofrece en vez de mentir con 0.
+  var nCong = _congeladasListo()
+    ? (S.acts||[]).filter(function(a){ return a.area===area && _esCongelada(a); }).length
+    : -1;
+  var b=function(que,txt,fondo,color,borde){
+    return '<button onclick="torreVer(\''+que+'\')" style="min-height:44px;padding:11px 14px;'+
+      'border-radius:10px;border:1.5px solid '+(borde||'var(--border2)')+';background:'+fondo+';color:'+color+';'+
+      'font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">'+txt+'</button>';
+  };
+  caja.innerHTML=
+    '<div style="border:1.5px solid var(--accent);border-radius:var(--r2);background:var(--bg2);'+
+      'padding:13px 14px;margin:10px 0 6px">'+
+      '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'+
+        '<div style="font-family:var(--tit);font-size:15px;font-weight:800;color:var(--text)">'+esc(_recNom(area))+'</div>'+
+        '<button onclick="torreCerrarMenu()" style="background:none;border:none;color:var(--text3);'+
+          'font-size:20px;line-height:1;cursor:pointer;padding:0 4px;min-height:40px">×</button>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+        b('todas','Ver las '+d.faltan+' abiertas','var(--accent-fill)','var(--accent-on)','var(--accent)')+
+        (d.venc>0 ? b('retrasadas','Solo las '+d.venc+' vencidas','var(--red-light)','var(--red)','var(--red)') : '')+
+        (nCong>0 ? b('congeladas','Las '+nCong+' congeladas','var(--bg3)','var(--text2)') : '')+
+      '</div>'+
+    '</div>';
 }
 async function loadAptoActs(area){
   try{
