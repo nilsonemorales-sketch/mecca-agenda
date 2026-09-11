@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_65';
+const APP_VERSION='20260911_66';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5554,6 +5554,39 @@ function actSelAll(){
 }
 function actSelNone(){ S.actSel={}; renderActs(); }
 
+/* ── QUITAR LA URGENCIA EN BLOQUE ──────────────────────────────────────────
+   383 de las 1.185 abiertas estan marcadas urgente: un tercio de la obra. Con
+   eso el aviso ya no avisa nada y el filtro no sirve para decidir por donde
+   empezar el dia. Limpiarlas de una en una, abriendo 383 formularios, no lo
+   hace nadie — por eso llevan ahi tanto tiempo.
+   Solo se toca 'prioridad', y solo por Acciones.
+   ────────────────────────────────────────────────────────────────────────── */
+async function actSelQuitarUrgente(){
+  if(!canEdit()) return;
+  // Se revalida contra el estado actual: solo las que de verdad estan urgentes.
+  var ids=_actSelIds().filter(function(id){
+    var a=(S.acts||[]).find(function(x){return x.id===id;});
+    return a && a.estado!=='completado' && a.prioridad==='urgente';
+  });
+  if(!ids.length){ showToast('Ninguna de las marcadas está urgente','err',4500); return; }
+  if(!confirm('Se le va a quitar la urgencia a '+ids.length+' actividad'+(ids.length!==1?'es':'')+'.\n\n¿Seguro?')) return;
+
+  var bien=0, mal=0, hechas=0, total=ids.length;
+  setSS('syncing','Guardando 0 de '+total+'...');
+  for(var i=0;i<ids.length;i+=5){
+    await Promise.all(ids.slice(i,i+5).map(function(id){
+      return Acciones.editar(id,{prioridad:'normal'})
+        .then(function(){ bien++; }, function(){ mal++; })
+        .then(function(){ hechas++; setSS('syncing','Guardando '+hechas+' de '+total+'...'); });
+    }));
+  }
+  S.actSel={}; S.actSelModo=false; S.actSelCorrer=false;
+  renderActs();
+  if(mal===0){ setSS('ok','✓'); showToast('Se quitó la urgencia a '+bien+'.'); }
+  else if(bien===0){ setSS('err','Error'); showToast('No se pudo quitar ninguna. Fallaron '+mal+'.','err',6000); }
+  else { setSS('ok','✓'); showToast('Se quitaron '+bien+'. Fallaron '+mal+'.','err',6000); }
+}
+
 /* ── CORRER FECHAS EN BLOQUE ───────────────────────────────────────────────
    En los ultimos 30 dias, de las ediciones sueltas que tocaron fechas, 144
    movieron LAS DOS (inicio y fin) y solo 87 movieron el fin. "Poner fecha"
@@ -5784,6 +5817,14 @@ function _actSelBarraHTML(){
     // se confunda con las otras dos.
     '<button onclick="actSelMarcarHechas()" style="'+bs+';border:none;background:var(--green-fill);color:#fff">Marcar hechas</button>'+
     '<button onclick="actSelMarcarRevisadas()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Marcar revisadas</button>'+
+    // Solo aparece si entre lo marcado hay alguna urgente: si no, estorba.
+    ((function(){
+      var n=ids.filter(function(id){
+        var a=(S.acts||[]).find(function(x){return x.id===id;});
+        return a && a.prioridad==='urgente';
+      }).length;
+      return n ? '<button onclick="actSelQuitarUrgente()" style="'+bs+';border:1px solid var(--amber);background:var(--bg2);color:var(--amber)">Quitar urgente ('+n+')</button>' : '';
+    })())+
     '<button onclick="actSelModo()" title="Salir" style="'+bs+';border:1px solid var(--border2);background:transparent;color:var(--text3)">✕</button>'+
   '</div>'+
   _actSelCorrerHTML();
@@ -7845,6 +7886,15 @@ var Acciones = (function(){
     // el motivo de estancada solo sobrevive mientras está pausada
     if('estado' in p && p.estado!=='pausada' && (actual.estancada_motivo||''))
       p.estancada_motivo='';
+
+    /* La marca de "falta la foto" se apaga al cerrar la partida.
+       Se ponia y no se quitaba nunca: hay 766 partidas YA TERMINADAS que
+       siguen pidiendo foto. Con eso el aviso dejo de avisar — pedia foto en
+       sitios donde ya no hacia falta — y se volvio ruido que se aprende a
+       ignorar. Cerrada la partida, la marca sobra: o la foto se subio, o ya
+       no se va a subir. */
+    if(estadoFinal==='completado' && actual.foto_pendiente && !('foto_pendiente' in p))
+      p.foto_pendiente=false;
 
     return p;
   }
