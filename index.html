@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_72';
+const APP_VERSION='20260911_73';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1519,8 +1519,17 @@ function otrasTodas(v){
 
 /* Los 11 apartamentos de un toque. Antes habia que elegirlos uno por uno
    en el desplegable, y por eso nadie creaba un taller para toda la torre. */
-function ubicTodosAptos(){
+function ubicTodosAptos(){ _ubicApartamentos(false); }
+
+/* Los diez del N2 al N6, sin el penthouse. Casi todo el trabajo repetido de la
+   torre es de esos diez: el penthouse tiene otra distribucion y casi siempre
+   lleva su propia partida. Con el boton de los once habia que entrar despues a
+   quitarle el penthouse a mano. */
+function ubicAptosN2aN6(){ _ubicApartamentos(true); }
+
+function _ubicApartamentos(sinPenthouse){
   var todos=(typeof REC_ORDEN!=='undefined')?REC_ORDEN.slice():[];
+  if(sinPenthouse) todos=todos.filter(function(x){ return !/penthouse/i.test(x); });
   todos.forEach(function(x){
     if(_ubicacionesSeleccionadas.indexOf(x)<0) _ubicacionesSeleccionadas.push(x);
   });
@@ -9767,7 +9776,10 @@ function showAddActPropio(ai, ctx){
         ${ubicacionSelect('a-area-single','')}
         <button type="button" id="btn-add-ubic" onclick="addUbicacion()" style="flex-shrink:0;padding:10px 14px;border-radius:var(--r);border:2px solid var(--accent);background:var(--blue-light);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Agregar</button>
       </div>
-      ${edit?"":`<button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>`}
+      ${edit?"":`<div style="display:flex;gap:7px;margin-top:7px">
+        <button type="button" onclick="ubicAptosN2aN6()" style="flex:1;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Del N2 al N6 (10)</button>
+        <button type="button" onclick="ubicTodosAptos()" style="flex:1;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11</button>
+      </div>`}
     </div>
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
@@ -9836,7 +9848,8 @@ function showAddActPropio(ai, ctx){
   window._ubicEdit = !!edit;
   window._editActual = edit ? a : null;
   window._otrasUbic = [];
-  _ubicacionesSeleccionadas = edit && a.area ? [a.area] : ((ctx&&ctx.area)?[ctx.area]:[]);
+  _ubicacionesSeleccionadas = edit && a.area ? [a.area]
+    : ((ctx&&ctx.area) ? [ctx.area] : _ctxAreasParaForm());
   setTimeout(()=>{
     var _d=document.getElementById('a-d'); if(!_d) return; _d.focus();
     initMultiUbicacion();
@@ -9845,6 +9858,38 @@ function showAddActPropio(ai, ctx){
 }
 
 // ── FORM CONTRATISTA ──────────────────────────────────
+/* ── EL FORMULARIO MIRA DONDE ESTABAS ──────────────────────────────────────
+   Se abre "Nueva actividad" estando en el Apto 2A filtrado por Yelson, y el
+   formulario salia en blanco: habia que volver a elegir el apartamento y el
+   contratista que ya estaban en pantalla. Es el mismo contexto que usa el
+   dictado desde la v65 — el apartamento tocado en el Edificio, el contratista
+   de la torre, los filtros de la lista, Por Apto y la Revision — asi que las
+   dos puertas entienden lo mismo.
+   Solo al CREAR, y solo si no se paso nada explicito: nunca pisa una eleccion.
+   ────────────────────────────────────────────────────────────────────────── */
+function _ctxFormulario(){
+  try{ return Comandos.contexto(); }catch(e){ return {areas:[],gente:[]}; }
+}
+function _ctxAreasParaForm(ctx){
+  // Solo areas de verdad; "Sin asignar" y similares no son sitios.
+  return (_ctxFormulario().areas||[]).slice(0,11);
+}
+function _ctxGenteParaForm(){
+  return (_ctxFormulario().gente||[]).filter(function(n){ return n && n!=='Sin asignar'; });
+}
+/* Se dice de donde salio lo prellenado. Un formulario que se rellena solo sin
+   explicar por que se siente como un error. */
+function _ctxAvisoHTML(areas, gente){
+  if(!areas.length && !gente.length) return '';
+  var partes=areas.map(function(a){ return _recNom(a); }).concat(gente);
+  return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;'+
+    'background:var(--accent-soft);border:1.5px solid var(--accent);border-radius:var(--r2);'+
+    'padding:8px 11px;margin:-4px 0 12px;font-size:11.5px;color:var(--accent)">'+
+    '<b>Traído de la pantalla:</b>'+
+    partes.map(function(t){ return '<span style="font-weight:700">'+esc(t)+'</span>'; }).join('<span style="opacity:.5">·</span>')+
+    '</div>';
+}
+
 /* ── LO QUE DICEN LAS HERMANAS ─────────────────────────────────────────────
    Al crear una partida hay que teclear otra vez el contratista y las fechas,
    aunque ese mismo taller ya exista en los otros apartamentos. De ahi salen
@@ -9934,13 +9979,14 @@ function showAddActContratista(ai, preContratista, ctx){
     descripcion:'',area:'',estado:'pendiente',tipo_personal:'contratista',
     unidad:'',cantidad_plan:0,cantidad_real:0,porcentaje:0,notas:'',
     ingeniero_nombre:(ctx&&ctx.ingeniero_nombre)||S.user?.nombre||'',
-    personal_nombre:preContratista||'',
+    personal_nombre:preContratista||(_ctxGenteParaForm()[0]||''),
     fecha_inicio:'',fecha_fin:''
   };
   document.getElementById('mcontent').innerHTML=`
     <div class="mhandle"></div>
     <h3>${edit?'Editar actividad':'Actividad — Contratista'}</h3>
 
+    ${edit?'':_ctxAvisoHTML((ctx&&ctx.area)?[]:_ctxAreasParaForm(), preContratista?[]:_ctxGenteParaForm().slice(0,1))}
     <div class="fw"><label class="fl">¿Qué se va a realizar? *</label>
       <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Ej: Instalación sistema eléctrico..." style="font-size:15px" oninput="_pintarHermanas()"></div>
     <div id="a-sug"></div>
@@ -9953,7 +9999,10 @@ function showAddActContratista(ai, preContratista, ctx){
         ${ubicacionSelect('a-area-single','')}
         <button type="button" id="btn-add-ubic" onclick="addUbicacion()" style="flex-shrink:0;padding:10px 14px;border-radius:var(--r);border:2px solid var(--accent);background:var(--blue-light);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Agregar</button>
       </div>
-      ${edit?"":`<button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>`}
+      ${edit?"":`<div style="display:flex;gap:7px;margin-top:7px">
+        <button type="button" onclick="ubicAptosN2aN6()" style="flex:1;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Del N2 al N6 (10)</button>
+        <button type="button" onclick="ubicTodosAptos()" style="flex:1;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11</button>
+      </div>`}
     </div>
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
@@ -10031,7 +10080,8 @@ function showAddActContratista(ai, preContratista, ctx){
   window._ubicEdit = !!edit;
   window._editActual = edit ? a : null;
   window._otrasUbic = [];
-  _ubicacionesSeleccionadas = edit && a.area ? [a.area] : ((ctx&&ctx.area)?[ctx.area]:[]);
+  _ubicacionesSeleccionadas = edit && a.area ? [a.area]
+    : ((ctx&&ctx.area) ? [ctx.area] : _ctxAreasParaForm());
   setTimeout(()=>{
     var _d=document.getElementById('a-d'); if(!_d) return; _d.focus();
     renderUbicacionesSeleccionadas();
@@ -10072,7 +10122,10 @@ function showAddActIngeniero(ai, ctx){
         ${ubicacionSelect('a-area-single','')}
         <button type="button" onclick="addUbicacion()" style="flex-shrink:0;padding:10px 14px;border-radius:var(--r);border:2px solid var(--accent);background:var(--blue-light);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">+ Agregar</button>
       </div>
-      ${edit?"":`<button type="button" onclick="ubicTodosAptos()" style="margin-top:7px;width:100%;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11 apartamentos de una vez</button>`}
+      ${edit?"":`<div style="display:flex;gap:7px;margin-top:7px">
+        <button type="button" onclick="ubicAptosN2aN6()" style="flex:1;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Del N2 al N6 (10)</button>
+        <button type="button" onclick="ubicTodosAptos()" style="flex:1;padding:10px;border-radius:var(--r);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;min-height:42px">Los 11</button>
+      </div>`}
     </div>
     <div id="ubicaciones-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:6px;min-height:4px"></div>
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
@@ -10132,7 +10185,8 @@ function showAddActIngeniero(ai, ctx){
   window._ubicEdit = !!edit;
   window._editActual = edit ? a : null;
   window._otrasUbic = [];
-  _ubicacionesSeleccionadas = edit && a.area ? [a.area] : ((ctx&&ctx.area)?[ctx.area]:[]);
+  _ubicacionesSeleccionadas = edit && a.area ? [a.area]
+    : ((ctx&&ctx.area) ? [ctx.area] : _ctxAreasParaForm());
   setTimeout(()=>{
     var _d=document.getElementById('a-d'); if(!_d) return; _d.focus();
     renderUbicacionesSeleccionadas();
