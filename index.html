@@ -513,29 +513,6 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <button onclick="doLockLogin()" style="width:100%;background:var(--accent-fill);border:none;border-radius:var(--r);color:#fff;font-size:16px;font-weight:700;padding:15px;cursor:pointer;font-family:var(--font);min-height:52px">
       Ingresar
     </button>
-
-    <!-- ── PRUEBA DEL LOGIN NUEVO (temporal) ──────────────────────────────
-         Esto NO abre sesion y NO toca el PIN de arriba: si falla, todo el
-         mundo sigue entrando igual que siempre. Solo hace la misma llamada
-         que hacia la v49 y enseña la respuesta cruda de Supabase, porque
-         desde el entorno de desarrollo no hay manera de alcanzarlo.
-         Se quita en cuanto el login por contraseña quede funcionando. -->
-    <button id="diag-abrir" onclick="_toggleDiag()" style="width:100%;background:transparent;border:1.5px solid var(--border2);border-radius:var(--r);color:var(--text3);font-size:12.5px;font-weight:600;padding:11px;margin-top:12px;cursor:pointer;font-family:var(--font);min-height:44px">
-      Probar contraseña nueva
-    </button>
-    <div id="lock-diag" style="display:none;margin-top:12px">
-      <div style="color:var(--text3);font-size:11.5px;line-height:1.5;margin-bottom:10px">
-        Prueba del acceso nuevo. No abre sesión ni cambia nada; el código de arriba sigue siendo el que entra.
-      </div>
-      <input id="diag-pass" type="password" maxlength="72" placeholder="Tu contraseña nueva" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
-        style="width:100%;background:var(--bg3);border:1.5px solid transparent;border-radius:var(--r);color:var(--text);font-size:16px;text-align:center;padding:14px 12px;font-family:var(--font);box-sizing:border-box;margin-bottom:10px;outline:none"
-        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='transparent'"
-        onkeydown="if(event.key==='Enter')probarClave()">
-      <button id="diag-btn" onclick="probarClave()" style="width:100%;background:var(--bg3);border:1.5px solid var(--border2);border-radius:var(--r);color:var(--text);font-size:14px;font-weight:700;padding:12px;cursor:pointer;font-family:var(--font);min-height:46px">
-        Probar
-      </button>
-      <div id="diag-out" style="display:none;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--text2);background:var(--bg3);border-radius:var(--r);padding:11px;margin-top:10px;text-align:left;max-height:200px;overflow:auto;-webkit-user-select:text;user-select:text"></div>
-    </div>
   </div>
   <div style="color:var(--text3);font-size:11px;margin-top:26px">Solo personal autorizado</div>
   <div id="login-version" style="color:var(--text3);opacity:.6;font-size:10px;margin-top:6px;letter-spacing:.3px"></div>
@@ -840,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_52';
+const APP_VERSION='20260911_53';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -2333,69 +2310,6 @@ function _llenarUsuariosLock(){
   });
   sel.innerHTML=h;
   if(prev&&USERS[prev]&&!USERS[prev].archivado) sel.value=prev;
-}
-
-/* ── PRUEBA DEL LOGIN NUEVO (temporal) ────────────────────────────────────
-   La v49 cambiaba el PIN por contraseña de verdad y en el iPad Supabase
-   contestaba "credenciales invalidas" con las cinco cuentas, aunque en la
-   base la contraseña valida correctamente. El entorno de desarrollo tiene
-   bloqueada la salida a Supabase, o sea que desde alli no hay forma de ver
-   la respuesta real: por eso la v49 se probo contra un Supabase de mentira
-   que contestaba lo que se esperaba, paso la prueba, y fallo en la obra.
-   Esto hace la MISMA llamada y enseña lo que Supabase contesta, tal cual.
-   No abre sesion, no guarda nada y no toca el PIN.
-   ──────────────────────────────────────────────────────────────────────── */
-function _toggleDiag(){
-  var caja=document.getElementById('lock-diag');
-  var btn=document.getElementById('diag-abrir');
-  if(!caja) return;
-  var abierto=caja.style.display!=='none';
-  caja.style.display=abierto?'none':'block';
-  if(btn) btn.textContent=abierto?'Probar contraseña nueva':'Ocultar la prueba';
-  if(!abierto) setTimeout(function(){var i=document.getElementById('diag-pass');if(i)i.focus();},80);
-}
-
-async function probarClave(){
-  var uid=document.getElementById('lock-user').value;
-  var clave=document.getElementById('diag-pass').value;
-  var out=document.getElementById('diag-out');
-  var btn=document.getElementById('diag-btn');
-  if(!out) return;
-  out.style.display='block';
-  if(!uid){ out.textContent='Elige tu usuario en la lista de arriba y vuelve a tocar Probar.'; return; }
-  if(!clave){ out.textContent='Escribe la contraseña en la casilla de aqui arriba.'; return; }
-  var correo=uid+'@mecca.local';
-  if(btn){ btn.disabled=true; btn.textContent='Probando…'; }
-  out.textContent='Probando '+correo+' …';
-  try{
-    var r=await fetch(SB+'/auth/v1/token?grant_type=password',{
-      method:'POST',
-      headers:{'apikey':KEY,'Content-Type':'application/json'},
-      body:JSON.stringify({email:correo, password:clave})
-    });
-    var txt=''; try{ txt=await r.text(); }catch(e){ txt='(sin cuerpo)'; }
-    if(r.ok && txt.indexOf('access_token')>=0){
-      /* Exito: NO se enseña el cuerpo, que trae el token. Solo el rol. */
-      var rol='(sin rol)';
-      try{
-        var t=JSON.parse(txt).access_token;
-        var pl=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
-        while(pl.length%4) pl+='=';
-        var c=JSON.parse(atob(pl));
-        rol=(c.app_metadata&&c.app_metadata.rol)||'(sin rol)';
-      }catch(e){}
-      out.textContent='✅ ENTRO BIEN\n'+correo+'\nrol: '+rol+'\nHTTP '+r.status+
-                      '\n\nEl login nuevo funciona. Digaselo a Claude.';
-    } else {
-      out.textContent='❌ RECHAZADO\n'+correo+'\nHTTP '+r.status+'\n\n'+txt.slice(0,700)+
-                      '\n\nCopie o lea esto tal cual a Claude.';
-    }
-  }catch(e){
-    out.textContent='❌ NI SALIO LA PETICION\n'+correo+'\n'+((e&&e.message)||e)+
-                    '\n\nEsto suele ser red, o Supabase rechazando el origen del app.'+
-                    '\n\nCopie o lea esto tal cual a Claude.';
-  }
-  if(btn){ btn.disabled=false; btn.textContent='Probar'; }
 }
 
 function hideLockScreen(){
