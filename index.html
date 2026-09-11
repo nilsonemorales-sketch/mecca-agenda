@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_57';
+const APP_VERSION='20260911_58';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5844,7 +5844,14 @@ function renderActs(){
   const ICO_FILT='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 5h18M6 12h12M10 19h4"/></svg>';
 
   document.getElementById('c-act').innerHTML=`
-    <!-- BUSCADOR — primero, siempre visible -->
+    <!-- SELECTOR DE VISTA — arriba y siempre visible.
+         Estaba metido dentro del panel de Filtros, que viene plegado, asi que
+         desde la Lista no habia manera de volver al Edificio, a la Matriz ni a
+         Por Apto sin saber que primero habia que abrir Filtros. Se elegia una
+         vez y ahi te quedabas. Las otras tres vistas siempre lo tuvieron
+         arriba; ahora las cuatro son iguales. -->
+    ${_actVistaToggle()}
+    <!-- BUSCADOR -->
     <div style="display:flex;align-items:center;gap:9px;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r2);padding:11px 13px;margin-bottom:10px">
       <span style="color:var(--text3);display:flex">${ICO_LUPA}</span>
       <input id="act-search" type="search" value="${esc(S.actFiltroTexto||'')}" placeholder="Buscar actividad, apartamento o contratista" oninput="_actBuscar(this.value)" style="flex:1;border:none;outline:none;font-size:14px;font-family:var(--font);background:transparent;color:var(--text)">
@@ -5868,7 +5875,6 @@ function renderActs(){
     <!-- PANEL DE FILTROS (plegado por defecto) -->
     <div style="${abierto?'':'display:none'};background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:16px">
       ${dateNavHTML()}
-      ${_actVistaToggle()}
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <button onclick="S.actMostrarTodas=false;loadActsAll().then(()=>renderActs())" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid ${!S.actMostrarTodas?'var(--accent-fill)':'var(--border2)'};background:${!S.actMostrarTodas?'var(--accent-soft)':'var(--bg2)'};color:${!S.actMostrarTodas?'var(--accent)':'var(--text2)'};font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Solo activas</button>
         <button onclick="S.actMostrarTodas=true;loadActsAll().then(()=>renderActs())" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid ${S.actMostrarTodas?'var(--green)':'var(--border2)'};background:${S.actMostrarTodas?'var(--green-light)':'var(--bg2)'};color:${S.actMostrarTodas?'var(--green)':'var(--text2)'};font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">Todas</button>
