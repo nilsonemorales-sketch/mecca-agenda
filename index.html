@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_46';
+const APP_VERSION='20260911_47';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5285,6 +5285,81 @@ async function actSelPonerFecha(){
   else if(bien===0){ setSS('err','Error'); showToast('No se pudo cambiar ninguna. Fallaron '+mal+'.','err',6000); }
   else { setSS('ok','✓'); showToast('Se cambiaron '+bien+'. Fallaron '+mal+'.','err',6000); }
 }
+// Cierra en bloque lo marcado. De las tres congeladas que se revisaron a mano,
+// dos ya estaban terminadas y nadie las había cerrado: con 62 en curso, cerrarlas
+// de una en una abriendo cada formulario no lo hace nadie.
+async function actSelMarcarHechas(){
+  if(!canEdit()) return;
+  // Se revalida contra el estado actual: una ya completada no se vuelve a cerrar.
+  var ids=_actSelIds().filter(function(id){
+    var a=(S.acts||[]).find(function(x){return x.id===id;});
+    return a && a.estado!=='completado';
+  });
+  if(!ids.length){ showToast('No hay nada marcado','err'); return; }
+  if(!confirm('Se van a dar por terminadas '+ids.length+' actividad'+(ids.length!==1?'es':'')+'. ¿Seguro?')) return;
+
+  var bien=0, mal=0, hechas=0, total=ids.length;
+  setSS('syncing','Cerrando 0 de '+total+'...');
+  // De 5 en 5, y cada una con su propio catch: un fallo suelto no puede dejar a
+  // medias el resto de la tanda.
+  for(var i=0;i<ids.length;i+=5){
+    await Promise.all(ids.slice(i,i+5).map(function(id){
+      return Acciones.completar(id)
+        .then(function(){ bien++; }, function(){ mal++; })
+        .then(function(){ hechas++; setSS('syncing','Cerrando '+hechas+' de '+total+'...'); });
+    }));
+  }
+  S.actSel={}; S.actSelModo=false;
+  renderActs();
+  if(mal===0){ setSS('ok','✓'); showToast('Se cerraron '+bien+'.'); }
+  else if(bien===0){ setSS('err','Error'); showToast('No se pudo cerrar ninguna. Fallaron '+mal+'.','err',6000); }
+  else { setSS('ok','✓'); showToast('Se cerraron '+bien+'. Fallaron '+mal+'.','err',6000); }
+}
+// Deja constancia de que se revisó y sigue igual, sin tocar la actividad. Se
+// apunta también en el Set del detector para que salga del filtro al instante,
+// sin tener que recargar.
+function _actMarcarRevisadaLocal(id){
+  if(S.tocadasRecientes instanceof Set) S.tocadasRecientes.add(String(id));
+  (S.ultimoCambio=S.ultimoCambio||{})[String(id)]=today();
+}
+async function actRevisarUna(id){
+  if(!canEdit()) return;
+  try{ await Acciones.revisar(id); }catch(e){ showToast('No se pudo registrar','err'); return; }
+  _actMarcarRevisadaLocal(id);
+  showToast('Revisada — sigue igual');
+  renderActs();
+}
+// Lo mismo sobre todo lo marcado. Sin confirm(): no cambia nada de la obra, solo
+// deja constancia de que se miró.
+async function actSelMarcarRevisadas(){
+  if(!canEdit()) return;
+  var ids=_actSelIds().filter(function(id){
+    var a=(S.acts||[]).find(function(x){return x.id===id;});
+    return a && a.estado!=='completado';
+  });
+  if(!ids.length){ showToast('No hay nada marcado','err'); return; }
+  var bien=0, mal=0, hechas=0, total=ids.length;
+  setSS('syncing','Registrando 0 de '+total+'...');
+  for(var i=0;i<ids.length;i+=5){
+    await Promise.all(ids.slice(i,i+5).map(function(id){
+      return Acciones.revisar(id)
+        .then(function(){ bien++; _actMarcarRevisadaLocal(id); }, function(){ mal++; })
+        .then(function(){ hechas++; setSS('syncing','Registrando '+hechas+' de '+total+'...'); });
+    }));
+  }
+  S.actSel={}; S.actSelModo=false;
+  renderActs();
+  if(mal===0){ setSS('ok','✓'); showToast('Se marcaron '+bien+' como revisadas.'); }
+  else if(bien===0){ setSS('err','Error'); showToast('No se pudo registrar ninguna. Fallaron '+mal+'.','err',6000); }
+  else { setSS('ok','✓'); showToast('Se marcaron '+bien+'. Fallaron '+mal+'.','err',6000); }
+}
+// Botón de fila. Solo con el filtro de congeladas puesto: en los demás estorba.
+function _actSigueIgualBtnHTML(a){
+  if(!canEdit() || !a || a.estado==='completado') return '';
+  if((S.actFiltroRapidos||[]).indexOf('congeladas')<0) return '';
+  return '<button onclick="event.stopPropagation();actRevisarUna(\''+a.id+'\')" title="Revisada y sigue igual" '+
+    'style="flex-shrink:0;padding:3px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">Sigue igual</button>';
+}
 // Barra de acción: solo asoma cuando hay algo marcado.
 function _actSelBarraHTML(){
   var ids=_actSelIds();
@@ -5296,6 +5371,10 @@ function _actSelBarraHTML(){
     '<button onclick="actSelNone()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Ninguna</button>'+
     '<input id="act-sel-fecha" type="date" value="'+esc(S.actSelFecha||'')+'" onchange="S.actSelFecha=this.value" style="flex:1;min-width:132px;padding:6px 8px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--font);font-size:12.5px">'+
     '<button onclick="actSelPonerFecha()" style="'+bs+';border:none;background:var(--accent-fill);color:var(--accent-on)">Poner fecha</button>'+
+    // Cerrar es la única irreversible de las tres: va en verde lleno para que no
+    // se confunda con las otras dos.
+    '<button onclick="actSelMarcarHechas()" style="'+bs+';border:none;background:var(--green-fill);color:#fff">Marcar hechas</button>'+
+    '<button onclick="actSelMarcarRevisadas()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Marcar revisadas</button>'+
     '<button onclick="actSelModo()" title="Salir" style="'+bs+';border:1px solid var(--border2);background:transparent;color:var(--text3)">✕</button>'+
   '</div>';
 }
@@ -6182,11 +6261,13 @@ function actsDesktopTable(acts, showDate){
       +'<span style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px">'+esc(a.descripcion)+'</span>'
       +'</div>';
     var _congB=_congeladaBadgeHTML(a);
-    if(fechaLine||a.notas||_congB){
+    var _sigB=_actSigueIgualBtnHTML(a);
+    if(fechaLine||a.notas||_congB||_sigB){
       html+='<div style="display:flex;align-items:center;gap:8px;margin-top:2px;font-size:10.5px;flex-wrap:wrap">';
       if(fechaLine) html+='<span>'+fechaLine+'</span>';
       if(_congB) html+=_congB;
       if(a.notas) html+='<span style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px">'+esc(a.notas)+'</span>';
+      if(_sigB) html+=_sigB;
       html+='</div>';
     }
     html+='</td>';
@@ -6304,7 +6385,7 @@ function actHTML(a, ai, tipo){
       <div style="flex:1;min-width:0">
         <div style="font-size:13.5px;font-weight:600;line-height:1.25;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${urgente?_ic('alerta',13,'var(--red)')+' ':''}${esc(a.descripcion)}${blocked?' '+_ic('lock',12,'var(--text3)'):''}</div>
         <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-          ${_areaCorta?`<span style="color:var(--accent);font-weight:700">${_areaCorta}</span>`:`<span style="color:var(--amber);font-weight:700">Sin área</span>`}${_contCorto?` · ${_contCorto}`:''} · <span style="color:${ec};font-weight:700">${el}</span>${_congeladaBadgeHTML(a)?' '+_congeladaBadgeHTML(a):''}
+          ${_areaCorta?`<span style="color:var(--accent);font-weight:700">${_areaCorta}</span>`:`<span style="color:var(--amber);font-weight:700">Sin área</span>`}${_contCorto?` · ${_contCorto}`:''} · <span style="color:${ec};font-weight:700">${el}</span>${_congeladaBadgeHTML(a)?' '+_congeladaBadgeHTML(a):''}${_actSigueIgualBtnHTML(a)?' '+_actSigueIgualBtnHTML(a):''}
         </div>
       </div>
       <span id="chev-${a.id}" style="color:var(--text3);font-size:15px;flex-shrink:0;transition:transform .15s;${_abierta?'transform:rotate(90deg)':''}">›</span>
@@ -7166,6 +7247,18 @@ var Acciones = (function(){
 
     async completar(id){
       return _patch(id,{estado:'completado'},'completado','Marcada como completada');
+    },
+
+    /* Revisada y sigue igual. NO toca la actividad: ni estado, ni porcentaje, ni
+       fecha, ni notas. Solo deja constancia de que alguien la miró.
+       Sin esto, revisar una partida no deja huella y mañana vuelve a salir como
+       congelada: el detector mostraría siempre las mismas y se volvería inútil.
+       El rastro va a obra_cambios, que es de donde el detector saca quién se
+       tocó, así que la partida deja de contarse como congelada. */
+    async revisar(id){
+      var a=_buscarLocal(id);
+      logCambio('revisado','actividad',id,(a&&a.descripcion)||'','Revisada sin cambios');
+      return {ok:true, id:id, revisada:true};
     },
 
     async setEstado(id,estado){
