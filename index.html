@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_71';
+const APP_VERSION='20260911_72';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -9845,6 +9845,89 @@ function showAddActPropio(ai, ctx){
 }
 
 // ── FORM CONTRATISTA ──────────────────────────────────
+/* ── LO QUE DICEN LAS HERMANAS ─────────────────────────────────────────────
+   Al crear una partida hay que teclear otra vez el contratista y las fechas,
+   aunque ese mismo taller ya exista en los otros apartamentos. De ahi salen
+   las 114 abiertas sin fecha y las 30 sin asignar: no es descuido, es que
+   volver a escribirlo cuesta.
+
+   Se mira con el MISMO motor Parecido que usan la Matriz y "¿falta algo
+   aqui?", asi que propone lo mismo que esas pantallas cuentan. Sin modelo:
+   es instantaneo, no gasta neuronas y funciona sin internet — y sobre todo
+   propone siempre lo mismo, que es lo que no puede garantizar una IA.
+   ────────────────────────────────────────────────────────────────────────── */
+function _hermanasDe(desc){
+  desc=String(desc||'').trim();
+  if(desc.length<6) return null;
+  var base=(S.acts||[]).concat(S.abiertas||[]);
+  var vistos={}, herm=[];
+  base.forEach(function(a){
+    if(!a||!a.id||vistos[a.id]||!a.descripcion) return;
+    var p=0; try{ p=Parecido.parecido(desc,a.descripcion); }catch(e){}
+    if(p<APLICAR_UMBRAL) return;
+    vistos[a.id]=1; herm.push(a);
+  });
+  if(herm.length<2) return null;          // con una sola no hay costumbre que copiar
+  var q={};
+  herm.forEach(function(a){ _responsables(a.personal_nombre).forEach(function(n){ q[n]=(q[n]||0)+1; }); });
+  var nombres=Object.keys(q).sort(function(x,y){ return q[y]-q[x]; });
+  var ini='', fin='';
+  herm.forEach(function(a){
+    if(a.fecha_inicio && (!ini || a.fecha_inicio<ini)) ini=a.fecha_inicio;
+    if(a.fecha_fin    && (!fin || a.fecha_fin   >fin)) fin=a.fecha_fin;
+  });
+  /* Misma regla de fechas que faltanCrear y que el hueco de la matriz: si lo
+     heredado no sirve, plazo desde hoy. El fin nunca antes del inicio. */
+  var _ini = ini || today();
+  var _fin = fin || '';
+  if(!_fin || _fin < _ini) _fin = _faltaEnDias(30);
+  var areas={}; herm.forEach(function(a){ if(a.area) areas[a.area]=1; });
+  return {n:herm.length, contratista:nombres[0]||'', cuantos:q[nombres[0]]||0,
+          ini:_ini, fin:_fin, areas:Object.keys(areas).sort()};
+}
+
+function _pintarHermanas(){
+  var c=document.getElementById('a-sug'); if(!c) return;
+  var d=document.getElementById('a-d');
+  var h=_hermanasDe(d&&d.value);
+  if(!h){ c.innerHTML=''; return; }
+  var dm=function(f){ return f? f.slice(8,10)+'/'+f.slice(5,7) : '—'; };
+  c.innerHTML='<div style="border:1.5px solid var(--accent);background:var(--accent-soft);'+
+      'border-radius:var(--r2);padding:11px 12px;margin:-2px 0 10px">'+
+    '<div style="font-size:11.5px;color:var(--text2);line-height:1.5">'+
+      'Este taller ya está en <b>'+h.areas.length+' apartamento'+(h.areas.length!==1?'s':'')+'</b>'+
+      (h.contratista? ', y en '+h.cuantos+' lo hace <b>'+esc(h.contratista)+'</b>' : '')+'.'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:4px">'+
+      'plazo de las hermanas: '+dm(h.ini)+' → '+dm(h.fin)+
+    '</div>'+
+    '<button type="button" onclick="usarHermanas()" style="margin-top:9px;min-height:40px;'+
+      'padding:9px 14px;border-radius:9px;border:none;background:var(--accent-fill);'+
+      'color:var(--accent-on);font-size:12.5px;font-weight:700;cursor:pointer;'+
+      'font-family:var(--font)">Usar contratista y fechas</button>'+
+  '</div>';
+}
+
+function usarHermanas(){
+  var h=_hermanasDe((document.getElementById('a-d')||{}).value);
+  if(!h) return;
+  if(h.contratista){
+    var marco=false;
+    document.querySelectorAll('input[name="a-pers"]').forEach(function(ch){
+      if(ch.value===h.contratista){ ch.checked=true; marco=true; }
+    });
+    // Si no esta en la lista de fichas, se pone igual en el campo oculto.
+    if(typeof updateWorkersField==='function') updateWorkersField();
+    if(!marco){ var oc=document.getElementById('a-pers'); if(oc) oc.value=h.contratista; }
+  }
+  var fi=document.getElementById('a-fi'), ff=document.getElementById('a-ff');
+  if(fi && !fi.value) fi.value=h.ini;
+  if(ff && !ff.value) ff.value=h.fin;
+  if(typeof calcDuracion==='function') try{ calcDuracion(); }catch(e){}
+  showToast('Copiado de las hermanas','ok',2500);
+  _pintarHermanas();
+}
+
 function showAddActContratista(ai, preContratista, ctx){
   const edit=ai!==undefined;
   const a=edit?S.acts[ai]:{
@@ -9859,7 +9942,8 @@ function showAddActContratista(ai, preContratista, ctx){
     <h3>${edit?'Editar actividad':'Actividad — Contratista'}</h3>
 
     <div class="fw"><label class="fl">¿Qué se va a realizar? *</label>
-      <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Ej: Instalación sistema eléctrico..." style="font-size:15px"></div>
+      <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Ej: Instalación sistema eléctrico..." style="font-size:15px" oninput="_pintarHermanas()"></div>
+    <div id="a-sug"></div>
     ${arqToggleHTML(a)}
     ${a.id?`<div style="margin:-2px 0 8px"><button type="button" onclick="abrirPendientes('${a.id}')" style="padding:6px 12px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Pendientes (${_pendAbiertos(a).length})</button></div>`:''}
 
