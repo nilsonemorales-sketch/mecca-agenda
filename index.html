@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_60';
+const APP_VERSION='20260911_61';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -3480,30 +3480,51 @@ async function cargarTorre(force){
         setTimeout(function(){ rechazar(new Error('la consulta tardó demasiado')); }, 25000);
       })
     ]);
-    var por={};
+    var por={}, porP={};   // porP: persona -> area -> sus numeros ahi
     (filas||[]).forEach(function(a){
       var ar=a.area||''; if(!ar) return;
-      var d=por[ar]||(por[ar]={total:0,hechas:0,faltan:0,venc:0,gente:{}});
-      d.total++;
-      if(a.estado==='completado'){ d.hechas++; return; }
-      d.faltan++;
+      var comp=a.estado==='completado';
       /* Se llama a isRetrasada, no se repite el criterio. El app cuenta como
          vencida la que pasó de fecha_fin O de fecha si la primera viene vacia
          — y 114 vienen vacias. Escrito aparte, el dibujo diria "65 vencidas"
          y la lista mostraria otro numero: el app dejaria de merecer confianza
-         justo donde mas se mira. */
-      // Una fila rara no puede tumbar el dibujo entero: si el calculo falla,
-      // esa cuenta como no vencida y se sigue con las demas.
-      try{ if(isRetrasada(a)) d.venc++; }catch(e){}
-      var q=(a.personal_nombre||'').trim()||'Sin asignar';
-      d.gente[q]=(d.gente[q]||0)+1;
+         justo donde mas se mira.
+         Y va en try: una fila rara no puede tumbar el dibujo entero. */
+      var atrasada=false; try{ atrasada=isRetrasada(a); }catch(e){}
+
+      var d=por[ar]||(por[ar]={total:0,hechas:0,faltan:0,venc:0,gente:{}});
+      d.total++;
+      if(comp){ d.hechas++; }
+      else{
+        d.faltan++; if(atrasada) d.venc++;
+        var q=(a.personal_nombre||'').trim()||'Sin asignar';
+        d.gente[q]=(d.gente[q]||0)+1;
+      }
+
+      /* Lo mismo, pero por persona. Un trabajo puede llevar varios nombres
+         separados por coma — 248 los llevan — y cuenta para cada uno, porque
+         los dos estuvieron en ese apartamento. */
+      var nombres=_responsables(a.personal_nombre);
+      if(!nombres.length) nombres=['Sin asignar'];
+      nombres.forEach(function(n){
+        var pp=porP[n]||(porP[n]={});
+        var e=pp[ar]||(pp[ar]={total:0,hechas:0,faltan:0,venc:0});
+        e.total++;
+        if(comp) e.hechas++;
+        else{ e.faltan++; if(atrasada) e.venc++; }
+      });
     });
-    Object.keys(por).forEach(function(k){
-      var d=por[k];
-      d.pct=d.total?Math.round(d.hechas/d.total*100):0;
-      d.lista=Object.keys(d.gente).map(function(q){return {q:q,n:d.gente[q]};})
-                    .sort(function(a,b){return b.n-a.n;});
-    });
+    function _porcentajes(mapa){
+      Object.keys(mapa).forEach(function(k){
+        var d=mapa[k];
+        d.pct=d.total?Math.round(d.hechas/d.total*100):0;
+        if(d.gente) d.lista=Object.keys(d.gente).map(function(q){return {q:q,n:d.gente[q]};})
+                                  .sort(function(a,b){return b.n-a.n;});
+      });
+    }
+    _porcentajes(por);
+    Object.keys(porP).forEach(function(n){ _porcentajes(porP[n]); });
+    S._torrePersona=porP;
     /* solo se guarda si de verdad vino algo: si la consulta falla o vuelve
        vacia no se cachea el vacio, y el proximo Hoy lo vuelve a intentar */
     S._torre = Object.keys(por).length ? por : null;
@@ -3519,6 +3540,8 @@ async function cargarTorre(force){
      vista Edificio de Actividades, y si esto siguiera mirando la pestaña se
      quedaba en "cargando…" para siempre en la otra. */
   if(document.querySelector('[data-torre]')) dibujarTorre();
+  // Con los datos ya en mano, la lista de gente por fin se puede armar.
+  _torrePintarSelector();
   return S._torre;
 }
 
@@ -3532,9 +3555,10 @@ async function cargarTorre(force){
    pestaña. Por eso se marcan con data-… y se pintan TODAS las que haya.
    ────────────────────────────────────────────────────────────────────────── */
 var _torreN=0;
-function torreHTML(){
+function torreHTML(persona){
   var uid='t'+(++_torreN);   // el clipPath tambien tiene que ser unico
-  return '<div data-torre="'+uid+'" style="background:var(--bg2);border-radius:var(--r2);'+
+  return '<div data-torre="'+uid+'"'+(persona?' data-torre-persona="'+esc(persona)+'"':'')+
+    ' style="background:var(--bg2);border-radius:var(--r2);'+
     'padding:14px 12px 16px;margin-bottom:10px">'+
     '<div style="display:flex;align-items:baseline;gap:8px;padding:0 4px 10px">'+
       '<div style="font-family:var(--tit);font-size:14px;font-weight:700;color:var(--text)">El edificio</div>'+
@@ -3552,10 +3576,27 @@ function dibujarTorre(){
   for(var i=0;i<cajas.length;i++) _dibujarTorreEn(cajas[i]);
 }
 
+/* Los numeros de toda la obra, o los de una sola persona.
+   Si ya cargo pero esa persona no tiene nada, devuelve {} y no null: null
+   significa "no ha cargado" y pintaria el aviso de error. */
+function _torreDatos(persona){
+  if(!persona) return S._torre;
+  if(!S._torre) return null;
+  return (S._torrePersona && S._torrePersona[persona]) || {};
+}
+
+// ¿Esta persona aparece entre los responsables de esta partida?
+function _personaEn(a, persona){
+  if(!persona) return true;
+  var ns=_responsables(a && a.personal_nombre);
+  return ns.length ? ns.indexOf(persona)>=0 : persona==='Sin asignar';
+}
+
 function _dibujarTorreEn(caja){
   var svg=caja.querySelector('[data-torre-svg]');
   if(!svg) return;
-  var D=S._torre;
+  var persona=caja.getAttribute('data-torre-persona')||'';
+  var D=_torreDatos(persona);
   var sub=caja.querySelector('[data-torre-sub]');
   var uid=caja.getAttribute('data-torre')||'t';
   if(!D){
@@ -3774,8 +3815,9 @@ function _dibujarTorreEn(caja){
   add('line',{x1:BALA-14,y1:yb+hb+10,x2:DER+14,y2:yb+hb+10,
     stroke:'var(--border2)','stroke-width':1.5});
 
-  if(sub) sub.textContent = total ?
-    (Math.round(hechas/total*100)+'% · faltan '+abiertas) : 'sin datos';
+  if(sub) sub.textContent = total
+    ? (Math.round(hechas/total*100)+'% · faltan '+abiertas)
+    : (persona ? 'sin partidas de '+persona : 'sin datos');
 
   _torreOtras(D, caja.querySelector('[data-torre-otras]'));
 }
@@ -5328,6 +5370,19 @@ function applyActFilters(acts){
   const contratistas = (av.contratistas||[]).filter(c=>c!=='__sin_asignar__');
   const responsables = av.responsables||[];
   if(contratistas.length) filtered = filtered.filter(a=>a.tipo_personal==='contratista'&&_responsables(a.personal_nombre).some(r=>contratistas.indexOf(r)>=0));
+  /* "personas" es quien hace el trabajo, sin exigir tipo_personal.
+     El filtro de arriba pide tipo_personal==='contratista', y ese campo no es
+     de fiar: hay 84 partidas abiertas con nombre marcadas 'propio' y 23
+     'ingeniero'. Usarlo para el Edificio por contratista dejaria 107 partidas
+     fuera y el dibujo diria un numero que la lista no enseña. Ademas 248
+     partidas llevan varios nombres separados por coma, asi que se compara
+     contra la lista, no contra el texto entero. */
+  const personas = av.personas||[];
+  if(personas.length) filtered = filtered.filter(function(a){
+    var ns=_responsables(a.personal_nombre);
+    if(!ns.length) return personas.indexOf('Sin asignar')>=0;
+    return ns.some(function(n){ return personas.indexOf(n)>=0; });
+  });
   if(av.prioridad) filtered = filtered.filter(a=>a.prioridad===av.prioridad);
   if(av.requiereArq) filtered = filtered.filter(a=>!!a.requiere_arq);
   if(ubicaciones.length) filtered = filtered.filter(a=>ubicaciones.indexOf(a.area||'')>=0);
@@ -6321,18 +6376,78 @@ function _actVistaToggle(){
    No se dibuja una segunda: si dos pantallas cuentan el avance por su cuenta,
    tarde o temprano dan numeros distintos y el app deja de merecer confianza.
    Es la misma funcion, los mismos datos y el mismo cache (S._torre). */
+/* La lista de gente sale de los MISMOS datos que pinta la torre, no de otra
+   consulta: si se sacara de otro sitio, el desplegable diria un numero y el
+   dibujo otro. Ordenada por vencidas, que es por donde se empieza. */
+function _torrePersonas(){
+  var P=S._torrePersona||{}, out=[];
+  Object.keys(P).forEach(function(n){
+    var ab=0, ve=0;
+    Object.keys(P[n]).forEach(function(ar){ ab+=P[n][ar].faltan; ve+=P[n][ar].venc; });
+    if(ab>0) out.push({nombre:n, abiertas:ab, vencidas:ve});
+  });
+  return out.sort(function(u,v){
+    return (v.vencidas-u.vencidas)||(v.abiertas-u.abiertas)||u.nombre.localeCompare(v.nombre);
+  });
+}
+
+function torreSetPersona(n){
+  S.torrePersona=n||'';
+  S.torreSel='';          // el menu abierto era de la vista anterior
+  renderActs();
+}
+
+/* Se pinta en su propio hueco y no de una sola vez con el resto: cuando la
+   vista se arma, los datos de la torre todavia no han llegado, asi que la
+   lista de gente salia vacia y nadie la volvia a pintar. El desplegable no
+   aparecia nunca. */
+function _torrePintarSelector(){
+  var caja=document.getElementById('torre-personas');
+  if(caja) caja.innerHTML=_torreSelectorHTML();
+}
+
+function _torreSelectorHTML(){
+  var gente=_torrePersonas();
+  if(!gente.length) return '';
+  var sel=S.torrePersona||'';
+  var h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;max-width:100%">'+
+    /* min-width:0 es obligatorio: por defecto un elemento flex no baja de su
+       contenido, y con un nombre largo mas los numeros el desplegable empujaba
+       el boton "Quitar" fuera de la pantalla. */
+    '<select onchange="torreSetPersona(this.value)" style="flex:1;min-width:0;min-height:44px;padding:11px 12px;'+
+      'border:1.5px solid '+(sel?'var(--accent)':'var(--border2)')+';border-radius:10px;'+
+      'background:'+(sel?'var(--accent-soft)':'var(--bg2)')+';color:var(--text);font-size:13.5px;'+
+      'font-weight:600;font-family:var(--font);-webkit-appearance:none;appearance:none;cursor:pointer;'+
+      'text-overflow:ellipsis">'+
+    '<option value="">Toda la obra</option>';
+  gente.forEach(function(g){
+    h+='<option value="'+esc(g.nombre)+'"'+(sel===g.nombre?' selected':'')+'>'+
+       esc(g.nombre)+' — '+g.abiertas+' abierta'+(g.abiertas!==1?'s':'')+
+       (g.vencidas?' · '+g.vencidas+' venc.':'')+'</option>';
+  });
+  h+='</select>';
+  if(sel) h+='<button onclick="torreSetPersona(\'\')" style="flex:0 0 auto;min-height:44px;padding:11px 14px;'+
+    'border-radius:10px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);'+
+    'font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Quitar</button>';
+  return h+'</div>';
+}
+
 function renderActsEdificio(){
   var el=document.getElementById('c-act'); if(!el) return;
   el.innerHTML = _actVistaToggle() +
-    torreHTML() +
+    '<div id="torre-personas"></div>' +
+    torreHTML(S.torrePersona||'') +
     '<div id="torre-menu"></div>'+
     '<div style="font-size:12px;color:var(--text3);text-align:center;padding:2px 6px 4px">'+
-      (S.torreSel?'':'Toca un apartamento para ver sus partidas.')+
+      (S.torreSel?'':(S.torrePersona
+        ? 'Solo lo de '+esc(S.torrePersona)+'. Toca un apartamento.'
+        : 'Toca un apartamento para ver sus partidas.'))+
     '</div>';
   /* Primero se lanza la carga y despues se pinta. Al reves, la primera entrada
      encontraba la bandera de "cargando" todavia en false y enseñaba "no se
      pudo cargar" durante un instante antes de empezar siquiera a pedir. */
   if(!S._torre) cargarTorre();
+  _torrePintarSelector();
   dibujarTorre();
   _torreMenu();
 }
@@ -6374,6 +6489,10 @@ function torreVer(que){
   var area=S.torreSel; if(!area) return;
   S.actFiltroAvanzado=S.actFiltroAvanzado||{};
   S.actFiltroAvanzado.ubicaciones=[area];
+  // Si el dibujo estaba filtrado por una persona, la lista sale igual de
+  // filtrada: si no, el boton diria 12 y la lista enseñaria 103.
+  if(S.torrePersona) S.actFiltroAvanzado.personas=[S.torrePersona];
+  else delete S.actFiltroAvanzado.personas;
   S.actFiltroRapidos = que==='todas' ? [] : [que];
   S.actFiltroTexto='';
   S.torreSel='';
@@ -6384,13 +6503,16 @@ function torreVer(que){
 function _torreMenu(){
   var caja=document.getElementById('torre-menu');
   if(!caja) return;
-  var area=S.torreSel, D=S._torre;
+  var area=S.torreSel, D=_torreDatos(S.torrePersona||'');
   if(!area || !D || !D[area]){ caja.innerHTML=''; return; }
   var d=D[area];
+  var persona=S.torrePersona||'';
   // Las congeladas salen de S.acts, que es lo abierto que ya tiene el app;
   // si el historial no cargo, ese boton no se ofrece en vez de mentir con 0.
   var nCong = _congeladasListo()
-    ? (S.acts||[]).filter(function(a){ return a.area===area && _esCongelada(a); }).length
+    ? (S.acts||[]).filter(function(a){
+        return a.area===area && _personaEn(a,persona) && _esCongelada(a);
+      }).length
     : -1;
   var b=function(que,txt,fondo,color,borde){
     return '<button onclick="torreVer(\''+que+'\')" style="min-height:44px;padding:11px 14px;'+
@@ -6401,7 +6523,8 @@ function _torreMenu(){
     '<div style="border:1.5px solid var(--accent);border-radius:var(--r2);background:var(--bg2);'+
       'padding:13px 14px;margin:10px 0 6px">'+
       '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'+
-        '<div style="font-family:var(--tit);font-size:15px;font-weight:800;color:var(--text)">'+esc(_recNom(area))+'</div>'+
+        '<div style="font-family:var(--tit);font-size:15px;font-weight:800;color:var(--text)">'+esc(_recNom(area))+
+          (persona?'<span style="display:block;font-size:11.5px;font-weight:600;color:var(--text3)">'+esc(persona)+'</span>':'')+'</div>'+
         '<button onclick="torreCerrarMenu()" style="background:none;border:none;color:var(--text3);'+
           'font-size:20px;line-height:1;cursor:pointer;padding:0 4px;min-height:40px">×</button>'+
       '</div>'+
