@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_55';
+const APP_VERSION='20260911_56';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -3504,6 +3504,7 @@ function torreHTML(){
     '</div>'+
     '<svg id="torre-svg" viewBox="0 0 424 568" style="width:100%;max-width:420px;margin:0 auto;display:block" '+
       'role="img" aria-label="Avance de cada apartamento"></svg>'+
+    '<div id="torre-otras" style="padding:4px 4px 0"></div>'+
   '</div>';
 }
 
@@ -3573,13 +3574,25 @@ function dibujarTorre(){
     [['A',AX,AW],['B',BX,BW]].forEach(function(l){
       var L=l[0], x=l[1], w=l[2];
       if(nivel==='7' && L==='A'){
+        /* Las areas comunes del N7 llevan 88 partidas de verdad. Eran un
+           recuadro de adorno; ahora se tocan como cualquier apartamento. */
         var rx=x+w*0.30, rw=w*0.70;
+        var dAC=D['N7 — Áreas Comunes N7'];
+        var gAC=add('g', dAC?{style:'cursor:pointer'}:{});
+        if(dAC) gAC.addEventListener('click',function(){ _torreTap('N7 — Áreas Comunes N7'); });
         add('rect',{x:rx,y:y,width:rw,height:alto,rx:10,fill:'none',
-          stroke:'var(--border2)','stroke-width':1,'stroke-dasharray':'4 3'});
-        add('text',{x:rx+rw/2,y:y+alto/2-1,'font-size':9,fill:'var(--text3)',
-          'text-anchor':'middle'}).textContent='N7 · áreas';
-        add('text',{x:rx+rw/2,y:y+alto/2+11,'font-size':9,fill:'var(--text3)',
-          'text-anchor':'middle'}).textContent='comunes';
+          stroke:'var(--border2)','stroke-width':1,'stroke-dasharray':'4 3'},gAC);
+        add('text',{x:rx+rw/2,y:y+alto/2-(dAC?9:1),'font-size':9,fill:'var(--text3)',
+          'text-anchor':'middle'},gAC).textContent='N7 · áreas';
+        add('text',{x:rx+rw/2,y:y+alto/2+(dAC?2:11),'font-size':9,fill:'var(--text3)',
+          'text-anchor':'middle'},gAC).textContent='comunes';
+        if(dAC){
+          /* El recuadro punteado es angosto (81 px): a 10 px el texto se sale
+             por los dos lados. A 9 px cabe con aire. */
+          add('text',{x:rx+rw/2,y:y+alto/2+16,'font-size':9,'font-weight':700,
+            fill:'var(--text2)','text-anchor':'middle','font-family':'var(--tit)'},gAC)
+            .textContent=dAC.pct+'% · faltan '+dAC.faltan;
+        }
         return;
       }
       var area=_torreArea(nivel,L);
@@ -3633,22 +3646,71 @@ function dibujarTorre(){
     });
   });
 
-  /* planta baja */
+  /* planta baja.
+     El parqueo lleva 147 partidas y 61 sin cerrar, pero hasta ahora era solo
+     un dibujo: no se podia tocar ni decia como iba. Se comportaba como si esa
+     obra no existiera. */
   var yb=yPiso, hb=46, px=NX-16, pw=NW+32;
-  add('rect',{x:BALA,y:yb,width:DER-BALA,height:hb,rx:10,fill:'var(--bg3)'});
+  var dPq=D['Parqueo'];
+  var gPB=add('g', dPq?{style:'cursor:pointer'}:{});
+  if(dPq) gPB.addEventListener('click',function(){ _torreTap('Parqueo'); });
+  add('rect',{x:BALA,y:yb,width:DER-BALA,height:hb,rx:10,fill:'var(--bg3)'},gPB);
+  if(dPq) add('rect',{x:BALA,y:yb,width:DER-BALA,height:hb,rx:10,fill:'var(--green)',
+    opacity:(0.05+dPq.pct/100*0.24).toFixed(2)},gPB);
   for(var f2=0;f2<4;f2++) for(var c2=0;c2<10;c2++)
-    add('rect',{x:px+5+c2*8.2,y:yb+12+f2*9,width:4,height:4,rx:.8,fill:'var(--border2)'});
+    add('rect',{x:px+5+c2*8.2,y:yb+12+f2*9,width:4,height:4,rx:.8,fill:'var(--border2)'},gPB);
   add('text',{x:12,y:yb+hb/2+4,'font-size':10,'font-weight':700,fill:'var(--text3)',
     'font-family':'var(--tit)'}).textContent='N1';
   add('text',{x:BALA+(px-BALA)/2,y:yb+hb/2+4,'font-size':9.5,'font-weight':600,
-    fill:'var(--text3)','text-anchor':'middle'}).textContent='lobby';
-  add('text',{x:px+pw+(DER-px-pw)/2,y:yb+hb/2+4,'font-size':9.5,'font-weight':600,
-    fill:'var(--text3)','text-anchor':'middle'}).textContent='parqueo';
+    fill:'var(--text3)','text-anchor':'middle'},gPB).textContent='lobby';
+  var cxPq=px+pw+(DER-px-pw)/2;
+  add('text',{x:cxPq,y:yb+hb/2+(dPq?-3:4),'font-size':9.5,'font-weight':600,
+    fill:'var(--text3)','text-anchor':'middle'},gPB).textContent='parqueo';
+  if(dPq){
+    add('text',{x:cxPq,y:yb+hb/2+11,'font-size':10,'font-weight':700,
+      fill:'var(--text2)','text-anchor':'middle','font-family':'var(--tit)'},gPB)
+      .textContent=dPq.pct+'% · faltan '+dPq.faltan;
+    total+=dPq.total; hechas+=dPq.hechas; abiertas+=dPq.faltan;
+  }
   add('line',{x1:BALA-14,y1:yb+hb+10,x2:DER+14,y2:yb+hb+10,
     stroke:'var(--border2)','stroke-width':1.5});
 
   if(sub) sub.textContent = total ?
     (Math.round(hechas/total*100)+'% · faltan '+abiertas) : 'sin datos';
+
+  _torreOtras(D);
+}
+
+/* Lo que no es apartamento ni parqueo: fachadas, escaleras, terraza, areas
+   comunes de los otros niveles. Son ~180 partidas que el dibujo no puede
+   representar y que, sin esto, no aparecen en ningun sitio de esta pantalla.
+   Se arman desde los datos, asi que un area nueva sale sola. */
+/* Se arma dentro y no como constante de arriba: REC_ORDEN se declara mas
+   abajo en el archivo, asi que arriba todavia viene vacio y los once
+   apartamentos se colarian aqui como si estuvieran fuera del dibujo. */
+function _torreEnDibujo(){
+  return ['Parqueo','N7 — Áreas Comunes N7'].concat(REC_ORDEN||[]);
+}
+function _torreOtras(D){
+  var caja=document.getElementById('torre-otras');
+  if(!caja) return;
+  var dentro=_torreEnDibujo();
+  var otras=Object.keys(D||{})
+    .filter(function(a){ return dentro.indexOf(a)<0 && D[a].faltan>0; })
+    .sort(function(a,b){ return D[b].faltan-D[a].faltan; });
+  if(!otras.length){ caja.innerHTML=''; return; }
+  caja.innerHTML='<div style="font-size:10.5px;color:var(--text3);margin:2px 0 6px">Fuera del dibujo</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+    otras.map(function(a){
+      var d=D[a];
+      return '<button onclick="_torreTap('+JSON.stringify(a).replace(/"/g,'&quot;')+')" '+
+        'style="min-height:40px;padding:7px 11px;border-radius:9px;border:1.5px solid var(--border2);'+
+        'background:var(--bg3);color:var(--text2);font-size:11.5px;font-weight:600;cursor:pointer;'+
+        'font-family:var(--font);text-align:left;line-height:1.3">'+
+        esc(a.replace(/^N\d+\s*—\s*/,''))+
+        '<span style="display:block;font-size:10px;color:var(--text3);font-weight:500">'+
+        d.pct+'% · faltan '+d.faltan+'</span></button>';
+    }).join('')+'</div>';
 }
 
 /* ═════════════════════════════════════════════════════════════════
