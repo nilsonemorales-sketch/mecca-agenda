@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_53';
+const APP_VERSION='20260911_54';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5239,6 +5239,7 @@ function _actSelFirma(){
 function actSelModo(){
   S.actSelModo=!S.actSelModo;
   S.actSel={};                       // ni al entrar ni al salir queda nada marcado de antes
+  S.actSelCorrer=false;              // el panel de fechas tampoco queda abierto
   S._actSelFirma=_actSelFirma();
   renderActs();
 }
@@ -5255,6 +5256,109 @@ function actSelAll(){
   renderActs();
 }
 function actSelNone(){ S.actSel={}; renderActs(); }
+
+/* ── CORRER FECHAS EN BLOQUE ───────────────────────────────────────────────
+   En los ultimos 30 dias, de las ediciones sueltas que tocaron fechas, 144
+   movieron LAS DOS (inicio y fin) y solo 87 movieron el fin. "Poner fecha"
+   nada mas toca el fin — por eso no servia para el caso mas comun y se seguia
+   abriendo el formulario de una en una. Esto mueve las dos juntas.
+
+   Dos operaciones, porque son dos situaciones distintas de obra:
+   - Arrancar hoy: la partida se retoma ahora. Inicio = hoy, fin = hoy + N.
+     Sirve tambien para las 114 que no tienen ninguna fecha.
+   - Correr N dias: la ventana estaba bien pero todo se atraso. Empuja las dos
+     y respeta cuanto duraba. A una sin fechas no se le puede "correr" nada,
+     asi que se salta y se dice cuantas.
+   ────────────────────────────────────────────────────────────────────────── */
+function actSelCorrerToggle(){
+  S.actSelCorrer=!S.actSelCorrer;
+  renderActs();
+}
+
+// Calcula el cambio sin escribir nada. Se usa para avisar antes de preguntar.
+function _actSelCorrerPlan(modo, dias){
+  var hoy=today(), plan=[], saltadas=0;
+  _actSelIds().forEach(function(id){
+    var a=(S.acts||[]).find(function(x){return x.id===id;});
+    if(!a || a.estado==='completado') return;   // una completada no se reprograma
+    var ini=(a.fecha_inicio||'').trim(), fin=(a.fecha_fin||'').trim();
+    var nIni, nFin;
+    if(modo==='arrancar'){
+      nIni=hoy; nFin=_isoAddDias(hoy,dias);
+    } else {
+      if(!ini && !fin){ saltadas++; return; }    // sin fechas no hay nada que correr
+      nIni = ini ? _isoAddDias(ini,dias) : '';
+      nFin = fin ? _isoAddDias(fin,dias) : '';
+    }
+    /* El fin NUNCA antes del inicio. Ya paso heredando fechas de las hermanas:
+       inicio hoy, fin en agosto, y la base la rechazo. */
+    if(nIni && nFin && nFin < nIni) nFin=nIni;
+    var patch={};
+    if(nIni!==ini) patch.fecha_inicio=nIni;
+    if(nFin!==fin) patch.fecha_fin=nFin;
+    if(!Object.keys(patch).length){ saltadas++; return; }   // ya estaba asi
+    plan.push({id:id, patch:patch});
+  });
+  return {plan:plan, saltadas:saltadas};
+}
+
+async function actSelCorrer(modo, dias){
+  if(!canEdit()) return;
+  var r=_actSelCorrerPlan(modo, dias);
+  var plan=r.plan;
+  if(!plan.length){
+    showToast(r.saltadas?'Nada que cambiar: '+r.saltadas+' ya estaban así o no tienen fecha':'No hay actividades marcadas','err',5000);
+    return;
+  }
+  var comoDias=dias===1?'1 día':dias+' días';
+  var msg = modo==='arrancar'
+    ? 'Se van a arrancar hoy '+plan.length+' actividad'+(plan.length!==1?'es':'')+', con '+comoDias+' de plazo.'
+    : 'Se van a correr '+comoDias+' hacia adelante '+plan.length+' actividad'+(plan.length!==1?'es':'')+'.';
+  if(r.saltadas) msg += '\n\n('+r.saltadas+' se quedan como están: sin fecha o ya iguales.)';
+  if(!confirm(msg+'\n\n¿Seguro?')) return;
+
+  var bien=0, mal=0, hechas=0, total=plan.length;
+  setSS('syncing','Guardando 0 de '+total+'...');
+  // De 5 en 5, igual que las otras acciones en bloque: una por una es lentisimo
+  // con cientos y todas de golpe satura la conexion en obra. Cada una lleva su
+  // propio catch para que un fallo suelto no tumbe el resto.
+  for(var i=0;i<plan.length;i+=5){
+    await Promise.all(plan.slice(i,i+5).map(function(p){
+      return Acciones.editar(p.id, p.patch)
+        .then(function(){ bien++; }, function(){ mal++; })
+        .then(function(){ hechas++; setSS('syncing','Guardando '+hechas+' de '+total+'...'); });
+    }));
+  }
+  S.actSel={}; S.actSelModo=false; S.actSelCorrer=false;
+  renderActs();
+  if(mal===0){ setSS('ok','✓'); showToast('Se movieron '+bien+'.'); }
+  else if(bien===0){ setSS('err','Error'); showToast('No se pudo mover ninguna. Fallaron '+mal+'.','err',6000); }
+  else { setSS('ok','✓'); showToast('Se movieron '+bien+'. Fallaron '+mal+'.','err',6000); }
+}
+
+function _actSelCorrerHTML(){
+  if(!S.actSelModo || !S.actSelCorrer || !_actSelIds().length) return '';
+  // Botones de dedo: 40px de alto es el minimo en obra, con guantes y sol.
+  var ch='padding:10px 13px;min-height:42px;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;'+
+         'font-family:var(--font);white-space:nowrap;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text)';
+  var tit='font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.04em;margin:2px 0 7px';
+  function b(modo,dias,txt){
+    return '<button onclick="actSelCorrer(\''+modo+'\','+dias+')" style="'+ch+'">'+txt+'</button>';
+  }
+  return '<div style="border:1.5px solid var(--accent);border-top:none;border-radius:0 0 var(--r2) var(--r2);background:var(--bg2);padding:11px 12px 13px;margin:-8px 0 8px">'+
+    '<div style="'+tit+'">ARRANCAR HOY, CON PLAZO DE</div>'+
+    '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">'+
+      b('arrancar',3,'3 días')+b('arrancar',7,'1 semana')+b('arrancar',14,'2 semanas')+b('arrancar',30,'1 mes')+
+    '</div>'+
+    '<div style="'+tit+'">CORRER TODO HACIA ADELANTE</div>'+
+    '<div style="display:flex;gap:7px;flex-wrap:wrap">'+
+      b('correr',3,'+3 días')+b('correr',7,'+1 semana')+b('correr',14,'+2 semanas')+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.5">'+
+      'Mueve el inicio y el fin juntos. «Correr» se salta las que no tienen fecha.'+
+    '</div>'+
+  '</div>';
+}
 
 // Pone la misma fecha de entrega a todas las marcadas.
 async function actSelPonerFecha(){
@@ -5376,12 +5480,16 @@ function _actSelBarraHTML(){
     '<button onclick="actSelNone()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Ninguna</button>'+
     '<input id="act-sel-fecha" type="date" value="'+esc(S.actSelFecha||'')+'" onchange="S.actSelFecha=this.value" style="flex:1;min-width:132px;padding:6px 8px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--font);font-size:12.5px">'+
     '<button onclick="actSelPonerFecha()" style="'+bs+';border:none;background:var(--accent-fill);color:var(--accent-on)">Poner fecha</button>'+
+    // Mueve inicio y fin juntos. Abre su propio panel para no seguir alargando
+    // esta barra, que en el telefono ya se parte en tres lineas.
+    '<button onclick="actSelCorrerToggle()" style="'+bs+';border:1.5px solid var(--accent);background:'+(S.actSelCorrer?'var(--accent-fill)':'var(--bg2)')+';color:'+(S.actSelCorrer?'var(--accent-on)':'var(--accent)')+'">Correr fechas'+(S.actSelCorrer?' ▲':' ▼')+'</button>'+
     // Cerrar es la única irreversible de las tres: va en verde lleno para que no
     // se confunda con las otras dos.
     '<button onclick="actSelMarcarHechas()" style="'+bs+';border:none;background:var(--green-fill);color:#fff">Marcar hechas</button>'+
     '<button onclick="actSelMarcarRevisadas()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Marcar revisadas</button>'+
     '<button onclick="actSelModo()" title="Salir" style="'+bs+';border:1px solid var(--border2);background:transparent;color:var(--text3)">✕</button>'+
-  '</div>';
+  '</div>'+
+  _actSelCorrerHTML();
 }
 // Casilla de la fila. Se dibuja aparte para que la lista y la tabla usen la misma.
 function _actSelBoxHTML(a){
