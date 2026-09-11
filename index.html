@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_62';
+const APP_VERSION='20260911_63';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5457,6 +5457,63 @@ function _actToggleResponsable(val){
   var idx=arr.indexOf(val);if(idx>=0)arr.splice(idx,1);else arr.push(val);
   S.actFiltroAvanzado={...S.actFiltroAvanzado,responsables:arr};renderActs();
 }
+/* ── QUE ESTOY VIENDO ──────────────────────────────────────────────────────
+   Al llegar desde el Edificio la lista sale filtrada por apartamento — y a
+   veces por contratista — pero el panel de filtros viene plegado, asi que no
+   se ve por que faltan partidas. Esta cinta lo dice con todas las letras y
+   deja quitar cada cosa por separado.
+   ────────────────────────────────────────────────────────────────────────── */
+var _RAPIDO_NOMBRE={retrasadas:'solo vencidas', sinfecha:'sin fecha',
+  sincontratista:'sin asignar', congeladas:'congeladas', activas:'solo activas',
+  'en-progreso':'en curso', pendiente:'pendientes', completado:'completadas',
+  pausada:'pausadas'};
+
+function actQuitarFiltro(tipo, valor){
+  var av=S.actFiltroAvanzado||(S.actFiltroAvanzado={});
+  if(tipo==='rapido') S.actFiltroRapidos=(S.actFiltroRapidos||[]).filter(function(x){return x!==valor;});
+  else if(tipo==='texto') S.actFiltroTexto='';
+  else if(tipo==='plan') S.actFiltroPlan='';
+  else if(tipo==='todas') S.actMostrarTodas=false;
+  else {
+    av[tipo]=(av[tipo]||[]).filter(function(x){return x!==valor;});
+    if(!av[tipo].length) delete av[tipo];
+  }
+  renderActs();
+}
+
+function _actCintaHTML(){
+  var av=S.actFiltroAvanzado||{}, trozos=[];
+  function chip(txt, tipo, valor){
+    trozos.push('<span style="display:inline-flex;align-items:center;gap:5px;background:var(--bg2);'+
+      'border:1.5px solid var(--accent);border-radius:99px;padding:5px 6px 5px 11px;font-size:12px;'+
+      'font-weight:700;color:var(--accent);white-space:nowrap">'+esc(txt)+
+      '<button onclick="actQuitarFiltro(\''+tipo+'\',\''+String(valor).replace(/'/g,"\\'")+'\')" '+
+      'aria-label="Quitar" style="width:26px;height:26px;border-radius:99px;border:none;cursor:pointer;'+
+      'background:var(--accent-soft);color:var(--accent);font-size:14px;font-weight:800;line-height:1;'+
+      'font-family:var(--font);padding:0">×</button></span>');
+  }
+  (av.ubicaciones||[]).forEach(function(u){ chip(_recNom(u),'ubicaciones',u); });
+  (av.personas||[]).forEach(function(n){ chip(n,'personas',n); });
+  (av.contratistas||[]).forEach(function(n){ chip(n==='__sin_asignar__'?'Sin asignar':n,'contratistas',n); });
+  (av.responsables||[]).forEach(function(n){ chip(n,'responsables',n); });
+  (S.actFiltroRapidos||[]).forEach(function(r){ chip(_RAPIDO_NOMBRE[r]||r,'rapido',r); });
+  if(S.actFiltroPlan) chip(S.actFiltroPlan==='manana'?'plan de mañana':'plan de hoy','plan','');
+  if(S.actFiltroTexto) chip('«'+S.actFiltroTexto+'»','texto','');
+  if(av.prioridad) chip(av.prioridad,'prioridad',av.prioridad);
+  if(!trozos.length) return '';
+  /* La etiqueta va en su propia linea y no al lado: con dos o tres chips mas
+     el boton de limpiar, la fila no cabia en un telefono y "Viendo" se salia
+     por la izquierda. */
+  return '<div style="margin-bottom:12px">'+
+    '<div style="font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;'+
+    'letter-spacing:.06em;margin-bottom:6px">Viendo</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;max-width:100%">'+trozos.join('')+
+    (trozos.length>1?'<button onclick="_actLimpiarFiltros()" style="min-height:36px;padding:6px 12px;'+
+      'border-radius:99px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);'+
+      'font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Quitar todo</button>':'')+
+  '</div></div>';
+}
+
 function _actLimpiarFiltros(){S.actFiltroRapidos=[];S.actFiltroAvanzado={};S.actFiltroPlan='';S.actFiltroTexto='';S.actFiltroOpen=null;renderActs();}
 
 // ══════════════════════════════════════════════════════════════
@@ -6010,6 +6067,8 @@ function renderActs(){
       ${(function(){var n=_congeladasCount(); return n?`<button onclick="S.actFiltroRapidos=['congeladas'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">${n} congeladas</button>`:'';})()}
       ${nF?`<button onclick="S.actFiltroRapidos=[];S.actFiltroPlan='';S.actFiltroAvanzado={};S.actMostrarTodas=false;renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Limpiar</button>`:''}
     </div>
+
+    ${_actCintaHTML()}
 
     <!-- PANEL DE FILTROS (plegado por defecto) -->
     <div style="${abierto?'':'display:none'};background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:16px">
@@ -6961,6 +7020,66 @@ function _ic(n,s,c){
     '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;flex-shrink:0">'+_IC[n]+'</svg>';
 }
 
+/* ── ACCIONES EN LA FILA, SIN ABRIRLA ──────────────────────────────────────
+   Para tocar una partida habia que abrirla primero: dos toques por cada una.
+   El ✓ va en la fila siempre. Los chips de avance solo en las que ya estan en
+   curso — y esto es por los datos, no por capricho: en toda la historia hay
+   1.304 "completado" y 71 "avance". Ponerle cuatro botones de porcentaje a las
+   1.100 filas restantes las haria mas altas a todas para algo que casi no se
+   usa, y en obra lo que cuesta es bajar la lista.
+   ────────────────────────────────────────────────────────────────────────── */
+/* Cuantos dias lleva pasada de fecha. Usa fechaVenc, el mismo criterio que
+   isRetrasada y que los filtros, para que nadie cuente distinto. */
+function _diasTarde(a){
+  var fv=fechaVenc(a); if(!fv) return null;
+  var d=Math.round((new Date(today()+'T12:00:00') - new Date(fv+'T12:00:00'))/864e5);
+  return isNaN(d)?null:d;
+}
+
+/* La fecha, en la fila y sin abrir nada. Mover fechas es lo que mas se hace
+   — 247 veces en dos semanas — y para decidir cual correr hay que verlas.
+   Va en su propia columna y no dentro del texto: ahi la corta el ellipsis. */
+function _actFilaFechaHTML(a){
+  if(a.estado==='completado') return '';
+  var fv=fechaVenc(a);
+  var caja='flex-shrink:0;text-align:right;font-family:var(--mono);font-size:10.5px;line-height:1.25;min-width:42px';
+  if(!fv) return '<div style="'+caja+';color:var(--amber);font-weight:700">sin<br>fecha</div>';
+  var d=_diasTarde(a);
+  /* Va el DIA, no los dias de atraso: el renglon de abajo ya dice "12d
+     vencida" y repetirlo era ruido. Lo que ahi no estaba — y hace falta para
+     decidir cual correr — es la fecha misma, y ademas aqui no la corta el
+     ellipsis cuando el nombre del contratista es largo. */
+  var dm=fv.slice(8,10)+'/'+fv.slice(5,7);
+  if(d>0)   return '<div style="'+caja+';color:var(--red);font-weight:800">'+dm+'</div>';
+  if(d===0) return '<div style="'+caja+';color:var(--amber);font-weight:800">hoy</div>';
+  return '<div style="'+caja+';color:var(--text3)">'+dm+'</div>';
+}
+
+function _actFilaCheckHTML(a){
+  if(!canEdit() || a.estado==='completado' || S.actSelModo) return '';
+  return '<button onclick="event.stopPropagation();marcarActCompletada(\''+a.id+'\')" '+
+    'title="Marcar hecha" aria-label="Marcar hecha" '+
+    'style="flex-shrink:0;width:40px;height:40px;border-radius:10px;cursor:pointer;'+
+    'border:1.5px solid var(--green);background:var(--green-light);color:var(--green);'+
+    'font-size:17px;font-weight:800;font-family:var(--font);line-height:1">✓</button>';
+}
+
+function _actFilaAvanceHTML(a){
+  if(!canEdit() || a.estado!=='en-progreso' || S.actSelModo) return '';
+  var actual=parseInt(a.porcentaje)||0;
+  var h='<div style="display:flex;gap:5px;padding:0 11px 9px" onclick="event.stopPropagation()">';
+  [25,50,75].forEach(function(v){
+    var on=actual===v;
+    h+='<button onclick="quickSetPct(\''+a.id+'\','+v+')" '+
+       'style="flex:1;min-height:40px;border-radius:9px;font-size:13px;font-weight:700;'+
+       'cursor:pointer;font-family:var(--font);'+
+       (on?'border:1.5px solid var(--accent-fill);background:var(--accent-fill);color:var(--accent-on)'
+          :'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)')+
+       '">'+v+'%</button>';
+  });
+  return h+'</div>';
+}
+
 function actHTML(a, ai, tipo){
   const fotos=fotoUrls(a.fotos);
   const hoy=today();
@@ -6994,39 +7113,6 @@ function actHTML(a, ai, tipo){
   var ibtn='width:38px;height:34px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0';
 
   // ── TARJETA COMPACTA ──────────────────────────────────────────
-/* ── ACCIONES EN LA FILA, SIN ABRIRLA ──────────────────────────────────────
-   Para tocar una partida habia que abrirla primero: dos toques por cada una.
-   El ✓ va en la fila siempre. Los chips de avance solo en las que ya estan en
-   curso — y esto es por los datos, no por capricho: en toda la historia hay
-   1.304 "completado" y 71 "avance". Ponerle cuatro botones de porcentaje a las
-   1.100 filas restantes las haria mas altas a todas para algo que casi no se
-   usa, y en obra lo que cuesta es bajar la lista.
-   ────────────────────────────────────────────────────────────────────────── */
-function _actFilaCheckHTML(a){
-  if(!canEdit() || a.estado==='completado' || S.actSelModo) return '';
-  return '<button onclick="event.stopPropagation();marcarActCompletada(\''+a.id+'\')" '+
-    'title="Marcar hecha" aria-label="Marcar hecha" '+
-    'style="flex-shrink:0;width:40px;height:40px;border-radius:10px;cursor:pointer;'+
-    'border:1.5px solid var(--green);background:var(--green-light);color:var(--green);'+
-    'font-size:17px;font-weight:800;font-family:var(--font);line-height:1">✓</button>';
-}
-
-function _actFilaAvanceHTML(a){
-  if(!canEdit() || a.estado!=='en-progreso' || S.actSelModo) return '';
-  var actual=parseInt(a.porcentaje)||0;
-  var h='<div style="display:flex;gap:5px;padding:0 11px 9px" onclick="event.stopPropagation()">';
-  [25,50,75].forEach(function(v){
-    var on=actual===v;
-    h+='<button onclick="quickSetPct(\''+a.id+'\','+v+')" '+
-       'style="flex:1;min-height:40px;border-radius:9px;font-size:13px;font-weight:700;'+
-       'cursor:pointer;font-family:var(--font);'+
-       (on?'border:1.5px solid var(--accent-fill);background:var(--accent-fill);color:var(--accent-on)'
-          :'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)')+
-       '">'+v+'%</button>';
-  });
-  return h+'</div>';
-}
-
   // Solo se ve lo imprescindible: qué es, dónde, quién y cómo va.
   // Todo lo demás (avance, notas, fotos, horas, botones) vive dentro de
   // #det-<id> y se abre al tocar la tarjeta. Nada se perdió, solo se plegó.
@@ -7043,6 +7129,7 @@ function _actFilaAvanceHTML(a){
           ${_areaCorta?`<span style="color:var(--accent);font-weight:700">${_areaCorta}</span>`:`<span style="color:var(--amber);font-weight:700">Sin área</span>`}${_contCorto?` · ${_contCorto}`:''} · <span style="color:${ec};font-weight:700">${el}</span>${_congeladaBadgeHTML(a)?' '+_congeladaBadgeHTML(a):''}${_actSigueIgualBtnHTML(a)?' '+_actSigueIgualBtnHTML(a):''}
         </div>
       </div>
+      ${_actFilaFechaHTML(a)}
       ${_actFilaCheckHTML(a)}
       <span id="chev-${a.id}" style="color:var(--text3);font-size:15px;flex-shrink:0;transition:transform .15s;${_abierta?'transform:rotate(90deg)':''}">›</span>
     </div>
@@ -8693,12 +8780,47 @@ function showToast(msg, type, ms){
 }
 
 // ── RENDER ALL ACTIVITY VIEWS ─────────────────────────
+/* ── NO PERDER EL SITIO AL REPINTAR ───────────────────────────────────────
+   Cada cambio rehace la lista entera con innerHTML, y eso manda el scroll al
+   principio: marcar algo en la fila 40 te deja otra vez en la 1, y con 1.185
+   renglones hay que volver a bajar cada vez. Ahora que se puede marcar hecha
+   desde la fila se toca mucho mas, asi que molestaba mas todavia.
+   El scroll no esta en la ventana sino en el contenedor .view (la pantalla es
+   height:100dvh con overflow:hidden), salvo en escritorio, donde si scrollea
+   la ventana. Se guardan los dos y se reponen los dos.
+   ───────────────────────────────────────────────────────────────────────── */
+function _scrollActual(){
+  var el=document.getElementById('c-act');
+  var cont=(el&&el.closest)?el.closest('.view'):null;
+  return {cont:cont, y:cont?cont.scrollTop:0,
+          win:window.scrollY||document.documentElement.scrollTop||0};
+}
+function _scrollRestaurar(s){
+  if(!s || (!s.y && !s.win)) return;
+  var poner=function(){
+    if(s.cont && s.y){
+      var max=Math.max(0, s.cont.scrollHeight - s.cont.clientHeight);
+      s.cont.scrollTop=Math.min(s.y, max);
+    }
+    if(s.win){
+      var maxw=Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      window.scrollTo(0, Math.min(s.win, maxw));
+    }
+  };
+  poner();
+  // Otra vez cuando el navegador ya midio: recien puesto el HTML, el alto
+  // todavia no es el final y el scroll se queda corto.
+  if(window.requestAnimationFrame) window.requestAnimationFrame(poner);
+}
+
 function reRenderActs(){
+  var _s=_scrollActual();
   renderHoy();
   renderActs();
   renderEnObra();
   if(S.obraVista==='kanban') renderKanban();
   if(S.currentTab==='reportes') renderReportesHub();
+  _scrollRestaurar(_s);
 }
 
 function renderAll(){
