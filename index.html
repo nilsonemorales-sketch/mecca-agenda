@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260910_44';
+const APP_VERSION='20260911_45';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5052,6 +5052,76 @@ function sortByPriority(acts){
   });
 }
 
+// ══════════════════════════════════════════════════════════════
+// ACTIVIDADES — PARTIDAS CONGELADAS
+// Una partida que lleva semanas sin que nadie le anote nada —ni avance, ni
+// nota— casi siempre o ya está hecha y nadie la cerró, o está abandonada. Las
+// tres que aparecieron hoy (dos "en curso" desde agosto y once con una nota de
+// bloqueo falsa) estaban libres y nadie lo sabía. Por eso se detectan aparte.
+// ══════════════════════════════════════════════════════════════
+var CONGELADA_DIAS=15;
+// S.tocadasRecientes: undefined = todavía no se pidió · null = no se pudo ·
+// Set = listo. El máximo por id se guarda aparte para poder decir cuántos días
+// lleva quieta sin traerse el historial entero.
+async function loadTocadasRecientes(){
+  var desde=_isoAddDias(today(),-CONGELADA_DIAS);
+  try{
+    // Solo la ventana reciente (~760 filas), no las ~4.400 del historial completo.
+    var rows=await sb('obra_cambios?entidad=eq.actividad&fecha=gte.'+desde+'&select=entidad_id,fecha&limit=5000');
+    var set=new Set(), ult={};
+    (rows||[]).forEach(function(r){
+      var id=r&&r.entidad_id; if(!id) return;
+      id=String(id); set.add(id);
+      var f=String(r.fecha||'').slice(0,10);
+      if(f && (!ult[id] || f>ult[id])) ult[id]=f;
+    });
+    S.tocadasRecientes=set; S.ultimoCambio=ult;
+  }catch(e){
+    // Si falla se queda sin el dato y el botón no se pinta. No puede tumbar la
+    // pantalla ni dejar la lista a medias.
+    S.tocadasRecientes=null; S.ultimoCambio={};
+  }
+  return S.tocadasRecientes;
+}
+function _congeladasListo(){ return S.tocadasRecientes instanceof Set; }
+function _esCongelada(a){
+  return !!a && a.estado!=='completado' && _congeladasListo() && !S.tocadasRecientes.has(String(a.id));
+}
+// Días sin movimiento. Para una congelada no hay fecha de último cambio (por eso
+// es congelada), así que se cuenta desde created_at: es lo único que dice cuánto
+// lleva ahí parada.
+function _diasQuieta(a){
+  if(!a) return 0;
+  var ref=(S.ultimoCambio&&S.ultimoCambio[String(a.id)])||String(a.created_at||'').slice(0,10);
+  if(!ref) return 0;
+  var d=Math.round((new Date(today()+'T12:00:00')-new Date(ref+'T12:00:00'))/864e5);
+  return d>0?d:0;
+}
+function _congeladaLbl(a){
+  var tocada=!!(S.ultimoCambio&&S.ultimoCambio[String(a.id)]);
+  var d=_diasQuieta(a);
+  if(tocada) return 'quieta '+d+'d';
+  return d?('sin movimiento desde que se creó ('+d+'d)'):'nunca tocada';
+}
+function _congeladasCount(){
+  if(!_congeladasListo()) return 0;
+  return (S.acts||[]).filter(_esCongelada).length;
+}
+// En curso primero: una empezada y congelada es mucho más sospechosa que una
+// pendiente en 0%, porque casi seguro el trabajo ya se hizo. Dentro de cada
+// grupo, la que lleva más tiempo quieta arriba.
+function _ordenCongeladas(list){
+  return list.slice().sort(function(a,b){
+    var ea=a.estado==='en-progreso'?0:1, eb=b.estado==='en-progreso'?0:1;
+    if(ea!==eb) return ea-eb;
+    return _diasQuieta(b)-_diasQuieta(a);
+  });
+}
+function _congeladaBadgeHTML(a){
+  if(!_esCongelada(a)) return '';
+  return '<span style="flex-shrink:0;font-size:9.5px;font-weight:700;background:var(--bg3);color:var(--text3);border:1px solid var(--border2);border-radius:4px;padding:0 4px;white-space:nowrap">❄ '+esc(_congeladaLbl(a))+'</span>';
+}
+
 function applyActFilters(acts){
   let filtered = acts;
   // 'retrasadas', 'sinfecha' y 'sincontratista' NO son estados (los estados son
@@ -5062,13 +5132,15 @@ function applyActFilters(acts){
   const soloRetrasadas = rs.indexOf('retrasadas')>=0;
   const soloSinFecha = rs.indexOf('sinfecha')>=0;
   const soloSinContr = rs.indexOf('sincontratista')>=0;
-  const pedidoEspecial = soloRetrasadas||soloSinFecha||soloSinContr;
-  const estados = rs.filter(x=>['retrasadas','sinfecha','sincontratista'].indexOf(x)<0);
+  const soloCongeladas = rs.indexOf('congeladas')>=0;
+  const pedidoEspecial = soloRetrasadas||soloSinFecha||soloSinContr||soloCongeladas;
+  const estados = rs.filter(x=>['retrasadas','sinfecha','sincontratista','congeladas'].indexOf(x)<0);
   if(soloRetrasadas) filtered = filtered.filter(isRetrasada);
   if(soloSinFecha) filtered = filtered.filter(a=>a.estado!=='completado' && !(a.fecha_fin||'').trim());
   // Sin asignar: NO se exige tipo_personal==='contratista'. Las que de verdad no tienen
   // a nadie vienen marcadas 'propio' o sin tipo, así que pedir 'contratista' daba 0.
   if(soloSinContr) filtered = filtered.filter(a=>a.estado!=='completado' && !(a.personal_nombre||'').trim());
+  if(soloCongeladas) filtered = filtered.filter(_esCongelada);
   if(rs.indexOf('activas')>=0) filtered = filtered.filter(a=>a.estado!=='completado');
   else if(estados.length) filtered = filtered.filter(a=>estados.indexOf(a.estado)>=0);
   // los pedidos especiales ya excluyen las completadas: no re-filtrar por "no completado" o anularía el pedido.
@@ -5092,6 +5164,9 @@ function applyActFilters(acts){
       return hay.indexOf(_q)>=0;
     });
   }
+  // Con el pedido de congeladas manda el orden por tiempo quieta: ver arriba las
+  // más olvidadas es justamente para lo que sirve el filtro.
+  if(soloCongeladas) return _ordenCongeladas(filtered);
   return sortByPriority(filtered);
 }
 function _actBuscar(v){
@@ -5441,6 +5516,15 @@ function toggleActFiltros(){
 
 function renderActs(){
   if(S.actVista==='apto'){ renderActsPorApto(); return; }
+  // El historial va aparte y sin esperarlo: la pantalla se pinta ya, y cuando
+  // llega (o falla) se vuelve a pintar. Así no retrasa nada ni rompe la lista.
+  if(S.tocadasRecientes===undefined && !S._tocadasCargando){
+    S._tocadasCargando=true;
+    loadTocadasRecientes().then(function(){
+      S._tocadasCargando=false;
+      if(S.currentTab==='obra' && S.obraVista==='todas') renderActs();
+    });
+  }
   // Si cambió cualquier filtro con el modo selección puesto, se suelta lo marcado:
   // guardar sobre actividades que ya no están a la vista sería una sorpresa fea.
   if(S.actSelModo){
@@ -5477,6 +5561,7 @@ function renderActs(){
       <button onclick="S.actFiltroRapidos=['en-progreso'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">${(S.acts||[]).filter(a=>a.estado==='en-progreso').length} en curso</button>
       ${(function(){var n=(S.acts||[]).filter(a=>a.estado!=='completado'&&!(a.fecha_fin||'').trim()).length; return n?`<button onclick="S.actFiltroRapidos=['sinfecha'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--amber);background:var(--bg2);color:var(--amber)">${n} sin fecha</button>`:'';})()}
       ${(function(){var n=(S.acts||[]).filter(a=>a.estado!=='completado'&&!(a.personal_nombre||'').trim()).length; return n?`<button onclick="S.actFiltroRapidos=['sincontratista'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">${n} sin asignar</button>`:'';})()}
+      ${(function(){var n=_congeladasCount(); return n?`<button onclick="S.actFiltroRapidos=['congeladas'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">${n} congeladas</button>`:'';})()}
       ${nF?`<button onclick="S.actFiltroRapidos=[];S.actFiltroPlan='';S.actFiltroAvanzado={};S.actMostrarTodas=false;renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Limpiar</button>`:''}
     </div>
 
@@ -5898,9 +5983,11 @@ function actsDesktopTable(acts, showDate){
       +(a.requiere_arq?'<span title="Requiere Arq. Miguel" style="flex-shrink:0;font-size:11px">🏛</span>':'')
       +'<span style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px">'+esc(a.descripcion)+'</span>'
       +'</div>';
-    if(fechaLine||a.notas){
+    var _congB=_congeladaBadgeHTML(a);
+    if(fechaLine||a.notas||_congB){
       html+='<div style="display:flex;align-items:center;gap:8px;margin-top:2px;font-size:10.5px;flex-wrap:wrap">';
       if(fechaLine) html+='<span>'+fechaLine+'</span>';
+      if(_congB) html+=_congB;
       if(a.notas) html+='<span style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px">'+esc(a.notas)+'</span>';
       html+='</div>';
     }
@@ -6019,7 +6106,7 @@ function actHTML(a, ai, tipo){
       <div style="flex:1;min-width:0">
         <div style="font-size:13.5px;font-weight:600;line-height:1.25;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${urgente?_ic('alerta',13,'var(--red)')+' ':''}${esc(a.descripcion)}${blocked?' '+_ic('lock',12,'var(--text3)'):''}</div>
         <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-          ${_areaCorta?`<span style="color:var(--accent);font-weight:700">${_areaCorta}</span>`:`<span style="color:var(--amber);font-weight:700">Sin área</span>`}${_contCorto?` · ${_contCorto}`:''} · <span style="color:${ec};font-weight:700">${el}</span>
+          ${_areaCorta?`<span style="color:var(--accent);font-weight:700">${_areaCorta}</span>`:`<span style="color:var(--amber);font-weight:700">Sin área</span>`}${_contCorto?` · ${_contCorto}`:''} · <span style="color:${ec};font-weight:700">${el}</span>${_congeladaBadgeHTML(a)?' '+_congeladaBadgeHTML(a):''}
         </div>
       </div>
       <span id="chev-${a.id}" style="color:var(--text3);font-size:15px;flex-shrink:0;transition:transform .15s;${_abierta?'transform:rotate(90deg)':''}">›</span>
@@ -7728,6 +7815,9 @@ async function loadActsAll(){
     fixActsConsistency();
     setSS('ok','✓ '+hhmm());
   }catch(e){setSS('err','Error cargando');}
+  // Se refresca junto con las actividades pero sin esperarlo: si el historial
+  // falla o tarda, la carga de actividades ya terminó igual.
+  loadTocadasRecientes().catch(function(){});
 }
 
 // ── DESHACER / REHACER ────────────────────────────────
