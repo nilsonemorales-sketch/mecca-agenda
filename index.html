@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_64';
+const APP_VERSION='20260911_65';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -8273,11 +8273,53 @@ var Comandos = (function(){
   /* Busca a que actividad se refiere. Devuelve la lista de candidatas
      ordenada por que tan bien casa. No decide sola: si hay varias, el panel
      se las muestra al usuario. */
+  /* Lo que el usuario tiene delante cuando habla.
+     El modelo devuelve una referencia en texto ("la ventana") y hasta ahora
+     esa referencia se buscaba contra las 2.439 partidas de toda la obra, sin
+     mirar que hay en pantalla. Por eso habia que dictar frases largas:
+     "marca completada la ventana del balcon del apartamento 2A". Sabiendo que
+     esta abierto el 2A y filtrado Coge, "ya esta" alcanza. */
+  function contexto(){
+    var av=S.actFiltroAvanzado||{};
+    var areas=[], gente=[];
+    if(S.torreSel) areas.push(S.torreSel);
+    (av.ubicaciones||[]).forEach(function(u){ areas.push(u); });
+    if(S.aptoSel) areas.push(S.aptoSel);
+    if(S.recorrido && S.recorrido.area) areas.push(S.recorrido.area);
+    if(S.torrePersona) gente.push(S.torrePersona);
+    (av.personas||[]).forEach(function(n){ gente.push(n); });
+    (av.contratistas||[]).forEach(function(n){ if(n!=='__sin_asignar__') gente.push(n); });
+    if(S.revContratista) gente.push(S.revContratista);
+    var unicos=function(l){ return l.filter(function(x,i){ return x && l.indexOf(x)===i; }); };
+    return {areas:unicos(areas), gente:unicos(gente)};
+  }
+
+  function _enContexto(a, ctx){
+    var okA = !ctx.areas.length || ctx.areas.indexOf(a.area||'')>=0;
+    var okG = !ctx.gente.length || ctx.gente.some(function(n){ return _personaEn(a,n); });
+    return okA && okG;
+  }
+
   function candidatas(ref, opts){
     opts=opts||{};
     var q=_norm(ref);
-    if(!q) return [];
-    var base=(opts.fuente||(S.acts||[]).concat(S.abiertas||[]));
+    var ctx=(opts.contexto===false)?{areas:[],gente:[]}:contexto();
+    var hayCtx=!!(ctx.areas.length || ctx.gente.length);
+    var base0=(opts.fuente||(S.acts||[]).concat(S.abiertas||[]));
+    /* Sin referencia ("ya esta", "esa va por la mitad") pero con algo en
+       pantalla: se ofrecen las de ahi en vez de no encontrar nada. */
+    if(!q){
+      if(!hayCtx) return [];
+      var vis={}, enC=[];
+      base0.forEach(function(a){
+        if(!a||!a.id||vis[a.id]) return;
+        if(a.estado==='completado') return;
+        if(!_enContexto(a,ctx)) return;
+        vis[a.id]=1; enC.push(a);
+      });
+      return (typeof sortByPriority==='function'?sortByPriority(enC):enC).slice(0,8);
+    }
+    var base=base0;
     var vistos={}, lista=[];
     base.forEach(function(a){ if(a&&a.id&&!vistos[a.id]){vistos[a.id]=1;lista.push(a);} });
     var palabras=q.split(' ').filter(function(w){return w.length>2;});
@@ -8296,6 +8338,9 @@ var Comandos = (function(){
       // lo que esta abierto pesa mas que lo ya terminado
       if(a.estado!=='completado') punt+=6;
       if(a.estado==='en-progreso') punt+=3;
+      /* Lo que se esta mirando pesa, pero no tanto como para tapar una
+         coincidencia exacta de otro sitio (esa suma 150). */
+      if(hayCtx && _enContexto(a,ctx)) punt+=25;
       return {act:a, punt:punt};
     }).filter(function(x){return x.punt>=10;});
     res.sort(function(a,b){return b.punt-a.punt;});
@@ -8344,7 +8389,7 @@ var Comandos = (function(){
     }
   }
 
-  return {interpretar:interpretar, candidatas:candidatas, describir:describir,
+  return {interpretar:interpretar, candidatas:candidatas, describir:describir, contexto:contexto,
           ejecutar:ejecutar, escribe:escribe, _numero:_numero, _limpiar:_limpiar};
 
 })();
@@ -8483,6 +8528,23 @@ function _cmdAviso2(titulo,color,sub){
   if(p) p.innerHTML=_cmdAviso(titulo,color,sub||'');
 }
 
+/* Se dice en voz alta sobre que va a trabajar. Sin esto el contexto seria
+   magia invisible: el usuario dicta "ya esta" y no sabe a que se le aplico. */
+function _cmdPintarContexto(){
+  var c=document.getElementById('cmd-ctx'); if(!c) return;
+  var ctx=Comandos.contexto();
+  if(!ctx.areas.length && !ctx.gente.length){ c.innerHTML=''; return; }
+  var partes=ctx.areas.map(function(a){return _recNom(a);}).concat(ctx.gente);
+  c.innerHTML='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;'+
+    'font-size:11.5px;color:var(--text3)">'+
+    '<span style="font-weight:700">Sobre:</span>'+
+    partes.map(function(t){
+      return '<span style="background:var(--accent-soft);color:var(--accent);border-radius:99px;'+
+        'padding:2px 9px;font-weight:700">'+esc(t)+'</span>';
+    }).join('')+
+    '</div>';
+}
+
 function abrirComando(){
   if(!canEdit()){ requireEdit(abrirComando); return; }
   var ov=document.getElementById('cmd-ov');
@@ -8498,9 +8560,11 @@ function abrirComando(){
           '<button id="cmd-mic" onclick="_cmdVoz()" title="Dictar" '+
             'style="width:46px;height:46px;flex-shrink:0;border-radius:11px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:19px;cursor:pointer">🎤</button>'+
         '</div>'+
+        '<div id="cmd-ctx" style="padding:0 14px 8px"></div>'+
         '<div id="cmd-panel" style="padding:0 12px 12px"></div>'+
         '<div style="padding:9px 14px;border-top:1px solid var(--border);background:var(--bg3);font-size:11px;color:var(--text3);line-height:1.6">'+
-          'Ejemplos: «marca el pañete del 2A como terminado» · «pon la pintura del 3B en 50%» · '+
+          'Ejemplos: «ya está» · «esa va por la mitad» · «marca el pañete del 2A como terminado» · '+
+          '«pon la pintura del 3B en 50%» · '+
           '«asigna el sheetrock del 5A a Secre» · «pausa la plomería por falta de material» · «busca todo lo de Felix»'+
         '</div>'+
       '</div>';
@@ -8533,6 +8597,7 @@ function abrirComando(){
   var i=document.getElementById('cmd-txt');
   i.value=''; document.getElementById('cmd-panel').innerHTML='';
   _cmd.intencion=null; _cmd.candidatas=[]; _cmd.elegida=null;
+  _cmdPintarContexto();   // se lee al abrir: lo que hay en pantalla en ese momento
   setTimeout(function(){ i.focus(); },50);
 }
 
