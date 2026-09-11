@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_47';
+const APP_VERSION='20260911_48';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5754,9 +5754,14 @@ function _matrizTalleres(filas){
     for(var i=0;i<grupos.length;i++){
       if(Parecido.parecido(grupos[i].rep,a.descripcion)>=FALTA_UMBRAL){ g=grupos[i]; break; }
     }
-    if(!g){ g={rep:a.descripcion, celdas:{}, items:[]}; grupos.push(g); }
+    if(!g){ g={rep:a.descripcion, celdas:{}, items:[], ini:'', fin:''}; grupos.push(g); }
     (g.celdas[a.area]=g.celdas[a.area]||[]).push(a);
     g.items.push(a);
+    /* Las fechas de las hermanas: la más temprana para empezar y la más tardía
+       para terminar. Es lo que se le copia a una partida creada desde un hueco,
+       igual que hace «¿Falta algo aquí?». */
+    if(a.fecha_inicio && (!g.ini || a.fecha_inicio < g.ini)) g.ini = a.fecha_inicio;
+    if(a.fecha_fin    && (!g.fin || a.fecha_fin    > g.fin)) g.fin = a.fecha_fin;
     if(String(a.descripcion).length>String(g.rep).length) g.rep=a.descripcion;
   });
   return grupos;
@@ -5794,6 +5799,79 @@ function matrizSetCont(q){
   renderActs();
   if(q) loadMatrizActs(q).then(function(){ if(S.actVista==='matriz') renderActs(); });
 }
+// ── LLENAR UN HUECO DE LA MATRIZ ──────────────────────────────────────
+// Un hueco dice que el taller está en los demás apartamentos y aquí no: o no
+// aplica, o falta por registrar. Hasta ahora la matriz lo enseñaba y no dejaba
+// hacer nada. "No aplica" se recuerda solo mientras dure la sesión: no vale la
+// pena una tabla nueva en la base para esto; si recarga, vuelve a ofrecerse.
+function _matrizNoAplicaSet(){ return (S._matrizNoAplica=S._matrizNoAplica||{}); }
+function _matrizHuecoKey(q,rep,area){ return q+'|'+rep+'|'+area; }
+function matrizAbrirHueco(i,j){
+  if(!canEdit()) return;
+  S._matrizHueco={i:i,j:j};
+  renderActs();
+}
+function matrizCerrarHueco(){ S._matrizHueco=null; renderActs(); }
+function matrizNoAplica(){
+  var V=S._matrizVista, H=S._matrizHueco;
+  if(!V||!H) return;
+  var g=V.talleres[H.i], area=V.cols[H.j];
+  if(!g||!area) return;
+  _matrizNoAplicaSet()[_matrizHuecoKey(V.q,g.rep,area)]=1;   // solo en memoria
+  S._matrizHueco=null;
+  showToast('No aplica — no se vuelve a ofrecer');
+  renderActs();
+}
+async function matrizCrearHueco(){
+  if(!canEdit()) return;
+  var V=S._matrizVista, H=S._matrizHueco;
+  if(!V||!H) return;
+  var g=V.talleres[H.i], area=V.cols[H.j];
+  if(!g||!area) return;
+  var en=Object.keys(g.celdas).length;
+  /* Misma regla de fechas que faltanCrear: de las hermanas puede venir cualquier
+     cosa —ninguna con fecha de inicio y la de fin ya pasada—, y copiadas tal cual
+     dejarían el fin antes del inicio y la validación la rechaza. Cuando la fecha
+     de las otras no sirve aquí, un mes de plazo desde hoy. */
+  var _ini = g.ini || today();
+  var _fin = g.fin || '';
+  if(!_fin || _fin < _ini) _fin = _faltaEnDias(30);
+  S._matrizHueco=null;
+  try{
+    await Acciones.crear({
+      descripcion:g.rep, personal_nombre:V.q, tipo_personal:'contratista',
+      area:area,
+      fecha_inicio:_ini, fecha_fin:_fin,
+      estado:'pendiente', porcentaje:0,
+      notas:'Creada desde la matriz: este taller existe en '+en+' apartamento(s) y aquí no.'
+    },{ubicaciones:[area], confirmarDuplicado:true});
+    // El caché de la matriz quedó viejo: se suelta para que la celda pase de
+    // hueco a 0% al repintar.
+    if(S._matrizCache) delete S._matrizCache[V.q];
+    showToast('Creada en '+area,'ok');
+    renderActs();
+  }catch(e){
+    showToast('No se pudo crear: '+((e&&e.message)||''),'err',5000);
+    renderActs();
+  }
+}
+function _matrizHuecoPanelHTML(){
+  var V=S._matrizVista, H=S._matrizHueco;
+  if(!V||!H) return '';
+  var g=V.talleres[H.i], area=V.cols[H.j];
+  if(!g||!area) return '';
+  var en=Object.keys(g.celdas).length;
+  var bb='flex:1;min-width:110px;padding:13px 10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);min-height:46px';
+  return '<div style="background:var(--bg2);border:1.5px solid var(--accent);border-radius:var(--r2);padding:13px 14px;margin-bottom:12px">'+
+    '<div style="font-size:13.5px;font-weight:800;color:var(--text);line-height:1.35">«'+esc(g.rep)+'» — '+esc(V.q)+' — '+esc(area)+'</div>'+
+    '<div style="font-size:12px;color:var(--text3);margin:6px 0 11px">Este taller está en '+en+' apartamento'+(en!==1?'s':'')+' y aquí no.</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button onclick="matrizCrearHueco()" style="'+bb+';border:none;background:var(--accent-fill);color:var(--accent-on)">Crear</button>'+
+      '<button onclick="matrizNoAplica()" style="'+bb+';border:1.5px solid var(--border2);background:var(--bg);color:var(--text2)">No aplica</button>'+
+      '<button onclick="matrizCerrarHueco()" style="'+bb+';border:1.5px solid var(--border2);background:transparent;color:var(--text3)">Cancelar</button>'+
+    '</div></div>';
+}
+
 function renderActsMatriz(){
   var el=document.getElementById('c-act'); if(!el) return;
   var h=_actVistaToggle();
@@ -5850,9 +5928,15 @@ function renderActsMatriz(){
   var NOMW=190;
   var stickyTd='position:sticky;left:0;z-index:1;min-width:'+NOMW+'px;max-width:'+NOMW+'px;';
 
+  // Se guarda lo pintado para que los botones del hueco referencien por índice y
+  // no haya que meter el área ni la descripción dentro de un atributo.
+  S._matrizVista={q:q, talleres:talleres, cols:cols};
+
   h+='<div style="font-size:11.5px;color:var(--text3);margin-bottom:8px">'+
      talleres.length+' taller'+(talleres.length!==1?'es':'')+' × '+cols.length+' apartamento'+(cols.length!==1?'s':'')+
      ' · <span style="color:var(--text3)">celda vacía = ese taller no existe ahí</span></div>';
+
+  h+=_matrizHuecoPanelHTML();
 
   // El scroll lateral vive DENTRO de este contenedor: la pantalla no se mueve.
   h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;border:1px solid var(--border);border-radius:var(--r2)">';
@@ -5872,11 +5956,17 @@ function renderActsMatriz(){
     var bg=i%2===0?'var(--bg2)':'var(--bg)';
     h+='<tr>';
     h+='<td title="'+esc(g.rep)+'" style="'+stickyTd+'background:'+bg+';padding:6px 9px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);overflow:hidden;text-overflow:ellipsis;font-weight:600;color:var(--text)">'+esc(g.rep)+'</td>';
-    cols.forEach(function(area){
+    cols.forEach(function(area,j){
       var items=g.celdas[area]||null;
       if(!items){
-        // Hueco: se deja bien claro a propósito, es información.
-        h+='<td style="background:'+bg+';border-bottom:1px solid var(--border);padding:6px 4px"></td>';
+        // Hueco: el taller está en otros apartamentos y aquí no. Se ofrece con un
+        // "+" tenue para que se vea que se puede llenar; si ya se dijo que no
+        // aplica, se deja en blanco para no volver a proponerlo.
+        var descartado=_matrizNoAplicaSet()[_matrizHuecoKey(q,g.rep,area)];
+        h+='<td'+(descartado||!canEdit()?'':' onclick="matrizAbrirHueco('+i+','+j+')" title="Falta aquí — tocar para crearla"')+
+           ' style="background:'+bg+';border-bottom:1px solid var(--border);padding:6px 4px;text-align:center'+
+           (descartado||!canEdit()?'':';cursor:pointer;color:var(--text3);font-weight:700;opacity:.45')+'">'+
+           (descartado||!canEdit()?'':'+')+'</td>';
         return;
       }
       var pct=_matrizPct(items), c=_matrizCeldaColor(items,pct);
