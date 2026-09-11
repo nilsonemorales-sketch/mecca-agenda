@@ -10,6 +10,14 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1e1b4b">
+<!-- El icono del app. Antes no habia NINGUNO declarado: iOS elegia por su
+     cuenta lo primero que encontraba en la pagina, por eso en la pantalla de
+     inicio salia la marca de Bridex, que es el logo de la empresa y a 60px no
+     dice que hace el app. Ahora es la torre con lo hecho en verde: lo que el
+     app mide. -->
+<link rel="apple-touch-icon" sizes="180x180" href="./icono-180.png">
+<link rel="apple-touch-icon" href="./icono-app.png">
+<link rel="icon" type="image/png" href="./icono-app.png">
 <title>Agenda de Obra — Mecca Residence</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -819,7 +827,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_73';
+const APP_VERSION='20260911_74';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
