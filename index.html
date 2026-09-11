@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_54';
+const APP_VERSION='20260911_55';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -3488,7 +3488,10 @@ async function cargarTorre(force){
     S._torre = Object.keys(por).length ? por : null;
   }catch(e){ S._torre=null; }
   S._torreCargando=false;
-  if(S.currentTab==='hoy') dibujarTorre();
+  /* Se repinta donde este la torre, no solo en Hoy: ahora vive tambien en la
+     vista Edificio de Actividades, y si esto siguiera mirando la pestaña se
+     quedaba en "cargando…" para siempre en la otra. */
+  if(document.getElementById('torre-svg')) dibujarTorre();
   return S._torre;
 }
 
@@ -3588,7 +3591,7 @@ function dibujarTorre(){
       total+=d.total; hechas+=d.hechas; abiertas+=d.faltan;
 
       var g=add('g',{style:'cursor:pointer'});
-      g.addEventListener('click',function(){ abrirAptoTorre(area); });
+      g.addEventListener('click',function(){ _torreTap(area); });
       add('rect',{x:x,y:y,width:w,height:alto,rx:10,fill:'var(--bg3)'},g);
       /* tinte verde proporcional al avance: se lee sin gritar */
       add('rect',{x:x,y:y,width:w,height:alto,rx:10,fill:'var(--green)',
@@ -3608,12 +3611,20 @@ function dibujarTorre(){
                                 : ['Apto '+nivel+L];
       tNom.textContent=nombres[0];
       try{
-        var libre=w-24-tFal.getComputedTextLength()-8;
+        var anchoFal=tFal.getComputedTextLength();
+        var libre=w-24-anchoFal-8, medido=false;
         for(var n=0;n<nombres.length;n++){
           tNom.textContent=nombres[n];
-          if(tNom.getComputedTextLength()<=libre) break;
+          var ancho=tNom.getComputedTextLength();
+          if(ancho>0){ medido=true; if(ancho<=libre) break; }
         }
-      }catch(e){}
+        /* Si el navegador todavia no sabe medir — pasa cuando la torre se
+           dibuja antes de que su contenedor tenga tamaño — todas las medidas
+           vuelven en 0, el primer nombre "cabe" y "Penthouse B" termina
+           montado encima del "faltan". En ese caso se usa el nombre corto:
+           mejor corto que encima. */
+        if(!medido || anchoFal===0) tNom.textContent=nombres[nombres.length-1];
+      }catch(e){ tNom.textContent=nombres[nombres.length-1]; }
       add('text',{x:x+12,y:y+42,'font-size':21,'font-weight':800,'letter-spacing':'-.03em',
         fill:'var(--text)','font-family':'var(--tit)'},g).textContent=d.pct+'%';
       add('rect',{x:x+12,y:y+alto-8,width:w-24,height:4,rx:2,fill:'var(--bg4)'},g);
@@ -4031,7 +4042,7 @@ function cerrarHojaApto(){
   S.recorrido=null;
   var el=document.getElementById('hoja-rec');
   if(el) el.remove();
-  if(S.currentTab==='hoy') dibujarTorre();
+  if(document.getElementById('torre-svg')) dibujarTorre();
 }
 
 /* Los pendientes del apartamento. Se piden una vez por apartamento y se
@@ -5709,6 +5720,7 @@ function toggleActFiltros(){
 function renderActs(){
   if(S.actVista==='apto'){ renderActsPorApto(); return; }
   if(S.actVista==='matriz'){ renderActsMatriz(); return; }
+  if(S.actVista==='edificio'){ renderActsEdificio(); return; }
   // El historial va aparte y sin esperarlo: la pantalla se pinta ya, y cuando
   // llega (o falla) se vuelve a pintar. Así no retrasa nada ni rompe la lista.
   if(S.tocadasRecientes===undefined && !S._tocadasCargando){
@@ -6122,11 +6134,43 @@ function _actVistaToggle(){
     var on=(v===val);
     return '<button onclick="S.actVista=\''+val+'\';renderActs()" style="flex:1;padding:9px;border-radius:10px;border:2px solid '+(on?color:'var(--border2)')+';background:'+(on?bgOn:'var(--bg2)')+';color:'+(on?color:'var(--text2)')+';font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">'+label+'</button>';
   };
-  return '<div style="display:flex;gap:8px;margin-bottom:12px">'+
+  // Cuatro segmentos ya no caben siempre en una linea de telefono: se deja
+  // envolver en vez de apretarlos hasta que el texto se corte.
+  return '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'+
     seg('lista','Lista','var(--blue)','var(--blue-light)')+
     seg('apto','Por Apto','var(--green)','var(--green-light)')+
     seg('matriz','Matriz','var(--accent)','var(--accent-soft)')+
+    seg('edificio','Edificio','var(--amber)','var(--amber-light)')+
   '</div>';
+}
+
+/* La torre de "Hoy", tal cual, tambien aqui.
+   No se dibuja una segunda: si dos pantallas cuentan el avance por su cuenta,
+   tarde o temprano dan numeros distintos y el app deja de merecer confianza.
+   Es la misma funcion, los mismos datos y el mismo cache (S._torre). */
+function renderActsEdificio(){
+  var el=document.getElementById('c-act'); if(!el) return;
+  el.innerHTML = _actVistaToggle() +
+    torreHTML() +
+    '<div style="font-size:12px;color:var(--text3);text-align:center;padding:2px 6px 4px">'+
+      'Toca un apartamento para ver sus partidas.'+
+    '</div>';
+  if(S._torre) dibujarTorre(); else cargarTorre();
+}
+
+/* La misma torre sirve en dos sitios y cada sitio necesita otra cosa:
+   en Hoy sube la hoja del recorrido para dictar lo del apartamento; en
+   Actividades se entra a la lista de ese apartamento ya filtrada, con los
+   filtros y las acciones en bloque que ya existen. */
+function _torreTap(area){
+  if(S.actVista==='edificio'){
+    S.actFiltroAvanzado=S.actFiltroAvanzado||{};
+    S.actFiltroAvanzado.ubicaciones=[area];
+    S.actVista='lista';
+    renderActs();
+    return;
+  }
+  abrirAptoTorre(area);
 }
 async function loadAptoActs(area){
   try{
