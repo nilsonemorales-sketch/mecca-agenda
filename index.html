@@ -819,7 +819,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_45';
+const APP_VERSION='20260911_46';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5516,6 +5516,7 @@ function toggleActFiltros(){
 
 function renderActs(){
   if(S.actVista==='apto'){ renderActsPorApto(); return; }
+  if(S.actVista==='matriz'){ renderActsMatriz(); return; }
   // El historial va aparte y sin esperarlo: la pantalla se pinta ya, y cuando
   // llega (o falla) se vuelve a pintar. Así no retrasa nada ni rompe la lista.
   if(S.tocadasRecientes===undefined && !S._tocadasCargando){
@@ -5641,11 +5642,208 @@ function renderActs(){
 // ══════════════════════════════════════════════════════════════
 // ACTIVIDADES — MODO POR APARTAMENTO
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// ACTIVIDADES — MATRIZ TALLER × APARTAMENTO (por contratista)
+// "40 partidas vencidas" asusta y no dice nada. Las mismas 40 puestas en
+// rejilla resultaron ser 4 talleres repetidos en 11 apartamentos: cuatro
+// apartamentos clavados en 90%, dos en cero, y el resto esperando turno. Así
+// el número se vuelve un plan. Un hueco en la rejilla también informa: el
+// taller existe en los demás apartamentos y en ese no.
+// ══════════════════════════════════════════════════════════════
+// Se pide aparte (y se cachea) porque la matriz necesita TAMBIÉN las
+// completadas: si no, un taller terminado se vería como hueco y un hueco aquí
+// significa otra cosa. No toca la consulta de arranque.
+async function loadMatrizActs(q){
+  S._matrizCache=S._matrizCache||{};
+  if(S._matrizCache[q]!==undefined) return S._matrizCache[q];
+  try{
+    var filas=await sbTodo('obra_actividades?personal_nombre=eq.'+encodeURIComponent(q)+
+      '&select=id,area,descripcion,estado,porcentaje,fecha,fecha_inicio,fecha_fin');
+    S._matrizCache[q]=filas||[];
+  }catch(e){ S._matrizCache[q]=null; }
+  return S._matrizCache[q];
+}
+// Mismo motor que "¿Falta algo aquí?": Parecido + FALTA_UMBRAL, y el nombre del
+// taller es la redacción más larga del grupo. No se inventa otra forma de
+// agrupar para que las dos vistas cuenten lo mismo.
+function _matrizTalleres(filas){
+  var grupos=[];
+  (filas||[]).forEach(function(a){
+    if(!a||!a.descripcion) return;
+    if(REC_ORDEN.indexOf(a.area)<0) return;          // solo apartamentos
+    var g=null;
+    for(var i=0;i<grupos.length;i++){
+      if(Parecido.parecido(grupos[i].rep,a.descripcion)>=FALTA_UMBRAL){ g=grupos[i]; break; }
+    }
+    if(!g){ g={rep:a.descripcion, celdas:{}, items:[]}; grupos.push(g); }
+    (g.celdas[a.area]=g.celdas[a.area]||[]).push(a);
+    g.items.push(a);
+    if(String(a.descripcion).length>String(g.rep).length) g.rep=a.descripcion;
+  });
+  return grupos;
+}
+function _matrizPct(items){
+  if(!items||!items.length) return null;
+  var s=0; items.forEach(function(a){ s+=(parseInt(a.porcentaje)||0); });
+  return Math.round(s/items.length);
+}
+// El color resume el estado de la celda de un vistazo.
+function _matrizCeldaColor(items,pct){
+  if(pct>=100) return {bg:'var(--green-light)',fg:'var(--green)'};
+  var venc=items.some(function(a){ return isRetrasada(a); });
+  if(pct===0 && venc)  return {bg:'var(--red-light)',fg:'var(--red)'};
+  if(pct>0)            return {bg:'var(--amber-light)',fg:'var(--amber)'};
+  return {bg:'var(--bg3)',fg:'var(--text3)'};
+}
+// Contratistas con actividades abiertas, el de más vencidas primero: es por
+// donde conviene empezar a mirar.
+function _matrizContratistas(){
+  var m={};
+  (S.acts||[]).forEach(function(a){
+    if(a.estado==='completado') return;
+    _responsables(a.personal_nombre).forEach(function(n){
+      if(!n) return;
+      var c=m[n]=m[n]||{nombre:n,abiertas:0,vencidas:0};
+      c.abiertas++; if(isRetrasada(a)) c.vencidas++;
+    });
+  });
+  return Object.keys(m).map(function(k){return m[k];})
+    .sort(function(u,v){ return (v.vencidas-u.vencidas)||(v.abiertas-u.abiertas)||u.nombre.localeCompare(v.nombre); });
+}
+function matrizSetCont(q){
+  S.matrizCont=q||'';
+  renderActs();
+  if(q) loadMatrizActs(q).then(function(){ if(S.actVista==='matriz') renderActs(); });
+}
+function renderActsMatriz(){
+  var el=document.getElementById('c-act'); if(!el) return;
+  var h=_actVistaToggle();
+
+  // Si el filtro avanzado ya trae un contratista, ese manda: el usuario ya dijo
+  // a quién está mirando.
+  var delFiltro=((S.actFiltroAvanzado||{}).contratistas||[]).filter(function(c){return c!=='__sin_asignar__';});
+  if(delFiltro.length===1 && !S.matrizCont) S.matrizCont=delFiltro[0];
+  var q=S.matrizCont||'';
+
+  var conts=_matrizContratistas();
+  h+='<div style="margin-bottom:12px"><label style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:5px">Contratista</label>'+
+     '<select onchange="matrizSetCont(this.value)" style="width:100%;padding:11px 12px;border:1.5px solid var(--border2);border-radius:10px;font-size:15px;font-weight:600;font-family:var(--font);background:var(--bg2);color:var(--text)">'+
+     '<option value="">— Elige un contratista —</option>'+
+     conts.map(function(c){
+       return '<option value="'+esc(c.nombre)+'"'+(q===c.nombre?' selected':'')+'>'+esc(c.nombre)+' — '+c.abiertas+' abiertas'+(c.vencidas?' · '+c.vencidas+' vencidas':'')+'</option>';
+     }).join('')+'</select></div>';
+
+  // Mezclar contratistas en una sola rejilla no dice nada: la matriz exige uno.
+  if(!q){
+    h+='<div class="empty" style="padding:40px 20px;color:var(--text3)">Elige un contratista para ver sus talleres por apartamento</div>';
+    el.innerHTML=h; return;
+  }
+
+  var filas=(S._matrizCache||{})[q];
+  if(filas===undefined){
+    if(!S._matrizCargando){ S._matrizCargando=true; loadMatrizActs(q).then(function(){ S._matrizCargando=false; if(S.actVista==='matriz') renderActs(); }); }
+    h+='<div class="empty" style="padding:30px 20px;color:var(--text3)">Cargando…</div>';
+    el.innerHTML=h; return;
+  }
+  if(filas===null){
+    h+='<div class="empty" style="padding:30px 20px;color:var(--text3)">No se pudieron cargar las actividades de este contratista.</div>';
+    el.innerHTML=h; return;
+  }
+
+  var talleres=_matrizTalleres(filas);
+  if(!talleres.length){
+    h+='<div class="empty" style="padding:30px 20px;color:var(--text3)">Este contratista no tiene actividades en apartamentos.</div>';
+    el.innerHTML=h; return;
+  }
+
+  // Solo las columnas donde este contratista trabaja: si nunca pisó el 6A, esa
+  // columna sobra y hace la tabla más difícil de leer.
+  var cols=REC_ORDEN.filter(function(area){
+    return talleres.some(function(g){ return !!g.celdas[area]; });
+  });
+
+  // Los talleres más extendidos arriba: son los que hablan de la torre entera.
+  talleres.sort(function(u,v){
+    var du=Object.keys(u.celdas).length, dv=Object.keys(v.celdas).length;
+    return (dv-du)||String(u.rep).localeCompare(String(v.rep));
+  });
+
+  var NOMW=190;
+  var stickyTd='position:sticky;left:0;z-index:1;min-width:'+NOMW+'px;max-width:'+NOMW+'px;';
+
+  h+='<div style="font-size:11.5px;color:var(--text3);margin-bottom:8px">'+
+     talleres.length+' taller'+(talleres.length!==1?'es':'')+' × '+cols.length+' apartamento'+(cols.length!==1?'s':'')+
+     ' · <span style="color:var(--text3)">celda vacía = ese taller no existe ahí</span></div>';
+
+  // El scroll lateral vive DENTRO de este contenedor: la pantalla no se mueve.
+  h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;border:1px solid var(--border);border-radius:var(--r2)">';
+  h+='<table style="border-collapse:separate;border-spacing:0;font-size:11px;white-space:nowrap">';
+
+  // Encabezado
+  h+='<thead><tr>';
+  h+='<th style="'+stickyTd+'background:var(--bg3);text-align:left;padding:7px 9px;font-size:10px;color:var(--text3);font-weight:700;border-bottom:2px solid var(--border);border-right:1px solid var(--border)">TALLER</th>';
+  cols.forEach(function(area){
+    h+='<th style="background:var(--bg3);padding:7px 6px;font-size:10px;color:var(--text3);font-weight:700;border-bottom:2px solid var(--border);min-width:52px">'+esc(_recNom(area))+'</th>';
+  });
+  h+='<th style="background:var(--bg3);padding:7px 8px;font-size:10px;color:var(--accent);font-weight:800;border-bottom:2px solid var(--border);border-left:1px solid var(--border);min-width:56px">TORRE</th>';
+  h+='</tr></thead><tbody>';
+
+  // Filas
+  talleres.forEach(function(g,i){
+    var bg=i%2===0?'var(--bg2)':'var(--bg)';
+    h+='<tr>';
+    h+='<td title="'+esc(g.rep)+'" style="'+stickyTd+'background:'+bg+';padding:6px 9px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);overflow:hidden;text-overflow:ellipsis;font-weight:600;color:var(--text)">'+esc(g.rep)+'</td>';
+    cols.forEach(function(area){
+      var items=g.celdas[area]||null;
+      if(!items){
+        // Hueco: se deja bien claro a propósito, es información.
+        h+='<td style="background:'+bg+';border-bottom:1px solid var(--border);padding:6px 4px"></td>';
+        return;
+      }
+      var pct=_matrizPct(items), c=_matrizCeldaColor(items,pct);
+      h+='<td onclick="editAct(\''+items[0].id+'\')" title="'+esc(area)+' — '+items.length+' partida'+(items.length!==1?'s':'')+'" '+
+         'style="background:'+c.bg+';color:'+c.fg+';border-bottom:1px solid var(--border);padding:6px 4px;text-align:center;font-weight:800;cursor:pointer">'+
+         pct+'%'+(items.length>1?'<span style="color:'+c.fg+';font-weight:900"> ·</span>':'')+'</td>';
+    });
+    var tot=_matrizPct(g.items);
+    h+='<td style="background:'+bg+';border-bottom:1px solid var(--border);border-left:1px solid var(--border);padding:6px 8px;text-align:center;font-weight:800;color:var(--accent)">'+tot+'%</td>';
+    h+='</tr>';
+  });
+
+  // Pie: avance del contratista en cada apartamento
+  h+='<tr>';
+  h+='<td style="'+stickyTd+'background:var(--bg3);padding:7px 9px;border-top:2px solid var(--border);border-right:1px solid var(--border);font-weight:800;color:var(--accent)">APARTAMENTO</td>';
+  cols.forEach(function(area){
+    var items=[];
+    talleres.forEach(function(g){ if(g.celdas[area]) items=items.concat(g.celdas[area]); });
+    var pct=_matrizPct(items);
+    h+='<td style="background:var(--bg3);border-top:2px solid var(--border);padding:7px 4px;text-align:center;font-weight:800;color:var(--accent)">'+(pct==null?'—':pct+'%')+'</td>';
+  });
+  var totAll=_matrizPct(talleres.reduce(function(acc,g){ return acc.concat(g.items); },[]));
+  h+='<td style="background:var(--bg3);border-top:2px solid var(--border);border-left:1px solid var(--border);padding:7px 8px;text-align:center;font-weight:900;color:var(--accent)">'+totAll+'%</td>';
+  h+='</tr>';
+
+  h+='</tbody></table></div>';
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:10.5px;color:var(--text3)">'+
+     '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--green-light);border:1px solid var(--green);vertical-align:-1px"></span> lista</span>'+
+     '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--amber-light);border:1px solid var(--amber);vertical-align:-1px"></span> empezada</span>'+
+     '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--red-light);border:1px solid var(--red);vertical-align:-1px"></span> vencida en 0%</span>'+
+     '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--bg3);border:1px solid var(--border2);vertical-align:-1px"></span> pendiente</span>'+
+     '<span>· = varias partidas</span></div>';
+  h+='<div style="height:100px"></div>';
+  el.innerHTML=h;
+}
+
 function _actVistaToggle(){
-  var apto=S.actVista==='apto';
+  var v=S.actVista||'lista';
+  var seg=function(val,label,color,bgOn){
+    var on=(v===val);
+    return '<button onclick="S.actVista=\''+val+'\';renderActs()" style="flex:1;padding:9px;border-radius:10px;border:2px solid '+(on?color:'var(--border2)')+';background:'+(on?bgOn:'var(--bg2)')+';color:'+(on?color:'var(--text2)')+';font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">'+label+'</button>';
+  };
   return '<div style="display:flex;gap:8px;margin-bottom:12px">'+
-    '<button onclick="S.actVista=\'lista\';renderActs()" style="flex:1;padding:9px;border-radius:10px;border:2px solid '+(apto?'var(--border2)':'var(--blue)')+';background:'+(apto?'var(--bg2)':'var(--blue-light)')+';color:'+(apto?'var(--text2)':'var(--blue)')+';font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Lista</button>'+
-    '<button onclick="S.actVista=\'apto\';renderActs()" style="flex:1;padding:9px;border-radius:10px;border:2px solid '+(apto?'var(--green)':'var(--border2)')+';background:'+(apto?'var(--green-light)':'var(--bg2)')+';color:'+(apto?'var(--green)':'var(--text2)')+';font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Por Apto</button>'+
+    seg('lista','Lista','var(--blue)','var(--blue-light)')+
+    seg('apto','Por Apto','var(--green)','var(--green-light)')+
+    seg('matriz','Matriz','var(--accent)','var(--accent-soft)')+
   '</div>';
 }
 async function loadAptoActs(area){
