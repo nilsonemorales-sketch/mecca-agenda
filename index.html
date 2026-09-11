@@ -501,10 +501,8 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div style="color:var(--text3);font-size:11px;font-weight:600;letter-spacing:.08em;margin-bottom:9px">USUARIO</div>
     <select id="lock-user" style="width:100%;background:var(--bg3);border:1.5px solid transparent;border-radius:var(--r);color:var(--text);font-size:15px;font-weight:600;padding:14px 15px;margin-bottom:18px;font-family:var(--font);-webkit-appearance:none;appearance:none;cursor:pointer;min-height:50px" onchange="document.getElementById('lock-pin').focus()">
       <option value="" style="background:#1d1e21;color:#f3f4f2">Selecciona tu usuario...</option>
-      <option value="nilson" style="background:#1d1e21;color:#f3f4f2">Ing. Nilson — Administrador</option>
-      <option value="moises" style="background:#1d1e21;color:#f3f4f2">Ing. Moises Jimenez</option>
-      <option value="luis" style="background:#1d1e21;color:#f3f4f2">Ing. Luis Jimenez</option>
-      <option value="karina" style="background:#1d1e21;color:#f3f4f2">Ing. Karina Breton</option>
+      <!-- Esta lista la reescribe _llenarUsuariosLock() desde USERS al arrancar.
+           Aqui solo queda lo minimo para el primer pintado. -->
     </select>
     <div style="color:var(--text3);font-size:11px;font-weight:600;letter-spacing:.08em;margin-bottom:9px">CÓDIGO DE ACCESO</div>
     <input id="lock-pin" type="password" inputmode="numeric" maxlength="10" placeholder="••••••"
@@ -819,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_50';
+const APP_VERSION='20260911_51';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -964,7 +962,10 @@ const USERS={
   nilson:{nombre:'Ing. Nilson',rol:'admin',color:'var(--blue)',pin:'5349'},
   edgar:{nombre:'Ing. Edgar Polanco',rol:'ing',color:'var(--blue)',pin:'2025',archivado:true},
   moises:{nombre:'Ing. Moises Jimenez',rol:'ing',color:'var(--amber)',pin:'2026'},
-  luis:{nombre:'Ing. Luis Jimenez',rol:'ing',color:'var(--green)',pin:'1999'},
+  // Archivado: sale de la lista de entrada y del control de inactividad, pero
+  // se queda en USERS para que su trabajo anterior siga saliendo con su nombre
+  // y su color en la bitacora y en los reportes. Igual que Edgar.
+  luis:{nombre:'Ing. Luis Jimenez',rol:'ing',color:'var(--green)',pin:'1999',archivado:true},
   karina:{nombre:'Ing. Karina Breton',rol:'ing',color:'#9c36b5',pin:'1996'},
   // Supervisión de arquitectura: no lleva bitácora diaria de obra, por eso
   // queda fuera del control automático de inactividad.
@@ -2230,17 +2231,24 @@ function updateAsistPct(){
 }
 
 // ── AUTH ──────────────────────────────────────────────
+
+/* La lista de usuarios se arma desde USERS, no a mano. Escrita a mano se
+   quedaba desfasada: la Arq. Liamelia nunca aparecio aqui aunque existiera
+   desde hace meses, y a un archivado habia que borrarlo de tres sitios. */
+function _opcionesUsuarios(){
+  var h='<option value="">Selecciona...</option>';
+  Object.entries(USERS).forEach(function(e){
+    if(e[1].archivado) return;
+    h+='<option value="'+e[0]+'">'+esc(e[1].nombre)+(e[1].rol==='admin'?' (Admin)':'')+'</option>';
+  });
+  return h;
+}
+
 function showLogin(){
   document.getElementById('mcontent').innerHTML=`
     <div class="mhandle"></div><h3>Iniciar sesión</h3>
     <div class="fw"><label class="fl">Usuario</label>
-      <select class="sel" id="lu" style="font-size:15px">
-        <option value="">Selecciona...</option>
-        <option value="nilson">Ing. Nilson (Admin)</option>
-        <option value="moises">Ing. Moises Jimenez</option>
-        <option value="luis">Ing. Luis Jimenez</option>
-        <option value="karina">Ing. Karina Breton</option>
-      </select></div>
+      <select class="sel" id="lu" style="font-size:15px">${_opcionesUsuarios()}</select></div>
     <div class="fw"><label class="fl">PIN</label>
       <input type="password" id="lp" placeholder="••••" style="font-size:28px;letter-spacing:10px;text-align:center;min-height:60px" maxlength="10" inputmode="numeric" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
       <div style="color:var(--red);font-size:12px;margin-top:4px;display:none" id="lerr">PIN incorrecto</div></div>
@@ -2255,6 +2263,9 @@ function doLogin(){
   const uid_=document.getElementById('lu').value;
   const pin=document.getElementById('lp').value;
   const u=USERS[uid_];
+  /* A un archivado no se le abre por aqui. Las otras dos puertas de entrada ya
+     lo comprobaban; esta no, y era la unica que se le habia escapado. */
+  if(u&&u.archivado){var _le=document.getElementById('lerr');if(_le){_le.textContent='Este usuario ya no tiene acceso';_le.style.display='block';}document.getElementById('lp').value='';return;}
   if(!u||pin!==u.pin){document.getElementById('lerr').style.display='block';document.getElementById('lp').value='';return;}
   S.user={...u,id:uid_};
   S._undoStack=[]; S._redoStack=[];
@@ -2348,13 +2359,7 @@ function requireEdit(action){
     <div class="mhandle"></div>
     <h3>Inicia sesión para editar</h3>
     <div class="fw"><label class="fl">Usuario</label>
-      <select class="sel" id="lu" style="font-size:15px">
-        <option value="">Selecciona...</option>
-        <option value="nilson">Ing. Nilson (Admin)</option>
-        <option value="moises">Ing. Moises Jimenez</option>
-        <option value="luis">Ing. Luis Jimenez</option>
-        <option value="karina">Ing. Karina Breton</option>
-      </select></div>
+      <select class="sel" id="lu" style="font-size:15px">${_opcionesUsuarios()}</select></div>
     <div class="fw"><label class="fl">PIN</label>
       <input type="password" id="lp" placeholder="••••" style="font-size:28px;letter-spacing:10px;text-align:center;min-height:60px" inputmode="numeric" maxlength="10" onkeydown="if(event.key==='Enter')doLoginAndRun_cb()">
       <div style="color:var(--red);font-size:12px;margin-top:4px;display:none" id="lerr">PIN incorrecto</div></div>
