@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_61';
+const APP_VERSION='20260911_62';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1256,10 +1256,19 @@ function addUbicacion(){
    esa lista se decide si de verdad falta.                               */
 /* Los contratistas marcados en el filtro de la pantalla, o null si no hay
    filtro puesto (entonces se miran todos). */
+/* Que gente esta filtrada en pantalla, venga por donde venga.
+   Antes solo miraba 'contratistas', el desplegable del panel de filtros. Desde
+   que el Edificio filtra por persona, se podia estar viendo solo lo de Coge y
+   al preguntar "¿falta algo aqui?" salian los faltantes de todo el mundo
+   mezclados — que es justo lo que no se queria. */
 function _faltanFiltroContratistas(){
-  var f=(S.actFiltroAvanzado||{}).contratistas||[];
-  if(!f.length) return null;
-  return f.map(function(x){ return x==='__sin_asignar__' ? 'Sin asignar' : x; });
+  var av=S.actFiltroAvanzado||{};
+  var f=(av.contratistas||[]).map(function(x){ return x==='__sin_asignar__' ? 'Sin asignar' : x; })
+    .concat(av.personas||[]);
+  if(S.torrePersona && f.indexOf(S.torrePersona)<0) f.push(S.torrePersona);
+  // sin repetidos
+  f=f.filter(function(x,i){ return x && f.indexOf(x)===i; });
+  return f.length ? f : null;
 }
 
 async function revisarFaltantes(area){
@@ -1312,7 +1321,10 @@ function _faltanEnArea(area, yaTiene){
     if(a.area===area) return;
     if(REC_ORDEN.indexOf(a.area)<0) return;
     var q=(a.personal_nombre||'').trim()||'Sin asignar';
-    if(soloQ && soloQ.indexOf(q)<0) return;
+    /* Se compara contra la lista de nombres, no contra el texto entero: 248
+       partidas llevan varios separados por coma, y "Coge, Lantigua" nunca iba
+       a ser igual a "Coge". */
+    if(soloQ && !soloQ.some(function(n){ return _personaEn(a,n); })) return;
     (porQ[q]=porQ[q]||[]).push(a);
   });
 
@@ -6982,6 +6994,39 @@ function actHTML(a, ai, tipo){
   var ibtn='width:38px;height:34px;border-radius:9px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0';
 
   // ── TARJETA COMPACTA ──────────────────────────────────────────
+/* ── ACCIONES EN LA FILA, SIN ABRIRLA ──────────────────────────────────────
+   Para tocar una partida habia que abrirla primero: dos toques por cada una.
+   El ✓ va en la fila siempre. Los chips de avance solo en las que ya estan en
+   curso — y esto es por los datos, no por capricho: en toda la historia hay
+   1.304 "completado" y 71 "avance". Ponerle cuatro botones de porcentaje a las
+   1.100 filas restantes las haria mas altas a todas para algo que casi no se
+   usa, y en obra lo que cuesta es bajar la lista.
+   ────────────────────────────────────────────────────────────────────────── */
+function _actFilaCheckHTML(a){
+  if(!canEdit() || a.estado==='completado' || S.actSelModo) return '';
+  return '<button onclick="event.stopPropagation();marcarActCompletada(\''+a.id+'\')" '+
+    'title="Marcar hecha" aria-label="Marcar hecha" '+
+    'style="flex-shrink:0;width:40px;height:40px;border-radius:10px;cursor:pointer;'+
+    'border:1.5px solid var(--green);background:var(--green-light);color:var(--green);'+
+    'font-size:17px;font-weight:800;font-family:var(--font);line-height:1">✓</button>';
+}
+
+function _actFilaAvanceHTML(a){
+  if(!canEdit() || a.estado!=='en-progreso' || S.actSelModo) return '';
+  var actual=parseInt(a.porcentaje)||0;
+  var h='<div style="display:flex;gap:5px;padding:0 11px 9px" onclick="event.stopPropagation()">';
+  [25,50,75].forEach(function(v){
+    var on=actual===v;
+    h+='<button onclick="quickSetPct(\''+a.id+'\','+v+')" '+
+       'style="flex:1;min-height:40px;border-radius:9px;font-size:13px;font-weight:700;'+
+       'cursor:pointer;font-family:var(--font);'+
+       (on?'border:1.5px solid var(--accent-fill);background:var(--accent-fill);color:var(--accent-on)'
+          :'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)')+
+       '">'+v+'%</button>';
+  });
+  return h+'</div>';
+}
+
   // Solo se ve lo imprescindible: qué es, dónde, quién y cómo va.
   // Todo lo demás (avance, notas, fotos, horas, botones) vive dentro de
   // #det-<id> y se abre al tocar la tarjeta. Nada se perdió, solo se plegó.
@@ -6998,8 +7043,10 @@ function actHTML(a, ai, tipo){
           ${_areaCorta?`<span style="color:var(--accent);font-weight:700">${_areaCorta}</span>`:`<span style="color:var(--amber);font-weight:700">Sin área</span>`}${_contCorto?` · ${_contCorto}`:''} · <span style="color:${ec};font-weight:700">${el}</span>${_congeladaBadgeHTML(a)?' '+_congeladaBadgeHTML(a):''}${_actSigueIgualBtnHTML(a)?' '+_actSigueIgualBtnHTML(a):''}
         </div>
       </div>
+      ${_actFilaCheckHTML(a)}
       <span id="chev-${a.id}" style="color:var(--text3);font-size:15px;flex-shrink:0;transition:transform .15s;${_abierta?'transform:rotate(90deg)':''}">›</span>
     </div>
+    ${_actFilaAvanceHTML(a)}
     <div id="det-${a.id}" style="display:${_abierta?'block':'none'};padding:2px 11px 11px;border-top:1px solid var(--border)">
 
     <div style="font-size:11.5px;color:var(--text3);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px">
