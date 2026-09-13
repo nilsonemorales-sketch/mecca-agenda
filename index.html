@@ -827,7 +827,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260911_75';
+const APP_VERSION='20260913_76';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5464,6 +5464,22 @@ function _congeladaBadgeHTML(a){
   return '<span style="flex-shrink:0;font-size:9.5px;font-weight:700;background:var(--bg3);color:var(--text3);border:1px solid var(--border2);border-radius:4px;padding:0 4px;white-space:nowrap">❄ '+esc(_congeladaLbl(a))+'</span>';
 }
 
+/* Los cuatro "huecos de datos" viven en UN solo sitio. Antes el criterio estaba
+   escrito a mano dentro de applyActFilters; al querer usarlo tambien en la
+   Revision habia que copiarlo, y dos copias del mismo criterio terminan dando
+   numeros distintos en dos pantallas que hablan de lo mismo.
+   Sin asignar: NO se exige tipo_personal==='contratista'. Las que de verdad no
+   tienen a nadie vienen marcadas 'propio' o sin tipo, asi que pedir
+   'contratista' daba 0. */
+var FILTRO_HUECO = {
+  retrasadas:     function(a){ return isRetrasada(a); },
+  sinfecha:       function(a){ return a.estado!=='completado' && !(a.fecha_fin||'').trim(); },
+  sincontratista: function(a){ return a.estado!=='completado' && !(a.personal_nombre||'').trim(); },
+  congeladas:     function(a){ return _esCongelada(a); }
+};
+var FILTRO_HUECO_NOM = {retrasadas:'vencidas', sinfecha:'sin fecha',
+                        sincontratista:'sin asignar', congeladas:'congeladas'};
+
 function applyActFilters(acts){
   let filtered = acts;
   // 'retrasadas', 'sinfecha' y 'sincontratista' NO son estados (los estados son
@@ -5477,12 +5493,10 @@ function applyActFilters(acts){
   const soloCongeladas = rs.indexOf('congeladas')>=0;
   const pedidoEspecial = soloRetrasadas||soloSinFecha||soloSinContr||soloCongeladas;
   const estados = rs.filter(x=>['retrasadas','sinfecha','sincontratista','congeladas'].indexOf(x)<0);
-  if(soloRetrasadas) filtered = filtered.filter(isRetrasada);
-  if(soloSinFecha) filtered = filtered.filter(a=>a.estado!=='completado' && !(a.fecha_fin||'').trim());
-  // Sin asignar: NO se exige tipo_personal==='contratista'. Las que de verdad no tienen
-  // a nadie vienen marcadas 'propio' o sin tipo, así que pedir 'contratista' daba 0.
-  if(soloSinContr) filtered = filtered.filter(a=>a.estado!=='completado' && !(a.personal_nombre||'').trim());
-  if(soloCongeladas) filtered = filtered.filter(_esCongelada);
+  if(soloRetrasadas) filtered = filtered.filter(FILTRO_HUECO.retrasadas);
+  if(soloSinFecha) filtered = filtered.filter(FILTRO_HUECO.sinfecha);
+  if(soloSinContr) filtered = filtered.filter(FILTRO_HUECO.sincontratista);
+  if(soloCongeladas) filtered = filtered.filter(FILTRO_HUECO.congeladas);
   if(rs.indexOf('activas')>=0) filtered = filtered.filter(a=>a.estado!=='completado');
   else if(estados.length) filtered = filtered.filter(a=>estados.indexOf(a.estado)>=0);
   // los pedidos especiales ya excluyen las completadas: no re-filtrar por "no completado" o anularía el pedido.
@@ -6780,8 +6794,336 @@ function _torreMenu(){
         (d.venc>0 ? b('retrasadas','Solo las '+d.venc+' vencidas','var(--red-light)','var(--red)','var(--red)') : '')+
         (nCong>0 ? b('congeladas','Las '+nCong+' congeladas','var(--bg3)','var(--text2)') : '')+
       '</div>'+
+      /* La otra forma de entrar: en vez de una lista para leer, las partidas de
+         una en una para ir contestando. Va aparte y debajo porque no es "ver",
+         es "trabajar": lo de arriba no escribe nada y esto si. */
+      (_pasoCuantas(area,persona)>0
+        ? '<button onclick="pasoIniciar()" style="width:100%;margin-top:9px;min-height:48px;padding:13px;'+
+            'border-radius:11px;border:none;background:var(--green);color:#fff;font-size:14px;'+
+            'font-weight:800;cursor:pointer;font-family:var(--font)">'+
+            'Recorrer una por una ('+_pasoCuantas(area,persona)+')</button>'
+        : '')+
     '</div>';
 }
+/* ── RECORRIDO PASO A PASO ───────────────────────────────────────────────
+   Una partida a la vez, a pantalla completa y con botones de dedo. Se hace de
+   pie, en el apartamento, con el telefono en una mano: abrir cada tarjeta,
+   editar, guardar y volver no es practico ahi arriba.
+
+   Dos reglas que no se negocian:
+   - TODO pasa por Acciones. Ni un PATCH suelto. Cada toque deja su linea en
+     obra_cambios, una sola, igual que el resto del app.
+   - Aqui NO se borra nada. "No aplica" pausa y deja dicho por que; lo que se
+     borra se decide sentado y mirando la obra entera, no de pie y de prisa.  */
+
+var _pasoOv=null;
+
+function _pasoLista(area,persona){
+  var l=(S.acts||[]).filter(function(a){
+    return (a.area||'')===area && a.estado!=='completado' && _personaEn(a,persona);
+  });
+  return _revOrdenActs(l);
+}
+function _pasoCuantas(area,persona){ return _pasoLista(area,persona).length; }
+
+function pasoIniciar(){
+  var area=S.torreSel; if(!area) return;
+  var persona=S.torrePersona||'';
+  var lista=_pasoLista(area,persona);
+  if(!lista.length){ showToast('No hay nada abierto aquí','warn'); return; }
+  S.paso={area:area, persona:persona, ids:lista.map(function(a){return a.id;}),
+          i:0, sub:null, error:'', guardando:false,
+          res:{cerradas:0, avances:0, fechas:0, revisadas:0, saltadas:0, noaplica:[]}};
+  S.torreSel='';
+  if(!_pasoOv){
+    _pasoOv=document.createElement('div');
+    _pasoOv.id='paso-ov';
+    _pasoOv.style.cssText='position:fixed;inset:0;z-index:9998;background:var(--bg);'+
+      'overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 0 26px';
+    document.body.appendChild(_pasoOv);
+  }
+  pasoPintar();
+}
+
+function _pasoActual(){
+  var P=S.paso; if(!P) return null;
+  var id=P.ids[P.i]; if(!id) return null;
+  return Acciones.porId(id) || (S.acts||[]).find(function(x){return x.id===id;}) || null;
+}
+
+function _pasoSiguiente(){
+  var P=S.paso; if(!P) return;
+  P.i++; P.sub=null; P.error='';
+  pasoPintar();
+  if(_pasoOv) _pasoOv.scrollTop=0;
+}
+
+function pasoAtras(){
+  var P=S.paso; if(!P || P.i<=0) return;
+  P.i--; P.sub=null; P.error='';
+  pasoPintar();
+  if(_pasoOv) _pasoOv.scrollTop=0;
+}
+
+function pasoSub(k){
+  var P=S.paso; if(!P) return;
+  P.sub = (P.sub===k) ? null : k;
+  P.error='';
+  pasoPintar();
+}
+
+function pasoSaltar(){
+  var P=S.paso; if(!P) return;
+  P.res.saltadas++;
+  _pasoSiguiente();
+}
+
+/* El unico sitio por el que se escribe desde el recorrido. Si falla, la partida
+   se queda donde esta y se avisa: nunca se avanza dando por buena una accion
+   que la base no acepto. */
+async function _pasoGuardar(fn, onOk, msg){
+  var P=S.paso; if(!P || P.guardando) return;
+  P.guardando=true; P.error=''; pasoPintar();
+  try{
+    await fn();
+    if(onOk) onOk(P);
+    P.guardando=false;
+    showToast(msg||'Guardado ✓');
+    _pasoSiguiente();
+  }catch(e){
+    P.guardando=false;
+    P.error=(e && e.message) || 'No se pudo guardar';
+    pasoPintar();
+  }
+}
+
+function pasoHecha(){
+  var a=_pasoActual(); if(!a) return;
+  _pasoGuardar(function(){ return Acciones.completar(a.id); },
+               function(P){ P.res.cerradas++; }, 'Cerrada ✓');
+}
+
+function pasoIgual(){
+  var a=_pasoActual(); if(!a) return;
+  _pasoGuardar(function(){ return Acciones.revisar(a.id); },
+               function(P){ P.res.revisadas++; }, 'Revisada, sigue igual');
+}
+
+function pasoAvance(v){
+  var a=_pasoActual(); if(!a) return;
+  var n=parseInt(v,10);
+  if(isNaN(n)||n<0||n>100){ S.paso.error='El avance va de 0 a 100'; pasoPintar(); return; }
+  _pasoGuardar(function(){ return Acciones.setAvance(a.id,n); },
+               function(P){ P.res.avances++; }, n+'% guardado ✓');
+}
+function pasoAvanceLibre(){
+  var el=document.getElementById('paso-pct');
+  pasoAvance(el?el.value:'');
+}
+
+function _pasoDiaViernes(sem){
+  var d=new Date(today()+'T12:00:00');
+  d.setDate(d.getDate() + ((5-d.getDay()+7)%7) + 7*(sem||0));   // 5 = viernes
+  return d.toISOString().slice(0,10);
+}
+
+/* "Ponle fecha" mueve la fecha de ENTREGA (fecha_fin), que es la que decide si
+   una partida sale vencida. fecha_plan es otra cosa: el plan del dia. */
+function pasoFecha(f){
+  var a=_pasoActual(); if(!a || !f) return;
+  var cambios={fecha_fin:f};
+  /* El fin nunca puede quedar antes del inicio: ese dato malo ya se colo una
+     vez y despues nadie entiende por que la partida nace vencida. */
+  if((a.fecha_inicio||'') && a.fecha_inicio>f) cambios.fecha_inicio=f;
+  _pasoGuardar(function(){ return Acciones.editar(a.id,cambios,'entrega → '+f+' (recorrido)'); },
+               function(P){ P.res.fechas++; }, 'Fecha puesta ✓');
+}
+function pasoFechaLibre(){
+  var el=document.getElementById('paso-fecha');
+  var v=el?el.value:'';
+  if(!v){ S.paso.error='Elige una fecha'; pasoPintar(); return; }
+  pasoFecha(v);
+}
+
+function pasoNoAplica(){
+  var a=_pasoActual(); if(!a) return;
+  var desc=a.descripcion||'(sin descripción)';
+  _pasoGuardar(function(){ return Acciones.pausar(a.id,'No aplica aquí — marcada en recorrido'); },
+               function(P){ P.res.noaplica.push({id:a.id, desc:desc}); },
+               'Marcada: no aplica aquí');
+}
+
+function pasoCerrar(){
+  var P=S.paso;
+  var toco = !!(P && (P.res.cerradas||P.res.avances||P.res.fechas||P.res.noaplica.length));
+  if(_pasoOv){ _pasoOv.remove(); _pasoOv=null; }
+  S.paso=null;
+  /* Si se movio algo, el avance dibujado en la torre ya no vale: se vuelve a
+     pedir en vez de enseñar un numero viejo. */
+  if(toco){ S._torre=null; S._torreCargando=false; }
+  renderObra();
+}
+
+function _pasoBtn(fn,txt,fondo,color,borde){
+  return '<button onclick="'+fn+'" style="width:100%;min-height:48px;padding:13px 14px;margin-bottom:8px;'+
+    'border-radius:12px;border:1.5px solid '+(borde||'transparent')+';background:'+fondo+';color:'+color+';'+
+    'font-size:15px;font-weight:800;cursor:pointer;font-family:var(--font)">'+txt+'</button>';
+}
+
+function pasoPintar(){
+  if(!_pasoOv) return;
+  var P=S.paso;
+  if(!P){ _pasoOv.innerHTML=''; return; }
+
+  var cab='<div style="position:sticky;top:0;z-index:2;background:var(--bg2);'+
+    'border-bottom:1.5px solid var(--border);padding:12px 15px;display:flex;align-items:center;gap:10px">'+
+    '<div style="flex:1;min-width:0">'+
+      '<div style="font-family:var(--tit);font-size:15px;font-weight:800;color:var(--text)">'+
+        esc(_recNom(P.area))+'</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);font-family:var(--mono);margin-top:2px">'+
+        (P.i<P.ids.length ? (P.i+1)+' de '+P.ids.length : 'recorrido terminado')+
+        (P.persona?' · '+esc(P.persona):'')+'</div>'+
+    '</div>'+
+    '<button onclick="pasoCerrar()" style="flex:0 0 auto;background:none;border:none;color:var(--text3);'+
+      'font-size:24px;line-height:1;cursor:pointer;padding:0 6px;min-height:44px">×</button>'+
+  '</div>';
+
+  // ── El final: que quedo hecho ──
+  if(P.i>=P.ids.length){
+    var R=P.res;
+    var fila=function(v,lab,col){
+      if(!v) return '';
+      return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;'+
+        'padding:9px 0;border-bottom:1px solid var(--border)">'+
+        '<span style="font-size:13.5px;color:var(--text2)">'+lab+'</span>'+
+        '<b style="font-size:17px;color:'+(col||'var(--text)')+'">'+v+'</b></div>';
+    };
+    var nada=!(R.cerradas||R.avances||R.fechas||R.revisadas||R.noaplica.length||R.saltadas);
+    _pasoOv.innerHTML=cab+
+      '<div style="padding:18px 15px">'+
+        '<div style="font-family:var(--tit);font-size:19px;font-weight:800;margin-bottom:4px">Recorrido terminado</div>'+
+        '<div style="font-size:12.5px;color:var(--text3);margin-bottom:16px">'+
+          esc(_recNom(P.area))+' · '+P.ids.length+' partida'+(P.ids.length!==1?'s':'')+'</div>'+
+        (nada?'<div class="empty" style="padding:22px">No se tocó nada</div>':
+          '<div style="background:var(--bg2);border:1.5px solid var(--border);border-radius:12px;padding:4px 14px 6px;margin-bottom:16px">'+
+            fila(R.cerradas,'Cerradas','var(--green)')+
+            fila(R.avances,'Avance cambiado','var(--blue)')+
+            fila(R.fechas,'Con fecha nueva','var(--amber)')+
+            fila(R.revisadas,'Revisadas, siguen igual','var(--text2)')+
+            fila(R.saltadas,'Saltadas','var(--text3)')+
+            fila(R.noaplica.length,'Marcadas «no aplica»','var(--red)')+
+          '</div>')+
+        /* Las de "no aplica" salen con su nombre: son las que hay que decidir
+           despues, y una cuenta suelta no sirve para decidir nada. */
+        (R.noaplica.length
+          ? '<div style="font-size:12.5px;font-weight:700;color:var(--red);margin-bottom:7px">'+
+              'Por decidir — no aplican aquí</div>'+
+            R.noaplica.map(function(x){
+              return '<div style="font-size:13px;color:var(--text2);background:var(--bg2);'+
+                'border:1px solid var(--border);border-left:3px solid var(--red);border-radius:9px;'+
+                'padding:9px 11px;margin-bottom:6px;line-height:1.35">'+esc(x.desc)+'</div>';
+            }).join('')+
+            '<div style="font-size:11.5px;color:var(--text3);margin:8px 0 16px;line-height:1.45">'+
+              'Quedaron pausadas, no borradas. El motivo está escrito en cada una.</div>'
+          : '')+
+        _pasoBtn('pasoCerrar()','Volver al edificio','var(--accent-fill)','var(--accent-on)','var(--accent)')+
+      '</div>';
+    return;
+  }
+
+  var a=_pasoActual();
+  if(!a){
+    // La partida ya no esta (se cerro desde otro sitio): se pasa de largo.
+    _pasoSiguiente(); return;
+  }
+
+  var pct=parseInt(a.porcentaje)||0;
+  var sub=P.sub;
+  var chip='font-size:10.5px;font-family:var(--mono);padding:3px 8px;border-radius:8px;font-weight:700';
+  var bsub='min-height:46px;padding:12px 6px;border-radius:11px;border:1.5px solid var(--border2);'+
+           'background:var(--bg2);color:var(--text);font-size:14px;font-weight:800;cursor:pointer;'+
+           'font-family:var(--font)';
+
+  var h=cab+'<div style="padding:16px 15px 0">';
+
+  if(P.error){
+    h+='<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:11px;'+
+      'padding:11px 13px;margin-bottom:12px;font-size:13px;color:var(--red);font-weight:600;line-height:1.4">'+
+      'No se guardó: '+esc(P.error)+'<br><span style="font-weight:400">La partida sigue como estaba.</span></div>';
+  }
+
+  h+='<div style="font-size:18px;font-weight:700;line-height:1.35;color:var(--text);margin-bottom:10px">'+
+      esc(a.descripcion||'(sin descripción)')+'</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px">'+
+      revChipEstado(a)+revChipFecha(a)+
+      (a.personal_nombre?'<span style="'+chip+';background:var(--bg2);color:var(--text3)">'+esc(a.personal_nombre)+'</span>':'')+
+      (a.prioridad==='urgente'?'<span style="'+chip+';background:var(--red-light);color:var(--red)">urgente</span>':'')+
+    '</div>'+
+    /* El chip de arriba ya canta los dias de retraso; aqui solo las fechas. */
+    '<div style="font-size:12.5px;color:var(--text3);font-family:var(--mono);margin-bottom:12px">'+
+      'Empieza: '+esc(a.fecha_inicio||'—')+'  ·  Entrega: '+esc(a.fecha_fin||'—')+
+    '</div>'+
+    (a.notas?'<div style="font-size:13px;color:var(--text2);background:var(--bg2);padding:10px 12px;'+
+      'border-radius:10px;border-left:3px solid var(--accent);white-space:pre-wrap;margin-bottom:14px;'+
+      'line-height:1.45">'+esc(a.notas)+'</div>':'<div style="height:6px"></div>');
+
+  if(P.guardando){
+    h+='<div style="text-align:center;padding:26px;font-size:14px;color:var(--text3)">Guardando…</div>';
+  } else if(sub==='avance'){
+    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:9px">'+
+        [25,50,75,85].map(function(v){
+          return '<button onclick="pasoAvance('+v+')" style="'+bsub+
+            (pct===v?';background:var(--accent-fill);border-color:var(--accent);color:var(--accent-on)':'')+
+            '">'+v+'%</button>';
+        }).join('')+
+      '</div>'+
+      '<div style="display:flex;gap:7px;margin-bottom:9px">'+
+        '<input id="paso-pct" type="number" inputmode="numeric" min="0" max="100" value="'+pct+'" '+
+          'style="flex:1;min-width:0;min-height:48px;padding:12px;border:1.5px solid var(--border2);'+
+          'border-radius:11px;background:var(--bg2);color:var(--text);font-size:16px;font-weight:700;'+
+          'font-family:var(--font)">'+
+        '<button onclick="pasoAvanceLibre()" style="flex:0 0 auto;min-height:48px;padding:12px 18px;'+
+          'border-radius:11px;border:none;background:var(--accent-fill);color:var(--accent-on);'+
+          'font-size:14px;font-weight:800;cursor:pointer;font-family:var(--font)">Poner</button>'+
+      '</div>'+
+      _pasoBtn('pasoSub(\'avance\')','Cancelar','var(--bg2)','var(--text2)','var(--border2)');
+  } else if(sub==='fecha'){
+    var hoy=today(), vie=_pasoDiaViernes(0), vie2=_pasoDiaViernes(1);
+    h+=_pasoBtn('pasoFecha(\''+hoy+'\')','Hoy — '+hoy,'var(--bg2)','var(--text)','var(--border2)')+
+      (vie!==hoy?_pasoBtn('pasoFecha(\''+vie+'\')','Esta semana — viernes '+vie,'var(--bg2)','var(--text)','var(--border2)'):'')+
+      _pasoBtn('pasoFecha(\''+vie2+'\')','La semana que viene — '+vie2,'var(--bg2)','var(--text)','var(--border2)')+
+      '<div style="display:flex;gap:7px;margin-bottom:9px">'+
+        '<input id="paso-fecha" type="date" value="'+esc(a.fecha_fin||hoy)+'" '+
+          'style="flex:1;min-width:0;min-height:48px;padding:12px;border:1.5px solid var(--border2);'+
+          'border-radius:11px;background:var(--bg2);color:var(--text);font-size:15px;font-weight:700;'+
+          'font-family:var(--font)">'+
+        '<button onclick="pasoFechaLibre()" style="flex:0 0 auto;min-height:48px;padding:12px 18px;'+
+          'border-radius:11px;border:none;background:var(--accent-fill);color:var(--accent-on);'+
+          'font-size:14px;font-weight:800;cursor:pointer;font-family:var(--font)">Poner</button>'+
+      '</div>'+
+      _pasoBtn('pasoSub(\'fecha\')','Cancelar','var(--bg2)','var(--text2)','var(--border2)');
+  } else {
+    h+=_pasoBtn('pasoHecha()','Ya está','var(--green)','#fff')+
+       _pasoBtn('pasoIgual()','Sigue igual','var(--bg2)','var(--text)','var(--border2)')+
+       _pasoBtn('pasoSub(\'avance\')','Cambiar avance','var(--bg2)','var(--text)','var(--border2)')+
+       _pasoBtn('pasoSub(\'fecha\')','Ponle fecha','var(--bg2)','var(--text)','var(--border2)')+
+       _pasoBtn('pasoNoAplica()','No aplica aquí','var(--bg2)','var(--red)','var(--red)')+
+       _pasoBtn('pasoSaltar()','Saltar','transparent','var(--text3)','var(--border)');
+  }
+
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">'+
+      (P.i>0
+        ? '<button onclick="pasoAtras()" style="background:none;border:none;color:var(--text3);'+
+            'font-size:13px;font-weight:600;cursor:pointer;padding:10px 0;min-height:44px;'+
+            'font-family:var(--font)">‹ Atrás</button>'
+        : '<span></span>')+
+      '<span style="font-size:11.5px;color:var(--text3);font-family:var(--mono)">'+
+        (P.ids.length-P.i-1)+' por delante</span>'+
+    '</div></div>';
+
+  _pasoOv.innerHTML=h;
+}
+
 async function loadAptoActs(area){
   try{
     var r=await sb('obra_actividades?area=eq.'+encodeURIComponent(area)+'&order=fecha_fin.asc,created_at.desc&limit=500');
@@ -8199,7 +8541,10 @@ var Acciones = (function(){
     },
 
     /* Cambios libres sobre una actividad (pasa por la regla de coherencia) */
-    async editar(id,cambios){ return _patch(id,cambios,'editado'); },
+    /* detalle es opcional: si no viene, _patch describe el cambio solo. Sirve
+       para que quien llama pueda dejar dicho en la bitacora DESDE DONDE se
+       edito ("en revision", "en recorrido") sin abrir otra via de escritura. */
+    async editar(id,cambios,detalle){ return _patch(id,cambios,'editado',detalle); },
 
     async setAvance(id,pct){
       var n=_pct(pct);
@@ -15890,8 +16235,48 @@ function renderObra(){
 // Recorres un contratista completo y marcas el estado real de cada
 // actividad con un toque. Todo queda firmado en el historial.
 // ══════════════════════════════════════════════════════════════
+/* Los filtros rapidos de Actividades TAMBIEN mandan aqui. Se entra a Revision
+   desde el Edificio con "solo las vencidas" puesto y la pantalla enseñaba las
+   115 abiertas igual: el filtro se quedaba atras y los numeros de las dos
+   pantallas no cuadraban. Se aplican solo los cuatro huecos de datos — no el
+   texto ni las ubicaciones, que son de la lista — y SIEMPRE se avisa arriba de
+   cual esta puesto, para que nadie lea una pantalla recortada creyendo que la
+   ve entera. */
+function _revRapidos(){
+  return (S.actFiltroRapidos||[]).filter(function(f){ return !!FILTRO_HUECO[f]; });
+}
 function revAbiertas(){
-  return (S.acts||[]).filter(function(a){return a.estado!=='completado';});
+  var out=(S.acts||[]).filter(function(a){return a.estado!=='completado';});
+  _revRapidos().forEach(function(f){ out=out.filter(FILTRO_HUECO[f]); });
+  return out;
+}
+function revAvisoFiltro(){
+  var fs=_revRapidos(); if(!fs.length) return '';
+  return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;'+
+    'padding:9px 12px;border-radius:10px;background:var(--amber-light);border:1.5px solid var(--amber)">'+
+    '<span style="font-size:12px;font-weight:700;color:var(--amber)">Viendo solo: '+
+      esc(fs.map(function(f){return FILTRO_HUECO_NOM[f];}).join(' · '))+'</span>'+
+    '<button onclick="revQuitarFiltro()" style="margin-left:auto;min-height:36px;padding:6px 12px;'+
+      'border-radius:9px;border:1.5px solid var(--amber);background:var(--bg2);color:var(--amber);'+
+      'font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Ver todas</button></div>';
+}
+function revQuitarFiltro(){
+  S.actFiltroRapidos=(S.actFiltroRapidos||[]).filter(function(f){ return !FILTRO_HUECO[f]; });
+  renderRevision();
+}
+/* Los apartamentos en el orden de la obra, no alfabetico. Para los once suena
+   igual — "N2 — Apto 2A" … "N7 — Penthouse B" ya ordenan bien por texto — pero
+   NO para el resto: alfabeticamente "Escalera de Emergencia", "Fachada" y
+   "General" caen ANTES del Apto 2A, asi que la pantalla empezaba por la
+   escalera en vez de por el primer apartamento. Ahora: primero los once, luego
+   las areas de un nivel que no son apartamento (N7 — Áreas Comunes) por nivel,
+   y al final lo que no pertenece a ningun nivel (Parqueo, Fachada, General). */
+function _revOrdenArea(k){
+  var i=REC_ORDEN.indexOf(k);
+  if(i>=0) return i;
+  var m=/^N(\d+)/.exec(String(k||''));
+  if(m) return 100+parseInt(m[1],10);
+  return 900;
 }
 function revDiasVencida(a){
   var fv=fechaVenc(a); if(!fv) return null;
@@ -16079,21 +16464,23 @@ function revListaContratistas(el){
     var ns=_responsables(a.personal_nombre);
     if(!ns.length) ns=['Sin asignar'];
     ns.forEach(function(k){
-      if(!g[k]) g[k]={n:0,v:0,p:0};
+      if(!g[k]) g[k]={n:0,v:0,p:0,sf:0};
       g[k].n++;
-      if(isRetrasada(a)) g[k].v++;
-      if(a.estado==='en-progreso') g[k].p++;
+      if(FILTRO_HUECO.retrasadas(a)) g[k].v++;
+      if(FILTRO_HUECO.sinfecha(a))   g[k].sf++;
+      if(a.estado==='en-progreso')   g[k].p++;
     });
   });
   var lista=Object.keys(g).sort(function(x,y){return g[y].n-g[x].n;});
   var hechas=Object.keys(S.revHechas).length;
-  var venc=abiertas.filter(isRetrasada).length;
+  var venc=abiertas.filter(FILTRO_HUECO.retrasadas).length;
 
   el.innerHTML=
     '<div class="obranow-header"><div>'+
       '<div style="font-size:14px;font-weight:600">Revisión por contratista</div>'+
       '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">Marca el estado real de cada actividad</div>'+
     '</div></div>'+
+    revAvisoFiltro()+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">'+
       '<div class="scard"><div class="v" style="font-size:18px">'+abiertas.length+'</div><div class="l">Abiertas</div></div>'+
       '<div class="scard"><div class="v" style="font-size:18px;color:'+(venc?'var(--red)':'var(--text3)')+'">'+venc+'</div><div class="l">Vencidas</div></div>'+
@@ -16110,14 +16497,15 @@ function revListaContratistas(el){
           '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
             d.n+' abiertas · '+d.p+' en proceso'+
             (d.v?' · <span style="color:var(--red);font-weight:700">'+d.v+' vencidas</span>':'')+
+            (d.sf?' · <span style="color:var(--amber);font-weight:700">'+d.sf+' sin fecha</span>':'')+
           '</div>'+
         '</div><div style="color:var(--text3);font-size:18px">›</div></button>';
     }).join('')+
     (lista.length?'':'<div class="empty" style="padding:30px">Sin actividades abiertas</div>');
 }
 
-function revAbrir(nm){ S.revContratista=nm; renderRevision(); window.scrollTo(0,0); }
-function revVolver(){ S.revContratista=null; renderRevision(); window.scrollTo(0,0); }
+function revAbrir(nm){ S.revContratista=nm; S.revAreaAbierta=''; renderRevision(); window.scrollTo(0,0); }
+function revVolver(){ S.revContratista=null; S.revAreaAbierta=''; renderRevision(); window.scrollTo(0,0); }
 
 function revCard(a){
   var id=a.id, sid=String(id).replace(/'/g,"\\'");
@@ -16155,14 +16543,51 @@ function revCard(a){
   '</div>';
 }
 
+/* Dentro de un apartamento, primero lo vencido, despues lo empezado y al final
+   lo que ni ha arrancado: es el orden en que se pregunta de pie en la obra. */
+function _revOrdenActs(list){
+  return list.slice().sort(function(x,y){
+    var vx=FILTRO_HUECO.retrasadas(x)?0:1, vy=FILTRO_HUECO.retrasadas(y)?0:1;
+    if(vx!==vy) return vx-vy;
+    var px=x.estado==='en-progreso'?0:1, py=y.estado==='en-progreso'?0:1;
+    if(px!==py) return px-py;
+    return String(x.descripcion||'').localeCompare(String(y.descripcion||''));
+  });
+}
+
+function revAreaToggle(ar){
+  S.revAreaAbierta = (S.revAreaAbierta===ar) ? '' : ar;
+  renderRevision();
+  /* Al plegar la de arriba la pantalla salta; se vuelve a poner la fila
+     abierta a la vista en vez de dejar al usuario perdido a media pagina. */
+  if(S.revAreaAbierta) requestAnimationFrame(function(){
+    var f=document.getElementById('revar-'+_slug(S.revAreaAbierta));
+    if(f && f.scrollIntoView) try{ f.scrollIntoView({block:'start'}); }catch(e){}
+  });
+}
+function _slug(s){ return String(s||'').replace(/[^a-zA-Z0-9]/g,''); }
+
 function revListaActividades(el){
   var nm=S.revContratista;
   // Mismo criterio que la lista de arriba: por nombre suelto, no por el texto entero.
   var mias=revAbiertas().filter(function(a){ return _personaEn(a,nm); });
   var areas={};
   mias.forEach(function(a){ var k=a.area||'(sin área)'; (areas[k]=areas[k]||[]).push(a); });
+  var claves=Object.keys(areas).sort(function(x,y){
+    return _revOrdenArea(x)-_revOrdenArea(y) || x.localeCompare(y);
+  });
+  /* Con un solo apartamento plegarlo no ahorra nada y obliga a un toque de mas. */
+  if(claves.length===1) S.revAreaAbierta=claves[0];
   var hechas=mias.filter(function(a){return S.revHechas[a.id];}).length;
   var pctBar=mias.length?Math.round(hechas/mias.length*100):0;
+  var venc=mias.filter(FILTRO_HUECO.retrasadas).length;
+  var sinf=mias.filter(FILTRO_HUECO.sinfecha).length;
+  var prog=mias.filter(function(a){return a.estado==='en-progreso';}).length;
+
+  var num=function(v,lab,col){
+    return '<div class="scard"><div class="v" style="font-size:17px'+(col&&v?';color:'+col:'')+'">'+v+'</div>'+
+           '<div class="l">'+lab+'</div></div>';
+  };
 
   el.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
@@ -16175,18 +16600,50 @@ function revListaActividades(el){
     '<div class="obranow-header"><div>'+
       '<div style="font-size:14px;font-weight:600">'+esc(nm)+'</div>'+
       '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">'+
-        mias.length+' abiertas · '+hechas+' revisadas</div>'+
+        hechas+' revisadas de '+mias.length+'</div>'+
     '</div></div>'+
-    '<div style="height:6px;background:var(--bg3);border-radius:99px;overflow:hidden;margin-bottom:16px">'+
+    revAvisoFiltro()+
+    /* Los cuatro numeros con los que se decide: cuanto hay, cuanto se paso de
+       fecha, cuanto no tiene fecha ninguna y cuanto esta de verdad andando. */
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">'+
+      num(mias.length,'Abiertas')+
+      num(venc,'Vencidas','var(--red)')+
+      num(sinf,'Sin fecha','var(--amber)')+
+      /* "En curso" y no "En proceso": con cuatro tarjetas en un telefono el
+         segundo parte en dos lineas y descuadra la fila. */
+      num(prog,'En curso','var(--blue)')+
+    '</div>'+
+    '<div style="height:6px;background:var(--bg3);border-radius:99px;overflow:hidden;margin-bottom:14px">'+
       '<div style="height:100%;width:'+pctBar+'%;background:var(--accent-fill);border-radius:99px;transition:width .3s"></div></div>'+
-    Object.keys(areas).sort().map(function(ar){
-      return '<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 9px;'+
-          'padding-bottom:7px;border-bottom:1.5px solid var(--border)">'+
-          '<b style="font-size:13px">'+esc(ar)+'</b>'+
-          '<span style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+areas[ar].length+'</span></div>'+
-        areas[ar].map(revCard).join('');
+    /* Plegado. Con Dimedes son 250 partidas: pintarlas todas de golpe dejaba una
+       pagina imposible de recorrer y el telefono tardando en cada toque. Ahora
+       se ve el edificio entero de un vistazo y se abre el apartamento donde se
+       esta parado. */
+    claves.map(function(ar){
+      var lista=_revOrdenActs(areas[ar]);
+      var av=lista.filter(FILTRO_HUECO.retrasadas).length;
+      var asf=lista.filter(FILTRO_HUECO.sinfecha).length;
+      var abierta=(S.revAreaAbierta===ar);
+      return '<div id="revar-'+_slug(ar)+'" style="margin-bottom:8px">'+
+        '<button onclick="revAreaToggle('+JSON.stringify(ar).replace(/"/g,'&quot;')+')" '+
+          'style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;min-height:48px;'+
+          'padding:11px 13px;border-radius:12px;cursor:pointer;font-family:var(--font);'+
+          'background:'+(abierta?'var(--bg3)':'var(--bg2)')+';'+
+          'border:1.5px solid '+(av?'var(--red)':(abierta?'var(--accent)':'var(--border)'))+'">'+
+          '<span style="color:var(--text3);font-size:13px;width:12px;flex:0 0 auto">'+(abierta?'▾':'▸')+'</span>'+
+          '<span style="flex:1;min-width:0">'+
+            '<span style="display:block;font-size:13.5px;font-weight:700;color:var(--text)">'+esc(_recNom(ar))+'</span>'+
+            '<span style="display:block;font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">'+
+              lista.length+' abiertas'+
+              (av?' · <span style="color:var(--red);font-weight:700">'+av+' vencidas</span>':'')+
+              (asf?' · <span style="color:var(--amber);font-weight:700">'+asf+' sin fecha</span>':'')+
+            '</span>'+
+          '</span></button>'+
+        (abierta?'<div style="padding:10px 0 2px">'+lista.map(revCard).join('')+'</div>':'')+
+      '</div>';
     }).join('')+
-    (mias.length?'':'<div class="empty" style="padding:30px">Todo revisado en este contratista ✓</div>');
+    (mias.length?'':'<div class="empty" style="padding:30px">'+
+      (_revRapidos().length?'Nada de este contratista con ese filtro':'Todo revisado en este contratista ✓')+'</div>');
 }
 
 async function revEstado(id, modo, pct){
@@ -16197,19 +16654,17 @@ async function revEstado(id, modo, pct){
     if(box) box.style.display='grid';
     return;
   }
-  var body, accion, det;
-  if(modo==='done'){
-    body={estado:'completado',porcentaje:100}; accion='completado'; det='completada en revisión';
-  } else if(modo==='prog'){
-    body={estado:'en-progreso',porcentaje:pct}; accion='avance'; det=pct+'% en revisión';
-  } else {
-    body={estado:'pendiente',porcentaje:0}; accion='editado'; det='devuelta a pendiente en revisión';
-  }
+  /* Todo por Acciones. Antes esto mandaba su propio PATCH y se saltaba la capa:
+     sin sellado de hora_inicio/hora_fin, sin apagar la marca de foto al cerrar,
+     y sin la regla que impide dejar una partida "pendiente" con 100%. Revisar
+     era la pantalla que mas partidas cerraba y era la unica que no pasaba por
+     el mismo sitio que el resto del app. */
   try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
-    Object.assign(a, body);
+    if(modo==='done')      await Acciones.completar(id);
+    else if(modo==='prog') await Acciones.setAvance(id,pct);
+    else                   await Acciones.editar(id,{estado:'pendiente',porcentaje:0},
+                                                 'devuelta a pendiente en revisión');
     S.revHechas[id]=true;
-    logCambio(accion,'actividad',id,a.descripcion||'',det);
     showToast(modo==='done'?'Completada ✓':modo==='prog'?(pct+'% guardado ✓'):'Sin empezar ✓');
     renderRevision();
   }catch(e){ showToast('Error al guardar: '+(e.message||''),'err'); }
@@ -16269,11 +16724,10 @@ async function revNota(id){
     ov.remove();
     var t=txt.trim();
     if(!t){ showToast('No se escuchó nada','warn'); return; }
-    var nueva=(a.notas?a.notas+'\n':'')+'['+today()+' '+(S.user&&S.user.nombre||'')+'] '+t;
+    /* Tambien por Acciones: agregarNota pega al final con fecha y firma, nunca
+       pisa lo escrito antes, y deja el rastro en obra_cambios una sola vez. */
     try{
-      await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({notas:nueva})});
-      a.notas=nueva;
-      logCambio('editado','actividad',id,a.descripcion||'','nota por voz: '+t.slice(0,120));
+      await Acciones.agregarNota(id, t);
       showToast('Nota guardada ✓');
       renderRevision();
     }catch(e){ showToast('Error al guardar la nota','err'); }
