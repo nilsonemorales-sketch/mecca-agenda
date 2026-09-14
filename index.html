@@ -4359,9 +4359,33 @@ var REC_ORDEN=['N2 — Apto 2A','N2 — Apto 2B','N3 — Apto 3A','N3 — Apto 3
 function _recNom(area){ return String(area||'').split('—').pop().trim(); }
 
 function abrirAptoTorre(area){
-  S.recorrido={area:area, tab:'dictar', abierto:null, confirmando:null};
+  S.recorrido={area:area, tab:'panel', abierto:null, confirmando:null};
   pintarRecorrido();
   cargarPendRec(area);
+}
+
+/* Lo que cuenta como "de esta semana": vence el viernes de esta semana o
+   antes. Lo vencido entra — sigue debiendose esta semana. */
+function _finDeSemana(){
+  var d=new Date(today()+'T12:00:00');
+  d.setDate(d.getDate() + ((5-d.getDay()+7)%7));   // 5 = viernes
+  return d.toISOString().slice(0,10);
+}
+
+/* Los cuatro numeros del apartamento, de S.acts — la misma carga que todo lo
+   demas desde la Fase 1, para que el panel no pueda decir algo distinto de lo
+   que dice la lista. */
+function _aptoCuentas(area, persona){
+  var l=(S.acts||[]).filter(function(a){
+    return (a.area||'')===area && a.estado!=='completado' && _personaEn(a,persona||'');
+  });
+  var vie=_finDeSemana();
+  return {
+    abiertas: l.length,
+    vencidas: l.filter(FILTRO_HUECO.retrasadas).length,
+    semana:   l.filter(function(a){ var f=fechaVenc(a); return !!f && f<=vie; }).length,
+    curso:    l.filter(function(a){ return a.estado==='en-progreso'; }).length
+  };
 }
 
 function cerrarHojaApto(){
@@ -4436,13 +4460,13 @@ function pintarRecorrido(){
         _recFlecha(sig,'',' ›')+
       '</div>'+
       '<div style="display:flex;gap:5px;background:var(--bg);border-radius:11px;padding:4px;margin-top:12px">'+
-        _recSeg('dictar','Dictar')+
+        _recSeg('panel','Panel')+
         _recSeg('pend','Pendientes&nbsp;<b style="font-family:var(--tit)">'+faltan+'</b>')+
         _recSeg('quien','Quién debe')+
       '</div>'+
     '</div>'+
     '<div id="rec-cuerpo" style="flex:1;overflow-y:auto;padding:13px 15px 14px">'+
-      (R.tab==='dictar'? _recDictar() : R.tab==='pend'? _recPend(grupos) : _recQuien(grupos,d))+
+      (R.tab==='pend'? _recPend(grupos) : R.tab==='quien'? _recQuien(grupos,d) : _recPanelApto())+
     '</div>'+
     '<div style="padding:0 15px calc(13px + var(--sb));flex-shrink:0">'+
       '<button onclick="cerrarHojaApto()" style="width:100%;min-height:48px;border:none;'+
@@ -4485,6 +4509,82 @@ function irApto(area){
   pintarRecorrido(); cargarPendRec(area);
 }
 function recTab(k){ S.recorrido.tab=k; S.recorrido.confirmando=null; pintarRecorrido(); }
+
+/* ── El panel del apartamento ──
+   Antes esta pestaña era solo el boton de dictar. Ahora es la puerta del
+   apartamento: los cuatro numeros con los que se decide y de ahi al recorrido
+   paso a paso, que es el unico sitio donde se registra. */
+function _recPanelApto(){
+  var R=S.recorrido, area=R.area;
+  var persona=S.torrePersona||'';
+  var c=_aptoCuentas(area,persona);
+  var a=function(s){ return String(s).replace(/'/g,"\\'"); };
+
+  var num=function(v,lab,col){
+    return '<div class="scard"><div class="v" style="font-size:18px'+(col&&v?';color:'+col:'')+'">'+v+'</div>'+
+           '<div class="l">'+lab+'</div></div>';
+  };
+  var bot=function(js,txt,fondo,color,borde,peso){
+    return '<button onclick="'+js+'" style="width:100%;min-height:48px;padding:13px 14px;'+
+      'margin-bottom:8px;border-radius:12px;border:1.5px solid '+(borde||'transparent')+';'+
+      'background:'+fondo+';color:'+color+';font-size:'+(peso||14)+'px;font-weight:800;'+
+      'cursor:pointer;font-family:var(--font)">'+txt+'</button>';
+  };
+
+  var h='';
+  if(persona) h+='<div style="display:inline-flex;align-items:center;gap:7px;background:var(--accent-soft);'+
+      'border:1px solid var(--accent);color:var(--accent);border-radius:99px;padding:6px 12px;'+
+      'font-size:12px;font-weight:700;margin-bottom:11px">Solo lo de '+esc(persona)+'</div>';
+
+  h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:13px">'+
+      num(c.abiertas,'Abiertas')+
+      num(c.vencidas,'Vencidas','var(--red)')+
+      num(c.semana,'Esta semana','var(--amber)')+
+      num(c.curso,'En curso','var(--blue)')+
+    '</div>';
+
+  if(!c.abiertas){
+    h+='<div class="empty" style="padding:26px 10px">Aquí no queda nada abierto</div>';
+  } else {
+    /* El boton grande es el de la semana: es lo que se camina un dia normal.
+       Si no hay nada de esta semana no se ofrece — un boton que arranca un
+       recorrido de cero partidas solo gasta un toque. */
+    if(c.semana) h+=bot("pasoIniciar('"+a(area)+"','semana')",
+      'Recorrer las '+c.semana+' de esta semana','var(--green)','#fff','',15);
+    if(c.vencidas) h+=bot("pasoIniciar('"+a(area)+"','retrasadas')",
+      'Solo las '+c.vencidas+' vencidas','var(--red-light)','var(--red)','var(--red)');
+    h+=bot("pasoIniciar('"+a(area)+"','')",
+      'Recorrer las '+c.abiertas+' abiertas','var(--bg3)','var(--text)','var(--border2)');
+  }
+
+  h+='<div style="display:flex;gap:8px;margin-top:4px">'+
+      '<button onclick="dictarEnRecorrido()" style="flex:1;min-height:48px;border-radius:12px;'+
+        'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);'+
+        'font-size:13.5px;font-weight:800;cursor:pointer;font-family:var(--font)">🎙️ Dictar</button>'+
+      '<button onclick="anotarEnRecorrido()" style="flex:1;min-height:48px;border-radius:12px;'+
+        'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);'+
+        'font-size:13.5px;font-weight:800;cursor:pointer;font-family:var(--font)">+ Anotar</button>'+
+    '</div>'+
+    '<button onclick="aptoVerEnLista()" style="width:100%;margin-top:8px;min-height:44px;'+
+      'border-radius:11px;border:none;background:transparent;color:var(--text3);font-size:12.5px;'+
+      'font-weight:700;cursor:pointer;font-family:var(--font)">Ver la lista en Actividades ›</button>';
+  return h;
+}
+
+/* Del panel a la lista de siempre, con el apartamento ya filtrado. Es lo que
+   antes hacia torreVer() desde el menu del dibujo. */
+function aptoVerEnLista(){
+  var area=S.recorrido && S.recorrido.area; if(!area) return;
+  S.actFiltroAvanzado=S.actFiltroAvanzado||{};
+  S.actFiltroAvanzado.ubicaciones=[area];
+  if(S.torrePersona) S.actFiltroAvanzado.personas=[S.torrePersona];
+  else delete S.actFiltroAvanzado.personas;
+  S.actFiltroRapidos=[]; S.actFiltroTexto='';
+  S.actVista='lista';
+  cerrarHojaApto();
+  goTab('obra');
+  renderActs();
+}
 
 /* ── Dictar: el apartamento ya esta puesto ── */
 function _recDictar(){
@@ -4551,21 +4651,20 @@ function _recPend(grupos){
           g.items.length+'</span></button>';
     if(ab){
       h+='<div style="padding:0 0 8px">';
+      /* Tocar la fila ya no abre un panelito de registro aqui mismo: entra al
+         recorrido paso a paso colocado en esa partida. Un solo sitio donde se
+         escribe, al que se llega desde varias puertas. */
       g.items.forEach(function(a){
-        var preg=R.confirmando===a.id;
         h+='<button onclick="recPreguntar(\''+a.id+'\')" '+
-          'style="width:100%;background:'+(preg?'var(--bg4)':'var(--bg3)')+';border:1px solid '+
-          (preg?'var(--border2)':'transparent')+';border-radius:11px'+
-          (preg?' 11px 0 0':'')+';padding:11px 12px;margin-bottom:'+(preg?'0':'7px')+';'+
+          'style="width:100%;background:var(--bg3);border:1px solid transparent;'+
+          'border-radius:11px;padding:11px 12px;margin-bottom:7px;'+
           'text-align:left;cursor:pointer;font-family:var(--font);color:var(--text);'+
           'font-size:12.5px;line-height:1.4;display:flex;gap:10px;align-items:flex-start;'+
           'justify-content:flex-start;min-height:44px">'+
           '<span style="width:16px;height:16px;border:1.5px solid var(--border2);border-radius:5px;'+
             'flex-shrink:0;margin-top:1px"></span>'+
-          '<span>'+esc(a.descripcion||'(sin descripción)')+'</span></button>';
-        if(preg){
-          h+=_recPanel(a);
-        }
+          '<span style="flex:1;min-width:0">'+esc(a.descripcion||'(sin descripción)')+'</span>'+
+          '<span style="color:var(--text3);flex-shrink:0">›</span></button>';
       });
       h+='<button onclick="recVerFaltan(\''+String(g.q).replace(/'/g,"\\\'")+'\')" '+
         'style="width:100%;border:1px dashed var(--border2);background:transparent;'+
@@ -4579,123 +4678,17 @@ function _recPend(grupos){
   });
   return h;
 }
-/* ── ANOTAR SIN SALIR DEL RECORRIDO ────────────────────────────────
-   Antes al tocar una actividad solo se podia decir "terminada, si o no".
-   En la obra la mayoria de las cosas no son si o no: el tomacorriente
-   esta puesto pero torcido. Ahora se pone el avance y se escribe la
-   observacion en el mismo sitio, sin abrir otra pantalla.
-
-   El panel NO se vuelve a pintar mientras se escribe: los porcentajes
-   se marcan tocando el DOM directo. Si se repintara, el texto a medio
-   escribir se perderia — y dictando con el microfono del teclado eso
-   significa volver a dictarlo todo.                                   */
-function _recPanel(a){
-  var actual=parseInt(a.porcentaje,10); if(isNaN(actual)) actual=0;
-  S.recorrido.pct=actual;
-  var chip=function(n,t){
-    var on=(n===actual);
-    return '<button id="recp-'+n+'" onclick="event.stopPropagation();recPct('+n+')" '+
-      'style="flex:1;border:1px solid '+(on?'var(--accent)':'var(--border2)')+';'+
-      'background:'+(on?'var(--accent-fill)':'transparent')+';color:'+(on?'#fff':'var(--text2)')+';'+
-      'border-radius:9px;padding:9px 2px;font-family:var(--font);font-size:12px;'+
-      'font-weight:700;cursor:pointer;min-height:42px">'+t+'</button>';
-  };
-  return '<div style="background:var(--bg4);border:1px solid var(--border2);border-top:none;'+
-    'border-radius:0 0 11px 11px;padding:11px 12px;margin-bottom:8px">'+
-    '<div style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;'+
-      'color:var(--text3);margin-bottom:7px">Avance — ahora en '+actual+'%</div>'+
-    '<div style="display:flex;gap:5px;margin-bottom:10px">'+
-      chip(0,'0%')+chip(25,'25%')+chip(50,'50%')+chip(75,'75%')+chip(100,'Hecha')+
-    '</div>'+
-    '<textarea id="rec-nota" rows="2" placeholder="Observación… (dicta con el micrófono del teclado)" '+
-      'onclick="event.stopPropagation()" '+
-      'style="width:100%;box-sizing:border-box;background:var(--bg2);color:var(--text);'+
-      'border:1px solid var(--border2);border-radius:9px;padding:10px;font-family:var(--font);'+
-      'font-size:12.5px;line-height:1.4;resize:vertical;-webkit-appearance:none"></textarea>'+
-    (a.notas ? '<div style="color:var(--text3);font-size:10.5px;line-height:1.4;margin-top:7px;'+
-        'max-height:52px;overflow:hidden">'+esc(String(a.notas).slice(-180))+'</div>' : '')+
-    '<div style="display:flex;gap:6px;margin-top:10px">'+
-      '<button onclick="event.stopPropagation();recCancelar()" '+
-        'style="flex:1;border:none;background:var(--bg3);color:var(--text3);border-radius:9px;'+
-        'padding:11px 4px;font-family:var(--font);font-size:12.5px;font-weight:600;'+
-        'cursor:pointer;min-height:44px">Cancelar</button>'+
-      '<button onclick="event.stopPropagation();recGuardar(\''+a.id+'\')" '+
-        'style="flex:2;border:none;background:var(--green-fill);color:#fff;border-radius:9px;'+
-        'padding:11px 4px;font-family:var(--font);font-size:12.5px;font-weight:700;'+
-        'cursor:pointer;min-height:44px">Guardar</button>'+
-    '</div></div>';
-}
-
-/* Marca el porcentaje elegido SIN repintar, para no borrar lo escrito. */
-function recPct(n){
-  if(!S.recorrido) return;
-  S.recorrido.pct=n;
-  [0,25,50,75,100].forEach(function(x){
-    var b=document.getElementById('recp-'+x); if(!b) return;
-    var on=(x===n);
-    b.style.borderColor = on?'var(--accent)':'var(--border2)';
-    b.style.background  = on?'var(--accent-fill)':'transparent';
-    b.style.color       = on?'#fff':'var(--text2)';
-  });
-}
-
-async function recGuardar(id){
-  var R=S.recorrido; if(!R) return;
-  var caja=document.getElementById('rec-nota');
-  var nota=caja?String(caja.value||'').trim():'';
-  var pct=R.pct;
-  var fila=((S._recPend||{})[R.area]||[]).filter(function(x){return x.id===id;})[0]||{};
-  var antes=parseInt(fila.porcentaje,10); if(isNaN(antes)) antes=0;
-
-  if(pct===antes && !nota){ recCancelar(); return; }
-
-  R.confirmando=null; pintarRecorrido();
-  try{
-    if(nota) await Acciones.agregarNota(id,nota);
-    if(pct===100){
-      await Acciones.completar(id);
-      var l=(S._recPend||{})[R.area]||[];
-      S._recPend[R.area]=l.filter(function(x){ return x.id!==id; });
-      var d=(S._torre||{})[R.area];
-      if(d){ d.faltan=Math.max(0,d.faltan-1); d.hechas++;
-             d.pct=d.total?Math.round(d.hechas/d.total*100):0; }
-    } else if(pct!==antes){
-      await Acciones.setAvance(id,pct);
-      fila.porcentaje=String(pct);
-      if(pct>0 && fila.estado==='pendiente') fila.estado='en-progreso';
-    }
-    if(nota) fila.notas=(fila.notas?fila.notas+' | ':'')+nota;
-    if(typeof showToast==='function')
-      showToast(pct===100?'Cerrada':(nota?'Anotado':'Avance guardado'),'ok');
-  }catch(e){
-    if(typeof showToast==='function') showToast('No se pudo guardar: '+(e&&e.message||''),'err');
-  }
-  pintarRecorrido();
-}
-
 function recAbrir(i){
   S.recorrido.abierto = S.recorrido.abierto===i ? null : i;
   S.recorrido.confirmando=null; S.recorrido.faltan=null; pintarRecorrido();
 }
-function recPreguntar(id){ S.recorrido.confirmando=id; pintarRecorrido(); }
-function recCancelar(){ S.recorrido.confirmando=null; pintarRecorrido(); }
-
-async function recCerrar(id){
-  var R=S.recorrido, area=R.area;
-  R.confirmando=null;
-  try{
-    await Acciones.completar(id);
-    /* se saca de la copia local: no hace falta volver a pedir la lista */
-    var l=(S._recPend||{})[area]||[];
-    S._recPend[area]=l.filter(function(x){ return x.id!==id; });
-    var d=(S._torre||{})[area];
-    if(d){ d.faltan=Math.max(0,d.faltan-1); d.hechas++;
-           d.pct=d.total?Math.round(d.hechas/d.total*100):0; }
-    if(typeof showToast==='function') showToast('Cerrada','ok');
-  }catch(e){
-    if(typeof showToast==='function') showToast('No se pudo cerrar: '+(e&&e.message||''),'err');
-  }
-  pintarRecorrido();
+/* Tocar una partida en Pendientes entra al recorrido paso a paso, colocado en
+   esa partida. Antes abria un panelito propio con sus chips de % y su boton de
+   guardar: otra pantalla mas para registrar lo mismo, con sus propias reglas.
+   Ahora hay un solo sitio donde se registra, y se llega a el desde aqui. */
+function recPreguntar(id){
+  var R=S.recorrido; if(!R) return;
+  pasoIniciar(R.area, '', id);
 }
 
 /* ── Quién debe ── */
@@ -6703,11 +6696,10 @@ function renderActsEdificio(){
   el.innerHTML = _actVistaToggle() +
     '<div id="torre-personas"></div>' +
     torreHTML(S.torrePersona||'') +
-    '<div id="torre-menu"></div>'+
     '<div style="font-size:12px;color:var(--text3);text-align:center;padding:2px 6px 4px">'+
-      (S.torreSel?'':(S.torrePersona
+      (S.torrePersona
         ? 'Solo lo de '+esc(S.torrePersona)+'. Toca un apartamento.'
-        : 'Toca un apartamento para ver sus partidas.'))+
+        : 'Toca un apartamento para abrir su panel.')+
     '</div>';
   /* Primero se lanza la carga y despues se pinta. Al reves, la primera entrada
      encontraba la bandera de "cargando" todavia en false y enseñaba "no se
@@ -6715,26 +6707,16 @@ function renderActsEdificio(){
   if(!S._torre) cargarTorre();
   _torrePintarSelector();
   dibujarTorre();
-  _torreMenu();
 }
 
-/* La misma torre sirve en dos sitios y cada sitio necesita otra cosa:
-   en Hoy sube la hoja del recorrido para dictar lo del apartamento; en
-   Actividades no se entra derecho a la lista completa: primero se pregunta
-   que se quiere ver, porque en un recorrido casi nunca se va a por las 115
-   abiertas del penthouse sino a por sus vencidas. */
+/* La misma torre esta en Hoy y en Actividades, y hacia dos cosas distintas
+   segun donde la tocaras: en Hoy subia la hoja del apartamento, en Actividades
+   abria un menu de filtros pegado al dibujo. El mismo gesto, dos resultados —
+   habia que acordarse de en que pestaña estabas para saber que iba a pasar.
+   Ahora tocar un apartamento abre SIEMPRE su panel, en los dos sitios. */
 function _torreTap(area){
-  if(S.actVista==='edificio'){
-    S.torreSel=area;
-    _torreMenu();
-    var m=document.getElementById('torre-menu');
-    if(m && m.scrollIntoView) try{ m.scrollIntoView({block:'nearest'}); }catch(e){}
-    return;
-  }
   abrirAptoTorre(area);
 }
-
-function torreCerrarMenu(){ S.torreSel=''; renderActs(); }
 
 /* Vuelve a pedir los datos del dibujo. Se suelta la bandera de "cargando" a
    mano porque el caso que se quiere rescatar es justo ese: una peticion que se
@@ -6750,66 +6732,6 @@ function torreReintentar(){
   cargarTorre(true);
 }
 
-/* Entra a la lista ya filtrada por el area y por lo que se pidio. */
-function torreVer(que){
-  var area=S.torreSel; if(!area) return;
-  S.actFiltroAvanzado=S.actFiltroAvanzado||{};
-  S.actFiltroAvanzado.ubicaciones=[area];
-  // Si el dibujo estaba filtrado por una persona, la lista sale igual de
-  // filtrada: si no, el boton diria 12 y la lista enseñaria 103.
-  if(S.torrePersona) S.actFiltroAvanzado.personas=[S.torrePersona];
-  else delete S.actFiltroAvanzado.personas;
-  S.actFiltroRapidos = que==='todas' ? [] : [que];
-  S.actFiltroTexto='';
-  S.torreSel='';
-  S.actVista='lista';
-  renderActs();
-}
-
-function _torreMenu(){
-  var caja=document.getElementById('torre-menu');
-  if(!caja) return;
-  var area=S.torreSel, D=_torreDatos(S.torrePersona||'');
-  if(!area || !D || !D[area]){ caja.innerHTML=''; return; }
-  var d=D[area];
-  var persona=S.torrePersona||'';
-  // Las congeladas salen de S.acts, que es lo abierto que ya tiene el app;
-  // si el historial no cargo, ese boton no se ofrece en vez de mentir con 0.
-  var nCong = _congeladasListo()
-    ? (S.acts||[]).filter(function(a){
-        return a.area===area && _personaEn(a,persona) && _esCongelada(a);
-      }).length
-    : -1;
-  var b=function(que,txt,fondo,color,borde){
-    return '<button onclick="torreVer(\''+que+'\')" style="min-height:44px;padding:11px 14px;'+
-      'border-radius:10px;border:1.5px solid '+(borde||'var(--border2)')+';background:'+fondo+';color:'+color+';'+
-      'font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">'+txt+'</button>';
-  };
-  caja.innerHTML=
-    '<div style="border:1.5px solid var(--accent);border-radius:var(--r2);background:var(--bg2);'+
-      'padding:13px 14px;margin:10px 0 6px">'+
-      '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'+
-        '<div style="font-family:var(--tit);font-size:15px;font-weight:800;color:var(--text)">'+esc(_recNom(area))+
-          (persona?'<span style="display:block;font-size:11.5px;font-weight:600;color:var(--text3)">'+esc(persona)+'</span>':'')+'</div>'+
-        '<button onclick="torreCerrarMenu()" style="background:none;border:none;color:var(--text3);'+
-          'font-size:20px;line-height:1;cursor:pointer;padding:0 4px;min-height:40px">×</button>'+
-      '</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-        b('todas','Ver las '+d.faltan+' abiertas','var(--accent-fill)','var(--accent-on)','var(--accent)')+
-        (d.venc>0 ? b('retrasadas','Solo las '+d.venc+' vencidas','var(--red-light)','var(--red)','var(--red)') : '')+
-        (nCong>0 ? b('congeladas','Las '+nCong+' congeladas','var(--bg3)','var(--text2)') : '')+
-      '</div>'+
-      /* La otra forma de entrar: en vez de una lista para leer, las partidas de
-         una en una para ir contestando. Va aparte y debajo porque no es "ver",
-         es "trabajar": lo de arriba no escribe nada y esto si. */
-      (_pasoCuantas(area,persona)>0
-        ? '<button onclick="pasoIniciar()" style="width:100%;margin-top:9px;min-height:48px;padding:13px;'+
-            'border-radius:11px;border:none;background:var(--green);color:#fff;font-size:14px;'+
-            'font-weight:800;cursor:pointer;font-family:var(--font)">'+
-            'Recorrer una por una ('+_pasoCuantas(area,persona)+')</button>'
-        : '')+
-    '</div>';
-}
 /* ── RECORRIDO PASO A PASO ───────────────────────────────────────────────
    Una partida a la vez, a pantalla completa y con botones de dedo. Se hace de
    pie, en el apartamento, con el telefono en una mano: abrir cada tarjeta,
@@ -6823,23 +6745,43 @@ function _torreMenu(){
 
 var _pasoOv=null;
 
-function _pasoLista(area,persona){
+function _pasoLista(area,persona,filtro){
   var l=(S.acts||[]).filter(function(a){
     return (a.area||'')===area && a.estado!=='completado' && _personaEn(a,persona);
   });
+  if(filtro==='semana'){
+    var vie=_finDeSemana();
+    l=l.filter(function(a){ var f=fechaVenc(a); return !!f && f<=vie; });
+  } else if(filtro && FILTRO_HUECO[filtro]){
+    l=l.filter(FILTRO_HUECO[filtro]);
+  }
   return _revOrdenActs(l);
 }
 function _pasoCuantas(area,persona){ return _pasoLista(area,persona).length; }
 
-function pasoIniciar(){
-  var area=S.torreSel; if(!area) return;
+/* area y filtro llegan por argumento y ya no de S.torreSel: el recorrido se
+   arranca desde el panel del apartamento, desde la lista de pendientes y desde
+   el dibujo, y los tres tienen que poder decir QUE se va a recorrer.
+   idInicial coloca el recorrido en una partida concreta — es lo que pasa al
+   tocar una fila en Pendientes. */
+function pasoIniciar(area,filtro,idInicial){
+  area=area||S.torreSel; if(!area) return;
   var persona=S.torrePersona||'';
-  var lista=_pasoLista(area,persona);
-  if(!lista.length){ showToast('No hay nada abierto aquí','warn'); return; }
-  S.paso={area:area, persona:persona, ids:lista.map(function(a){return a.id;}),
-          i:0, sub:null, error:'', guardando:false,
+  var lista=_pasoLista(area,persona,filtro);
+  if(!lista.length){ showToast('No hay nada que recorrer aquí','warn'); return; }
+  var i0=0;
+  if(idInicial){
+    var k=lista.findIndex(function(a){return a.id===idInicial;});
+    if(k>=0) i0=k;
+  }
+  S.paso={area:area, persona:persona, filtro:filtro||'', ids:lista.map(function(a){return a.id;}),
+          i:i0, sub:null, error:'', guardando:false,
           res:{cerradas:0, avances:0, fechas:0, revisadas:0, saltadas:0, noaplica:[]}};
   S.torreSel='';
+  /* La hoja del apartamento estorba detras del recorrido: se cierra al entrar
+     y se vuelve a ella al salir. */
+  S._pasoVolverApto=(S.recorrido && S.recorrido.area===area) ? area : '';
+  if(S._pasoVolverApto) cerrarHojaApto();
   if(!_pasoOv){
     _pasoOv=document.createElement('div');
     _pasoOv.id='paso-ov';
@@ -6881,6 +6823,17 @@ function pasoSaltar(){
   var P=S.paso; if(!P) return;
   P.res.saltadas++;
   _pasoSiguiente();
+}
+
+/* La barra de comando por voz, con el apartamento y la partida de contexto.
+   Es lo que hacia dictarEnRecorrido() desde la hoja, que era solo
+   abrirComando(); aqui ademas se sabe en que partida estas parado. */
+function pasoDictar(){
+  var P=S.paso; if(!P) return;
+  var a=_pasoActual();
+  S.recorrido=S.recorrido||{area:P.area,tab:'panel',abierto:null,confirmando:null};
+  S._pasoTrabajando=a?(a.descripcion||''):'';
+  abrirComando();
 }
 
 /* El unico sitio por el que se escribe desde el recorrido. Si falla, la partida
@@ -6961,12 +6914,21 @@ function pasoNoAplica(){
 function pasoCerrar(){
   var P=S.paso;
   var toco = !!(P && (P.res.cerradas||P.res.avances||P.res.fechas||P.res.noaplica.length));
+  var volver = S._pasoVolverApto||'';
   if(_pasoOv){ _pasoOv.remove(); _pasoOv=null; }
-  S.paso=null;
+  S.paso=null; S._pasoVolverApto='';
   /* Si se movio algo, el avance dibujado en la torre ya no vale: se vuelve a
-     pedir en vez de enseñar un numero viejo. */
-  if(toco){ S._torre=null; S._torreCargando=false; }
-  renderObra();
+     pedir en vez de enseñar un numero viejo. Y los pendientes del apartamento
+     tampoco, que es de donde sale el contador de la pestaña. */
+  if(toco){
+    S._torre=null; S._torreCargando=false;
+    if(volver && S._recPend) delete S._recPend[volver];
+  }
+  /* Se vuelve al panel del apartamento, que es de donde se entro. Repintar la
+     pestaña de fondo a ciegas mandaba a Actividades aunque hubieras entrado
+     desde Hoy. */
+  if(volver){ abrirAptoTorre(volver); return; }
+  if(S.currentTab==='hoy') renderHoy(); else renderObra();
 }
 
 function _pasoBtn(fn,txt,fondo,color,borde){
@@ -7112,7 +7074,19 @@ function pasoPintar(){
        _pasoBtn('pasoIgual()','Sigue igual','var(--bg2)','var(--text)','var(--border2)')+
        _pasoBtn('pasoSub(\'avance\')','Cambiar avance','var(--bg2)','var(--text)','var(--border2)')+
        _pasoBtn('pasoSub(\'fecha\')','Ponle fecha','var(--bg2)','var(--text)','var(--border2)')+
-       _pasoBtn('pasoNoAplica()','No aplica aquí','var(--bg2)','var(--red)','var(--red)')+
+       /* El dictado, que antes solo estaba en la hoja del apartamento. Aqui el
+          apartamento YA esta fijado y la partida tambien, asi que lo dictado
+          cae en su sitio sin tener que nombrarlo. */
+       '<div style="display:flex;gap:8px;margin-bottom:8px">'+
+         '<button onclick="pasoDictar()" style="flex:1;min-height:48px;padding:13px 8px;'+
+           'border-radius:12px;border:1.5px solid var(--accent);background:var(--accent-soft);'+
+           'color:var(--accent);font-size:14px;font-weight:800;cursor:pointer;'+
+           'font-family:var(--font)">🎙️ Dictar</button>'+
+         '<button onclick="pasoNoAplica()" style="flex:1;min-height:48px;padding:13px 8px;'+
+           'border-radius:12px;border:1.5px solid var(--red);background:var(--bg2);'+
+           'color:var(--red);font-size:14px;font-weight:800;cursor:pointer;'+
+           'font-family:var(--font)">No aplica aquí</button>'+
+       '</div>'+
        _pasoBtn('pasoSaltar()','Saltar','transparent','var(--text3)','var(--border)');
   }
 
@@ -16523,10 +16497,13 @@ function recLeido(txt, cerrar){
   if(!enArea.length) return malo('No encuentro el área "'+area+'"');
   if(navigator.vibrate) try{navigator.vibrate(60);}catch(e){}
   cerrar();
+  /* El codigo pegado en la puerta abre el panel de ESE apartamento, que es
+     donde se decide que recorrer. Antes dejaba Actividades filtrado y habia
+     que seguir buscando; estando parado en la puerta eso sobra.
+     El filtro se deja puesto igual, para el que salga del panel a la lista. */
   recAplicarFiltro(area, quien, enArea);
-  goTab('actividades');
-  renderActs();
-  window.scrollTo(0,0);
+  S.torrePersona = quien || '';
+  abrirAptoTorre(area);
   showToast(area+(quien?' · '+quien:''));
 }
 
