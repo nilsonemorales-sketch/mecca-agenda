@@ -2163,7 +2163,7 @@ async function loadAll(){
     ]);
     clearTimeout(retryTimer);
     S.personal=personal; S.asist=asist; S.acts=acts; S.estancadas=undefined; S.abiertas=undefined;
-    fixActsConsistency();
+    revisarConsistencia();
     // Cache for instant reload
     try{sessionStorage.setItem('mecca_cache_'+S.fecha,JSON.stringify({personal,asist,acts}));}catch(e){}
     setSS('ok','✓ '+hhmm());
@@ -2260,7 +2260,7 @@ async function loadFecha(){
       sbTodo('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc'),
     ]);
     S.asist=asist;S.acts=acts;S.estancadas=undefined;S.abiertas=undefined;
-    fixActsConsistency();
+    revisarConsistencia();
     setSS('ok','✓ '+hhmm());
     renderHoy();renderAsist();renderActs();renderReportes();
     updateAsistPct();
@@ -6212,6 +6212,9 @@ function renderActs(){
          vez y ahi te quedabas. Las otras tres vistas siempre lo tuvieron
          arriba; ahora las cuatro son iguales. -->
     ${_actVistaToggle()}
+    <!-- AVISO DE DESCUADRE — arriba del todo porque es un dato malo, no un
+         filtro. Solo se ve si hay algo descuadrado; si no, no ocupa nada. -->
+    ${descuadreHTML()}
     <!-- BUSCADOR -->
     <div style="display:flex;align-items:center;gap:9px;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r2);padding:11px 13px;margin-bottom:10px">
       <span style="color:var(--text3);display:flex">${ICO_LUPA}</span>
@@ -9643,23 +9646,100 @@ function _actsRango(acts){
   if(!fs.length) return '';
   return fs[0]===fs[fs.length-1]?(' · '+fs[0]):(' · '+fs[0]+' → '+fs[fs.length-1]);
 }
-async function fixActsConsistency(){
+/* Una partida esta descuadrada cuando el numero y el estado se contradicen:
+   100% sin estar completada, o completada con menos de 100%. */
+function _esDescuadrada(a){
+  var pct=parseInt(a&&a.porcentaje)||0;
+  return (pct>=100 && a.estado!=='completado') || (a.estado==='completado' && pct<100);
+}
+
+/* Esto ANTES se llamaba fixActsConsistency y cerraba las partidas solo: veia
+   un descuadre y lo tapaba con un PATCH al 100%, sin preguntar y sin dejar
+   rastro de quien lo hizo. Una partida al 100% por error se convertia en una
+   partida CERRADA que nadie mando a cerrar, y encima desaparecia de la lista.
+   Se llamaba desde cuatro sitios, asi que pasaba en cada carga.
+   Ahora solo mira y cuenta. Cuadrar es una decision del que manda la obra, y
+   cuando la toma queda escrita en obra_cambios como cualquier otro cambio. */
+function revisarConsistencia(){
   _mergeTouchedActs();
-  var toFix=S.acts.filter(function(a){
-    var pct=parseInt(a.porcentaje)||0;
-    return (pct>=100&&a.estado!=='completado')||(a.estado==='completado'&&pct<100);
-  });
-  if(!toFix.length) return;
-  toFix.forEach(function(a){a.estado='completado';a.porcentaje=100;});
-  // Remove newly-completado entries from active list unless showing all
-  if(!S.actMostrarTodas){
-    S.acts=S.acts.filter(function(a){return a.estado!=='completado';});
+  S._descuadradas=(S.acts||[]).filter(_esDescuadrada).map(function(a){return a.id;});
+  return S._descuadradas.length;
+}
+
+/* Se guardan los id y no las actividades: si entretanto alguna se arreglo por
+   otro lado, no se vuelve a ofrecer cuadrar algo que ya esta bien. */
+function descuadradas(){
+  return (S._descuadradas||[])
+    .map(function(id){ return Acciones.porId(id); })
+    .filter(function(a){ return a && _esDescuadrada(a); });
+}
+
+function descuadreToggle(){
+  S._descuadreAbierto=!S._descuadreAbierto;
+  renderActs();
+}
+
+/* El aviso: solo aparece si hay algo que avisar. */
+function descuadreHTML(){
+  var ds=descuadradas();
+  if(!ds.length){ S._descuadreAbierto=false; return ''; }
+  var h='<div style="border:1.5px solid var(--amber);background:var(--amber-light);'+
+      'border-radius:12px;padding:11px 13px;margin-bottom:12px">'+
+    '<button onclick="descuadreToggle()" style="display:flex;align-items:center;gap:9px;width:100%;'+
+      'background:none;border:none;padding:0;min-height:44px;cursor:pointer;text-align:left;'+
+      'font-family:var(--font)">'+
+      '<span style="font-size:18px">⚠️</span>'+
+      '<span style="flex:1;min-width:0;font-size:13.5px;font-weight:700;color:var(--amber)">'+
+        ds.length+' partida'+(ds.length!==1?'s':'')+' descuadrada'+(ds.length!==1?'s':'')+
+        '<span style="display:block;font-size:11.5px;font-weight:500;color:var(--text3);margin-top:2px">'+
+          'El número y el estado no coinciden</span></span>'+
+      '<span style="color:var(--text3);font-size:14px">'+(S._descuadreAbierto?'▾':'▸')+'</span>'+
+    '</button>';
+  if(S._descuadreAbierto){
+    h+='<div style="margin-top:10px">'+
+      ds.map(function(a){
+        var pct=parseInt(a.porcentaje)||0;
+        return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:9px;'+
+          'padding:9px 11px;margin-bottom:6px">'+
+          '<div style="font-size:13px;font-weight:600;color:var(--text);line-height:1.35">'+
+            esc(a.descripcion||'(sin descripción)')+'</div>'+
+          '<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:3px">'+
+            esc(a.area||'sin área')+' · '+esc(a.estado||'')+' · '+pct+'%</div>'+
+        '</div>';
+      }).join('')+
+      '<button onclick="cuadrarTodas()" style="width:100%;min-height:44px;padding:12px;'+
+        'border-radius:11px;border:none;background:var(--amber);color:#fff;font-size:14px;'+
+        'font-weight:800;cursor:pointer;font-family:var(--font)">Cuadrarlas ('+ds.length+')</button>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:7px;line-height:1.45">'+
+        'Las que están al 100% se cierran; las cerradas con menos se suben a 100. '+
+        'Queda tu nombre en el historial.</div>'+
+    '</div>';
   }
-  for(var i=0;i<toFix.length;i++){
-    var a=toFix[i];
-    try{await sb('obra_actividades?id=eq.'+a.id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estado:'completado',porcentaje:100})});}
-    catch(e){console.warn('fixActsConsistency patch failed for',a.id,e);}
+  return h+'</div>';
+}
+
+/* Cuadrar de verdad: por Acciones, una por una, con su linea en obra_cambios.
+   Si alguna falla, las demas siguen y se dice cuantas fallaron. */
+async function cuadrarTodas(){
+  if(!canEdit()) return;
+  var ds=descuadradas();
+  if(!ds.length){ renderActs(); return; }
+  if(!confirm('¿Cuadrar '+ds.length+' partida'+(ds.length!==1?'s':'')+'?')) return;
+  var bien=0, mal=0;
+  for(var i=0;i<ds.length;i++){
+    try{
+      /* Se manda el porcentaje y la capa acomoda el estado: 100% cierra la
+         partida. Para la que esta "completado" con menos de 100, el numero
+         que manda es el estado — se sube a 100, que es lo que significa
+         darla por terminada. */
+      await Acciones.setAvance(ds[i].id,100);
+      bien++;
+    }catch(e){ mal++; }
   }
+  revisarConsistencia();
+  S._descuadreAbierto=false;
+  showToast(mal ? ('Cuadradas '+bien+'. Fallaron '+mal+'.') : ('Cuadradas '+bien+' ✓'), mal?'warn':'ok');
+  renderActs();
 }
 
 async function loadActsAll(){
@@ -9671,7 +9751,7 @@ async function loadActsAll(){
     } else {
       S.acts=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit='+lim);
     }
-    fixActsConsistency();
+    revisarConsistencia();
     setSS('ok','✓ '+hhmm());
   }catch(e){setSS('err','Error cargando');}
   // Se refresca junto con las actividades pero sin esperarlo: si el historial
@@ -14960,31 +15040,26 @@ function pausarDesdeObra(k){
 
 
 // Avance rápido desde tarjeta En Obra
+/* Antes mandaba su propio PATCH y NO llamaba a logCambio. El usuario tocaba
+   75%, el numero se guardaba, y en Reportes → Modificaciones no aparecia
+   nunca: avance registrado sin autor y sin fecha. Era el unico sitio del app
+   que escribia a ciegas.
+   Ahora por Acciones.setAvance, que cuadra el estado con el porcentaje, sella
+   la hora, apaga la marca de foto al cerrar y deja el rastro.
+   Cambia una cosa a proposito: poner 100% ahora CIERRA la partida. Antes la
+   dejaba "en-progreso" al 100%, un dato incoherente que fixActsConsistency
+   venia detras a tapar en silencio. */
 async function setAvanceRapido(actId,newPct){
-  var act=(S.acts||[]).find(function(a){return a.id===actId;})||
-           (S.actsActivas||[]).find(function(a){return a.id===actId;});
-  if(!act) return;
-  var prevPct=act.porcentaje||0,prevEst=act.estado;
-  var newEst=(newPct>0&&prevEst==='pendiente')?'en-progreso':prevEst;
-  function _sync(p,e){
-    [S.acts,S.actsActivas].forEach(function(arr){
-      if(!arr) return;
-      var i=arr.findIndex(function(a){return a.id===actId;});
-      if(i>=0){arr[i].porcentaje=p;arr[i].estado=e;}
-    });
-  }
-  act.porcentaje=newPct;act.estado=newEst;_sync(newPct,newEst);
-  renderActs();renderEnObra();
-  var body={porcentaje:newPct};
-  if(newEst!==prevEst) body.estado=newEst;
+  if(!Acciones.porId(actId)) return;
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
+    await Acciones.setAvance(actId,newPct);
     setSS('ok','✓ '+newPct+'% guardado');
   }catch(e){
-    act.porcentaje=prevPct;act.estado=prevEst;_sync(prevPct,prevEst);
-    renderActs();renderEnObra();
     setSS('err','No se pudo guardar');
   }
+  /* Acciones ya repuso el valor viejo si fallo, asi que se repinta en los dos
+     casos y la pantalla nunca queda enseñando algo que no se guardo. */
+  renderActs(); renderEnObra();
 }
 
 // Registro rápido de avance desde En Obra (input % + Guardar) — refleja en el
@@ -19867,7 +19942,7 @@ setInterval(async function(){
     var asist=await sb('obra_asistencia?fecha=eq.'+S.fecha);
     var acts=await sbTodo('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc');
     S.asist=asist; S.acts=acts;
-    fixActsConsistency();
+    revisarConsistencia();
     setSS('ok',''+hhmm());
     renderHoy(); renderAsist(); renderActs(); renderReportes();
     if(S.currentTab==='plan') renderPlan();
