@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v83 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v84 — 14 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -112,9 +112,20 @@ Antes de construir una pantalla, busca si ya existe. Este mapa está al día
 a **v77 (14 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
-El menú es: **Hoy · Actividades · Equipo · Reportes · Fotos · Planos ·
-Compras · Bitácora · Gerencia · Metodología.** «En Obra» **se retiró en
-v77**: era el mismo módulo que Actividades con otra cara.
+El menú es: **Actividades · Equipo · Reportes · Fotos · Planos · Compras ·
+Bitácora · Gerencia · Metodología.** El app **abre en Actividades**.
+
+Dos módulos se retiraron por la misma razón — eran Actividades con otra
+cara: **«En Obra» en v77** y **«Hoy» en v84**. Lo de Hoy estaba tres veces
+en otro sitio (el plan ya era un filtro de la lista, el edificio es una
+vista, la asistencia está en Equipo); lo único suyo era repartir el plan,
+y eso se mudó. **No los vuelvas a crear.**
+
+**El plan del día vive en la lista**, como pastilla: `Plan hoy N` /
+`Plan mañana N` al principio de la fila de filtros (`S.actFiltroPlan`, que
+ya existía). Con la pastilla puesta sale `_planBarraHTML()` con **Generar
+PDF** y **WhatsApp**. Las partidas del plan son filas normales, con los
+mismos botones que cualquier otra.
 
 | Quiero… | Está en |
 |---|---|
@@ -359,6 +370,9 @@ pertenece a ningún nivel.
 | **v76→v81** — el recorrido paso a paso: cinco versiones construyéndolo y moviéndole la puerta, y nunca se usó en obra. Se retiró entero. | Una pantalla que hay que seguir rescatando no tiene un problema de puerta: no encaja en cómo se trabaja. Pregunta antes de la tercera versión. |
 | **v81** — se estuvo a punto de añadir un filtro «esta semana» que la lista no sabe enseñar ni soltar: habría recortado la lista sin nada en pantalla que lo dijera. | No filtres con estado invisible. Si el usuario no lo ve, no lo puede quitar — y entonces la lista miente. |
 | **v76→v82** — tres pantallas seguidas rechazadas en obra: el recorrido, la propuesta del plan y el panel de tres pestañas. Las tres **guiaban** al usuario. Lo que sí funcionó: acciones en la fila, y fechas por contratista dentro del apartamento. | Este usuario no quiere que lo lleven de la mano; quiere menos toques para lo que ya sabe hacer. Antes de construir una pantalla, pregunta **qué le hace el día más largo**, no qué le gustaría ver. |
+| **v84** — «Hoy» se rescató cuatro veces (reordenar, plegar, botones nuevos, subir el plan) y el dueño siguió diciendo que no era funcional. Era Actividades con otra piel. | Segunda vez que pasa lo mismo, después de «En Obra» y del recorrido. Si una pantalla repite lo que ya hay en otra, arreglarla no la salva: **compárala con lo que ya existe antes de tocarla**. |
+| **v84** — al quitar el contenedor de Hoy, un regex `(?:.*\n)*?` se llevó también el de Actividades y el app se quedó sin `#c-act`. | Para borrar bloques de HTML, cuenta las etiquetas o recórtalo a mano. Un no-greedy multilínea no sabe dónde cierra un `<div>`. |
+| **v84** — una prueba medía el alto de los botones **dos veces** (una para listar las alturas y otra para el veredicto) y el navegador recalculaba en medio: fallaba 3 de cada 8 veces. | Lee el diseño **una sola vez** a un array y decide sobre ese array. Y una prueba intermitente no vale nada: arréglala o bórrala. |
 | **v83** — se llegaba a la lista filtrada desde el panel y no había vuelta: la cinta de chips deja **quitar** el filtro, que no es lo mismo que **volver**. | Todo camino que lleve a otra pantalla con estado puesto necesita su camino de vuelta, visible. |
 | **v83** — en Hoy había ocho filas de controles —fecha, asistencia, HOY/MAÑANA, título, PDF, organizar, chips, buscar— antes de la primera actividad, y la cabecera «Plan del día · HOY» salía dos veces. | Cada fila de controles empuja el trabajo fuera de la pantalla. Con menos de diez partidas, filtrar y organizar sobran: plégalos. |
 | **v82** — el panel pedía a la base los pendientes del apartamento (`cargarPendRec`, `S._recPend`) cuando `S.acts` ya los tenía desde v77. Una consulta por apartamento, y dos copias que podían decir números distintos. | Desde la carga única, **nada** necesita su propia consulta de actividades. Si vas a pedir a `obra_actividades`, mira primero si ya está en `S.acts`. |
