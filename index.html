@@ -2854,15 +2854,15 @@ async function planDiaGuardar(actId){
   if(!canEdit())return;
   var el=document.getElementById('pct-'+actId);
   var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
-  var a=_findActAny(actId)||(S.abiertas||[]).find(function(x){return x.id===actId;});
+  /* El Plan del dia se queda —planificar no es registrar— pero ya no manda su
+     propio PATCH: se saltaba el sellado de horas y la coherencia. Por
+     Acciones.setAvance, que ademas cuadra el estado solo. */
   try{
-    await sb('obra_actividades?id=eq.'+actId,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:(n>=100?'completado':'en-progreso')})});
-    if(a){ a.porcentaje=n; if(n>=100)a.estado='completado'; }
-    logCambio(n>=100?'completado':'avance','actividad',actId,(a&&a.descripcion)||'',n+'%');
+    await Acciones.setAvance(actId,n);
     _hoyMarcarLocal(actId);
     showToast(n>=100?'Completada ✓':'Avance '+n+'% ✓');
     loadAbiertas().then(function(){renderHoy();});
-  }catch(e){showToast('Error: '+e.message,'err');}
+  }catch(e){showToast('Error: '+(e&&e.message||''),'err');}
 }
 function planDiaSinCambios(actId){
   if(!canEdit())return;
@@ -3298,62 +3298,14 @@ async function estancPausar(id){
 }
 
 // ══════════════════════════════════════════════════════════════
-// CIERRE DEL DÍA — paso para actualizar avances (antes del resumen)
+// CIERRE DEL DÍA — el resumen del día, de solo lectura
 // ══════════════════════════════════════════════════════════════
-function cierreAvancesHTML(){
-  if(S._cierreAvOmit) return '';
-  if(!canEdit()) return '';
-  var uNom=(S.user&&S.user.nombre)||'';
-  var enProg=(S.acts||[]).filter(function(a){return a.estado==='en-progreso';});
-  var admin=(!uNom)||uNom.toLowerCase().indexOf('nilson')>=0;
-  if(!admin){
-    var key=uNom.replace(/^ing\.?\s*/i,'').toLowerCase().split(' ')[0];
-    enProg=enProg.filter(function(a){return (a.ingeniero_nombre||'').toLowerCase().indexOf(key)>=0;});
-  }
-  if(!enProg.length) return '';
-  var h='<div style="margin-bottom:14px;border:1.5px solid var(--blue);border-radius:12px;overflow:hidden;background:var(--bg2)">';
-  h+='<div style="padding:10px 14px;background:#eef2ff;display:flex;align-items:center;justify-content:space-between;gap:8px">'+
-     '<span style="font-size:13px;font-weight:800;color:var(--blue)">Actualizar avances ('+enProg.length+')</span>'+
-     '<button onclick="S._cierreAvOmit=true;renderCierreDia(S._cierreFecha)" style="padding:4px 12px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Omitir</button>'+
-     '</div><div>';
-  enProg.slice(0,60).forEach(function(a){
-    var p=a.porcentaje||0;
-    h+='<div id="cav-row-'+a.id+'" style="padding:9px 12px;border-top:1px solid var(--border2)">'+
-      '<div style="font-size:12px;font-weight:700;color:var(--text)">'+esc(a.descripcion||'')+'</div>'+
-      '<div style="font-size:11px;color:var(--text3);margin-top:1px">'+esc(a.area||'')+(a.personal_nombre?' · '+esc(a.personal_nombre):'')+'</div>'+
-      '<div style="display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap">'+
-        '<button onclick="cierreAvAdj(\''+a.id+'\',-5)" style="min-width:32px;height:28px;border:1.5px solid var(--border2);background:var(--bg2);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">-5</button>'+
-        '<input type="number" min="0" max="100" value="'+p+'" id="cav-'+a.id+'" style="width:56px;padding:4px 6px;border:1.5px solid var(--border2);border-radius:6px;font-size:13px;text-align:center;font-family:var(--font)">'+
-        '<button onclick="cierreAvAdj(\''+a.id+'\',5)" style="min-width:32px;height:28px;border:1.5px solid var(--border2);background:var(--bg2);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">+5</button>'+
-        '<button onclick="cierreAvAdj(\''+a.id+'\',10)" style="min-width:36px;height:28px;border:1.5px solid var(--border2);background:var(--bg2);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">+10</button>'+
-        '<button onclick="cierreAvGuardar(\''+a.id+'\')" style="padding:5px 12px;border:none;border-radius:6px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Guardar</button>'+
-        '<button onclick="cierreAvSinCambios(\''+a.id+'\')" style="padding:5px 10px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)">Sin cambios hoy</button>'+
-      '</div>'+
-    '</div>';
-  });
-  h+='</div></div>';
-  return h;
-}
-function cierreAvAdj(id,delta){var el=document.getElementById('cav-'+id);if(!el)return;el.value=Math.min(100,Math.max(0,(parseInt(el.value)||0)+delta));}
-function _cavDone(id,txt){var r=document.getElementById('cav-row-'+id);if(r){r.style.opacity='0.55';r.innerHTML='<div style="font-size:12px;color:var(--green);font-weight:700;padding:2px 0">✓ '+txt+'</div>';}}
-async function cierreAvGuardar(id){
-  if(!canEdit())return;
-  var el=document.getElementById('cav-'+id);
-  var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
-  var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
-  try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({porcentaje:n,estado:(n>=100?'completado':'en-progreso')})});
-    a.porcentaje=n; if(n>=100)a.estado='completado';
-    logCambio(n>=100?'completado':'avance','actividad',id,a.descripcion||'',n+'%');
-    _cavDone(id, n>=100?'Completada':('Avance '+n+'%'));
-  }catch(e){showToast('Error: '+e.message,'err');}
-}
-function cierreAvSinCambios(id){
-  if(!canEdit())return;
-  var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
-  logCambio('editado','actividad',id,a.descripcion||'','sin avance hoy');
-  _cavDone(id,'Sin cambios hoy');
-}
+/* El Cierre del dia vuelve a ser lo que dice que es: un reporte, de solo
+   lectura. Tenia dentro un bloque "Actualizar avances (n)" con sus botones
+   -5/+5/+10 y su Guardar — una puerta de registro escondida en un reporte, con
+   un PATCH suelto que se saltaba la capa Acciones. Lo que se registre, se
+   registra en el recorrido. */
+function cierreAvancesHTML(){ return ''; }
 
 // ══════════════════════════════════════════════════════════════
 // PENDIENTES por actividad (ítems accionables: material/plano/decisión/…)
@@ -7158,19 +7110,13 @@ function _aptoCard(a){
      (a.ingeniero_nombre?'<span>'+esc(_ingenieros(a.ingeniero_nombre).map(function(n){return n.replace(/^Ing\.?\s*/i,'');}).join(', '))+'</span>':'')+
      (a.fecha_fin?'<span>'+esc(a.fecha_fin)+'</span>':'')+
      '</div></div>';
-  h+='<span '+(canEdit()?'onclick="aptoCiclarEstado(\''+a.id+'\')" ':'')+'style="'+(canEdit()?'cursor:pointer;':'')+'font-size:10px;background:'+ec+'22;color:'+ec+';padding:2px 8px;border-radius:6px;font-weight:700;white-space:nowrap;flex-shrink:0">'+esc(a.estado)+(canEdit()&&a.estado!=='completado'?' ▸':'')+'</span>'+arqBadge(a)+pendBadge(a);
+  h+='<span style="font-size:10px;background:'+ec+'22;color:'+ec+';padding:2px 8px;border-radius:6px;font-weight:700;white-space:nowrap;flex-shrink:0">'+esc(a.estado)+'</span>'+arqBadge(a)+pendBadge(a);
   h+='</div>';
   h+='<div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin:6px 0"><div style="height:100%;width:'+Math.min(100,a.porcentaje||0)+'%;background:'+ec+';border-radius:2px"></div></div>';
-  if(canEdit()&&a.estado!=='completado'){
-    h+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
-       '<span style="font-size:11px;color:var(--text3)">%</span>'+
-       '<input type="number" min="0" max="100" value="'+(a.porcentaje||0)+'" id="apto-pct-'+a.id+'" style="width:54px;padding:4px 6px;border:1.5px solid var(--border2);border-radius:6px;font-size:12px">'+
-       '<button onclick="aptoGuardarPct(\''+a.id+'\')" style="padding:4px 10px;border:none;border-radius:6px;background:var(--blue);color:#fff;font-size:11px;font-weight:700;cursor:pointer">Guardar</button>'+
-       '<button onclick="aptoCompletar(\''+a.id+'\')" style="padding:4px 10px;border:none;border-radius:6px;background:var(--green);color:#fff;font-size:11px;font-weight:700;cursor:pointer">✓ Completar</button>'+
-       '</div>';
-  } else {
-    h+='<div style="font-size:11px;color:var(--text3)">'+(a.porcentaje||0)+'%</div>';
-  }
+  /* Aqui ya no se registra. Actividades es para buscar, filtrar y repartir;
+     el avance se pone en el recorrido paso a paso, que es la pantalla hecha
+     para eso y la que deja el rastro completo. */
+  h+='<div style="font-size:11px;color:var(--text3)">'+(a.porcentaje||0)+'%</div>';
   h+='</div>';
   return h;
 }
@@ -7220,42 +7166,6 @@ function renderActsPorApto(){
   });
   h+='<div style="height:80px"></div>';
   el.innerHTML=h;
-}
-async function aptoGuardarPct(id){
-  if(!canEdit())return;
-  var elp=document.getElementById('apto-pct-'+id);
-  var n=Math.min(100,Math.max(0,parseInt(elp&&elp.value)||0));
-  var a=(S.aptoActs||[]).find(function(x){return x.id===id;}); if(!a) return;
-  var prevPct=a.porcentaje, prevEstado=a.estado;
-  try{
-    var _r=await Acciones.setAvance(id,n);
-    var nuevoEstado=(_r.cambios&&_r.cambios.estado)||a.estado;
-    _undoPatch(id,a.descripcion,'% de '+_undoNombre(a)+' → '+n+'%',{porcentaje:prevPct,estado:prevEstado},{porcentaje:n,estado:nuevoEstado});
-    loadAbiertas(); showToast('Avance guardado ✓'); renderActs();
-  }catch(e){ showToast('Error: '+e.message,'err'); }
-}
-async function aptoCompletar(id){
-  if(!canEdit())return;
-  var a=(S.aptoActs||[]).find(function(x){return x.id===id;}); if(!a) return;
-  var prevPct=a.porcentaje, prevEstado=a.estado;
-  try{
-    await Acciones.completar(id);
-    _undoPatch(id,a.descripcion,'completar '+_undoNombre(a),{estado:prevEstado,porcentaje:prevPct},{estado:'completado',porcentaje:100});
-    loadAbiertas(); showToast('Completada ✓'); renderActs();
-  }catch(e){ showToast('Error: '+e.message,'err'); }
-}
-async function aptoCiclarEstado(id){
-  if(!canEdit())return;
-  var a=(S.aptoActs||[]).find(function(x){return x.id===id;}); if(!a||a.estado==='completado') return;
-  var ciclo=(typeof CICLO_ESTADOS!=='undefined'&&CICLO_ESTADOS.length)?CICLO_ESTADOS:['pendiente','en-progreso','pausada'];
-  var prev=a.estado; var cur=ciclo.indexOf(a.estado); var next=ciclo[(cur+1)%ciclo.length];
-  try{
-    var _p=Acciones.setEstado(id,next);
-    renderActs();
-    await _p;
-    _undoPatch(id,a.descripcion,'estado de '+_undoNombre(a)+' → '+next,{estado:prev},{estado:next});
-    loadAbiertas();
-  }catch(e){ renderActs(); showToast('Error: '+(e.message||''),'err'); }
 }
 function aptoNuevaTarea(){
   if(!canEdit())return;
@@ -7453,7 +7363,7 @@ function actsDesktopTable(acts, showDate){
 
     // Estado
     html+='<td style="padding:6px 8px" onclick="event.stopPropagation()">'
-      +'<span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:7px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block" onclick="cycleEstado(\''+a.id+'\')">'+esc(est)+' ▸</span>'
+      +'<span style="background:'+eb+';color:'+ec+';border:1px solid '+ec+'40;border-radius:7px;padding:2px 8px;font-size:10.5px;font-weight:700;white-space:nowrap;display:inline-block">'+esc(est)+'</span>'
       +'</td>';
 
     // Descripción + fechas + alerta (todo en una celda flexible)
@@ -7490,7 +7400,7 @@ function actsDesktopTable(acts, showDate){
 
     // % + mini bar
     html+='<td style="padding:6px 8px;text-align:center" onclick="event.stopPropagation()">'
-      +'<span style="font-size:12px;font-weight:700;color:'+(a.porcentaje>=100?'var(--green)':a.porcentaje>0?'var(--accent)':'var(--text3)')+';cursor:pointer" onclick="showPctPopover(\''+a.id+'\',this)">'+a.porcentaje+'%</span>';
+      +'<span style="font-size:12px;font-weight:700;color:'+(a.porcentaje>=100?'var(--green)':a.porcentaje>0?'var(--accent)':'var(--text3)')+'">'+a.porcentaje+'%</span>';
     if(a.porcentaje>0) html+='<div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:3px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,a.porcentaje)+'%;background:'+(a.porcentaje>=100?'var(--green)':'var(--accent)')+'"></div></div>';
     html+='</td>';
 
@@ -7593,21 +7503,10 @@ function _actFilaCheckHTML(a){
     'font-size:17px;font-weight:800;font-family:var(--font);line-height:1">✓</button>';
 }
 
-function _actFilaAvanceHTML(a){
-  if(!canEdit() || a.estado!=='en-progreso' || S.actSelModo) return '';
-  var actual=parseInt(a.porcentaje)||0;
-  var h='<div style="display:flex;gap:5px;padding:0 11px 9px" onclick="event.stopPropagation()">';
-  [25,50,75].forEach(function(v){
-    var on=actual===v;
-    h+='<button onclick="quickSetPct(\''+a.id+'\','+v+')" '+
-       'style="flex:1;min-height:40px;border-radius:9px;font-size:13px;font-weight:700;'+
-       'cursor:pointer;font-family:var(--font);'+
-       (on?'border:1.5px solid var(--accent-fill);background:var(--accent-fill);color:var(--accent-on)'
-          :'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)')+
-       '">'+v+'%</button>';
-  });
-  return h+'</div>';
-}
+/* Los chips 25/50/75 de la fila se fueron: Actividades ya no registra. Se
+   deja la funcion devolviendo vacio porque la plantilla la llama, y quitar la
+   llamada de la plantilla obliga a tocar el render entero por nada. */
+function _actFilaAvanceHTML(a){ return ''; }
 
 function actHTML(a, ai, tipo){
   const fotos=fotoUrls(a.fotos);
@@ -7675,7 +7574,7 @@ function actHTML(a, ai, tipo){
     </div>
 
     <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:8px">
-      <span style="font-size:11px;background:${eb};color:${ec};padding:3px 9px;border-radius:99px;font-weight:700;white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();cycleEstado('${a.id}')">${el}</span>
+      <span style="font-size:11px;background:${eb};color:${ec};padding:3px 9px;border-radius:99px;font-weight:700;white-space:nowrap">${el}</span>
       ${arqBadge(a)}
       ${pendBadge(a)}
     </div>
@@ -9966,80 +9865,11 @@ async function cycleEstado(actId){
   }
 }
 
-async function quickSetPct(actId,pct){
-  if(!canEdit())return;
-  var a=S.acts.find(function(x){return x.id===actId;});
-  if(!a)return;
-  // Route 100% through the photo gate
-  if(pct>=100){
-    document.getElementById('pct-pop')?.remove();
-    marcarActCompletada(actId);
-    return;
-  }
-  var prevPct=a.porcentaje, prevEstado=a.estado;
-  try{
-    // El 0% es el "volver atras": la actividad regresa a pendiente. Para el
-    // resto, la capa mueve el estado sola segun el avance.
-    var _p = pct===0
-      ? Acciones.editar(actId,{porcentaje:0,estado:'pendiente'})
-      : Acciones.setAvance(actId,pct);
-    reRenderActs();
-    await _p;
-    setSS('ok',pct===0?'↺ 0% — vuelve a pendiente':'✓ '+pct+'%');
-    _undoPatch(actId,a.descripcion,'% de '+_undoNombre(a)+' → '+pct+'%',{porcentaje:prevPct,estado:prevEstado},{porcentaje:pct,estado:a.estado});
-  }catch(e){ reRenderActs(); }
-}
-
 // Fila de avance dentro de la tarjeta: 0 · 25 · 50 · 75 · 100.
 // El ingeniero marca el porcentaje de un toque, sin teclado y sin abrir nada.
 // El 0% devuelve la actividad a pendiente: así se deshace una marca puesta
 // por error, incluso si ya se había completado.
-function pctFila(a){
-  if(!canEdit()) return '';
-  var actual=parseInt(a.porcentaje)||0;
-  var h='<div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--border)">'+
-    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;'+
-    'letter-spacing:.5px;margin-bottom:6px">Avance</div>'+
-    '<div style="display:flex;gap:5px">';
-  [0,25,50,75,100].forEach(function(v){
-    var on = (v===100) ? actual>=100 : actual===v;
-    // Relleno, no el color de texto: --accent y --green son claros y sobre
-    // ellos el blanco no llega a 4.5:1.
-    var col = v===100 ? 'var(--green-fill)' : 'var(--accent-fill)';
-    h+='<button onclick="event.stopPropagation();quickSetPct(\''+a.id+'\','+v+')" '+
-       'title="'+(v===0?'Volver a pendiente':'Marcar '+v+'% de avance')+'" '+
-       'style="flex:1;padding:10px 0;border-radius:9px;font-size:13px;font-weight:700;'+
-       'cursor:pointer;font-family:var(--font);'+
-       (!on
-         ? 'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)'
-         : v===0
-           // El 0% marcado se ve hundido, no encendido: no es un logro.
-           ? 'border:2px solid var(--text2);background:var(--bg3);color:var(--text)'
-           : 'border:1.5px solid '+col+';background:'+col+';color:var(--accent-on)')+
-       '">'+v+'%</button>';
-  });
-  return h+'</div></div>';
-}
-
-function showPctPopover(actId, triggerEl){
-  var existing=document.getElementById('pct-pop');
-  if(existing){existing.remove();if(existing.dataset.act===actId)return;}
-  var pop=document.createElement('div');
-  pop.id='pct-pop';pop.dataset.act=actId;
-  pop.style.cssText='position:fixed;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;z-index:9000;box-shadow:0 4px 20px rgba(0,0,0,.15);display:flex;gap:6px;align-items:center';
-  var rect=triggerEl.getBoundingClientRect();
-  pop.style.top=(rect.bottom+6)+'px';pop.style.left=rect.left+'px';
-  pop.innerHTML='<input id="pct-inp" type="number" min="0" max="100" style="width:56px;border:1px solid var(--border2);border-radius:6px;padding:4px 8px;font-size:14px;font-family:var(--font)" placeholder="%">'+
-    '<button onclick="var v=parseInt(document.getElementById(\'pct-inp\').value);if(!isNaN(v))quickSetPct(\''+actId+'\',Math.min(100,Math.max(0,v)));document.getElementById(\'pct-pop\').remove()" style="background:var(--accent-fill);color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600">OK</button>';
-  document.body.appendChild(pop);
-  var inp=document.getElementById('pct-inp');
-  inp.focus();
-  inp.addEventListener('keydown',function(e){
-    if(e.key==='Enter'){var v=parseInt(inp.value);if(!isNaN(v))quickSetPct(actId,Math.min(100,Math.max(0,v)));pop.remove();}
-    if(e.key==='Escape')pop.remove();
-  });
-  setTimeout(function(){document.addEventListener('click',function handler(e){if(!pop.contains(e.target)&&e.target!==triggerEl){pop.remove();document.removeEventListener('click',handler);}});},100);
-}
+function pctFila(a){ return ''; }
 
 // Keyboard shortcuts (desktop)
 document.addEventListener('keydown',function(e){
