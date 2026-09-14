@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260914_78';
+const APP_VERSION='20260914_79';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5726,6 +5726,11 @@ function _actSelBarraHTML(){
   var bs='padding:7px 11px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap';
   return '<div style="position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:var(--accent-soft);border:1.5px solid var(--accent);border-radius:var(--r2);padding:9px 11px;margin-bottom:8px">'+
     '<span style="font-size:12.5px;font-weight:800;color:var(--accent);white-space:nowrap">'+ids.length+' seleccionada'+(ids.length!==1?'s':'')+'</span>'+
+    /* El recorrido se arma AQUI. Antes lo armaba el app por ti — "las N de esta
+       semana", "las N vencidas" — y te las pasaba en un orden que no es el que
+       caminas. Ahora filtras o marcas lo que vas a ver, en el orden que ya
+       tienes en pantalla, y lo recorres. */
+    '<button onclick="actSelRecorrer()" style="'+bs+';border:none;background:var(--green);color:#fff">Recorrer estas '+ids.length+'</button>'+
     '<button onclick="actSelAll()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Todo</button>'+
     '<button onclick="actSelNone()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Ninguna</button>'+
     '<input id="act-sel-fecha" type="date" value="'+esc(S.actSelFecha||'')+'" onchange="S.actSelFecha=this.value" style="flex:1;min-width:132px;padding:6px 8px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--font);font-size:12.5px">'+
@@ -6575,8 +6580,34 @@ function pasoIniciar(area,filtro,idInicial){
     var k=lista.findIndex(function(a){return a.id===idInicial;});
     if(k>=0) i0=k;
   }
+  _pasoArrancarCon(area, persona, lista, i0, filtro||'');
+}
+
+/* El recorrido, armado desde la lista: se lleva lo que hay marcado, EN EL
+   ORDEN EN QUE ESTA EN PANTALLA. Esa es la diferencia con antes — el app ya no
+   decide por donde empiezas; la lista, que es donde se trabaja, ya viene
+   ordenada y filtrada como hace falta. */
+function actSelRecorrer(){
+  var ids=_actSelIds();
+  if(!ids.length){ showToast('No hay nada marcado','warn'); return; }
+  /* Se respeta el orden de la pantalla, no el de los ids: applyActFilters ya
+     ordeno la lista y el usuario esta viendo ESE orden. */
+  var enPantalla=applyActFilters(S.acts||[]).filter(function(a){
+    return ids.indexOf(a.id)>=0 && a.estado!=='completado';
+  });
+  if(!enPantalla.length){ showToast('Lo marcado ya está cerrado','warn'); return; }
+  var areas={}; enPantalla.forEach(function(a){ areas[a.area||'']=1; });
+  var nAreas=Object.keys(areas).length;
+  /* Si lo marcado toca varios apartamentos, el titulo no puede decir uno solo:
+     diria "Apto 2A" mientras te pasa partidas del 6B. */
+  var titulo = nAreas===1 ? enPantalla[0].area : (enPantalla.length+' partidas · '+nAreas+' áreas');
+  S.actSelModo=false; S.actSel={};
+  _pasoArrancarCon(titulo, '', enPantalla, 0, 'seleccion');
+}
+
+function _pasoArrancarCon(area, persona, lista, i0, filtro){
   S.paso={area:area, persona:persona, filtro:filtro||'', ids:lista.map(function(a){return a.id;}),
-          i:i0, sub:null, error:'', guardando:false,
+          i:i0||0, sub:null, error:'', guardando:false,
           res:{cerradas:0, avances:0, fechas:0, revisadas:0, saltadas:0, noaplica:[]}};
   S.torreSel='';
   /* La hoja del apartamento estorba detras del recorrido: se cierra al entrar
@@ -7404,10 +7435,83 @@ function _actFilaCheckHTML(a){
     'font-size:17px;font-weight:800;font-family:var(--font);line-height:1">✓</button>';
 }
 
-/* Los chips 25/50/75 de la fila se fueron: Actividades ya no registra. Se
-   deja la funcion devolviendo vacio porque la plantilla la llama, y quitar la
-   llamada de la plantilla obliga a tocar el render entero por nada. */
-function _actFilaAvanceHTML(a){ return ''; }
+/* ── LAS ACCIONES EN LA FILA ──────────────────────────────────────────
+   La lista es donde se trabaja. En v77 se le quito el registro entero y se
+   mando todo al recorrido; en obra resulto que sacarte de la lista para
+   marcar un avance es mas friccion, no menos. Vuelve — pero por Acciones,
+   que era el problema de verdad del registro viejo, no el sitio.
+
+   Aparece al abrir la fila, encima del detalle: un toque en la fila y las
+   acciones estan ahi, sin cambiar de pantalla. */
+function _actFilaAvanceHTML(a){
+  if(!canEdit() || a.estado==='completado' || S.actSelModo) return '';
+  var actual=parseInt(a.porcentaje)||0;
+  var id=String(a.id).replace(/'/g,"\\'");
+  var h='<div style="padding:8px 0 2px" onclick="event.stopPropagation()">';
+
+  h+='<div style="display:flex;gap:5px;margin-bottom:6px">'+
+    [25,50,75,100].map(function(v){
+      var on=(actual===v);
+      return '<button onclick="actFilaPct(\''+id+'\','+v+')" '+
+        'style="flex:1;min-width:0;min-height:44px;border-radius:10px;font-size:13px;'+
+        'font-weight:800;cursor:pointer;font-family:var(--font);'+
+        (on?'border:1.5px solid var(--accent);background:var(--accent-fill);color:var(--accent-on)'
+           :v===100?'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)'
+           :'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)')+
+        '">'+(v===100?'Ya está':v+'%')+'</button>';
+    }).join('')+
+  '</div>';
+
+  /* Las dos fechas que se usan de verdad en un recorrido: hoy, o el viernes.
+     Cualquier otra se pone en el modal de editar, que ya existe. */
+  var hoy=today(), vie=_finDeSemana();
+  h+='<div style="display:flex;gap:5px">'+
+    '<button onclick="actFilaFecha(\''+id+'\',\''+hoy+'\')" '+
+      'style="flex:1;min-width:0;min-height:44px;border-radius:10px;border:1.5px solid var(--border2);'+
+      'background:var(--bg2);color:var(--text2);font-size:12.5px;font-weight:700;cursor:pointer;'+
+      'font-family:var(--font)">Entrega hoy</button>'+
+    (vie!==hoy
+      ? '<button onclick="actFilaFecha(\''+id+'\',\''+vie+'\')" '+
+        'style="flex:1;min-width:0;min-height:44px;border-radius:10px;border:1.5px solid var(--border2);'+
+        'background:var(--bg2);color:var(--text2);font-size:12.5px;font-weight:700;cursor:pointer;'+
+        'font-family:var(--font)">El viernes</button>'
+      : '')+
+    '<button onclick="dictarSobre(\''+id+'\')" '+
+      'style="flex:1;min-width:0;min-height:44px;border-radius:10px;border:1.5px solid var(--accent);'+
+      'background:var(--accent-soft);color:var(--accent);font-size:12.5px;font-weight:800;'+
+      'cursor:pointer;font-family:var(--font)">🎙️ Dictar</button>'+
+  '</div>';
+  return h+'</div>';
+}
+
+/* Las dos escriben por Acciones y repintan sin cerrar la fila: S.actAbiertas
+   la deja abierta, asi que se ve el resultado en el sitio donde se toco. */
+async function actFilaPct(id,v){
+  if(!canEdit()) return;
+  /* Cerrar va por marcarActCompletada, NO por setAvance(100). Es el mismo
+     camino que el ✓ de la fila y el que pide la foto antes de dar una partida
+     por terminada. Con setAvance se cerraba igual pero sin pasar por ahi:
+     dos botones que dicen lo mismo tienen que hacer lo mismo. */
+  if(v>=100){ marcarActCompletada(id); return; }
+  try{
+    await Acciones.setAvance(id,v);
+    showToast(v+'% guardado ✓');
+  }catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err'); }
+  renderActs();
+}
+
+async function actFilaFecha(id,f){
+  if(!canEdit()) return;
+  var a=Acciones.porId(id); if(!a) return;
+  var cambios={fecha_fin:f};
+  // El fin nunca antes del inicio — la misma regla que en el recorrido.
+  if((a.fecha_inicio||'') && a.fecha_inicio>f) cambios.fecha_inicio=f;
+  try{
+    await Acciones.editar(id,cambios,'entrega → '+f+' (desde la lista)');
+    showToast('Entrega: '+f+' ✓');
+  }catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err'); }
+  renderActs();
+}
 
 function actHTML(a, ai, tipo){
   const fotos=fotoUrls(a.fotos);
@@ -7462,8 +7566,13 @@ function actHTML(a, ai, tipo){
       ${_actFilaCheckHTML(a)}
       <span id="chev-${a.id}" style="color:var(--text3);font-size:15px;flex-shrink:0;transition:transform .15s;${_abierta?'transform:rotate(90deg)':''}">›</span>
     </div>
-    ${_actFilaAvanceHTML(a)}
     <div id="det-${a.id}" style="display:${_abierta?'block':'none'};padding:2px 11px 11px;border-top:1px solid var(--border)">
+    <!-- Las acciones van DENTRO del detalle, no fuera. Fuera no aparecian
+         nunca al tocar la fila: toggleActDet solo cambia el display de esta
+         caja, no repinta la lista, asi que una barra pintada por fuera y
+         condicionada a S.actAbiertas se quedaba invisible hasta el siguiente
+         repintado. Aqui se abre y se cierra con el mismo gesto. -->
+    ${_actFilaAvanceHTML(a)}
 
     <div style="font-size:11.5px;color:var(--text3);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px">
       ${a.area?`<span style="color:var(--accent);font-weight:600;display:inline-flex;align-items:center;gap:3px">${_ic('pin',12)}${esc(a.area)}</span>`:`<span style="color:var(--amber);cursor:pointer;font-weight:600" onclick="event.stopPropagation();setArea('${a.id}')">Sin área</span>`}
@@ -7523,9 +7632,11 @@ function actHTML(a, ai, tipo){
       return out;
     })()}
 
+    <!-- "Completar" se fue de aqui: ya estaba el ✓ de la fila y ahora ademas
+         "Ya está" arriba. Tres botones para lo mismo en una tarjeta es ruido,
+         y el de en medio era el mas escondido de los tres. -->
     ${canEdit()&&a.estado!=='completado'?`<div style="display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
-      <button onclick="marcarActCompletada('${a.id}')" style="${btn};flex:1;border:none;background:var(--accent-fill);color:var(--accent-on);font-size:13px;padding:10px">${_ic('check',14)} Completar</button>
-      ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="${ibtn}" title="Iniciar actividad">${_ic('play',14)}</button>`:''}
+      ${a.estado==='pendiente'?`<button onclick="iniciarActividad('${a.id}')" style="${btn};flex:1;border:1.5px solid var(--green);background:var(--green-light);color:var(--green);font-size:13px;padding:10px">${_ic('play',14)} Iniciar</button>`:''}
       ${!a.hora_inicio?`<button onclick="stampHora('${a.id}','hora_inicio')" style="${ibtn};color:var(--blue);border-color:var(--blue)" title="Registrar hora de inicio">${_ic('reloj',14)}</button>`:`<button onclick="stampHora('${a.id}','hora_fin')" style="${ibtn};color:var(--amber);border-color:var(--amber)" title="Registrar hora de fin">${_ic('stop',13)}</button>`}
       <button onclick="abrirFotoUpload('${a.id}')" style="${ibtn}" title="Adjuntar foto">${_ic('cam',14)}</button>
       <button onclick="togglePrioridadAct('${a.id}')" style="${ibtn}${urgente?';color:var(--red);border-color:var(--red);background:var(--red-light)':''}" title="${urgente?'Quitar urgente':'Marcar urgente'}">${_ic('alerta',14)}</button>
@@ -15845,9 +15956,16 @@ async function revEstado(id, modo, pct){
   }catch(e){ showToast('Error al guardar: '+(e.message||''),'err'); }
 }
 
-async function revNota(id){
+/* Dictar sobre UNA partida. Nacio en Revision y ahora sirve tambien desde la
+   fila de la lista: es la misma necesidad —hablarle a una partida concreta sin
+   tener que nombrarla— y tener dos micrófonos distintos para lo mismo
+   terminaria dando dos comportamientos distintos.
+   revNota() se queda como nombre viejo para los botones de Revision. */
+function revNota(id){ return dictarSobre(id); }
+
+async function dictarSobre(id){
   if(!canEdit()) return;
-  var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
+  var a=Acciones.porId(id); if(!a) return;
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ showToast('Para dictar usa Chrome','warn',5000); return; }
 
@@ -15903,12 +16021,51 @@ async function revNota(id){
        pisa lo escrito antes, y deja el rastro en obra_cambios una sola vez. */
     try{
       await Acciones.agregarNota(id, t);
-      showToast('Nota guardada ✓');
-      renderRevision();
+      /* Si lo dictado trae un porcentaje —"esta va en sesenta"— se aplica
+         ademas de guardarse la nota. Son dos cosas distintas y cada una deja
+         su linea: el numero mueve el avance, el texto explica por que. */
+      var pct=_pctDictado(t);
+      if(pct!==null){
+        try{ await Acciones.setAvance(id,pct); }catch(e2){}
+        showToast('Anotado y puesto en '+pct+'% ✓');
+      } else {
+        showToast('Anotado ✓');
+      }
+      _repintarDondeEstoy();
     }catch(e){ showToast('Error al guardar la nota','err'); }
   }
   ov.onclick=cerrar;
   try{ r.start(); }catch(e){ cerrar(); }
+}
+
+/* Saca el porcentaje de una frase dictada. Solo cuenta si el numero viene
+   pegado a la idea de avance: "sesenta por ciento", "va en 60", "al 60".
+   Un "60" suelto en "puerta de 60 centimetros" NO puede mover el avance. */
+function _pctDictado(txt){
+  var t=' '+String(txt||'').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')+' ';
+  var PAL={cero:0,diez:10,quince:15,veinte:20,veinticinco:25,treinta:30,cuarenta:40,
+           cincuenta:50,sesenta:60,setenta:70,ochenta:80,noventa:90,cien:100,ciento:100,
+           'media':50,'medio':50,'la mitad':50,'un cuarto':25,'tres cuartos':75};
+  var m=t.match(/(\d{1,3})\s*(?:%|por\s*ciento|porciento)/);
+  if(!m) m=t.match(/(?:va(?:mos)?\s+(?:en|por)|esta\s+(?:en|al)|al|en|ponle|pon)\s+(\d{1,3})(?!\s*(?:cent|metro|cm|mm|m\b))/);
+  if(m){ var n=parseInt(m[1],10); return (n>=0&&n<=100)?n:null; }
+  for(var k in PAL){
+    if(new RegExp('(?:va(?:mos)?\\s+(?:en|por)|esta\\s+(?:en|al)|al|en)\\s+'+k+'\\b').test(t) ||
+       new RegExp(k+'\\s*(?:%|por\\s*ciento|porciento)').test(t)) return PAL[k];
+  }
+  return null;
+}
+
+/* Repinta la pantalla en la que estas, sin adivinar. Antes esto llamaba a
+   renderRevision() a secas, asi que dictar desde la lista habria repintado
+   otra pantalla. */
+function _repintarDondeEstoy(){
+  try{
+    if(S.currentTab==='hoy'){ renderHoy(); return; }
+    if(S.obraVista==='revision'){ renderRevision(); return; }
+    renderActs();
+  }catch(e){}
 }
 
 // ── RENDER EQUIPO (Asistencia + Personal + Penalidades) ──

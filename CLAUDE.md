@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v77 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v79 — 14 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -126,18 +126,40 @@ v77**: era el mismo módulo que Actividades con otra cara.
 | **El panel de un apartamento** | Tocar el apartamento en la torre, **en Hoy o en Actividades → Edificio** — `abrirAptoTorre()`, `_recPanelApto()` |
 | **REGISTRAR: avance, cerrar, fecha, iniciar, interrumpir** | **El recorrido paso a paso** — `pasoIniciar(area, filtro, idInicial)` |
 
-**En v77 hay UNA sola puerta de registro: el recorrido paso a paso.** Se
-llega desde el panel del apartamento, desde una fila de «Pendientes», o
-leyendo el QR de la puerta. Actividades es para buscar, filtrar,
-planificar, crear y editar — **ya no registra avance**.
+**Se registra en dos sitios, y los dos pasan por `Acciones`:**
+
+1. **En la fila de la lista.** Un toque en la fila abre sus acciones ahí
+   mismo: `25% · 50% · 75% · Ya está`, `Entrega hoy · El viernes`, y el
+   micrófono. `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`.
+2. **El recorrido paso a paso**, para pasar varias seguidas de pie.
+
+v77 le quitó el registro a la lista entera y lo mandó todo al recorrido.
+**En obra resultó peor**: sacarte de la lista para marcar un avance es más
+fricción, no menos. Volvió en v79 — pero por `Acciones`, que era el
+problema de verdad del registro viejo, no el sitio donde estaba.
+
+**El recorrido se arma desde la lista** (`actSelRecorrer()`): marcas en
+modo selección y tocas «Recorrer estas N». Recorre lo que marcaste, en el
+orden en que lo estás viendo. Antes lo armaba el app por ti («las de esta
+semana», «las vencidas») y te las pasaba en un orden que no es el que se
+camina.
 
 El panel del apartamento y el paso a paso se reparten así:
 
 - **`abrirAptoTorre` / `pintarRecorrido` / `_rec*`** = el panel del
   apartamento: sus cuatro números y tres pestañas (Panel · Pendientes ·
   Quién debe). **No escribe.**
-- **`pasoIniciar` / `paso*`** = el recorrido, «7 de 23». **Es el único que
-  escribe**, y todo por `Acciones`.
+- **`pasoIniciar` / `paso*`** = el recorrido, «7 de 23».
+
+**Cerrar una partida va SIEMPRE por `marcarActCompletada()`**, que es quien
+exige la foto. `Acciones.setAvance(id,100)` también la cierra, pero se
+salta esa puerta: no lo uses para cerrar desde la interfaz.
+
+**`dictarSobre(id)`** es el micrófono de UNA partida — nació en Revisión
+(`revNota`) y ahora sirve también desde la fila. Si lo dictado trae un
+porcentaje («esta va en sesenta»), lo aplica además de guardar la nota;
+`_pctDictado()` solo lo acepta pegado a la idea de avance, para que un
+«puerta de 60 centímetros» no mueva nada.
 
 Los cuatro filtros rápidos (`retrasadas`, `sinfecha`, `sincontratista`,
 `congeladas`) **también aplican dentro de Revisión** desde v76, con aviso
@@ -293,6 +315,9 @@ pertenece a ningún nivel.
 | **v77** — `loadActsAll` pedía `limit = actMostrarTodas ? 500 : 2000`. Al revés: tocar «Todas» bajaba el tope a 500 sobre 2.465 filas, sin avisar. | Un tope silencioso miente peor que un error. Si hay que paginar, `sbTodo`. |
 | **v77** — `fixActsConsistency` cerraba partidas sola en cada carga, sin preguntar y sin dejar rastro de quién. | Un dato incoherente se avisa, no se tapa. Cuadrarlo es una decisión de quien manda la obra, y queda escrita. |
 | **v77** — el manejador de teclas hacía `e.target.closest(...)` sin comprobar que `e.target` fuera un elemento. Cuando no lo era reventaba el manejador **entero**. | Un guardia que falla no puede llevarse por delante todo lo que protege. |
+| **v78** — la × del recorrido nacía **debajo del notch** del iPhone: la cabecera se escribió con `padding:12px` pelado, sin `var(--st)`. No se podía cerrar. El panel del apartamento sí lo hacía bien. | Toda pantalla completa lleva `var(--st)` arriba y `var(--sb)` abajo. Y arriba a la derecha no puede ser la única salida: el pulgar vive abajo. |
+| **v79** — la barra de acciones se pintaba fuera de `det-<id>` y gateada por `S.actAbiertas`. `toggleActDet` solo cambia el `display`, **no repinta**, así que al tocar la fila no aparecía nunca. | Si algo tiene que aparecer con un toggle, ponlo **dentro** de lo que el toggle muestra. Y mide lo VISIBLE, no el innerHTML. |
+| **v79** — «Ya está» cerraba con `Acciones.setAvance(100)` y se saltaba la exigencia de foto que sí aplica el ✓ de la fila. | Dos botones que dicen lo mismo tienen que hacer lo mismo, por el mismo camino. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
