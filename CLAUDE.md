@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v81 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v82 — 14 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -123,9 +123,10 @@ v77**: era el mismo módulo que Actividades con otra cara.
 | Ver taller × apartamento | **Actividades → Matriz** |
 | Ver el edificio por niveles | **Actividades → Edificio** (v55) |
 | **Revisar por contratista** | **Actividades → Revisión** — `renderRevision()`, `revAbrir()` |
-| **El panel de un apartamento** | Tocar el apartamento en la torre, **en Hoy o en Actividades → Edificio** — `abrirAptoTorre()`, `_recPanelApto()` |
+| **El panel de un apartamento, por contratista** | Tocar el apartamento en la torre, **en Hoy o en Actividades → Edificio** — `abrirAptoTorre()`, `_recPanelApto()` |
+| **Mover fechas en bloque** | Modo selección en la lista, **o** el panel del apartamento por contratista — `_correrPlan()`, `_correrAplicar()` |
 | **REGISTRAR: avance, cerrar, fecha** | **En la fila de la lista** — `_actFilaAvanceHTML()` |
-| **Que el app proponga el plan del día** | **Hoy**, arriba del todo — `propuestaHTML()`, `_propuestaHoy()` |
+
 
 **Se registra en UN sitio: la fila de la lista.** Un toque en la fila abre
 sus acciones ahí mismo: `25% · 50% · 75%`, `Entrega hoy · El viernes`, y el
@@ -141,19 +142,31 @@ práctico. **Se retiró entero en v81** (~475 líneas). Si alguien pide «una
 pantalla que pase las partidas una por una», esto ya se intentó: lo que
 funciona en obra es la lista, con las acciones en la fila.
 
-**Hoy abre con la propuesta del día** (`propuestaHTML`). El app mira lo
-vencido y lo que vence hoy y propone un día de trabajo, agrupado por
-contratista y con tope (`PROP_POR_CONTRATISTA` 3, `PROP_CONTRATISTAS` 5)
-— proponer las 339 que se deben no es proponer nada. **No planifica solo**:
-se acepta entero o se quita con la ×. Va arriba del edificio, que antes se
-comía la primera pantalla entera del teléfono.
+### El panel del apartamento se organiza POR CONTRATISTA
 
-El panel del apartamento y el paso a paso se reparten así:
+Tocar un apartamento en la torre abre `_recPanelApto()`: sus cuatro números
+y **un bloque por contratista**, ordenados por quién debe más vencido. Al
+abrir un contratista salen, **arriba de sus partidas**, sus fechas:
+`+1 semana · +2 semanas · Entrega el viernes · Entrega hoy · fecha libre`.
+Mueven todas las de **ese** contratista en **ese** apartamento.
 
-- **`abrirAptoTorre` / `pintarRecorrido` / `_rec*`** = el panel del
-  apartamento: sus cuatro números y tres pestañas (Panel · Pendientes ·
-  Quién debe). **No escribe.**
-- **`pasoIniciar` / `paso*`** = el recorrido, «7 de 23».
+Por qué así: en esta obra se planifica por contratista — a cada uno se le
+entrega su hoja, no un listado del apartamento. Y mover fechas es lo que
+más se hace (247 de 349 ediciones del historial), que antes obligaba a
+irse a la lista, entrar en modo selección y marcarlas una por una.
+
+Las tres pestañas que había (Panel · Pendientes · Quién debe) **se
+fundieron en v82**: las tres agrupaban por contratista, una con números,
+otra con la lista y otra con el conteo.
+
+**La propuesta del plan del día se probó en v81 y se retiró en v82**: le
+decía al dueño lo que ya sabía y lo único que hacía era alejar el plan.
+No la vuelvas a construir.
+
+La aritmética de mover fechas vive en **un solo sitio**, `_correrPlan(ids,
+modo, dias)` y `_correrAplicar(plan, detalle)` — los usan el modo selección
+y el panel del apartamento. El fin nunca queda antes del inicio, «correr»
+se salta las que no tienen fecha, y se guarda de 5 en 5.
 
 **Cerrar una partida va SIEMPRE por `marcarActCompletada()`**, que es quien
 exige la foto. `Acciones.setAvance(id,100)` también la cierra, pero se
@@ -325,6 +338,8 @@ pertenece a ningún nivel.
 | **v80** — llegaron a existir **tres** formas de cerrar una partida en la misma tarjeta: el ✓ de la fila, «Ya está» y «Completar». El dueño lo dijo en una línea: «no quiero cosas de más». | Antes de añadir un botón, busca si lo que hace ya está en esa pantalla. Que dos caminos lleguen al mismo sitio no los hace útiles: obligan a elegir. |
 | **v76→v81** — el recorrido paso a paso: cinco versiones construyéndolo y moviéndole la puerta, y nunca se usó en obra. Se retiró entero. | Una pantalla que hay que seguir rescatando no tiene un problema de puerta: no encaja en cómo se trabaja. Pregunta antes de la tercera versión. |
 | **v81** — se estuvo a punto de añadir un filtro «esta semana» que la lista no sabe enseñar ni soltar: habría recortado la lista sin nada en pantalla que lo dijera. | No filtres con estado invisible. Si el usuario no lo ve, no lo puede quitar — y entonces la lista miente. |
+| **v76→v82** — tres pantallas seguidas rechazadas en obra: el recorrido, la propuesta del plan y el panel de tres pestañas. Las tres **guiaban** al usuario. Lo que sí funcionó: acciones en la fila, y fechas por contratista dentro del apartamento. | Este usuario no quiere que lo lleven de la mano; quiere menos toques para lo que ya sabe hacer. Antes de construir una pantalla, pregunta **qué le hace el día más largo**, no qué le gustaría ver. |
+| **v82** — el panel pedía a la base los pendientes del apartamento (`cargarPendRec`, `S._recPend`) cuando `S.acts` ya los tenía desde v77. Una consulta por apartamento, y dos copias que podían decir números distintos. | Desde la carga única, **nada** necesita su propia consulta de actividades. Si vas a pedir a `obra_actividades`, mira primero si ya está en `S.acts`. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base

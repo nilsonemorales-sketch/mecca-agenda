@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260914_81';
+const APP_VERSION='20260914_82';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -2646,142 +2646,6 @@ function _planFiltroBuscar(v){
   if(S.currentTab==='hoy')renderHoy();
   var el=document.getElementById('plan-search'); if(el){ el.focus(); try{el.setSelectionRange(v.length,v.length);}catch(e){} }
 }
-/* ── LA PROPUESTA DE HOY ───────────────────────────────────────────────
-   Hoy abria con el dibujo del edificio y el plan del dia empezaba FUERA de la
-   pantalla: habia que bajar para llegar al trabajo. Y el plan tenia 10
-   partidas mientras la obra debia 339 — la pantalla no decia nada de ese hueco.
-
-   Ahora lo primero que se ve es una propuesta: el app mira lo vencido y lo que
-   vence hoy, y propone un dia de trabajo. No lo planifica solo — se acepta,
-   entero o partida por partida. Planificar sigue siendo decision del que manda
-   la obra; lo que sobraba era tener que armarlo desde cero cada mañana.
-
-   Como se arma: por contratista, porque asi se reparte el trabajo en esta obra,
-   y con tope. Proponer las 339 no es proponer nada. */
-var PROP_POR_CONTRATISTA=3, PROP_CONTRATISTAS=5;
-
-function _propuestaHoy(){
-  var hoy=today(), marc=S.marcadasHoy||{};
-  var cand=(S.abiertas||[]).filter(function(a){
-    if(a.estado==='completado') return false;
-    if((a.fecha_plan||'').slice(0,10)===hoy) return false;   // ya esta en el plan
-    if(marc[String(a.id)]) return false;                     // ya se marco hoy
-    var fv=fechaVenc(a);
-    return !!fv && fv<=hoy;                                  // vence hoy o antes
-  });
-  if(!cand.length) return [];
-  /* Agrupado por quien lo debe. Una partida con varios nombres cuenta para el
-     primero: el plan se le entrega a alguien, no a una lista. */
-  var g={}, orden=[];
-  cand.forEach(function(a){
-    var ns=_responsables(a.personal_nombre);
-    var k=ns.length?ns[0]:'Sin asignar';
-    if(!g[k]){ g[k]=[]; orden.push(k); }
-    g[k].push(a);
-  });
-  orden.forEach(function(k){
-    g[k].sort(function(x,y){ return _hoyDiasAtraso(y)-_hoyDiasAtraso(x); });
-  });
-  /* Primero quien mas atraso acumula: es por donde se empieza a destrabar. */
-  orden.sort(function(x,y){
-    var ax=g[x].reduce(function(s,a){return s+Math.max(0,_hoyDiasAtraso(a));},0);
-    var ay=g[y].reduce(function(s,a){return s+Math.max(0,_hoyDiasAtraso(a));},0);
-    return ay-ax || g[y].length-g[x].length;
-  });
-  return orden.slice(0,PROP_CONTRATISTAS).map(function(k){
-    return {quien:k, items:g[k].slice(0,PROP_POR_CONTRATISTA), total:g[k].length};
-  });
-}
-
-function _propuestaIds(){
-  var out=[];
-  _propuestaHoy().forEach(function(gr){
-    gr.items.forEach(function(a){ if(!(S._propQuitadas||{})[a.id]) out.push(a.id); });
-  });
-  return out;
-}
-
-function propuestaQuitar(id){
-  S._propQuitadas=S._propQuitadas||{};
-  S._propQuitadas[id]=1;
-  renderHoy();
-}
-
-async function propuestaAceptarTodo(){
-  if(!canEdit()) return;
-  var ids=_propuestaIds();
-  if(!ids.length) return;
-  var bien=0, mal=0;
-  for(var i=0;i<ids.length;i++){
-    if(await _planSet(ids[i], today(), 'planificada para hoy (propuesta)', true)) bien++;
-    else mal++;
-  }
-  showToast(mal ? ('Al plan: '+bien+'. Fallaron '+mal+'.') : ('Al plan: '+bien+' ✓'), mal?'warn':'ok');
-  renderHoy();
-}
-
-function propuestaHTML(){
-  if(!canEdit()) return '';
-  var grupos=_propuestaHoy();
-  var quit=S._propQuitadas||{};
-  grupos=grupos.map(function(gr){
-    return {quien:gr.quien, total:gr.total, items:gr.items.filter(function(a){return !quit[a.id];})};
-  }).filter(function(gr){ return gr.items.length; });
-  if(!grupos.length) return '';
-  var n=grupos.reduce(function(s,gr){return s+gr.items.length;},0);
-  var debidas=(S.abiertas||[]).filter(function(a){
-    var fv=fechaVenc(a); return a.estado!=='completado' && !!fv && fv<=today();
-  }).length;
-
-  var h='<div style="border:1.5px solid var(--accent);border-radius:14px;background:var(--bg2);'+
-      'overflow:hidden;margin-bottom:12px">'+
-    '<div style="padding:12px 14px;background:var(--accent-soft)">'+
-      '<div style="font-family:var(--tit);font-size:16px;font-weight:800;color:var(--accent)">'+
-        'La propuesta de hoy</div>'+
-      '<div style="font-size:11.5px;color:var(--text3);margin-top:3px;line-height:1.45">'+
-        n+' partida'+(n!==1?'s':'')+' de '+grupos.length+' contratista'+(grupos.length!==1?'s':'')+
-        ' · escogidas entre las '+debidas+' que se deben hoy</div>'+
-    '</div>';
-
-  grupos.forEach(function(gr){
-    h+='<div style="padding:9px 14px 4px;border-top:1px solid var(--border)">'+
-       '<div style="font-size:12px;font-weight:800;color:var(--text);display:flex;'+
-         'align-items:baseline;gap:6px">'+esc(gr.quien)+
-         '<span style="font-size:10.5px;font-weight:600;color:var(--text3);font-family:var(--mono)">'+
-           'debe '+gr.total+'</span></div>';
-    gr.items.forEach(function(a){
-      var atr=_hoyDiasAtraso(a);
-      h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;'+
-          'border-bottom:1px solid var(--border)">'+
-        '<div style="flex:1;min-width:0">'+
-          '<div style="font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35">'+
-            esc(a.descripcion||'(sin descripción)')+'</div>'+
-          '<div style="font-size:10.5px;color:var(--text3);font-family:var(--mono);margin-top:2px">'+
-            esc(_recNom(a.area||'sin área'))+
-            (atr>0?' · <span style="color:var(--red);font-weight:700">'+atr+'d de atraso</span>':' · vence hoy')+
-          '</div>'+
-        '</div>'+
-        '<button onclick="propuestaQuitar(\''+String(a.id).replace(/'/g,"\\'")+'\')" '+
-          'aria-label="Quitar de la propuesta" '+
-          'style="flex:0 0 auto;width:44px;height:44px;border-radius:11px;border:1px solid var(--border2);'+
-          'background:var(--bg3);color:var(--text3);font-size:17px;cursor:pointer;'+
-          'font-family:var(--font)">×</button>'+
-      '</div>';
-    });
-    h+='</div>';
-  });
-
-  h+='<div style="padding:11px 14px calc(11px + 0px)">'+
-      '<button onclick="propuestaAceptarTodo()" style="width:100%;min-height:48px;'+
-        'border-radius:12px;border:none;background:var(--accent-fill);color:var(--accent-on);'+
-        'font-size:15px;font-weight:800;cursor:pointer;font-family:var(--font)">'+
-        'Aceptar las '+n+' · al plan de hoy</button>'+
-      '<div style="font-size:11px;color:var(--text3);margin-top:7px;line-height:1.45">'+
-        'Quita con la × lo que no vaya. Nada se planifica hasta que aceptes.</div>'+
-    '</div></div>';
-  return h;
-}
-
 function renderPlanDia(){
   var f=_planFechaActiva();
   var sp=_planDiaSplit(f);
@@ -4009,9 +3873,11 @@ var Reporte = (function(){
     if(grupos==='error' || !grupos) grupos=[];
 
     /* con un contratista abierto, el reporte es SU hoja — la que se
-       le entrega en mano, con espacio para firmar */
-    if(R.tab==='pend' && R.abierto!==null && grupos[R.abierto]){
-      var g=grupos[R.abierto];
+       le entrega en mano, con espacio para firmar.
+       R.abierto guarda el NOMBRE desde v82, no el indice: el orden de los
+       grupos cambia al mover fechas y con el indice salia la hoja de otro. */
+    var g = R.abierto ? grupos.find(function(x){return x.q===R.abierto;}) : null;
+    if(g){
       return {
         titulo: nomCorto(area)+' — '+g.q,
         filtros:['Pendientes de este contratista'],
@@ -4355,7 +4221,6 @@ function _recNom(area){ return String(area||'').split('—').pop().trim(); }
 function abrirAptoTorre(area){
   S.recorrido={area:area, tab:'panel', abierto:null, confirmando:null};
   pintarRecorrido();
-  cargarPendRec(area);
 }
 
 /* Lo que cuenta como "de esta semana": vence el viernes de esta semana o
@@ -4389,47 +4254,217 @@ function cerrarHojaApto(){
   if(document.querySelector('[data-torre]')) dibujarTorre();
 }
 
-/* Los pendientes del apartamento. Se piden una vez por apartamento y se
-   guardan; cerrar uno actualiza la copia sin volver a pedir la lista. */
-async function cargarPendRec(area, force){
-  S._recPend=S._recPend||{};
-  if(S._recPend[area] && !force) return S._recPend[area];
-  try{
-    var q='obra_actividades?area=eq.'+encodeURIComponent(area)+
-          '&estado=neq.completado&select=id,descripcion,personal_nombre,estado,prioridad,porcentaje,notas'+
-          '&order=personal_nombre.asc&limit=600';
-    S._recPend[area]=await sb(q)||[];
-  }catch(e){ S._recPend[area]=null; }
-  if(S.recorrido && S.recorrido.area===area) pintarRecorrido();
-  return S._recPend[area];
-}
-
+/* Lo abierto del apartamento, agrupado por quien lo debe.
+   Sale de S.acts, que desde v77 trae la obra entera: antes era una consulta
+   aparte (S._recPend) y el panel podia decir un numero distinto del que decia
+   la lista de la misma partida.
+   El reparto es por contratista porque asi se planifica esta obra — se le
+   entrega su hoja a cada uno, no un listado del apartamento. */
 function _recGrupos(area){
-  var filas=(S._recPend||{})[area];
-  if(filas===null) return 'error';   /* la consulta fallo: no es que este cargando */
-  if(!filas) return null;
+  var l=(S.acts||[]).filter(function(a){
+    return (a.area||'')===area && a.estado!=='completado';
+  });
   var m={}, orden=[];
-  filas.forEach(function(a){
-    var q=(a.personal_nombre||'').trim()||'Sin asignar';
+  l.forEach(function(a){
+    /* Varios nombres en una partida: cuenta para el primero. La hoja se le da
+       a alguien, no a una lista. */
+    var ns=_responsables(a.personal_nombre);
+    var q=ns.length?ns[0]:'Sin asignar';
     if(!m[q]){ m[q]=[]; orden.push(q); }
     m[q].push(a);
   });
-  orden.sort(function(x,y){ return m[y].length-m[x].length; });
+  /* Primero el que mas debe vencido: es por donde se destraba el apartamento. */
+  orden.sort(function(x,y){
+    var vx=m[x].filter(FILTRO_HUECO.retrasadas).length;
+    var vy=m[y].filter(FILTRO_HUECO.retrasadas).length;
+    return vy-vx || m[y].length-m[x].length || x.localeCompare(y);
+  });
+  orden.forEach(function(q){
+    m[q]=_revOrdenActs(m[q]);   // vencidas, luego empezadas, luego lo demas
+  });
   return orden.map(function(q){ return {q:q, items:m[q]}; });
 }
 
-function _recReintentar(){
-  return '<div style="padding:18px 0;text-align:center">'+
-    '<p style="color:var(--text3);font-size:12.5px;line-height:1.5;margin:0 0 12px">'+
-    'No se pudo traer lo pendiente de este apartamento.</p>'+
-    '<button onclick="recReintentar()" style="border:1px solid var(--border2);background:var(--bg3);'+
-    'color:var(--text);border-radius:10px;padding:11px 18px;font-family:var(--font);'+
-    'font-size:13px;font-weight:600;cursor:pointer;min-height:44px">Intentar otra vez</button></div>';
+/* Mueve TODAS las de un contratista en ESTE apartamento. Es lo que mas se hace
+   —247 de 349 ediciones del historial son mover fechas— y hasta ahora obligaba
+   a irse a la lista, entrar en modo seleccion y marcarlas una por una. */
+async function aptoCorrer(quien, dias){
+  if(!canEdit()) return;
+  var R=S.recorrido; if(!R) return;
+  var ids=((_recGrupos(R.area).find(function(g){return g.q===quien;})||{}).items||[])
+    .map(function(a){return a.id;});
+  if(!ids.length) return;
+  var r=_correrPlan(ids,'correr',dias);
+  if(!r.plan.length){
+    showToast('Nada que mover: '+r.saltadas+' sin fecha o ya iguales','warn',4000);
+    return;
+  }
+  var comoDias=dias===1?'1 día':dias+' días';
+  var msg='Se van a correr '+comoDias+' hacia adelante '+r.plan.length+' partida'+
+          (r.plan.length!==1?'s':'')+' de '+quien+' en '+_recNom(R.area)+'.';
+  if(r.saltadas) msg+='\n\n('+r.saltadas+' se quedan: sin fecha o ya iguales.)';
+  if(!confirm(msg+'\n\n¿Seguro?')) return;
+  await _correrAplicar(r.plan, 'corrida '+comoDias+' desde el apartamento');
+  pintarRecorrido();
 }
-function recReintentar(){
-  var a=S.recorrido && S.recorrido.area; if(!a) return;
-  delete (S._recPend||{})[a];
-  pintarRecorrido(); cargarPendRec(a,true);
+
+/* Entrega para una fecha concreta, con el mismo criterio de la lista: el fin
+   nunca antes del inicio. */
+async function aptoFechaFija(quien, f){
+  if(!canEdit() || !f) return;
+  var R=S.recorrido; if(!R) return;
+  var items=((_recGrupos(R.area).find(function(g){return g.q===quien;})||{}).items||[]);
+  if(!items.length) return;
+  var dd=f.slice(8,10)+'/'+f.slice(5,7);
+  if(!confirm('Entrega '+dd+' para '+items.length+' partida'+(items.length!==1?'s':'')+
+              ' de '+quien+' en '+_recNom(R.area)+'. ¿Seguro?')) return;
+  var plan=items.map(function(a){
+    var p={fecha_fin:f};
+    if((a.fecha_inicio||'') && a.fecha_inicio>f) p.fecha_inicio=f;
+    return {id:a.id, patch:p};
+  });
+  await _correrAplicar(plan, 'entrega → '+f+' desde el apartamento');
+  pintarRecorrido();
+}
+
+function aptoFechaLibre(quien){
+  var el=document.getElementById('apto-f-'+_slug(quien));
+  var v=el?el.value:'';
+  if(!v){ showToast('Elige una fecha','warn'); return; }
+  aptoFechaFija(quien, v);
+}
+
+/* ── EL PANEL DEL APARTAMENTO ──────────────────────────────────────────
+   Una sola pantalla, organizada por CONTRATISTA — que es como se planifica
+   esta obra: a cada uno se le entrega su hoja, no un listado del apartamento.
+   Cada bloque trae las fechas a mano, porque mover fechas es lo que mas se
+   hace (247 de 349 ediciones del historial) y hasta ahora obligaba a irse a la
+   lista, entrar en modo seleccion y marcarlas una por una. */
+function _recPanelApto(grupos){
+  var R=S.recorrido, area=R.area;
+  var persona=S.torrePersona||'';
+  grupos=grupos||_recGrupos(area);
+  if(persona) grupos=grupos.filter(function(g){return g.q===persona;});
+  var c=_aptoCuentas(area,persona);
+
+  var num=function(v,lab,col){
+    return '<div class="scard"><div class="v" style="font-size:18px'+(col&&v?';color:'+col:'')+'">'+v+'</div>'+
+           '<div class="l">'+lab+'</div></div>';
+  };
+  var h='';
+  if(persona) h+='<div style="display:inline-flex;align-items:center;gap:7px;background:var(--accent-soft);'+
+      'border:1px solid var(--accent);color:var(--accent);border-radius:99px;padding:6px 12px;'+
+      'font-size:12px;font-weight:700;margin-bottom:11px">Solo lo de '+esc(persona)+'</div>';
+
+  h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:13px">'+
+      num(c.abiertas,'Abiertas')+
+      num(c.vencidas,'Vencidas','var(--red)')+
+      num(c.semana,'Semana','var(--amber)')+
+      num(c.curso,'En curso','var(--blue)')+
+    '</div>';
+
+  if(!grupos.length){
+    h+='<div class="empty" style="padding:26px 10px">Aquí no queda nada abierto</div>';
+  }
+
+  var vie=_finDeSemana(), hoy=today();
+  grupos.forEach(function(g){
+    var sl=_slug(g.q);
+    var ab=g.items.length;
+    var ve=g.items.filter(FILTRO_HUECO.retrasadas).length;
+    var abierta=(S.recorrido.abierto===g.q);
+    var qj=JSON.stringify(g.q).replace(/"/g,'&quot;');
+
+    h+='<div style="margin-bottom:8px">'+
+      '<button onclick="recAbrir('+qj+')" style="display:flex;align-items:center;gap:10px;width:100%;'+
+        'text-align:left;min-height:48px;padding:11px 13px;border-radius:12px;cursor:pointer;'+
+        'font-family:var(--font);background:'+(abierta?'var(--bg3)':'var(--bg2)')+';'+
+        'border:1.5px solid '+(ve?'var(--red)':(abierta?'var(--accent)':'var(--border)'))+'">'+
+        '<span style="color:var(--text3);font-size:13px;width:12px;flex:0 0 auto">'+(abierta?'▾':'▸')+'</span>'+
+        '<span style="flex:1;min-width:0">'+
+          '<span style="display:block;font-size:13.5px;font-weight:700;color:var(--text);'+
+            'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(g.q)+'</span>'+
+          '<span style="display:block;font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">'+
+            ab+' abierta'+(ab!==1?'s':'')+
+            (ve?' · <span style="color:var(--red);font-weight:700">'+ve+' vencida'+(ve!==1?'s':'')+'</span>':'')+
+          '</span>'+
+        '</span></button>';
+
+    if(abierta){
+      /* Las fechas ARRIBA de la lista: es a lo que se viene. Debajo de veinte
+         partidas habria que bajar para alcanzarlas. */
+      var bf='flex:1;min-width:0;min-height:44px;padding:10px 6px;border-radius:10px;'+
+             'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text);'+
+             'font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font)';
+      h+='<div style="padding:10px 2px 4px">'+
+        '<div style="font-size:10.5px;font-weight:700;color:var(--text3);letter-spacing:.04em;'+
+          'margin-bottom:6px">MOVER LAS '+ab+' DE '+esc(g.q.split(" ")[0].toUpperCase())+'</div>'+
+        '<div style="display:flex;gap:6px;margin-bottom:6px">'+
+          '<button onclick="aptoCorrer('+qj+',7)" style="'+bf+'">+1 semana</button>'+
+          '<button onclick="aptoCorrer('+qj+',14)" style="'+bf+'">+2 semanas</button>'+
+        '</div>'+
+        '<div style="display:flex;gap:6px;margin-bottom:6px">'+
+          '<button onclick="aptoFechaFija('+qj+',\''+vie+'\')" style="'+bf+'">Entrega el viernes</button>'+
+          '<button onclick="aptoFechaFija('+qj+',\''+hoy+'\')" style="'+bf+'">Entrega hoy</button>'+
+        '</div>'+
+        '<div style="display:flex;gap:6px">'+
+          '<input id="apto-f-'+sl+'" type="date" style="flex:1;min-width:0;min-height:44px;padding:10px;'+
+            'border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);'+
+            'font-size:13px;font-weight:700;font-family:var(--font)">'+
+          '<button onclick="aptoFechaLibre('+qj+')" style="flex:0 0 auto;min-height:44px;padding:10px 16px;'+
+            'border-radius:10px;border:none;background:var(--accent-fill);color:var(--accent-on);'+
+            'font-size:13px;font-weight:800;cursor:pointer;font-family:var(--font)">Poner</button>'+
+        '</div>'+
+      '</div>';
+
+      h+='<div style="padding:4px 0 2px">';
+      g.items.forEach(function(a){
+        var d=revDiasVencida(a);
+        var fv=fechaVenc(a);
+        var dm=fv?(fv.slice(8,10)+'/'+fv.slice(5,7)):'sin fecha';
+        var col=(d!==null&&d>0)?'var(--red)':(d===0?'var(--amber)':'var(--text3)');
+        h+='<button onclick="recPreguntar(\''+String(a.id).replace(/'/g,"\\'")+'\')" '+
+          'style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;min-height:44px;'+
+          'padding:9px 11px;margin-bottom:5px;border-radius:10px;border:1px solid var(--border);'+
+          'background:var(--bg3);cursor:pointer;font-family:var(--font);color:var(--text)">'+
+          '<span style="flex:1;min-width:0;font-size:12.5px;line-height:1.35">'+
+            esc(a.descripcion||'(sin descripción)')+'</span>'+
+          '<span style="flex:0 0 auto;font-family:var(--mono);font-size:10.5px;font-weight:800;'+
+            'color:'+col+'">'+dm+'</span>'+
+          '<span style="flex:0 0 auto;color:var(--text3)">›</span></button>';
+      });
+      h+='<button onclick="recVerFaltan('+qj+')" style="width:100%;border:1px dashed var(--border2);'+
+        'background:transparent;color:var(--text2);border-radius:10px;padding:11px;margin:3px 0 6px;'+
+        'font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;min-height:44px">'+
+        '¿Qué le falta a '+esc(g.q.split(" ")[0])+' aquí?</button>';
+      if(R.faltan && R.faltan.q===g.q) h+=_faltaHTML();
+      h+='</div>';
+    }
+    h+='</div>';
+  });
+
+  h+='<div style="display:flex;gap:8px;margin-top:10px">'+
+      '<button onclick="dictarEnRecorrido()" style="flex:1;min-height:48px;border-radius:12px;'+
+        'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);'+
+        'font-size:13.5px;font-weight:800;cursor:pointer;font-family:var(--font)">🎙️ Dictar</button>'+
+      '<button onclick="anotarEnRecorrido()" style="flex:1;min-height:48px;border-radius:12px;'+
+        'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);'+
+        'font-size:13.5px;font-weight:800;cursor:pointer;font-family:var(--font)">+ Anotar</button>'+
+    '</div>'+
+    '<button onclick="aptoVerEnLista(\'\')" style="width:100%;margin-top:8px;min-height:44px;'+
+      'border-radius:11px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);'+
+      'font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font)">'+
+      'Ver las '+c.abiertas+' en la lista ›</button>';
+  return h;
+}
+
+/* Ahora se abre por NOMBRE y no por indice: el orden de los grupos cambia al
+   mover fechas (se ordenan por vencidas), y con un indice se te quedaba
+   abierto el contratista equivocado. */
+function recAbrir(q){
+  S.recorrido.abierto = S.recorrido.abierto===q ? null : q;
+  S.recorrido.faltan=null;
+  pintarRecorrido();
 }
 
 function pintarRecorrido(){
@@ -4453,14 +4488,13 @@ function pintarRecorrido(){
         '</div>'+
         _recFlecha(sig,'',' ›')+
       '</div>'+
-      '<div style="display:flex;gap:5px;background:var(--bg);border-radius:11px;padding:4px;margin-top:12px">'+
-        _recSeg('panel','Panel')+
-        _recSeg('pend','Pendientes&nbsp;<b style="font-family:var(--tit)">'+faltan+'</b>')+
-        _recSeg('quien','Quién debe')+
-      '</div>'+
     '</div>'+
+    /* Se fueron las tres pestañas — Panel · Pendientes · Quién debe — porque
+       decian lo mismo tres veces: las tres agrupaban por contratista, una con
+       numeros, otra con la lista y otra con el conteo. Ahora es una sola
+       pantalla: cada contratista con lo que debe aqui y sus fechas a mano. */
     '<div id="rec-cuerpo" style="flex:1;overflow-y:auto;padding:13px 15px 14px">'+
-      (R.tab==='pend'? _recPend(grupos) : R.tab==='quien'? _recQuien(grupos,d) : _recPanelApto())+
+      _recPanelApto(grupos)+
     '</div>'+
     '<div style="padding:0 15px calc(13px + var(--sb));flex-shrink:0">'+
       '<button onclick="cerrarHojaApto()" style="width:100%;min-height:48px;border:none;'+
@@ -4490,78 +4524,11 @@ function _recFlecha(area,pre,post){
     'white-space:nowrap">'+(pre||'')+esc(_recNom(area).replace('Apto ','').replace('Penthouse B','PH'))+
     (post||'')+'</button>';
 }
-function _recSeg(k,t){
-  var on=S.recorrido.tab===k;
-  return '<button onclick="recTab(\''+k+'\')" role="tab" aria-selected="'+on+'" '+
-    'style="flex:1;border:none;border-radius:8px;padding:9px 3px;font-family:var(--font);'+
-    'font-size:11.5px;font-weight:600;cursor:pointer;min-height:38px;white-space:nowrap;'+
-    'background:'+(on?'var(--bg3)':'transparent')+';color:'+(on?'var(--text)':'var(--text3)')+'">'+t+'</button>';
-}
 function irApto(area){
   S.recorrido.area=area; S.recorrido.abierto=null; S.recorrido.confirmando=null;
   S.recorrido.faltan=null;
-  pintarRecorrido(); cargarPendRec(area);
+  pintarRecorrido();
 }
-function recTab(k){ S.recorrido.tab=k; S.recorrido.confirmando=null; pintarRecorrido(); }
-
-/* ── El panel del apartamento ──
-   Antes esta pestaña era solo el boton de dictar. Ahora es la puerta del
-   apartamento: los cuatro numeros con los que se decide y de ahi al recorrido
-   paso a paso, que es el unico sitio donde se registra. */
-function _recPanelApto(){
-  var R=S.recorrido, area=R.area;
-  var persona=S.torrePersona||'';
-  var c=_aptoCuentas(area,persona);
-  var a=function(s){ return String(s).replace(/'/g,"\\'"); };
-
-  var num=function(v,lab,col){
-    return '<div class="scard"><div class="v" style="font-size:18px'+(col&&v?';color:'+col:'')+'">'+v+'</div>'+
-           '<div class="l">'+lab+'</div></div>';
-  };
-  var bot=function(js,txt,fondo,color,borde,peso){
-    return '<button onclick="'+js+'" style="width:100%;min-height:48px;padding:13px 14px;'+
-      'margin-bottom:8px;border-radius:12px;border:1.5px solid '+(borde||'transparent')+';'+
-      'background:'+fondo+';color:'+color+';font-size:'+(peso||14)+'px;font-weight:800;'+
-      'cursor:pointer;font-family:var(--font)">'+txt+'</button>';
-  };
-
-  var h='';
-  if(persona) h+='<div style="display:inline-flex;align-items:center;gap:7px;background:var(--accent-soft);'+
-      'border:1px solid var(--accent);color:var(--accent);border-radius:99px;padding:6px 12px;'+
-      'font-size:12px;font-weight:700;margin-bottom:11px">Solo lo de '+esc(persona)+'</div>';
-
-  h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:13px">'+
-      num(c.abiertas,'Abiertas')+
-      num(c.vencidas,'Vencidas','var(--red)')+
-      /* "Semana" a secas: con cuatro tarjetas en un telefono, "Esta semana"
-         parte en dos lineas y descuadra la fila. */
-      num(c.semana,'Semana','var(--amber)')+
-      num(c.curso,'En curso','var(--blue)')+
-    '</div>';
-
-  if(!c.abiertas){
-    h+='<div class="empty" style="padding:26px 10px">Aquí no queda nada abierto</div>';
-  } else {
-    /* La lista es la accion principal del panel. Antes lo eran los botones del
-       recorrido paso a paso, que se retiro en v81; "ver la lista" era un
-       renglon gris al fondo. Se trabaja en la lista, asi que va arriba y en
-       grande. */
-    h+=bot("aptoVerEnLista('')",'Ver las '+c.abiertas+' abiertas','var(--green)','#fff','',15);
-    if(c.vencidas) h+=bot("aptoVerEnLista('retrasadas')",
-      'Solo las '+c.vencidas+' vencidas','var(--red-light)','var(--red)','var(--red)');
-  }
-
-  h+='<div style="display:flex;gap:8px;margin-top:4px">'+
-      '<button onclick="dictarEnRecorrido()" style="flex:1;min-height:48px;border-radius:12px;'+
-        'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);'+
-        'font-size:13.5px;font-weight:800;cursor:pointer;font-family:var(--font)">🎙️ Dictar</button>'+
-      '<button onclick="anotarEnRecorrido()" style="flex:1;min-height:48px;border-radius:12px;'+
-        'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);'+
-        'font-size:13.5px;font-weight:800;cursor:pointer;font-family:var(--font)">+ Anotar</button>'+
-    '</div>';
-  return h;
-}
-
 /* Del panel a la lista de siempre, con el apartamento ya filtrado. Es lo que
    antes hacia torreVer() desde el menu del dibujo. */
 function aptoVerEnLista(filtro){
@@ -4586,59 +4553,6 @@ function aptoVerEnLista(filtro){
 function dictarEnRecorrido(){ abrirComando(); }
 function anotarEnRecorrido(){ showAddActSmart(); }
 
-/* ── Pendientes: tocar y confirmar ── */
-function _recPend(grupos){
-  var R=S.recorrido;
-  if(grupos==='error') return _recReintentar();
-  if(!grupos) return '<p style="color:var(--text3);font-size:12.5px;padding:16px 0">Cargando lo pendiente…</p>';
-  if(!grupos.length) return '<p style="color:var(--text3);font-size:12.5px;padding:16px 0">Aquí no queda nada pendiente.</p>';
-  var h='';
-  grupos.forEach(function(g,gi){
-    var ab=R.abierto===gi;
-    h+='<div style="border-bottom:1px solid var(--border)">'+
-      '<button onclick="recAbrir('+gi+')" aria-expanded="'+ab+'" '+
-        'style="width:100%;background:none;border:none;display:flex;align-items:center;gap:10px;'+
-        'padding:12px 2px;cursor:pointer;font-family:var(--font);color:var(--text);text-align:left;'+
-        'min-height:44px">'+
-        '<span style="color:var(--text3);font-size:10px;width:9px;display:inline-block;'+
-          'transform:rotate('+(ab?'90':'0')+'deg);transition:transform .16s">▶</span>'+
-        '<span style="flex:1;font-size:13.5px;font-weight:600;min-width:0;overflow:hidden;'+
-          'text-overflow:ellipsis;white-space:nowrap">'+esc(g.q)+'</span>'+
-        '<span style="font-family:var(--tit);font-size:13px;font-weight:700;color:var(--text2)">'+
-          g.items.length+'</span></button>';
-    if(ab){
-      h+='<div style="padding:0 0 8px">';
-      /* Tocar la fila ya no abre un panelito de registro aqui mismo: entra al
-         recorrido paso a paso colocado en esa partida. Un solo sitio donde se
-         escribe, al que se llega desde varias puertas. */
-      g.items.forEach(function(a){
-        h+='<button onclick="recPreguntar(\''+a.id+'\')" '+
-          'style="width:100%;background:var(--bg3);border:1px solid transparent;'+
-          'border-radius:11px;padding:11px 12px;margin-bottom:7px;'+
-          'text-align:left;cursor:pointer;font-family:var(--font);color:var(--text);'+
-          'font-size:12.5px;line-height:1.4;display:flex;gap:10px;align-items:flex-start;'+
-          'justify-content:flex-start;min-height:44px">'+
-          '<span style="width:16px;height:16px;border:1.5px solid var(--border2);border-radius:5px;'+
-            'flex-shrink:0;margin-top:1px"></span>'+
-          '<span style="flex:1;min-width:0">'+esc(a.descripcion||'(sin descripción)')+'</span>'+
-          '<span style="color:var(--text3);flex-shrink:0">›</span></button>';
-      });
-      h+='<button onclick="recVerFaltan(\''+String(g.q).replace(/'/g,"\\\'")+'\')" '+
-        'style="width:100%;border:1px dashed var(--border2);background:transparent;'+
-        'color:var(--text2);border-radius:10px;padding:10px;margin-bottom:9px;'+
-        'font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;'+
-        'min-height:42px">¿Qué le falta a '+esc(g.q.split(' ')[0])+' aquí?</button>';
-      h+='</div>';
-      if(R.faltan && R.faltan.q===g.q) h+=_faltaHTML();
-    }
-    h+='</div>';
-  });
-  return h;
-}
-function recAbrir(i){
-  S.recorrido.abierto = S.recorrido.abierto===i ? null : i;
-  S.recorrido.confirmando=null; S.recorrido.faltan=null; pintarRecorrido();
-}
 /* Tocar una partida en Pendientes entra al recorrido paso a paso, colocado en
    esa partida. Antes abria un panelito propio con sus chips de % y su boton de
    guardar: otra pantalla mas para registrar lo mismo, con sus propias reglas.
@@ -4665,26 +4579,6 @@ function recPreguntar(id){
     var el=document.getElementById('det-'+id);
     if(el && el.scrollIntoView) try{ el.scrollIntoView({block:'center'}); }catch(e){}
   });
-}
-
-/* ── Quién debe ── */
-function _recQuien(grupos,d){
-  if(grupos==='error') return _recReintentar();
-  if(!grupos) return '<p style="color:var(--text3);font-size:12.5px;padding:16px 0">Cargando…</p>';
-  if(!grupos.length) return '<p style="color:var(--text3);font-size:12.5px;padding:16px 0">Nadie debe nada aquí.</p>';
-  var max=grupos[0].items.length||1, h='';
-  grupos.forEach(function(g){
-    h+='<div style="display:flex;align-items:center;gap:10px;padding:11px 0;'+
-      'border-bottom:1px solid var(--border)">'+
-      '<span style="flex:1;font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;'+
-        'white-space:nowrap">'+esc(g.q)+'</span>'+
-      '<span style="width:74px;height:5px;background:var(--bg4);border-radius:3px;flex-shrink:0">'+
-        '<span style="display:block;height:100%;border-radius:3px;background:var(--green);'+
-        'width:'+Math.round(g.items.length/max*100)+'%"></span></span>'+
-      '<span style="font-family:var(--tit);font-size:13.5px;font-weight:700;width:26px;'+
-        'text-align:right">'+g.items.length+'</span></div>';
-  });
-  return h;
 }
 
 /* Del recorrido a la lista completa filtrada por ese apartamento */
@@ -4925,11 +4819,6 @@ function renderHoy(){
   var _planDiaHTML=renderPlanDia();
 
   document.getElementById('c-hoy').innerHTML=`
-    <!-- La propuesta va PRIMERO. Antes lo primero era el dibujo del edificio,
-         que se come la pantalla entera del telefono: abrias Hoy y veias un
-         dibujo, y el trabajo empezaba fuera de la vista. El edificio sigue
-         justo debajo. -->
-    ${propuestaHTML()}
     ${torreHTML()}
     ${dateNavHTML()}
     ${(S.user&&S.user.rol==='view')?'<div style="background:#ecfeff;border:1.5px solid #0d9488;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#0f766e;display:flex;align-items:center;gap:6px">Modo solo visualización — puedes ver todo, pero no editar</div>':''}
@@ -5694,10 +5583,15 @@ function actSelCorrerToggle(){
 }
 
 // Calcula el cambio sin escribir nada. Se usa para avisar antes de preguntar.
-function _actSelCorrerPlan(modo, dias){
+function _actSelCorrerPlan(modo, dias){ return _correrPlan(_actSelIds(), modo, dias); }
+
+/* La aritmetica de correr fechas, sobre CUALQUIER lista de ids. Antes solo
+   sabia leer del modo seleccion; el panel del apartamento necesita lo mismo y
+   dos copias de esta regla terminarian moviendo distinto. */
+function _correrPlan(ids, modo, dias){
   var hoy=today(), plan=[], saltadas=0;
-  _actSelIds().forEach(function(id){
-    var a=(S.acts||[]).find(function(x){return x.id===id;});
+  (ids||[]).forEach(function(id){
+    var a=Acciones.porId(id);
     if(!a || a.estado==='completado') return;   // una completada no se reprograma
     var ini=(a.fecha_inicio||'').trim(), fin=(a.fecha_fin||'').trim();
     var nIni, nFin;
@@ -5735,23 +5629,29 @@ async function actSelCorrer(modo, dias){
   if(r.saltadas) msg += '\n\n('+r.saltadas+' se quedan como están: sin fecha o ya iguales.)';
   if(!confirm(msg+'\n\n¿Seguro?')) return;
 
+  await _correrAplicar(plan);
+  S.actSel={}; S.actSelModo=false; S.actSelCorrer=false;
+  renderActs();
+}
+
+/* Guarda un plan de fechas. De 5 en 5, igual que las otras acciones en bloque:
+   una por una es lentisimo con cientos y todas de golpe satura la conexion en
+   obra. Cada una lleva su propio catch para que un fallo suelto no tumbe el
+   resto, y al final se dice cuantas fallaron en vez de decir que si a todo. */
+async function _correrAplicar(plan, detalle){
   var bien=0, mal=0, hechas=0, total=plan.length;
   setSS('syncing','Guardando 0 de '+total+'...');
-  // De 5 en 5, igual que las otras acciones en bloque: una por una es lentisimo
-  // con cientos y todas de golpe satura la conexion en obra. Cada una lleva su
-  // propio catch para que un fallo suelto no tumbe el resto.
   for(var i=0;i<plan.length;i+=5){
     await Promise.all(plan.slice(i,i+5).map(function(p){
-      return Acciones.editar(p.id, p.patch)
+      return Acciones.editar(p.id, p.patch, detalle)
         .then(function(){ bien++; }, function(){ mal++; })
         .then(function(){ hechas++; setSS('syncing','Guardando '+hechas+' de '+total+'...'); });
     }));
   }
-  S.actSel={}; S.actSelModo=false; S.actSelCorrer=false;
-  renderActs();
   if(mal===0){ setSS('ok','✓'); showToast('Se movieron '+bien+'.'); }
   else if(bien===0){ setSS('err','Error'); showToast('No se pudo mover ninguna. Fallaron '+mal+'.','err',6000); }
   else { setSS('ok','✓'); showToast('Se movieron '+bien+'. Fallaron '+mal+'.','err',6000); }
+  return {bien:bien, mal:mal};
 }
 
 function _actSelCorrerHTML(){
@@ -8129,9 +8029,9 @@ var Acciones = (function(){
                                         personal_nombre:a.personal_nombre||''});
         var t=(S._torre||{})[a.area];
         if(t){ t.total++; t.faltan++; t.pct=Math.round(t.hechas/t.total*100); }
-        var p=(S._recPend||{})[a.area];
-        if(p) p.push({id:a.id,descripcion:a.descripcion,
-                      personal_nombre:a.personal_nombre||'',estado:a.estado});
+        /* Ya no hace falta sembrar una copia aparte: el panel del apartamento
+           lee de S.acts, donde crear() ya metio la actividad unas lineas
+           arriba. Una copia menos que se puede quedar atras. */
       });
 
       try{
