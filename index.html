@@ -801,7 +801,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260914_85';
+const APP_VERSION='20260914_86';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5130,6 +5130,70 @@ function _planBarraHTML(){
   '</div>';
 }
 
+/* ── LAS PASTILLAS DE UN TOQUE ────────────────────────────────────────
+   Contratista y apartamento salian solo del panel de Filtros, que son nueve
+   filas de controles y hay que abrirlo. Son los dos filtros que mas se usan
+   —la obra se planifica por contratista y se camina por apartamento— asi que
+   salen fuera, en la misma fila que "vencidas", que ya hace scroll.
+
+   Se filtra por `personas`, no por `contratistas`: ese ultimo exige
+   tipo_personal==='contratista' y ese campo no es de fiar — dejaria fuera
+   trabajo real. Es el mismo criterio que usa el Edificio. */
+function _actTogglePersona(n){
+  var av=S.actFiltroAvanzado||{};
+  var arr=(av.personas||[]).slice();
+  var i=arr.indexOf(n);
+  if(i>=0) arr.splice(i,1); else arr.push(n);
+  S.actFiltroAvanzado={...av, personas:arr};
+  renderActs();
+}
+
+function _actPillsRapidasHTML(){
+  var abiertas=(S.acts||[]).filter(function(a){return a.estado!=='completado';});
+  if(!abiertas.length) return '';
+  var av=S.actFiltroAvanzado||{};
+  var sel=av.personas||[], selU=av.ubicaciones||[];
+  var pil=function(txt,n,on,js,col){
+    return '<button onclick="'+js+'" style="flex-shrink:0;padding:8px 13px;border-radius:99px;'+
+      'cursor:pointer;font-family:var(--font);font-size:13px;font-weight:'+(on?'800':'600')+';'+
+      'border:1.5px solid '+(on?(col||'var(--accent)'):'var(--border2)')+';'+
+      'background:'+(on?(col?col:'var(--accent-fill)'):'var(--bg2)')+';'+
+      'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+
+      (on?'✓ ':'')+esc(txt)+(n!=null?' '+n:'')+'</button>';
+  };
+
+  /* Quien mas debe primero: es por donde se empieza. Seis caben en la fila sin
+     que haya que arrastrar media pantalla. */
+  var g={};
+  abiertas.forEach(function(a){
+    var ns=_responsables(a.personal_nombre);
+    (ns.length?ns:['Sin asignar']).forEach(function(k){ g[k]=(g[k]||0)+1; });
+  });
+  var gente=Object.keys(g).sort(function(x,y){return g[y]-g[x];}).slice(0,6);
+  /* Si hay uno elegido que no esta entre los seis, se añade: si no, el filtro
+     estaria puesto y no habria pastilla para quitarlo. */
+  sel.forEach(function(nm){ if(gente.indexOf(nm)<0) gente.push(nm); });
+
+  var u={};
+  abiertas.forEach(function(a){ var k=a.area||''; if(k) u[k]=(u[k]||0)+1; });
+  var aptos=REC_ORDEN.filter(function(k){ return u[k]; });
+  selU.forEach(function(k){ if(aptos.indexOf(k)<0 && u[k]) aptos.push(k); });
+
+  var h='<div style="display:flex;gap:7px;margin-bottom:10px;overflow-x:auto;'+
+        'scrollbar-width:none;padding-bottom:2px">';
+  gente.forEach(function(nm){
+    h+=pil(nm.split(' ')[0], g[nm], sel.indexOf(nm)>=0,
+           "_actTogglePersona("+JSON.stringify(nm).replace(/"/g,'&quot;')+")");
+  });
+  h+='</div><div style="display:flex;gap:7px;margin-bottom:14px;overflow-x:auto;'+
+     'scrollbar-width:none;padding-bottom:2px">';
+  aptos.forEach(function(k){
+    h+=pil(_recNom(k), u[k], selU.indexOf(k)>=0,
+           "_actToggleUbicacion("+JSON.stringify(k).replace(/"/g,'&quot;')+")");
+  });
+  return h+'</div>';
+}
+
 /* Vuelve al panel del apartamento del que saliste, con su filtro ya soltado:
    si volvieras con el filtro puesto, al salir otra vez a la lista te
    encontrarias lo mismo y no habrias avanzado. */
@@ -5597,11 +5661,9 @@ function buildActsFiltros(){
   h+='<button onclick="S.actFiltroAvanzado={...S.actFiltroAvanzado,tipo:S.actFiltroAvanzado.tipo===\'ingeniero\'?\'\':\'ingeniero\'};S.actFiltroOpen=null;renderActs()" style="'+pillSt+(adminOn?'var(--blue)':'var(--border2)')+';background:'+(adminOn?'var(--blue-light)':'var(--bg2)')+';color:'+(adminOn?'var(--blue)':'var(--text2)')+'">'+(adminOn?'✓ ':'')+'Admin</button>';
   h+='<button onclick="toggleFiltroUrgente()" style="'+pillSt+(urgOn?'var(--red)':'var(--border2)')+';background:'+(urgOn?'var(--red-light)':'var(--bg2)')+';color:'+(urgOn?'var(--red)':'var(--text2)')+'">'+(urgOn?'✓ ':'')+'Urgentes</button>';
   h+='<button onclick="toggleFiltroArq()" style="'+pillSt+(arqOn?'var(--accent-fill)':'var(--border2)')+';background:'+(arqOn?'var(--accent-soft)':'var(--bg2)')+';color:'+(arqOn?'var(--accent)':'var(--text2)')+'">'+(arqOn?'✓ ':'')+'Con el Arq.</button>';
-  var _aphCnt=(S.acts||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===today()&&a.estado!=='completado';}).length;
-  var _apmCnt=(S.acts||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===tomorrow()&&a.estado!=='completado';}).length;
-  var _aphOn=S.actFiltroPlan==='hoy',_apmOn=S.actFiltroPlan==='manana';
-  h+='<button onclick="S.actFiltroPlan=S.actFiltroPlan===\'hoy\'?\'\':\'hoy\';renderActs()" style="'+pillSt+(_aphOn?'var(--accent-fill)':'var(--border2)')+';background:'+(_aphOn?'var(--accent-soft)':'var(--bg2)')+';color:'+(_aphOn?'var(--accent)':'var(--text2)')+'">'+(_aphOn?'✓ ':'')+'Plan hoy ('+_aphCnt+')</button>';
-  h+='<button onclick="S.actFiltroPlan=S.actFiltroPlan===\'manana\'?\'\':\'manana\';renderActs()" style="'+pillSt+(_apmOn?'var(--accent-fill)':'var(--border2)')+';background:'+(_apmOn?'var(--accent-soft)':'var(--bg2)')+';color:'+(_apmOn?'var(--accent)':'var(--text2)')+'">'+(_apmOn?'✓ ':'')+'Plan mañana ('+_apmCnt+')</button>';
+  /* "Plan hoy" y "Plan mañana" salieron de aqui en v86: estaban tambien como
+     pastillas fuera del panel, y el mismo filtro en dos sitios obliga a elegir
+     por cual tocarlo. */
   if(hasFilters) h+='<button onclick="_actLimpiarFiltros()" style="'+pillSt+'var(--red);background:var(--red-light);color:var(--red)">× Limpiar</button>';
   h+='</div>';
   if(panel) h+=panel;
@@ -5809,6 +5871,7 @@ function renderActs(){
       ${nF?`<button onclick="S.actFiltroRapidos=[];S.actFiltroPlan='';S.actFiltroAvanzado={};S.actMostrarTodas=false;renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Limpiar</button>`:''}
     </div>
 
+    ${_actPillsRapidasHTML()}
     ${_planBarraHTML()}
     ${_actCintaHTML()}
 
@@ -6737,30 +6800,55 @@ function _actFilaCheckHTML(a){
 
    Aparece al abrir la fila, encima del detalle: un toque en la fila y las
    acciones estan ahi, sin cambiar de pantalla. */
-function _actFilaAvanceHTML(a){
+/* ── LO QUE SE VE SIN ABRIR LA FILA ──────────────────────────────────
+   Una sola linea por tarjeta con lo que se toca todo el dia: el avance, la
+   fecha que mas se mueve y el microfono. Antes habia que tocar la fila para
+   que apareciera; en obra eso es un toque de mas por cada partida.
+   Cerrar NO esta aqui: lo hace el ✓ verde de la cabecera, que ya estaba. */
+function _actFilaRapidaHTML(a){
   if(!canEdit() || a.estado==='completado' || S.actSelModo) return '';
   var actual=parseInt(a.porcentaje)||0;
   var id=String(a.id).replace(/'/g,"\\'");
+  var bs='flex:1;min-width:0;min-height:44px;border-radius:10px;font-size:12.5px;'+
+         'font-weight:800;cursor:pointer;font-family:var(--font)';
+  var h='<div style="display:flex;gap:5px;padding:0 11px 9px" onclick="event.stopPropagation()">';
+  [25,50,75].forEach(function(v){
+    var on=(actual===v);
+    h+='<button onclick="actFilaPct(\''+id+'\','+v+')" style="'+bs+';'+
+      (on?'border:1.5px solid var(--accent);background:var(--accent-fill);color:var(--accent-on)'
+         :'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)')+
+      '">'+v+'%</button>';
+  });
+  /* "+1 sem" y no una fecha concreta: mover fechas es lo que mas se hace
+     —247 de 349 ediciones del historial— y casi siempre es correrla. */
+  h+='<button onclick="actFilaCorrer(\''+id+'\',7)" style="'+bs+';'+
+    'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">+1 sem</button>'+
+    '<button onclick="dictarSobre(\''+id+'\')" style="flex:0 0 auto;width:46px;min-height:44px;'+
+    'border-radius:10px;border:1.5px solid var(--accent);background:var(--accent-soft);'+
+    'color:var(--accent);font-size:15px;cursor:pointer;font-family:var(--font)">🎙️</button>';
+  return h+'</div>';
+}
+
+/* Corre la fecha de UNA partida, con la misma aritmetica del modo seleccion y
+   del panel del apartamento: el fin nunca antes del inicio, y sin fecha no se
+   inventa ninguna. */
+async function actFilaCorrer(id,dias){
+  if(!canEdit()) return;
+  var r=_correrPlan([id],'correr',dias);
+  if(!r.plan.length){ showToast('Esa partida no tiene fecha que correr','warn'); return; }
+  try{
+    await Acciones.editar(id, r.plan[0].patch, 'corrida '+dias+' días desde la lista');
+    showToast('Movida '+dias+' días ✓');
+  }catch(e){ showToast('No se pudo mover: '+(e&&e.message||''),'err'); }
+  if(!_repintarFila(id)) renderActs();
+}
+
+/* Lo de dentro de la tarjeta abierta: las fechas concretas, que se usan menos
+   que correr una semana pero hacen falta cuando se sabe el dia. */
+function _actFilaAvanceHTML(a){
+  if(!canEdit() || a.estado==='completado' || S.actSelModo) return '';
+  var id=String(a.id).replace(/'/g,"\\'");
   var h='<div style="padding:8px 0 2px" onclick="event.stopPropagation()">';
-
-  /* Aqui NO va "Ya está". Cerrar ya lo hace el ✓ verde de la fila, que esta
-     siempre a la vista y a un toque — este habria que abrir la fila primero.
-     Dos botones para cerrar la misma partida en la misma tarjeta es una
-     eleccion que el usuario no tiene por que hacer. */
-  h+='<div style="display:flex;gap:5px;margin-bottom:6px">'+
-    [25,50,75].map(function(v){
-      var on=(actual===v);
-      return '<button onclick="actFilaPct(\''+id+'\','+v+')" '+
-        'style="flex:1;min-width:0;min-height:44px;border-radius:10px;font-size:13px;'+
-        'font-weight:800;cursor:pointer;font-family:var(--font);'+
-        (on?'border:1.5px solid var(--accent);background:var(--accent-fill);color:var(--accent-on)'
-           :'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)')+
-        '">'+v+'%</button>';
-    }).join('')+
-  '</div>';
-
-  /* Las dos fechas que se usan de verdad en un recorrido: hoy, o el viernes.
-     Cualquier otra se pone en el modal de editar, que ya existe. */
   var hoy=today(), vie=_finDeSemana();
   h+='<div style="display:flex;gap:5px">'+
     '<button onclick="actFilaFecha(\''+id+'\',\''+hoy+'\')" '+
@@ -6773,10 +6861,6 @@ function _actFilaAvanceHTML(a){
         'background:var(--bg2);color:var(--text2);font-size:12.5px;font-weight:700;cursor:pointer;'+
         'font-family:var(--font)">El viernes</button>'
       : '')+
-    '<button onclick="dictarSobre(\''+id+'\')" '+
-      'style="flex:1;min-width:0;min-height:44px;border-radius:10px;border:1.5px solid var(--accent);'+
-      'background:var(--accent-soft);color:var(--accent);font-size:12.5px;font-weight:800;'+
-      'cursor:pointer;font-family:var(--font)">🎙️ Dictar</button>'+
   '</div>';
   return h+'</div>';
 }
@@ -6794,7 +6878,7 @@ async function actFilaPct(id,v){
     await Acciones.setAvance(id,v);
     showToast(v+'% guardado ✓');
   }catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err'); }
-  renderActs();
+  if(!_repintarFila(id)) renderActs();
 }
 
 async function actFilaFecha(id,f){
@@ -6807,7 +6891,7 @@ async function actFilaFecha(id,f){
     await Acciones.editar(id,cambios,'entrega → '+f+' (desde la lista)');
     showToast('Entrega: '+f+' ✓');
   }catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err'); }
-  renderActs();
+  if(!_repintarFila(id)) renderActs();
 }
 
 function actHTML(a, ai, tipo){
@@ -6850,7 +6934,7 @@ function actHTML(a, ai, tipo){
   var _areaCorta = a.area ? esc(String(a.area).replace(/^N\d+\s*—\s*/,'')) : '';
   var _contCorto = a.personal_nombre ? esc(String(a.personal_nombre).replace(/\s*\(.*\)\s*$/,'')) : '';
 
-  return`<div class="act-item ${tipo}" style="padding:0;margin-bottom:6px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${bleft};border-radius:var(--r2);overflow:hidden;box-shadow:none">
+  return`<div id="act-${a.id}" class="act-item ${tipo}" data-tipo="${tipo}" style="padding:0;margin-bottom:6px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${bleft};border-radius:var(--r2);overflow:hidden;box-shadow:none">
     <div onclick="toggleActDet('${a.id}')" style="display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer">
       ${_actSelBoxHTML(a)}
       <div style="flex:1;min-width:0">
@@ -6863,12 +6947,12 @@ function actHTML(a, ai, tipo){
       ${_actFilaCheckHTML(a)}
       <span id="chev-${a.id}" style="color:var(--text3);font-size:15px;flex-shrink:0;transition:transform .15s;${_abierta?'transform:rotate(90deg)':''}">›</span>
     </div>
+    <!-- Las acciones de cada dia, SIEMPRE a la vista: no hay que abrir la
+         fila para marcar un avance. Van fuera de det- y sin condicionar a
+         S.actAbiertas — asi fue como en v79 se quedaron invisibles:
+         toggleActDet solo cambia el display de esa caja, no repinta. -->
+    ${_actFilaRapidaHTML(a)}
     <div id="det-${a.id}" style="display:${_abierta?'block':'none'};padding:2px 11px 11px;border-top:1px solid var(--border)">
-    <!-- Las acciones van DENTRO del detalle, no fuera. Fuera no aparecian
-         nunca al tocar la fila: toggleActDet solo cambia el display de esta
-         caja, no repinta la lista, asi que una barra pintada por fuera y
-         condicionada a S.actAbiertas se quedaba invisible hasta el siguiente
-         repintado. Aqui se abre y se cierra con el mismo gesto. -->
     ${_actFilaAvanceHTML(a)}
 
     <div style="font-size:11.5px;color:var(--text3);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px">
@@ -8839,6 +8923,32 @@ async function refrescarApp(){
   try{ await loadAll(); showToast('Ya estás en la última versión · datos al día','ok',3000); }
   catch(e){ showToast('No se pudieron traer los datos','err',4000); }
   if(b){ b.disabled=false; b.style.animation=''; }
+}
+
+/* Repinta UNA tarjeta, no la lista entera.
+   Medido con las 1.080 abiertas de la obra: renderActs() tarda ~1,1 s en un
+   navegador de escritorio, y en el telefono bastante mas. Marcar un avance
+   repintaba las 1.080 para cambiar un boton — cada toque se sentia como un
+   tiron. Esto cambia solo la tarjeta que se toco.
+   Devuelve false si no la encuentra (por ejemplo si el filtro la sacaría de
+   la lista), y entonces el que llama repinta de verdad. */
+function _repintarFila(id){
+  var el=document.getElementById('act-'+id);
+  if(!el) return false;
+  var a=Acciones.porId(id);
+  if(!a) return false;
+  /* Si con el cambio deja de cumplir el filtro, tiene que desaparecer: para
+     eso hace falta repintar la lista. */
+  if(applyActFilters([a]).length===0) return false;
+  var abierta=!!(S.actAbiertas&&S.actAbiertas[id]);
+  el.outerHTML=actHTML(a, 0, el.getAttribute('data-tipo')||a.tipo_personal||'');
+  if(abierta){
+    var d=document.getElementById('det-'+id);
+    if(d) d.style.display='block';
+    var c=document.getElementById('chev-'+id);
+    if(c) c.style.transform='rotate(90deg)';
+  }
+  return true;
 }
 
 function reRenderActs(){

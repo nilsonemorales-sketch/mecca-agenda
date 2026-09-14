@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v85 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v86 — 14 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -146,9 +146,24 @@ Hoy tenía sus propios controles —un select de 11px, una casilla de 52px y
 tres botones diminutos— que además registraban por otra vía: se aprendía
 dos veces y en obra no se aciertan.
 
-**Se registra en UN sitio: la fila de la lista.** Un toque en la fila abre
-sus acciones ahí mismo: `25% · 50% · 75%`, `Entrega hoy · El viernes`, y el
-micrófono. `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`, todo
+**Se registra en UN sitio: la fila de la lista, y los botones se ven SIN
+abrir nada** (`_actFilaRapidaHTML`, v86): `25% · 50% · 75% · +1 sem · 🎙️`
+en cada tarjeta. Dentro de la tarjeta abierta quedan solo las fechas
+concretas (`Entrega hoy · El viernes`, `_actFilaAvanceHTML`).
+
+**Nunca repintes la lista entera para cambiar una tarjeta.** Con las 1.080
+abiertas, `renderActs()` tarda **~1,1 s** en escritorio y bastante más en el
+teléfono. Usa **`_repintarFila(id)`**, que cambia solo esa tarjeta (16 ms
+medidos) y devuelve `false` si con el cambio dejaría de cumplir el filtro —
+ahí sí hay que repintar de verdad.
+
+**Contratista y apartamento son pastillas de un toque**
+(`_actPillsRapidasHTML`), fuera del panel de Filtros: los seis que más
+deben y los apartamentos con trabajo abierto, en `REC_ORDEN`. Filtran por
+`personas`, **no** por `contratistas` — ese exige `tipo_personal` y no es
+de fiar.
+
+El resto de la explicación: `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`, todo
 por `Acciones`. **Cerrar NO está ahí**: lo hace el ✓ verde de la fila, que
 está siempre a la vista y a un toque. Una sola forma de cerrar por tarjeta.
 
@@ -371,6 +386,7 @@ pertenece a ningún nivel.
 | **v81** — se estuvo a punto de añadir un filtro «esta semana» que la lista no sabe enseñar ni soltar: habría recortado la lista sin nada en pantalla que lo dijera. | No filtres con estado invisible. Si el usuario no lo ve, no lo puede quitar — y entonces la lista miente. |
 | **v76→v82** — tres pantallas seguidas rechazadas en obra: el recorrido, la propuesta del plan y el panel de tres pestañas. Las tres **guiaban** al usuario. Lo que sí funcionó: acciones en la fila, y fechas por contratista dentro del apartamento. | Este usuario no quiere que lo lleven de la mano; quiere menos toques para lo que ya sabe hacer. Antes de construir una pantalla, pregunta **qué le hace el día más largo**, no qué le gustaría ver. |
 | **v84** — «Hoy» se rescató cuatro veces (reordenar, plegar, botones nuevos, subir el plan) y el dueño siguió diciendo que no era funcional. Era Actividades con otra piel. | Segunda vez que pasa lo mismo, después de «En Obra» y del recorrido. Si una pantalla repite lo que ya hay en otra, arreglarla no la salva: **compárala con lo que ya existe antes de tocarla**. |
+| **v86** — la lista tardaba **~1 segundo** en repintarse con 1.080 filas, y marcar un avance repintaba las 1.080 para cambiar un botón. Cada toque era un tirón. | Mide antes de dar algo por rápido. Si un cambio afecta a una fila, toca **esa** fila. `_repintarFila` bajó la acción de 1.016 ms a 16 ms. |
 | **v85** — «Error cargando» en obra: `loadActsAll` tenía `catch(e){setSS('err','Error cargando');}` — se tragaba el motivo y la barra roja no hacía nada. Y con «Todas» son **tres** peticiones de 1.000 filas: que una se cayera tiraba las 2.465. | Un `catch` que no dice qué pasó ni ofrece salida es peor que el error. Toda carga larga y por páginas necesita **reintento por página** y decir que lo anterior sigue en pantalla. |
 | **v85** — una prueba contaba peticiones y salían de más: el **arranque del app seguía corriendo** y sus reintentos caían sobre el doble recién instalado. | Espera a que el arranque termine antes de instalar el doble. Si cuentas llamadas, asegúrate de que nadie más las esté haciendo. |
 | **v84** — al quitar el contenedor de Hoy, un regex `(?:.*\n)*?` se llevó también el de Actividades y el app se quedó sin `#c-act`. | Para borrar bloques de HTML, cuenta las etiquetas o recórtalo a mano. Un no-greedy multilínea no sabe dónde cierra un `<div>`. |
