@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v80 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v81 — 14 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -124,27 +124,29 @@ v77**: era el mismo módulo que Actividades con otra cara.
 | Ver el edificio por niveles | **Actividades → Edificio** (v55) |
 | **Revisar por contratista** | **Actividades → Revisión** — `renderRevision()`, `revAbrir()` |
 | **El panel de un apartamento** | Tocar el apartamento en la torre, **en Hoy o en Actividades → Edificio** — `abrirAptoTorre()`, `_recPanelApto()` |
-| **REGISTRAR: avance, cerrar, fecha, iniciar, interrumpir** | **El recorrido paso a paso** — `pasoIniciar(area, filtro, idInicial)` |
+| **REGISTRAR: avance, cerrar, fecha** | **En la fila de la lista** — `_actFilaAvanceHTML()` |
+| **Que el app proponga el plan del día** | **Hoy**, arriba del todo — `propuestaHTML()`, `_propuestaHoy()` |
 
-**Se registra en dos sitios, y los dos pasan por `Acciones`:**
+**Se registra en UN sitio: la fila de la lista.** Un toque en la fila abre
+sus acciones ahí mismo: `25% · 50% · 75%`, `Entrega hoy · El viernes`, y el
+micrófono. `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`, todo
+por `Acciones`. **Cerrar NO está ahí**: lo hace el ✓ verde de la fila, que
+está siempre a la vista y a un toque. Una sola forma de cerrar por tarjeta.
 
-1. **En la fila de la lista.** Un toque en la fila abre sus acciones ahí
-   mismo: `25% · 50% · 75%`, `Entrega hoy · El viernes`, y el micrófono.
-   `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`.
-   **Cerrar NO está ahí**: lo hace el ✓ verde de la fila, que está siempre a
-   la vista y a un toque. Una sola forma de cerrar por tarjeta.
-2. **El recorrido paso a paso**, para pasar varias seguidas de pie.
+### El recorrido paso a paso NO existe. No lo vuelvas a construir.
 
-v77 le quitó el registro a la lista entera y lo mandó todo al recorrido.
-**En obra resultó peor**: sacarte de la lista para marcar un avance es más
-fricción, no menos. Volvió en v79 — pero por `Acciones`, que era el
-problema de verdad del registro viejo, no el sitio donde estaba.
+Se construyó en v76, se le dieron tres formas de entrar (v77), se le movió
+la entrada a la lista (v79)… y el dueño dijo tres veces que no le era
+práctico. **Se retiró entero en v81** (~475 líneas). Si alguien pide «una
+pantalla que pase las partidas una por una», esto ya se intentó: lo que
+funciona en obra es la lista, con las acciones en la fila.
 
-**El recorrido se arma desde la lista** (`actSelRecorrer()`): marcas en
-modo selección y tocas «Recorrer estas N». Recorre lo que marcaste, en el
-orden en que lo estás viendo. Antes lo armaba el app por ti («las de esta
-semana», «las vencidas») y te las pasaba en un orden que no es el que se
-camina.
+**Hoy abre con la propuesta del día** (`propuestaHTML`). El app mira lo
+vencido y lo que vence hoy y propone un día de trabajo, agrupado por
+contratista y con tope (`PROP_POR_CONTRATISTA` 3, `PROP_CONTRATISTAS` 5)
+— proponer las 339 que se deben no es proponer nada. **No planifica solo**:
+se acepta entero o se quita con la ×. Va arriba del edificio, que antes se
+comía la primera pantalla entera del teléfono.
 
 El panel del apartamento y el paso a paso se reparten así:
 
@@ -321,6 +323,8 @@ pertenece a ningún nivel.
 | **v79** — la barra de acciones se pintaba fuera de `det-<id>` y gateada por `S.actAbiertas`. `toggleActDet` solo cambia el `display`, **no repinta**, así que al tocar la fila no aparecía nunca. | Si algo tiene que aparecer con un toggle, ponlo **dentro** de lo que el toggle muestra. Y mide lo VISIBLE, no el innerHTML. |
 | **v79** — «Ya está» cerraba con `Acciones.setAvance(100)` y se saltaba la exigencia de foto que sí aplica el ✓ de la fila. | Dos botones que dicen lo mismo tienen que hacer lo mismo, por el mismo camino. |
 | **v80** — llegaron a existir **tres** formas de cerrar una partida en la misma tarjeta: el ✓ de la fila, «Ya está» y «Completar». El dueño lo dijo en una línea: «no quiero cosas de más». | Antes de añadir un botón, busca si lo que hace ya está en esa pantalla. Que dos caminos lleguen al mismo sitio no los hace útiles: obligan a elegir. |
+| **v76→v81** — el recorrido paso a paso: cinco versiones construyéndolo y moviéndole la puerta, y nunca se usó en obra. Se retiró entero. | Una pantalla que hay que seguir rescatando no tiene un problema de puerta: no encaja en cómo se trabaja. Pregunta antes de la tercera versión. |
+| **v81** — se estuvo a punto de añadir un filtro «esta semana» que la lista no sabe enseñar ni soltar: habría recortado la lista sin nada en pantalla que lo dijera. | No filtres con estado invisible. Si el usuario no lo ve, no lo puede quitar — y entonces la lista miente. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base

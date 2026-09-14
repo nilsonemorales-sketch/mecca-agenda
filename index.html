@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260914_80';
+const APP_VERSION='20260914_81';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -2646,6 +2646,142 @@ function _planFiltroBuscar(v){
   if(S.currentTab==='hoy')renderHoy();
   var el=document.getElementById('plan-search'); if(el){ el.focus(); try{el.setSelectionRange(v.length,v.length);}catch(e){} }
 }
+/* ── LA PROPUESTA DE HOY ───────────────────────────────────────────────
+   Hoy abria con el dibujo del edificio y el plan del dia empezaba FUERA de la
+   pantalla: habia que bajar para llegar al trabajo. Y el plan tenia 10
+   partidas mientras la obra debia 339 — la pantalla no decia nada de ese hueco.
+
+   Ahora lo primero que se ve es una propuesta: el app mira lo vencido y lo que
+   vence hoy, y propone un dia de trabajo. No lo planifica solo — se acepta,
+   entero o partida por partida. Planificar sigue siendo decision del que manda
+   la obra; lo que sobraba era tener que armarlo desde cero cada mañana.
+
+   Como se arma: por contratista, porque asi se reparte el trabajo en esta obra,
+   y con tope. Proponer las 339 no es proponer nada. */
+var PROP_POR_CONTRATISTA=3, PROP_CONTRATISTAS=5;
+
+function _propuestaHoy(){
+  var hoy=today(), marc=S.marcadasHoy||{};
+  var cand=(S.abiertas||[]).filter(function(a){
+    if(a.estado==='completado') return false;
+    if((a.fecha_plan||'').slice(0,10)===hoy) return false;   // ya esta en el plan
+    if(marc[String(a.id)]) return false;                     // ya se marco hoy
+    var fv=fechaVenc(a);
+    return !!fv && fv<=hoy;                                  // vence hoy o antes
+  });
+  if(!cand.length) return [];
+  /* Agrupado por quien lo debe. Una partida con varios nombres cuenta para el
+     primero: el plan se le entrega a alguien, no a una lista. */
+  var g={}, orden=[];
+  cand.forEach(function(a){
+    var ns=_responsables(a.personal_nombre);
+    var k=ns.length?ns[0]:'Sin asignar';
+    if(!g[k]){ g[k]=[]; orden.push(k); }
+    g[k].push(a);
+  });
+  orden.forEach(function(k){
+    g[k].sort(function(x,y){ return _hoyDiasAtraso(y)-_hoyDiasAtraso(x); });
+  });
+  /* Primero quien mas atraso acumula: es por donde se empieza a destrabar. */
+  orden.sort(function(x,y){
+    var ax=g[x].reduce(function(s,a){return s+Math.max(0,_hoyDiasAtraso(a));},0);
+    var ay=g[y].reduce(function(s,a){return s+Math.max(0,_hoyDiasAtraso(a));},0);
+    return ay-ax || g[y].length-g[x].length;
+  });
+  return orden.slice(0,PROP_CONTRATISTAS).map(function(k){
+    return {quien:k, items:g[k].slice(0,PROP_POR_CONTRATISTA), total:g[k].length};
+  });
+}
+
+function _propuestaIds(){
+  var out=[];
+  _propuestaHoy().forEach(function(gr){
+    gr.items.forEach(function(a){ if(!(S._propQuitadas||{})[a.id]) out.push(a.id); });
+  });
+  return out;
+}
+
+function propuestaQuitar(id){
+  S._propQuitadas=S._propQuitadas||{};
+  S._propQuitadas[id]=1;
+  renderHoy();
+}
+
+async function propuestaAceptarTodo(){
+  if(!canEdit()) return;
+  var ids=_propuestaIds();
+  if(!ids.length) return;
+  var bien=0, mal=0;
+  for(var i=0;i<ids.length;i++){
+    if(await _planSet(ids[i], today(), 'planificada para hoy (propuesta)', true)) bien++;
+    else mal++;
+  }
+  showToast(mal ? ('Al plan: '+bien+'. Fallaron '+mal+'.') : ('Al plan: '+bien+' ✓'), mal?'warn':'ok');
+  renderHoy();
+}
+
+function propuestaHTML(){
+  if(!canEdit()) return '';
+  var grupos=_propuestaHoy();
+  var quit=S._propQuitadas||{};
+  grupos=grupos.map(function(gr){
+    return {quien:gr.quien, total:gr.total, items:gr.items.filter(function(a){return !quit[a.id];})};
+  }).filter(function(gr){ return gr.items.length; });
+  if(!grupos.length) return '';
+  var n=grupos.reduce(function(s,gr){return s+gr.items.length;},0);
+  var debidas=(S.abiertas||[]).filter(function(a){
+    var fv=fechaVenc(a); return a.estado!=='completado' && !!fv && fv<=today();
+  }).length;
+
+  var h='<div style="border:1.5px solid var(--accent);border-radius:14px;background:var(--bg2);'+
+      'overflow:hidden;margin-bottom:12px">'+
+    '<div style="padding:12px 14px;background:var(--accent-soft)">'+
+      '<div style="font-family:var(--tit);font-size:16px;font-weight:800;color:var(--accent)">'+
+        'La propuesta de hoy</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:3px;line-height:1.45">'+
+        n+' partida'+(n!==1?'s':'')+' de '+grupos.length+' contratista'+(grupos.length!==1?'s':'')+
+        ' · escogidas entre las '+debidas+' que se deben hoy</div>'+
+    '</div>';
+
+  grupos.forEach(function(gr){
+    h+='<div style="padding:9px 14px 4px;border-top:1px solid var(--border)">'+
+       '<div style="font-size:12px;font-weight:800;color:var(--text);display:flex;'+
+         'align-items:baseline;gap:6px">'+esc(gr.quien)+
+         '<span style="font-size:10.5px;font-weight:600;color:var(--text3);font-family:var(--mono)">'+
+           'debe '+gr.total+'</span></div>';
+    gr.items.forEach(function(a){
+      var atr=_hoyDiasAtraso(a);
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;'+
+          'border-bottom:1px solid var(--border)">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35">'+
+            esc(a.descripcion||'(sin descripción)')+'</div>'+
+          '<div style="font-size:10.5px;color:var(--text3);font-family:var(--mono);margin-top:2px">'+
+            esc(_recNom(a.area||'sin área'))+
+            (atr>0?' · <span style="color:var(--red);font-weight:700">'+atr+'d de atraso</span>':' · vence hoy')+
+          '</div>'+
+        '</div>'+
+        '<button onclick="propuestaQuitar(\''+String(a.id).replace(/'/g,"\\'")+'\')" '+
+          'aria-label="Quitar de la propuesta" '+
+          'style="flex:0 0 auto;width:44px;height:44px;border-radius:11px;border:1px solid var(--border2);'+
+          'background:var(--bg3);color:var(--text3);font-size:17px;cursor:pointer;'+
+          'font-family:var(--font)">×</button>'+
+      '</div>';
+    });
+    h+='</div>';
+  });
+
+  h+='<div style="padding:11px 14px calc(11px + 0px)">'+
+      '<button onclick="propuestaAceptarTodo()" style="width:100%;min-height:48px;'+
+        'border-radius:12px;border:none;background:var(--accent-fill);color:var(--accent-on);'+
+        'font-size:15px;font-weight:800;cursor:pointer;font-family:var(--font)">'+
+        'Aceptar las '+n+' · al plan de hoy</button>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:7px;line-height:1.45">'+
+        'Quita con la × lo que no vaya. Nada se planifica hasta que aceptes.</div>'+
+    '</div></div>';
+  return h;
+}
+
 function renderPlanDia(){
   var f=_planFechaActiva();
   var sp=_planDiaSplit(f);
@@ -3110,14 +3246,21 @@ function _planRerender(){
   try{ if(S.currentTab==='hoy') renderHoy(); }catch(e){}
   try{ if(S.currentTab==='reportes' && S.reportesVista==='cierre') renderCierreDia(S._cierreFecha); }catch(e){}
 }
-async function _planSet(actId,fecha,detalle){
-  if(!canEdit())return;
-  var a=_findActAny(actId)||(S.abiertas||[]).find(function(x){return x.id===actId;});
+/* Devuelve si se pudo o no, para que quien planifique en bloque sepa cuantas
+   fallaron. Antes se tragaba el error y decia que si a todo.
+   silencioso corta el repintado: aceptando quince de golpe, repintar Hoy
+   quince veces no se nota mas que en el tiempo que tarda. */
+async function _planSet(actId,fecha,detalle,silencioso){
+  if(!canEdit()) return false;
   try{
     await Acciones.planificar(actId,fecha,detalle);
     _planUpdateMem(actId,fecha);
-    _planRerender();
-  }catch(e){ showToast('Error: '+e.message,'err'); }
+    if(!silencioso) _planRerender();
+    return true;
+  }catch(e){
+    if(!silencioso) showToast('Error: '+e.message,'err');
+    return false;
+  }
 }
 function planAgregar(actId,dia){
   var f=dia==='manana'?tomorrow():today();
@@ -4399,15 +4542,13 @@ function _recPanelApto(){
   if(!c.abiertas){
     h+='<div class="empty" style="padding:26px 10px">Aquí no queda nada abierto</div>';
   } else {
-    /* El boton grande es el de la semana: es lo que se camina un dia normal.
-       Si no hay nada de esta semana no se ofrece — un boton que arranca un
-       recorrido de cero partidas solo gasta un toque. */
-    if(c.semana) h+=bot("pasoIniciar('"+a(area)+"','semana')",
-      'Recorrer las '+c.semana+' de esta semana','var(--green)','#fff','',15);
-    if(c.vencidas) h+=bot("pasoIniciar('"+a(area)+"','retrasadas')",
+    /* La lista es la accion principal del panel. Antes lo eran los botones del
+       recorrido paso a paso, que se retiro en v81; "ver la lista" era un
+       renglon gris al fondo. Se trabaja en la lista, asi que va arriba y en
+       grande. */
+    h+=bot("aptoVerEnLista('')",'Ver las '+c.abiertas+' abiertas','var(--green)','#fff','',15);
+    if(c.vencidas) h+=bot("aptoVerEnLista('retrasadas')",
       'Solo las '+c.vencidas+' vencidas','var(--red-light)','var(--red)','var(--red)');
-    h+=bot("pasoIniciar('"+a(area)+"','')",
-      'Recorrer las '+c.abiertas+' abiertas','var(--bg3)','var(--text)','var(--border2)');
   }
 
   h+='<div style="display:flex;gap:8px;margin-top:4px">'+
@@ -4417,24 +4558,27 @@ function _recPanelApto(){
       '<button onclick="anotarEnRecorrido()" style="flex:1;min-height:48px;border-radius:12px;'+
         'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);'+
         'font-size:13.5px;font-weight:800;cursor:pointer;font-family:var(--font)">+ Anotar</button>'+
-    '</div>'+
-    '<button onclick="aptoVerEnLista()" style="width:100%;margin-top:8px;min-height:44px;'+
-      'border-radius:11px;border:none;background:transparent;color:var(--text3);font-size:12.5px;'+
-      'font-weight:700;cursor:pointer;font-family:var(--font)">Ver la lista en Actividades ›</button>';
+    '</div>';
   return h;
 }
 
 /* Del panel a la lista de siempre, con el apartamento ya filtrado. Es lo que
    antes hacia torreVer() desde el menu del dibujo. */
-function aptoVerEnLista(){
+function aptoVerEnLista(filtro){
   var area=S.recorrido && S.recorrido.area; if(!area) return;
   S.actFiltroAvanzado=S.actFiltroAvanzado||{};
   S.actFiltroAvanzado.ubicaciones=[area];
   if(S.torrePersona) S.actFiltroAvanzado.personas=[S.torrePersona];
   else delete S.actFiltroAvanzado.personas;
-  S.actFiltroRapidos=[]; S.actFiltroTexto='';
+  /* Solo filtros que la lista SABE enseñar y que el usuario puede quitar desde
+     sus pastillas. Se penso en ofrecer "esta semana", pero eso habria sido un
+     filtro invisible: la lista recortada sin nada en pantalla que lo diga ni
+     forma de soltarlo. Es el error de la sub-nav escondida, otra vez. */
+  S.actFiltroRapidos = filtro ? [filtro] : [];
+  S.actFiltroTexto='';
   S.actVista='lista';
   cerrarHojaApto();
+  S.obraVista='todas';
   goTab('obra');
   renderActs();
 }
@@ -4499,9 +4643,28 @@ function recAbrir(i){
    esa partida. Antes abria un panelito propio con sus chips de % y su boton de
    guardar: otra pantalla mas para registrar lo mismo, con sus propias reglas.
    Ahora hay un solo sitio donde se registra, y se llega a el desde aqui. */
+/* Tocar una partida en Pendientes la abre en la lista, ya filtrada por su
+   apartamento: ahi estan sus acciones (25/50/75, fechas, dictado) y el ✓ para
+   cerrarla. Antes esto entraba al recorrido paso a paso, que se retiro en v81
+   por no ser practico en obra. */
 function recPreguntar(id){
   var R=S.recorrido; if(!R) return;
-  pasoIniciar(R.area, '', id);
+  var a=Acciones.porId(id);
+  S.actFiltroAvanzado=S.actFiltroAvanzado||{};
+  S.actFiltroAvanzado.ubicaciones=[R.area];
+  S.actFiltroRapidos=[]; S.actFiltroTexto='';
+  S.actVista='lista';
+  S.actAbiertas=S.actAbiertas||{}; S.actAbiertas[id]=1;
+  cerrarHojaApto();
+  S.obraVista='todas';
+  goTab('obra');
+  renderActs();
+  /* Se lleva la pantalla hasta la partida: con 86 abiertas en un apartamento,
+     abrirla y dejarla fuera de vista no sirve de nada. */
+  requestAnimationFrame(function(){
+    var el=document.getElementById('det-'+id);
+    if(el && el.scrollIntoView) try{ el.scrollIntoView({block:'center'}); }catch(e){}
+  });
 }
 
 /* ── Quién debe ── */
@@ -4762,6 +4925,11 @@ function renderHoy(){
   var _planDiaHTML=renderPlanDia();
 
   document.getElementById('c-hoy').innerHTML=`
+    <!-- La propuesta va PRIMERO. Antes lo primero era el dibujo del edificio,
+         que se come la pantalla entera del telefono: abrias Hoy y veias un
+         dibujo, y el trabajo empezaba fuera de la vista. El edificio sigue
+         justo debajo. -->
+    ${propuestaHTML()}
     ${torreHTML()}
     ${dateNavHTML()}
     ${(S.user&&S.user.rol==='view')?'<div style="background:#ecfeff;border:1.5px solid #0d9488;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#0f766e;display:flex;align-items:center;gap:6px">Modo solo visualización — puedes ver todo, pero no editar</div>':''}
@@ -5726,11 +5894,6 @@ function _actSelBarraHTML(){
   var bs='padding:7px 11px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap';
   return '<div style="position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:var(--accent-soft);border:1.5px solid var(--accent);border-radius:var(--r2);padding:9px 11px;margin-bottom:8px">'+
     '<span style="font-size:12.5px;font-weight:800;color:var(--accent);white-space:nowrap">'+ids.length+' seleccionada'+(ids.length!==1?'s':'')+'</span>'+
-    /* El recorrido se arma AQUI. Antes lo armaba el app por ti — "las N de esta
-       semana", "las N vencidas" — y te las pasaba en un orden que no es el que
-       caminas. Ahora filtras o marcas lo que vas a ver, en el orden que ya
-       tienes en pantalla, y lo recorres. */
-    '<button onclick="actSelRecorrer()" style="'+bs+';border:none;background:var(--green);color:#fff">Recorrer estas '+ids.length+'</button>'+
     '<button onclick="actSelAll()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Todo</button>'+
     '<button onclick="actSelNone()" style="'+bs+';border:1px solid var(--border2);background:var(--bg2);color:var(--text2)">Ninguna</button>'+
     '<input id="act-sel-fecha" type="date" value="'+esc(S.actSelFecha||'')+'" onchange="S.actSelFecha=this.value" style="flex:1;min-width:132px;padding:6px 8px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--font);font-size:12.5px">'+
@@ -6538,485 +6701,6 @@ function torreReintentar(){
     var g=c.querySelector('[data-torre-svg]'); if(g) g.innerHTML='';
   });
   cargarTorre(true);
-}
-
-/* ── RECORRIDO PASO A PASO ───────────────────────────────────────────────
-   Una partida a la vez, a pantalla completa y con botones de dedo. Se hace de
-   pie, en el apartamento, con el telefono en una mano: abrir cada tarjeta,
-   editar, guardar y volver no es practico ahi arriba.
-
-   Dos reglas que no se negocian:
-   - TODO pasa por Acciones. Ni un PATCH suelto. Cada toque deja su linea en
-     obra_cambios, una sola, igual que el resto del app.
-   - Aqui NO se borra nada. "No aplica" pausa y deja dicho por que; lo que se
-     borra se decide sentado y mirando la obra entera, no de pie y de prisa.  */
-
-var _pasoOv=null;
-
-function _pasoLista(area,persona,filtro){
-  var l=(S.acts||[]).filter(function(a){
-    return (a.area||'')===area && a.estado!=='completado' && _personaEn(a,persona);
-  });
-  if(filtro==='semana'){
-    var vie=_finDeSemana();
-    l=l.filter(function(a){ var f=fechaVenc(a); return !!f && f<=vie; });
-  } else if(filtro && FILTRO_HUECO[filtro]){
-    l=l.filter(FILTRO_HUECO[filtro]);
-  }
-  return _revOrdenActs(l);
-}
-/* area y filtro llegan por argumento y ya no de S.torreSel: el recorrido se
-   arranca desde el panel del apartamento, desde la lista de pendientes y desde
-   el dibujo, y los tres tienen que poder decir QUE se va a recorrer.
-   idInicial coloca el recorrido en una partida concreta — es lo que pasa al
-   tocar una fila en Pendientes. */
-function pasoIniciar(area,filtro,idInicial){
-  area=area||S.torreSel; if(!area) return;
-  var persona=S.torrePersona||'';
-  var lista=_pasoLista(area,persona,filtro);
-  if(!lista.length){ showToast('No hay nada que recorrer aquí','warn'); return; }
-  var i0=0;
-  if(idInicial){
-    var k=lista.findIndex(function(a){return a.id===idInicial;});
-    if(k>=0) i0=k;
-  }
-  _pasoArrancarCon(area, persona, lista, i0, filtro||'');
-}
-
-/* El recorrido, armado desde la lista: se lleva lo que hay marcado, EN EL
-   ORDEN EN QUE ESTA EN PANTALLA. Esa es la diferencia con antes — el app ya no
-   decide por donde empiezas; la lista, que es donde se trabaja, ya viene
-   ordenada y filtrada como hace falta. */
-function actSelRecorrer(){
-  var ids=_actSelIds();
-  if(!ids.length){ showToast('No hay nada marcado','warn'); return; }
-  /* Se respeta el orden de la pantalla, no el de los ids: applyActFilters ya
-     ordeno la lista y el usuario esta viendo ESE orden. */
-  var enPantalla=applyActFilters(S.acts||[]).filter(function(a){
-    return ids.indexOf(a.id)>=0 && a.estado!=='completado';
-  });
-  if(!enPantalla.length){ showToast('Lo marcado ya está cerrado','warn'); return; }
-  var areas={}; enPantalla.forEach(function(a){ areas[a.area||'']=1; });
-  var nAreas=Object.keys(areas).length;
-  /* Si lo marcado toca varios apartamentos, el titulo no puede decir uno solo:
-     diria "Apto 2A" mientras te pasa partidas del 6B. */
-  var titulo = nAreas===1 ? enPantalla[0].area : (enPantalla.length+' partidas · '+nAreas+' áreas');
-  S.actSelModo=false; S.actSel={};
-  _pasoArrancarCon(titulo, '', enPantalla, 0, 'seleccion');
-}
-
-function _pasoArrancarCon(area, persona, lista, i0, filtro){
-  S.paso={area:area, persona:persona, filtro:filtro||'', ids:lista.map(function(a){return a.id;}),
-          i:i0||0, sub:null, error:'', guardando:false,
-          res:{cerradas:0, avances:0, fechas:0, revisadas:0, saltadas:0, noaplica:[]}};
-  S.torreSel='';
-  /* La hoja del apartamento estorba detras del recorrido: se cierra al entrar
-     y se vuelve a ella al salir. */
-  S._pasoVolverApto=(S.recorrido && S.recorrido.area===area) ? area : '';
-  if(S._pasoVolverApto) cerrarHojaApto();
-  if(!_pasoOv){
-    _pasoOv=document.createElement('div');
-    _pasoOv.id='paso-ov';
-    /* Sin padding abajo: la zona segura la pone el bloque de botones, que es
-       lo ultimo que se pinta. Ponerla aqui dejaba un hueco muerto incluso en
-       la pantalla del resumen. */
-    _pasoOv.style.cssText='position:fixed;inset:0;z-index:9998;background:var(--bg);'+
-      'overflow-y:auto;-webkit-overflow-scrolling:touch';
-    document.body.appendChild(_pasoOv);
-  }
-  pasoPintar();
-}
-
-function _pasoActual(){
-  var P=S.paso; if(!P) return null;
-  var id=P.ids[P.i]; if(!id) return null;
-  return Acciones.porId(id) || (S.acts||[]).find(function(x){return x.id===id;}) || null;
-}
-
-function _pasoSiguiente(){
-  var P=S.paso; if(!P) return;
-  P.i++; P.sub=null; P.error='';
-  pasoPintar();
-  if(_pasoOv) _pasoOv.scrollTop=0;
-}
-
-function pasoAtras(){
-  var P=S.paso; if(!P || P.i<=0) return;
-  P.i--; P.sub=null; P.error='';
-  pasoPintar();
-  if(_pasoOv) _pasoOv.scrollTop=0;
-}
-
-function pasoSub(k){
-  var P=S.paso; if(!P) return;
-  P.sub = (P.sub===k) ? null : k;
-  P.error='';
-  pasoPintar();
-}
-
-function pasoSaltar(){
-  var P=S.paso; if(!P) return;
-  P.res.saltadas++;
-  _pasoSiguiente();
-}
-
-/* ── Lo que venia de "En Obra" ──
-   Arrancar, interrumpir con motivo y marcar urgente eran tres botones de una
-   pestaña aparte que hacia lo mismo que esta con otra cara. Aqui van por
-   Acciones: setEstado sella la hora_inicio solo, pausar guarda el motivo y
-   setPrioridad valida que la prioridad exista. Los tres dejan su linea. */
-function pasoArrancar(){
-  var a=_pasoActual(); if(!a) return;
-  var retoma=(a.estado==='pausada');
-  _pasoGuardar(function(){ return Acciones.setEstado(a.id,'en-progreso'); },
-               null, retoma?'Retomada':'Arrancada');
-}
-
-var PASO_MOTIVOS=['Falta de material','Surgió tarea urgente','Instrucción del ingeniero',
-                  'Espera de otro trabajador','Descanso / almuerzo','Problema técnico'];
-
-function pasoInterrumpir(motivo){
-  var a=_pasoActual(); if(!a) return;
-  if(!motivo){ pasoSub('pausa'); return; }
-  _pasoGuardar(function(){ return Acciones.pausar(a.id,motivo); },
-               null,'Interrumpida');
-}
-
-/* Urgente es un interruptor: si ya lo esta, lo quita. Y NO pasa a la siguiente
-   partida — marcar algo urgente no es haberlo revisado. */
-async function pasoUrgente(){
-  var P=S.paso, a=_pasoActual();
-  if(!P || !a || P.guardando) return;
-  var nueva=(a.prioridad==='urgente')?'normal':'urgente';
-  P.guardando=true; P.error=''; pasoPintar();
-  try{
-    await Acciones.setPrioridad(a.id,nueva);
-    showToast(nueva==='urgente'?'Marcada urgente':'Ya no es urgente');
-  }catch(e){ P.error=(e&&e.message)||'No se pudo guardar'; }
-  P.guardando=false; pasoPintar();
-}
-
-/* La barra de comando por voz, con el apartamento y la partida de contexto.
-   Es lo que hacia dictarEnRecorrido() desde la hoja, que era solo
-   abrirComando(); aqui ademas se sabe en que partida estas parado. */
-function pasoDictar(){
-  var P=S.paso; if(!P) return;
-  var a=_pasoActual();
-  S.recorrido=S.recorrido||{area:P.area,tab:'panel',abierto:null,confirmando:null};
-  S._pasoTrabajando=a?(a.descripcion||''):'';
-  abrirComando();
-}
-
-/* El unico sitio por el que se escribe desde el recorrido. Si falla, la partida
-   se queda donde esta y se avisa: nunca se avanza dando por buena una accion
-   que la base no acepto. */
-async function _pasoGuardar(fn, onOk, msg){
-  var P=S.paso; if(!P || P.guardando) return;
-  P.guardando=true; P.error=''; pasoPintar();
-  try{
-    await fn();
-    if(onOk) onOk(P);
-    P.guardando=false;
-    showToast(msg||'Guardado ✓');
-    _pasoSiguiente();
-  }catch(e){
-    P.guardando=false;
-    P.error=(e && e.message) || 'No se pudo guardar';
-    pasoPintar();
-  }
-}
-
-function pasoHecha(){
-  var a=_pasoActual(); if(!a) return;
-  _pasoGuardar(function(){ return Acciones.completar(a.id); },
-               function(P){ P.res.cerradas++; }, 'Cerrada ✓');
-}
-
-function pasoIgual(){
-  var a=_pasoActual(); if(!a) return;
-  _pasoGuardar(function(){ return Acciones.revisar(a.id); },
-               function(P){ P.res.revisadas++; }, 'Revisada, sigue igual');
-}
-
-function pasoAvance(v){
-  var a=_pasoActual(); if(!a) return;
-  var n=parseInt(v,10);
-  if(isNaN(n)||n<0||n>100){ S.paso.error='El avance va de 0 a 100'; pasoPintar(); return; }
-  _pasoGuardar(function(){ return Acciones.setAvance(a.id,n); },
-               function(P){ P.res.avances++; }, n+'% guardado ✓');
-}
-function pasoAvanceLibre(){
-  var el=document.getElementById('paso-pct');
-  pasoAvance(el?el.value:'');
-}
-
-function _pasoDiaViernes(sem){
-  var d=new Date(today()+'T12:00:00');
-  d.setDate(d.getDate() + ((5-d.getDay()+7)%7) + 7*(sem||0));   // 5 = viernes
-  return d.toISOString().slice(0,10);
-}
-
-/* "Ponle fecha" mueve la fecha de ENTREGA (fecha_fin), que es la que decide si
-   una partida sale vencida. fecha_plan es otra cosa: el plan del dia. */
-function pasoFecha(f){
-  var a=_pasoActual(); if(!a || !f) return;
-  var cambios={fecha_fin:f};
-  /* El fin nunca puede quedar antes del inicio: ese dato malo ya se colo una
-     vez y despues nadie entiende por que la partida nace vencida. */
-  if((a.fecha_inicio||'') && a.fecha_inicio>f) cambios.fecha_inicio=f;
-  _pasoGuardar(function(){ return Acciones.editar(a.id,cambios,'entrega → '+f+' (recorrido)'); },
-               function(P){ P.res.fechas++; }, 'Fecha puesta ✓');
-}
-function pasoFechaLibre(){
-  var el=document.getElementById('paso-fecha');
-  var v=el?el.value:'';
-  if(!v){ S.paso.error='Elige una fecha'; pasoPintar(); return; }
-  pasoFecha(v);
-}
-
-function pasoNoAplica(){
-  var a=_pasoActual(); if(!a) return;
-  var desc=a.descripcion||'(sin descripción)';
-  _pasoGuardar(function(){ return Acciones.pausar(a.id,'No aplica aquí — marcada en recorrido'); },
-               function(P){ P.res.noaplica.push({id:a.id, desc:desc}); },
-               'Marcada: no aplica aquí');
-}
-
-function pasoCerrar(){
-  var P=S.paso;
-  var toco = !!(P && (P.res.cerradas||P.res.avances||P.res.fechas||P.res.noaplica.length));
-  var volver = S._pasoVolverApto||'';
-  if(_pasoOv){ _pasoOv.remove(); _pasoOv=null; }
-  S.paso=null; S._pasoVolverApto='';
-  /* Si se movio algo, el avance dibujado en la torre ya no vale: se vuelve a
-     pedir en vez de enseñar un numero viejo. Y los pendientes del apartamento
-     tampoco, que es de donde sale el contador de la pestaña. */
-  if(toco){
-    S._torre=null; S._torreCargando=false;
-    if(volver && S._recPend) delete S._recPend[volver];
-  }
-  /* Se vuelve al panel del apartamento, que es de donde se entro. Repintar la
-     pestaña de fondo a ciegas mandaba a Actividades aunque hubieras entrado
-     desde Hoy. */
-  if(volver){ abrirAptoTorre(volver); return; }
-  if(S.currentTab==='hoy') renderHoy(); else renderObra();
-}
-
-function _pasoBtn(fn,txt,fondo,color,borde){
-  return '<button onclick="'+fn+'" style="width:100%;min-height:48px;padding:13px 14px;margin-bottom:8px;'+
-    'border-radius:12px;border:1.5px solid '+(borde||'transparent')+';background:'+fondo+';color:'+color+';'+
-    'font-size:15px;font-weight:800;cursor:pointer;font-family:var(--font)">'+txt+'</button>';
-}
-
-function pasoPintar(){
-  if(!_pasoOv) return;
-  var P=S.paso;
-  if(!P){ _pasoOv.innerHTML=''; return; }
-
-  /* La cabecera lleva la zona segura DENTRO, no en el contenedor: con
-     position:sticky y top:0, meterla fuera hace que la barra se pegue por
-     debajo del notch y la cabecera se corte al subir.
-     Esto estaba mal y por eso la × no se dejaba tocar: sin var(--st) la
-     cabecera nacia debajo de la barra de estado del iPhone. El panel del
-     apartamento si lo hacia bien; esta pantalla se escribio sin copiarlo. */
-  var cab='<div style="position:sticky;top:0;z-index:2;background:var(--bg2);'+
-    'border-bottom:1.5px solid var(--border);padding:calc(10px + var(--st)) 10px 10px 15px;'+
-    'display:flex;align-items:center;gap:10px">'+
-    '<div style="flex:1;min-width:0">'+
-      '<div style="font-family:var(--tit);font-size:15px;font-weight:800;color:var(--text)">'+
-        esc(_recNom(P.area))+'</div>'+
-      '<div style="font-size:11.5px;color:var(--text3);font-family:var(--mono);margin-top:2px">'+
-        (P.i<P.ids.length ? (P.i+1)+' de '+P.ids.length : 'recorrido terminado')+
-        (P.persona?' · '+esc(P.persona):'')+'</div>'+
-    '</div>'+
-    /* 48x48 de verdad, no un simbolo suelto: antes el area tocable era el
-       ancho del caracter ×, unos 14 px. */
-    '<button onclick="pasoCerrar()" aria-label="Salir del recorrido" '+
-      'style="flex:0 0 auto;width:48px;height:48px;background:var(--bg3);border:1px solid var(--border);'+
-      'border-radius:12px;color:var(--text2);font-size:22px;line-height:1;cursor:pointer;'+
-      'display:flex;align-items:center;justify-content:center;font-family:var(--font)">×</button>'+
-  '</div>';
-
-  // ── El final: que quedo hecho ──
-  if(P.i>=P.ids.length){
-    var R=P.res;
-    var fila=function(v,lab,col){
-      if(!v) return '';
-      return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;'+
-        'padding:9px 0;border-bottom:1px solid var(--border)">'+
-        '<span style="font-size:13.5px;color:var(--text2)">'+lab+'</span>'+
-        '<b style="font-size:17px;color:'+(col||'var(--text)')+'">'+v+'</b></div>';
-    };
-    var nada=!(R.cerradas||R.avances||R.fechas||R.revisadas||R.noaplica.length||R.saltadas);
-    _pasoOv.innerHTML=cab+
-      '<div style="padding:18px 15px">'+
-        '<div style="font-family:var(--tit);font-size:19px;font-weight:800;margin-bottom:4px">Recorrido terminado</div>'+
-        '<div style="font-size:12.5px;color:var(--text3);margin-bottom:16px">'+
-          esc(_recNom(P.area))+' · '+P.ids.length+' partida'+(P.ids.length!==1?'s':'')+'</div>'+
-        (nada?'<div class="empty" style="padding:22px">No se tocó nada</div>':
-          '<div style="background:var(--bg2);border:1.5px solid var(--border);border-radius:12px;padding:4px 14px 6px;margin-bottom:16px">'+
-            fila(R.cerradas,'Cerradas','var(--green)')+
-            fila(R.avances,'Avance cambiado','var(--blue)')+
-            fila(R.fechas,'Con fecha nueva','var(--amber)')+
-            fila(R.revisadas,'Revisadas, siguen igual','var(--text2)')+
-            fila(R.saltadas,'Saltadas','var(--text3)')+
-            fila(R.noaplica.length,'Marcadas «no aplica»','var(--red)')+
-          '</div>')+
-        /* Las de "no aplica" salen con su nombre: son las que hay que decidir
-           despues, y una cuenta suelta no sirve para decidir nada. */
-        (R.noaplica.length
-          ? '<div style="font-size:12.5px;font-weight:700;color:var(--red);margin-bottom:7px">'+
-              'Por decidir — no aplican aquí</div>'+
-            R.noaplica.map(function(x){
-              return '<div style="font-size:13px;color:var(--text2);background:var(--bg2);'+
-                'border:1px solid var(--border);border-left:3px solid var(--red);border-radius:9px;'+
-                'padding:9px 11px;margin-bottom:6px;line-height:1.35">'+esc(x.desc)+'</div>';
-            }).join('')+
-            '<div style="font-size:11.5px;color:var(--text3);margin:8px 0 16px;line-height:1.45">'+
-              'Quedaron pausadas, no borradas. El motivo está escrito en cada una.</div>'
-          : '')+
-        _pasoBtn('pasoCerrar()','Volver al edificio','var(--accent-fill)','var(--accent-on)','var(--accent)')+
-        '<div style="padding-bottom:calc(10px + var(--sb))"></div>'+
-      '</div>';
-    return;
-  }
-
-  var a=_pasoActual();
-  if(!a){
-    // La partida ya no esta (se cerro desde otro sitio): se pasa de largo.
-    _pasoSiguiente(); return;
-  }
-
-  var pct=parseInt(a.porcentaje)||0;
-  var sub=P.sub;
-  var chip='font-size:10.5px;font-family:var(--mono);padding:3px 8px;border-radius:8px;font-weight:700';
-  var bsub='min-height:46px;padding:12px 6px;border-radius:11px;border:1.5px solid var(--border2);'+
-           'background:var(--bg2);color:var(--text);font-size:14px;font-weight:800;cursor:pointer;'+
-           'font-family:var(--font)';
-
-  var h=cab+'<div style="padding:16px 15px 0">';
-
-  if(P.error){
-    h+='<div style="background:var(--red-light);border:1.5px solid var(--red);border-radius:11px;'+
-      'padding:11px 13px;margin-bottom:12px;font-size:13px;color:var(--red);font-weight:600;line-height:1.4">'+
-      'No se guardó: '+esc(P.error)+'<br><span style="font-weight:400">La partida sigue como estaba.</span></div>';
-  }
-
-  h+='<div style="font-size:18px;font-weight:700;line-height:1.35;color:var(--text);margin-bottom:10px">'+
-      esc(a.descripcion||'(sin descripción)')+'</div>'+
-    '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px">'+
-      revChipEstado(a)+revChipFecha(a)+
-      (a.personal_nombre?'<span style="'+chip+';background:var(--bg2);color:var(--text3)">'+esc(a.personal_nombre)+'</span>':'')+
-      (a.prioridad==='urgente'?'<span style="'+chip+';background:var(--red-light);color:var(--red)">urgente</span>':'')+
-    '</div>'+
-    /* El chip de arriba ya canta los dias de retraso; aqui solo las fechas. */
-    '<div style="font-size:12.5px;color:var(--text3);font-family:var(--mono);margin-bottom:12px">'+
-      'Empieza: '+esc(a.fecha_inicio||'—')+'  ·  Entrega: '+esc(a.fecha_fin||'—')+
-    '</div>'+
-    (a.notas?'<div style="font-size:13px;color:var(--text2);background:var(--bg2);padding:10px 12px;'+
-      'border-radius:10px;border-left:3px solid var(--accent);white-space:pre-wrap;margin-bottom:14px;'+
-      'line-height:1.45">'+esc(a.notas)+'</div>':'<div style="height:6px"></div>');
-
-  if(P.guardando){
-    h+='<div style="text-align:center;padding:26px;font-size:14px;color:var(--text3)">Guardando…</div>';
-  } else if(sub==='avance'){
-    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:9px">'+
-        [25,50,75,85].map(function(v){
-          return '<button onclick="pasoAvance('+v+')" style="'+bsub+
-            (pct===v?';background:var(--accent-fill);border-color:var(--accent);color:var(--accent-on)':'')+
-            '">'+v+'%</button>';
-        }).join('')+
-      '</div>'+
-      '<div style="display:flex;gap:7px;margin-bottom:9px">'+
-        '<input id="paso-pct" type="number" inputmode="numeric" min="0" max="100" value="'+pct+'" '+
-          'style="flex:1;min-width:0;min-height:48px;padding:12px;border:1.5px solid var(--border2);'+
-          'border-radius:11px;background:var(--bg2);color:var(--text);font-size:16px;font-weight:700;'+
-          'font-family:var(--font)">'+
-        '<button onclick="pasoAvanceLibre()" style="flex:0 0 auto;min-height:48px;padding:12px 18px;'+
-          'border-radius:11px;border:none;background:var(--accent-fill);color:var(--accent-on);'+
-          'font-size:14px;font-weight:800;cursor:pointer;font-family:var(--font)">Poner</button>'+
-      '</div>'+
-      _pasoBtn('pasoSub(\'avance\')','Cancelar','var(--bg2)','var(--text2)','var(--border2)');
-  } else if(sub==='fecha'){
-    var hoy=today(), vie=_pasoDiaViernes(0), vie2=_pasoDiaViernes(1);
-    h+=_pasoBtn('pasoFecha(\''+hoy+'\')','Hoy — '+hoy,'var(--bg2)','var(--text)','var(--border2)')+
-      (vie!==hoy?_pasoBtn('pasoFecha(\''+vie+'\')','Esta semana — viernes '+vie,'var(--bg2)','var(--text)','var(--border2)'):'')+
-      _pasoBtn('pasoFecha(\''+vie2+'\')','La semana que viene — '+vie2,'var(--bg2)','var(--text)','var(--border2)')+
-      '<div style="display:flex;gap:7px;margin-bottom:9px">'+
-        '<input id="paso-fecha" type="date" value="'+esc(a.fecha_fin||hoy)+'" '+
-          'style="flex:1;min-width:0;min-height:48px;padding:12px;border:1.5px solid var(--border2);'+
-          'border-radius:11px;background:var(--bg2);color:var(--text);font-size:15px;font-weight:700;'+
-          'font-family:var(--font)">'+
-        '<button onclick="pasoFechaLibre()" style="flex:0 0 auto;min-height:48px;padding:12px 18px;'+
-          'border-radius:11px;border:none;background:var(--accent-fill);color:var(--accent-on);'+
-          'font-size:14px;font-weight:800;cursor:pointer;font-family:var(--font)">Poner</button>'+
-      '</div>'+
-      _pasoBtn('pasoSub(\'fecha\')','Cancelar','var(--bg2)','var(--text2)','var(--border2)');
-  } else if(sub==='pausa'){
-    h+='<div style="font-size:12.5px;color:var(--text3);margin-bottom:9px">¿Por qué se interrumpe?</div>'+
-      PASO_MOTIVOS.map(function(m){
-        return _pasoBtn('pasoInterrumpir('+JSON.stringify(m).replace(/"/g,'&quot;')+')',
-                        esc(m),'var(--bg2)','var(--text)','var(--border2)');
-      }).join('')+
-      _pasoBtn('pasoSub(\'pausa\')','Cancelar','transparent','var(--text3)','var(--border)');
-  } else {
-    var enCurso=(a.estado==='en-progreso');
-    var urg=(a.prioridad==='urgente');
-    /* Los cuatro de siempre, a 48 px. Debajo, en una fila mas chica, lo que
-       venia de En Obra: son acciones de menos uso y ocho botones grandes no
-       caben en un telefono sin que haya que hacer scroll para contestar. */
-    var chico=function(js,txt,color,borde){
-      return '<button onclick="'+js+'" style="flex:1;min-width:0;min-height:44px;padding:10px 6px;'+
-        'border-radius:11px;border:1.5px solid '+borde+';background:var(--bg2);color:'+color+';'+
-        'font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font)">'+txt+'</button>';
-    };
-    h+=_pasoBtn('pasoHecha()','Ya está','var(--green)','#fff')+
-       _pasoBtn('pasoIgual()','Sigue igual','var(--bg2)','var(--text)','var(--border2)')+
-       _pasoBtn('pasoSub(\'avance\')','Cambiar avance','var(--bg2)','var(--text)','var(--border2)')+
-       _pasoBtn('pasoSub(\'fecha\')','Ponle fecha','var(--bg2)','var(--text)','var(--border2)')+
-       '<div style="display:flex;gap:7px;margin-bottom:8px">'+
-         (enCurso
-           ? chico('pasoInterrumpir()','Interrumpir','var(--amber)','var(--amber)')
-           : chico('pasoArrancar()', a.estado==='pausada'?'Retomar':'Iniciar','var(--green)','var(--green)'))+
-         chico('pasoUrgente()', urg?'↓ Normal':'Urgente', urg?'var(--red)':'var(--text2)',
-               urg?'var(--red)':'var(--border2)')+
-       '</div>'+
-       /* El dictado, que antes solo estaba en la hoja del apartamento. Aqui el
-          apartamento YA esta fijado y la partida tambien, asi que lo dictado
-          cae en su sitio sin tener que nombrarlo. */
-       '<div style="display:flex;gap:8px;margin-bottom:8px">'+
-         '<button onclick="pasoDictar()" style="flex:1;min-height:48px;padding:13px 8px;'+
-           'border-radius:12px;border:1.5px solid var(--accent);background:var(--accent-soft);'+
-           'color:var(--accent);font-size:14px;font-weight:800;cursor:pointer;'+
-           'font-family:var(--font)">🎙️ Dictar</button>'+
-         '<button onclick="pasoNoAplica()" style="flex:1;min-height:48px;padding:13px 8px;'+
-           'border-radius:12px;border:1.5px solid var(--red);background:var(--bg2);'+
-           'color:var(--red);font-size:14px;font-weight:800;cursor:pointer;'+
-           'font-family:var(--font)">No aplica aquí</button>'+
-       '</div>'+
-       _pasoBtn('pasoSaltar()','Saltar','transparent','var(--text3)','var(--border)');
-  }
-
-  /* Atrás y Salir abajo, donde llega el pulgar con el telefono en una mano.
-     La × de arriba se queda para el iPad, pero arriba a la derecha es el peor
-     sitio de la pantalla para una mano sola y no puede ser la unica salida. */
-  h+='<div style="display:flex;align-items:center;gap:8px;margin-top:6px;'+
-      'padding-bottom:calc(10px + var(--sb))">'+
-      (P.i>0
-        ? '<button onclick="pasoAtras()" style="flex:0 0 auto;min-height:48px;padding:12px 16px;'+
-            'border-radius:12px;border:1.5px solid var(--border2);background:var(--bg2);'+
-            'color:var(--text2);font-size:14px;font-weight:700;cursor:pointer;'+
-            'font-family:var(--font)">‹ Atrás</button>'
-        : '')+
-      '<button onclick="pasoCerrar()" style="flex:1;min-height:48px;padding:12px;'+
-        'border-radius:12px;border:1.5px solid var(--border2);background:var(--bg2);'+
-        'color:var(--text2);font-size:14px;font-weight:700;cursor:pointer;'+
-        'font-family:var(--font)">Salir del recorrido</button>'+
-      '<span style="flex:0 0 auto;font-size:11.5px;color:var(--text3);font-family:var(--mono)">'+
-        (P.ids.length-P.i-1)+' más</span>'+
-    '</div></div>';
-
-  _pasoOv.innerHTML=h;
 }
 
 async function loadAptoActs(area){
