@@ -4390,7 +4390,9 @@ function _recPanelApto(){
   h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:13px">'+
       num(c.abiertas,'Abiertas')+
       num(c.vencidas,'Vencidas','var(--red)')+
-      num(c.semana,'Esta semana','var(--amber)')+
+      /* "Semana" a secas: con cuatro tarjetas en un telefono, "Esta semana"
+         parte en dos lineas y descuadra la fila. */
+      num(c.semana,'Semana','var(--amber)')+
       num(c.curso,'En curso','var(--blue)')+
     '</div>';
 
