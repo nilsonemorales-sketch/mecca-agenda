@@ -1,7 +1,7 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v76 — 13 de septiembre de 2026.** Antes de escribir, comprueba
-la versión real del repo (`APP_VERSION` en `index.html`, línea ~830): este
+**Al día a v77 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
 
@@ -88,7 +88,7 @@ Corre gratis debajo de las 10,000 neuronas diarias que regala Cloudflare
 
 | Archivo | Qué es |
 |---|---|
-| `index.html` | **El app entero.** ~21,900 líneas, 1.4 MB. HTML, CSS y JS en un solo archivo. |
+| `index.html` | **El app entero.** ~21,100 líneas, 1.36 MB. HTML, CSS y JS en un solo archivo. |
 | `sw.js` | Service worker. 61 líneas. **Pieza frágil, ver §5.** |
 | `worker/worker.js` | El Worker de Cloudflare (voz e inteligencia). |
 | `worker/wrangler.toml` | Configuración del Worker. |
@@ -109,8 +109,12 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v76 (13 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v77 (14 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
+
+El menú es: **Hoy · Actividades · Equipo · Reportes · Fotos · Planos ·
+Compras · Bitácora · Gerencia · Metodología.** «En Obra» **se retiró en
+v77**: era el mismo módulo que Actividades con otra cara.
 
 | Quiero… | Está en |
 |---|---|
@@ -118,23 +122,34 @@ a **v76 (13 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 | Trabajar un apartamento completo | **Actividades → Por Apto** |
 | Ver taller × apartamento | **Actividades → Matriz** |
 | Ver el edificio por niveles | **Actividades → Edificio** (v55) |
-| **Revisar por contratista** | **Obra → Revisión** — `renderRevision()`, `revAbrir()` |
-| **Recorrer partidas una por una** | Desde **Edificio**, botón verde en el apartamento — `pasoIniciar()` |
-| Hoja del apartamento para el recorrido en sitio | `pintarRecorrido()` / `_rec*` — **no** es el paso a paso |
-| Plan del día | **Plan** · Cierre del día | **Hoy** |
+| **Revisar por contratista** | **Actividades → Revisión** — `renderRevision()`, `revAbrir()` |
+| **El panel de un apartamento** | Tocar el apartamento en la torre, **en Hoy o en Actividades → Edificio** — `abrirAptoTorre()`, `_recPanelApto()` |
+| **REGISTRAR: avance, cerrar, fecha, iniciar, interrumpir** | **El recorrido paso a paso** — `pasoIniciar(area, filtro, idInicial)` |
 
-Ojo con dos nombres que se parecen y no son lo mismo:
+**En v77 hay UNA sola puerta de registro: el recorrido paso a paso.** Se
+llega desde el panel del apartamento, desde una fila de «Pendientes», o
+leyendo el QR de la puerta. Actividades es para buscar, filtrar,
+planificar, crear y editar — **ya no registra avance**.
 
-- **`pintarRecorrido` / `_rec*`** = la hoja del apartamento (dictar,
-  pendientes, quién debe). Es de antes.
-- **`pasoIniciar` / `paso*`** = el paso a paso, «7 de 23» con seis botones
-  (v76).
+El panel del apartamento y el paso a paso se reparten así:
 
-Los cuatro filtros rápidos de arriba (`retrasadas`, `sinfecha`,
-`sincontratista`, `congeladas`) **también aplican dentro de Revisión**
-desde v76, con aviso arriba y botón «Ver todas». Su criterio vive en un
-solo sitio, `FILTRO_HUECO`: si necesitas ese criterio en otra pantalla,
-úsalo de ahí. Dos copias del mismo criterio terminan contando distinto.
+- **`abrirAptoTorre` / `pintarRecorrido` / `_rec*`** = el panel del
+  apartamento: sus cuatro números y tres pestañas (Panel · Pendientes ·
+  Quién debe). **No escribe.**
+- **`pasoIniciar` / `paso*`** = el recorrido, «7 de 23». **Es el único que
+  escribe**, y todo por `Acciones`.
+
+Los cuatro filtros rápidos (`retrasadas`, `sinfecha`, `sincontratista`,
+`congeladas`) **también aplican dentro de Revisión** desde v76, con aviso
+arriba y botón «Ver todas». Su criterio vive en un solo sitio,
+`FILTRO_HUECO`: si necesitas ese criterio en otra pantalla, úsalo de ahí.
+Dos copias del mismo criterio terminan contando distinto.
+
+**Una sola carga de datos** desde v77: `S.acts` la trae entera por `sbTodo`
+(sin tope), y `S.abiertas` y `S.actsActivas` **se derivan de ella** con
+`_derivarAbiertas()` — son el mismo array, no copias. No añadas una
+segunda consulta de actividades: eso fue justo lo que hacía que Hoy y
+Actividades cantaran números distintos.
 
 ---
 
@@ -174,26 +189,30 @@ alguien miró la partida y sigue igual.
 
 ### Lo que todavía escribe por fuera — no lo imites, y si lo tocas, arréglalo
 
-La regla es de oro pero el app no está limpio del todo. A **v76** quedan
-**cinco** sitios que escriben `estado` o `porcentaje` con un `PATCH`
-suelto, saltándose el sellado de horas, la coherencia y el apagado de la
-marca de foto:
+**A v77 no queda ninguno.** Los seis que había se cerraron:
 
-| Función | Dónde se usa |
+| Función | Qué se hizo |
 |---|---|
-| `planDiaGuardar()` | El plan del día |
-| `cierreAvGuardar()` | Los avances del cierre del día |
-| `accionActObra()` | Completar / iniciar / retomar, desde **En Obra** |
-| `mostrarPausaObra()` | Pausar, desde **En Obra** (los dos botones) |
-| `setAvanceRapido()` | El avance rápido en la tarjeta de **En Obra** |
+| `revEstado`, `revNota` | Reconectadas a `Acciones` (v76) |
+| `setAvanceRapido()` | Reconectada en la Fase 0, y retirada en la Fase 3 con «En Obra» |
+| `accionActObra()`, `mostrarPausaObra()` | Retiradas con «En Obra»; ahora son botones del paso a paso, por `Acciones` |
+| `cierreAvGuardar()` | Retirada: el Cierre del día es un reporte, de solo lectura |
+| `planDiaGuardar()` | Reconectada a `Acciones.setAvance` |
 
-`revEstado` y `revNota` eran un sexto y **se arreglaron en v76**.
+Puedes comprobarlo tú: busca `obra_actividades` junto a `PATCH` y mira si
+la línea toca `estado` o `porcentaje`. **Si aparece uno nuevo, es un bug.**
 
-Estos otros `PATCH` directos **sí son legítimos**, no los toques:
-`Acciones._patch` (es la capa misma), `stampHora` (es el sellado),
-`fixActsConsistency` (es la rutina de reparación), y los que escriben
-fotos, pendientes, área, planos, asistencia y personal — que no son estado
-ni avance.
+Estos `PATCH` directos **sí son legítimos**, no los toques:
+
+- `Acciones._patch` — es la capa misma.
+- `stampHora` — es el sellado de horas.
+- `undoAction` / `redoAction` — reponen un retrato exacto del estado
+  anterior. Pasarlos por `_coherencia` los rompería: deshacer un
+  «completar» tiene que poder devolver la partida a `en-progreso` con su
+  100%, que es justo lo que la regla de coherencia prohíbe crear. **Sí
+  registran** en `obra_cambios`.
+- Los que escriben fotos, pendientes, área, planos, asistencia y personal
+  — no son estado ni avance.
 
 ---
 
@@ -240,7 +259,14 @@ mismo:**
   (abiertas, vencidas, sin fecha, **en curso** — «revisadas» va en la
   línea de arriba, no en las tarjetas), el orden por `REC_ORDEN` y las
   áreas plegables
-- **Paso a paso**: los seis botones, el Atrás y el resumen final
+- **Paso a paso**: los ocho botones (Ya está · Sigue igual · Cambiar
+  avance · Ponle fecha · Iniciar/Retomar · Interrumpir · No aplica aquí ·
+  Saltar), el micrófono, el Atrás y el resumen final
+- **La sub-nav de Actividades** (Actividades · Kanban · Revisión) se ve
+  **siempre**. Esconderla en la vista de entrada deja Kanban y Revisión sin
+  ninguna puerta — pasó en v77 y es el mismo error de v58
+- **«Todas» carga las 2.465 filas**, no 500. El tope viejo estaba
+  invertido: pedir «ver todas» lo bajaba
 
 Sobre el orden de las áreas: **alfabético no sirve.** Para los once
 apartamentos suena igual — `N2 — Apto 2A` … `N7 — Penthouse B` ya ordenan
@@ -264,6 +290,9 @@ pertenece a ningún nivel.
 | **v60** — dos `id="torre-svg"` en la página. La torre escondida de «Hoy» ganaba el `getElementById` y la de Actividades no dibujaba nunca. | Si una pieza se pinta en dos pantallas, no puede tener un `id` fijo. Y la prueba tiene que montar **las dos**. |
 | **v58** — el selector de vistas vivía dentro del panel de Filtros, que está `display:none`. Se elegía una vista y ya no se podía cambiar. La prueba ponía `S.actVista` por código, así que nunca lo vio. | **Toca botones de verdad y cuenta solo lo visible.** Fijar el estado a mano se salta justo el bug. |
 | **v49** — un login nuevo dejó a todo el mundo fuera en la obra. La prueba usaba un Supabase de mentira que devolvía lo que se esperaba. | Lo que no se puede probar contra lo real, no se sube. |
+| **v77** — `loadActsAll` pedía `limit = actMostrarTodas ? 500 : 2000`. Al revés: tocar «Todas» bajaba el tope a 500 sobre 2.465 filas, sin avisar. | Un tope silencioso miente peor que un error. Si hay que paginar, `sbTodo`. |
+| **v77** — `fixActsConsistency` cerraba partidas sola en cada carga, sin preguntar y sin dejar rastro de quién. | Un dato incoherente se avisa, no se tapa. Cuadrarlo es una decisión de quien manda la obra, y queda escrita. |
+| **v77** — el manejador de teclas hacía `e.target.closest(...)` sin comprobar que `e.target` fuera un elemento. Cuando no lo era reventaba el manejador **entero**. | Un guardia que falla no puede llevarse por delante todo lo que protege. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
@@ -302,7 +331,7 @@ sea una opinión.
 
 Si alguno cambió respecto a antes de tu cambio, **no subas: arréglalo.**
 
-**5. Sube `APP_VERSION`** (línea ~830, formato `'AAAAMMDD_NN'`).
+**5. Sube `APP_VERSION`** (línea ~820, formato `'AAAAMMDD_NN'`).
 Sin eso el usuario no sabe si le bajó la versión nueva.
 
 ---
