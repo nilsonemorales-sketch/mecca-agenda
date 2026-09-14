@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v79 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v80 — 14 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -129,8 +129,10 @@ v77**: era el mismo módulo que Actividades con otra cara.
 **Se registra en dos sitios, y los dos pasan por `Acciones`:**
 
 1. **En la fila de la lista.** Un toque en la fila abre sus acciones ahí
-   mismo: `25% · 50% · 75% · Ya está`, `Entrega hoy · El viernes`, y el
-   micrófono. `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`.
+   mismo: `25% · 50% · 75%`, `Entrega hoy · El viernes`, y el micrófono.
+   `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`.
+   **Cerrar NO está ahí**: lo hace el ✓ verde de la fila, que está siempre a
+   la vista y a un toque. Una sola forma de cerrar por tarjeta.
 2. **El recorrido paso a paso**, para pasar varias seguidas de pie.
 
 v77 le quitó el registro a la lista entera y lo mandó todo al recorrido.
@@ -318,6 +320,7 @@ pertenece a ningún nivel.
 | **v78** — la × del recorrido nacía **debajo del notch** del iPhone: la cabecera se escribió con `padding:12px` pelado, sin `var(--st)`. No se podía cerrar. El panel del apartamento sí lo hacía bien. | Toda pantalla completa lleva `var(--st)` arriba y `var(--sb)` abajo. Y arriba a la derecha no puede ser la única salida: el pulgar vive abajo. |
 | **v79** — la barra de acciones se pintaba fuera de `det-<id>` y gateada por `S.actAbiertas`. `toggleActDet` solo cambia el `display`, **no repinta**, así que al tocar la fila no aparecía nunca. | Si algo tiene que aparecer con un toggle, ponlo **dentro** de lo que el toggle muestra. Y mide lo VISIBLE, no el innerHTML. |
 | **v79** — «Ya está» cerraba con `Acciones.setAvance(100)` y se saltaba la exigencia de foto que sí aplica el ✓ de la fila. | Dos botones que dicen lo mismo tienen que hacer lo mismo, por el mismo camino. |
+| **v80** — llegaron a existir **tres** formas de cerrar una partida en la misma tarjeta: el ✓ de la fila, «Ya está» y «Completar». El dueño lo dijo en una línea: «no quiero cosas de más». | Antes de añadir un botón, busca si lo que hace ya está en esa pantalla. Que dos caminos lleguen al mismo sitio no los hace útiles: obligan a elegir. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
