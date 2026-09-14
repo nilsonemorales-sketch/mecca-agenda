@@ -686,7 +686,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <!-- EQUIPO: Asistencia + Personal + Penalidades -->
     <!-- OBRA: Actividades, Kanban y Revisión. Es la pantalla de entrada desde
          v84: "Hoy" se retiró por ser esta misma lista con otra piel. -->
-    <div class="view active" id="view-obra">
+    <div class="view" id="view-obra">
       <div id="c-obra-subnav"></div>
       <div id="c-act"><div class="shimmer-block" style="padding:16px">
   <div style="height:60px;background:var(--bg3);border-radius:var(--r);margin-bottom:10px;animation:shimmer 1.2s infinite"></div>
@@ -698,7 +698,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 
     <!-- OBRA: la cola de trabajo. Se llama 'terreno' por dentro porque el id
          'obra' ya es el de Actividades (ver comentario de la pestaña). -->
-    <div class="view" id="view-terreno"><div id="c-terreno"></div></div>
+    <div class="view active" id="view-terreno"><div id="c-terreno"></div></div>
 
     <div class="view" id="view-equipo">
       <div id="c-equipo-subnav"></div>
@@ -855,7 +855,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260914_87';
+const APP_VERSION='20260914_88';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1737,7 +1737,10 @@ const ESTADOS_ASIST=['presente','tarde','medio día','ausente','justificado'];
 let S={
   user:null, fecha:today(),
   personal:[], asist:[], acts:[], pens:[], semanas:[], plan:[], planActs:[],
-  semanaActual:null, currentTab:'obra', busqueda:'',
+  /* El app abre en Obra desde v87: se usa de pie en la obra, y Obra pregunta
+     dónde estás en vez de soltar 1.080 renglones. Actividades queda a un toque
+     en la barra de abajo. */
+  semanaActual:null, currentTab:'terreno', busqueda:'',
   histFiltroIng:'todos', histFecha:'', histFechaFin:'', histActs:[], histAsist:[], histPens:[],
   cambios:[], cambiosOk:true, cambiosFiltroUser:'todos', cambiosFiltroFecha:'', cambiosFiltroFechaFin:'',
   actFiltroOpen:null,
@@ -2185,18 +2188,21 @@ async function loadAll(){
   // Spin refresh button while loading
   const refBtn=document.getElementById('btn-refresh');
   if(refBtn){refBtn.style.transition='none';refBtn.style.animation='spin 0.7s linear infinite';}
-  /* El aviso de "tardando" vivia en el contenedor de Hoy, que se retiro en v84.
-     Ahora en el de Actividades, que es la pantalla de entrada. */
+  /* El aviso de "tardando" vivia en el contenedor de Hoy (retirado en v84) y
+     luego en el de Actividades. Desde v87 la pantalla de entrada es Obra, asi
+     que se pinta en el contenedor que se este VIENDO: si no, el ingeniero se
+     queda mirando "Cargando la obra..." sin boton de reintentar a la vista. */
   const el=document.getElementById('c-act');
-  const retryTimer=setTimeout(()=>{
-    if(el&&el.querySelector('.shimmer-block')){
-      el.innerHTML=`<div class="empty" style="padding:40px 20px">
+  const aviso=`<div class="empty" style="padding:40px 20px">
         <div style="font-size:32px;margin-bottom:12px">📡</div>
         <div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px">Tardando más de lo normal</div>
         <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Verifica tu conexión a internet</div>
         <button class="ibtn primary" onclick="loadAll()" style="margin:0 auto;display:block">Reintentar</button>
       </div>`;
-    }
+  const retryTimer=setTimeout(()=>{
+    if(el&&el.querySelector('.shimmer-block')) el.innerHTML=aviso;
+    const tr=document.getElementById('c-terreno');
+    if(tr && !(S.acts||[]).length) tr.innerHTML=aviso;
   }, 8000);
 
   try{
@@ -2213,7 +2219,14 @@ async function loadAll(){
     setSS('ok','✓ '+hhmm());
     const rb=document.getElementById('btn-refresh');
     if(rb){rb.style.animation='';rb.style.transition='transform .4s ease,background .15s';}
-    clearTimeout(retryTimer); renderAsist(); renderActs(); renderReportes();
+    /* Se pinta la pantalla que se ESTÁ VIENDO. Antes solo se llamaba a
+       renderActs, así que con Obra de entrada (v87) los datos llegaban y la
+       pantalla se quedaba en "Cargando la obra..." para siempre. Y al revés:
+       renderActs cuesta ~0,4 s con las 1.080 y no se ve si estás en Obra —
+       al cambiar de pestaña la pinta goTab. */
+    clearTimeout(retryTimer); renderAsist();
+    if(S.currentTab==='terreno') renderTerreno(); else renderActs();
+    renderReportes();
     if(S.currentTab==='plan') renderPlan();
     updateAsistPct();
     setTimeout(checkInactividadIngenieros, 300);
@@ -2223,15 +2236,16 @@ async function loadAll(){
     clearTimeout(retryTimer);
     const msg = e.message?.includes('timeout') ? 'Tiempo agotado — reintenta' : 'Error de conexión — reintenta';
     setSS('err', msg+'  ↺');
-    // Show retry in Actividades if still skeleton
-    const hoyEl=document.getElementById('c-act');
-    if(hoyEl&&hoyEl.querySelector('.shimmer-block')){
-      hoyEl.innerHTML=`<div class="empty" style="padding:40px 20px">
+    // El reintento se ofrece donde el ingeniero esté mirando, no solo en la lista.
+    const err=`<div class="empty" style="padding:40px 20px">
         <div style="font-size:32px;margin-bottom:12px">📡</div>
         <div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px">${msg}</div>
         <button class="ibtn primary" onclick="loadAll()" style="margin:8px auto 0;display:block">Reintentar</button>
       </div>`;
-    }
+    const hoyEl=document.getElementById('c-act');
+    if(hoyEl&&hoyEl.querySelector('.shimmer-block')) hoyEl.innerHTML=err;
+    const trEl=document.getElementById('c-terreno');
+    if(trEl && !(S.acts||[]).length) trEl.innerHTML=err;
   }
 }
 
@@ -19156,6 +19170,9 @@ setInterval(function(){
 // La detección de deploys nuevos se hace por firma (ETag/Last-Modified) en el
 // bloque "AUTO-ACTUALIZACIÓN ROBUSTA" al inicio del script. Aquí no se repite.
 
+/* Se entra por Obra. Va por goTab y no por la clase del HTML para que la barra
+   de abajo marque el botón que toca: updateBNav solo lo hace desde aquí. */
+try{ goTab('terreno'); }catch(e){ console.warn('arranque:',e); }
 loadAll();
 
 // ── ÓRDENES DE COMPRA ─────────────────────────────────

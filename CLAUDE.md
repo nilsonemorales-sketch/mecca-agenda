@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v87 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v88 — 14 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,12 +109,22 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v87 (14 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v88 (14 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
-Compras · Bitácora · Gerencia · Metodología.** El app **abre en
-Actividades**.
+Compras · Bitácora · Gerencia · Metodología.** El app **abre en Obra**
+desde v88: se usa de pie en la obra, y Obra pregunta dónde estás en vez de
+soltar 1.080 renglones. Actividades queda a un toque en la barra de abajo.
+
+**Si cambias la pantalla de entrada, hay tres sitios, no uno:**
+`S.currentTab` en el estado inicial, la clase `active` del `<div class="view">`
+en el HTML, y el `goTab(...)` del arranque (justo antes de `loadAll()`) — sin
+ese último la barra de abajo no marca ningún botón, porque `updateBNav` solo
+se llama desde `goTab`. Y **`loadAll` pinta la pantalla que se está viendo**
+(`if(S.currentTab==='terreno') renderTerreno(); else renderActs();`): antes
+llamaba solo a `renderActs`, así que con Obra de entrada los datos llegaban y
+la pantalla se quedaba en «Cargando la obra…» para siempre.
 
 **Actividades es el corazón y Obra es la cola.** Lo dijo el dueño en una
 línea: en Actividades están *todas* las opciones de modificación, registro
@@ -449,6 +459,10 @@ pertenece a ningún nivel.
 | **v87** — las cinco pastillas de filtro hacían `S.actFiltroRapidos=['x']`: reemplazaban en vez de conmutar, no se marcaban al estar puestas, y su número se contaba sobre `S.acts` entero en vez de sobre lo que ya estaba filtrado. | Una pastilla de filtro tiene que decir tres cosas: cuántas, si está puesta, y cómo quitarla. Si falta una, el usuario deja de creerle al número — es el mismo engaño de «863 vencidas → cero». |
 | **v87** — contar las cinco pastillas llamaba a `applyActFilters` cinco veces, y cada llamada **ordenaba** las 2.465 filas: `renderActs` pasó de 442 ms a 468 ms sin que nadie lo notara. | Mide **después** también. Un cambio que solo añade un conteo puede pagar el precio de toda la cadena que hay detrás. |
 | **v87** — una prueba usaba `#c-act [id^="act-"]` para coger la primera fila y cogía `act-filtros-box`. Los clics no hacían nada y la prueba decía que el pliegue no abría. | Un selector por prefijo de `id` casa con más de lo que crees. Usa la clase de la fila (`.act-item`), y comprueba que lo que cogiste es lo que querías. |
+
+| **v88** — se cambió la pantalla de entrada a Obra y los datos llegaban (1.080 cargadas) pero la pantalla seguía diciendo «Cargando la obra…»: `loadAll` llamaba solo a `renderActs`, que pinta un contenedor oculto. | Cambiar la puerta de entrada toca **tres** sitios (estado, clase `active`, `goTab` del arranque) y **quien carga los datos tiene que repintar la pantalla que se ve**, no la que solía verse. |
+| **v88** — el aviso de «Tardando más de lo normal», con su botón de Reintentar, se pintaba en `#c-act`. Con Obra de entrada quedaba detrás de una vista oculta: el ingeniero veía «Cargando…» sin ninguna salida. | Todo aviso de error se pinta **donde el usuario está mirando**. Un botón de reintentar en un contenedor oculto es lo mismo que no tenerlo. |
+| **v88** — una prueba lado a lado dio `checkVisible: 0` y pareció que el ✓ de la fila había desaparecido. Era la prueba: medía `#c-act` sin activar la pestaña, y desde v88 nace oculta. | Cuando midas lo VISIBLE, abre la pestaña de verdad primero. Si no, un cambio de pantalla de entrada hace que toda la prueba mienta a la vez. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
