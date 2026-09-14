@@ -6251,9 +6251,11 @@ function renderActs(){
         <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px">${grupoPills}</div>
       </div>
       ${buildActsFiltros()}
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--amber-light);border:1px solid var(--amber);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--amber)">
+      <!-- El boton "Cargar todas" se fue con el tope: la carga ya es completa
+           siempre. Dejarlo seria ofrecer algo que no hace nada. -->
+      <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--text3)">
         <span>${allActs.length} cargadas${_actsRango(allActs)}</span>
-        ${S.actLimitAll?'<span style="color:var(--green);font-weight:700">Todas ✓</span>':`<button onclick="S.actLimitAll=true;loadActsAll().then(function(){renderActs();})" style="padding:4px 10px;border:1.5px solid var(--amber);background:var(--bg2);color:var(--amber);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">Cargar todas</button>`}
+        <span style="margin-left:auto;color:var(--green);font-weight:700">Todas ✓</span>
       </div>
     </div>
 
@@ -9745,12 +9747,18 @@ async function cuadrarTodas(){
 async function loadActsAll(){
   setSS('syncing','Cargando...');
   try{
-    var lim=S.actLimitAll?3000:(S.actMostrarTodas?500:2000);
-    if(S.actMostrarTodas){
-      S.acts=await sb('obra_actividades?order=fecha.desc,created_at.desc&limit='+lim);
-    } else {
-      S.acts=await sb('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc&limit='+lim);
-    }
+    /* Antes el tope era `actMostrarTodas ? 500 : 2000`, justo al reves de lo
+       que hace falta: pedir "ver TODAS" lo BAJABA a 500 sobre una tabla de
+       2.465 filas. El usuario creia estar viendo la obra entera y veia una
+       quinta parte, sin ningun aviso.
+       Ahora por sbTodo, que pagina hasta traerlo todo — lo mismo que ya hacia
+       el arranque en loadAll(). No hay tope que ajustar. */
+    S.acts = await sbTodo(S.actMostrarTodas
+      ? 'obra_actividades?order=fecha.desc,created_at.desc'
+      : 'obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc');
+    /* Una sola carga para todo el app: lo que ven Hoy y En Obra sale de aqui
+       mismo, no de una segunda consulta que puede quedarse atras. */
+    _derivarAbiertas();
     revisarConsistencia();
     setSS('ok','✓ '+hhmm());
   }catch(e){setSS('err','Error cargando');}
@@ -14516,18 +14524,37 @@ async function guardarUploaderFoto(actId, fotoUrl){
 // Carga TODAS las actividades abiertas (estado != completado), sin ventana de
 // fechas ni tope de 250. Dataset dedicado que usan En Obra y Estancadas para
 // ver también las de fuera del rango cargado en S.acts (p.ej. fechas de agosto).
-async function loadAbiertas(){
-  try{
-    var r=await sbTodo('obra_actividades?estado=neq.completado&order=fecha_fin.asc,created_at.desc');
-    S.abiertas=Array.isArray(r)?r:[];
-  }catch(e){ S.abiertas=S.abiertas||[]; }
+/* S.abiertas y S.actsActivas salen de S.acts, no de otra consulta.
+   Antes loadAbiertas() repetia LA MISMA consulta del arranque
+   (estado=neq.completado por sbTodo): el app pedia las 1.080 abiertas dos
+   veces, y despues Hoy leia un array y Actividades el otro. En cuanto uno se
+   quedaba atras, las dos pantallas cantaban numeros distintos de la misma
+   obra y no habia forma de saber cual mentia. */
+function _derivarAbiertas(){
+  S.abiertas=(S.acts||[]).filter(function(a){return a.estado!=='completado';});
+  /* En Obra siempre enseño TODAS las abiertas: es el mismo array, no una copia,
+     para que no puedan separarse. */
+  S.actsActivas=S.abiertas;
   return S.abiertas;
+}
+
+async function loadAbiertas(){
+  /* Solo se va a la base si S.acts todavia esta vacio — arranque a medias o
+     cache frio. Sin esta guarda, Hoy se pintaria con cero abiertas en el
+     primer pintado y se quedaria asi, porque el que llama solo pregunta si
+     S.abiertas sigue undefined. */
+  if(!(S.acts||[]).length){
+    try{
+      var r=await sbTodo('obra_actividades?estado=neq.completado&order=fecha_fin.asc,created_at.desc');
+      S.acts=Array.isArray(r)?r:[];
+    }catch(e){ S.abiertas=S.abiertas||[]; return S.abiertas; }
+  }
+  return _derivarAbiertas();
 }
 async function loadTareas(){
   renderEnObra();
   try{
-    await loadAbiertas();
-    S.actsActivas=S.abiertas||[];   // En Obra muestra TODAS las abiertas
+    await loadAbiertas();   // ya deja S.actsActivas apuntando al mismo array
     S.tareas=[];
     renderEnObra();
   }catch(e){ console.warn('Error En Obra:', e.message); }
