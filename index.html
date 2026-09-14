@@ -111,6 +111,45 @@ body{padding-left:var(--sl);padding-right:var(--sr)}
 .app{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
 
 
+/* ── MÓDULO OBRA — la cola de trabajo (v87) ──
+   Botones de dedo: 46px. Esto se toca de pie, con polvo y sol, no sentado.
+   Las tarjetas salen de la cola al marcarlas: por eso la transición. */
+.ob-h{font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.9px;text-transform:uppercase;margin:20px 0 9px}
+.ob-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px}
+.ob-pill{min-height:64px;flex-direction:column;align-items:flex-start!important;justify-content:center;gap:3px;
+  padding:9px 11px;border-radius:14px;border:1.5px solid var(--border2);background:var(--bg2);
+  color:var(--text);font-family:var(--font);cursor:pointer;text-align:left;width:100%}
+.ob-pill b{font-size:13.5px;font-weight:800;line-height:1.2}
+.ob-pill s{text-decoration:none;font-size:11px;color:var(--text3);font-family:var(--mono);line-height:1.3}
+.ob-pill s i{font-style:normal;color:var(--red);font-weight:700}
+.ob-pill.roja{border-color:var(--red);background:var(--red-light)}
+.ob-mas{min-height:46px;width:100%;margin-top:8px;border-radius:12px;border:1.5px dashed var(--border2);
+  background:none;color:var(--text3);font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font)}
+.ob-bar{display:flex;align-items:center;gap:10px;margin:2px 0 12px}
+.ob-volver{flex:0 0 auto;min-height:46px;padding:0 15px;border-radius:12px;border:1.5px solid var(--accent);
+  background:var(--accent-fill);color:var(--accent-on);font-size:13px;font-weight:800;cursor:pointer;font-family:var(--font)}
+.ob-tit{flex:1;min-width:0}
+.ob-tit b{display:block;font-size:16px;font-weight:800;line-height:1.25}
+.ob-tit s{text-decoration:none;font-size:11.5px;color:var(--text3);font-family:var(--mono)}
+.ob-todas{display:flex;gap:6px;margin-bottom:14px}
+.ob-todas button{flex:1;min-width:0;min-height:44px;border-radius:11px;border:1.5px solid var(--border2);
+  background:var(--bg3);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)}
+.ob-card{border:1.5px solid var(--border);background:var(--bg2);border-radius:16px;padding:12px 12px 10px;
+  margin-bottom:10px;transition:opacity .22s,transform .22s}
+.ob-card.va{opacity:0;transform:translateX(30px)}
+.ob-d{font-size:14.5px;font-weight:700;line-height:1.35;margin-bottom:4px}
+.ob-m{font-size:11.5px;color:var(--text3);margin-bottom:8px;font-family:var(--mono);line-height:1.45}
+.ob-m i{font-style:normal;color:var(--red);font-weight:700}
+.ob-r{display:flex;gap:6px;margin-top:6px}
+.ob-r button{flex:1;min-width:0;min-height:46px;border-radius:12px;border:1.5px solid var(--border2);
+  background:var(--bg3);color:var(--text2);font-size:12.5px;font-weight:800;cursor:pointer;font-family:var(--font)}
+.ob-r button.on{border-color:var(--accent);background:var(--accent-fill);color:var(--accent-on)}
+.ob-r button.ok{flex:1.3;border-color:var(--green);background:var(--green-light);color:var(--green)}
+.ob-r button.mic{flex:0 0 54px}
+.ob-vacio{text-align:center;padding:36px 16px;color:var(--text3);font-size:13.5px;line-height:1.6}
+.ob-cont{display:inline-block;background:var(--green-light);color:var(--green);border-radius:99px;
+  padding:6px 13px;font-size:12px;font-weight:800;font-family:var(--mono)}
+
 /* ── MODO CAMPO (index.html?campo=usuario) ── */
 html[data-campo] .app,html[data-campo] #app-lock,html[data-campo] .add-fab,
 html[data-campo] .bottom-nav,html[data-campo] #sidebar,html[data-campo] .drawer{display:none!important}
@@ -546,6 +585,10 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
         <svg id="sb-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
     </div>
+    <button class="sb-btn" id="sb-terreno" onclick="goTab('terreno')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>
+      <span class="sb-btn-lbl">Obra</span>
+    </button>
     <button class="sb-btn" id="sb-actividades" onclick="goTab('actividades')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
       <span class="sb-btn-lbl">Actividades</span>
@@ -622,6 +665,9 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
   </div>
 
   <div class="tabs">
+    <!-- "Obra" es 'terreno' por dentro: el id 'obra' ya es el de Actividades,
+         heredado de la pestaña "En Obra" que se retiró en v77. -->
+    <div class="tab" data-tab="terreno" onclick="goTab('terreno')">Obra</div>
     <div class="tab" data-tab="actividades" onclick="goTab('actividades')">Actividades</div>
     <div class="tab" data-tab="equipo" onclick="goTab('equipo')">Equipo</div>
     <div class="tab" data-tab="reportes" onclick="goTab('reportes')">Reportes</div>
@@ -649,6 +695,10 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <div id="c-kanban" style="display:none"></div>
       <div id="c-revision" style="display:none"></div>
     </div>
+
+    <!-- OBRA: la cola de trabajo. Se llama 'terreno' por dentro porque el id
+         'obra' ya es el de Actividades (ver comentario de la pestaña). -->
+    <div class="view" id="view-terreno"><div id="c-terreno"></div></div>
 
     <div class="view" id="view-equipo">
       <div id="c-equipo-subnav"></div>
@@ -708,6 +758,10 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 
   <!-- BOTTOM NAV (mobile) -->
   <nav class="bottom-nav" id="bottom-nav">
+    <button class="bnav-btn" id="bn-terreno" onclick="goTab('terreno')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>
+      <span class="blbl">Obra</span>
+    </button>
     <button class="bnav-btn" id="bn-equipo" onclick="goTab('equipo')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span class="blbl">Equipo</span>
@@ -801,7 +855,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260914_86';
+const APP_VERSION='20260914_87';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -4978,7 +5032,11 @@ var FILTRO_HUECO = {
 var FILTRO_HUECO_NOM = {retrasadas:'vencidas', sinfecha:'sin fecha',
                         sincontratista:'sin asignar', congeladas:'congeladas'};
 
-function applyActFilters(acts){
+/* soloContar salta el ordenado del final. Las pastillas de arriba llaman aquí
+   cinco veces por repintado solo para saber CUÁNTAS quedan, y ordenar 2.465
+   filas cinco veces costaba ~58 ms de cada toque. El criterio sigue viviendo
+   aquí y en un solo sitio: lo único que se salta es el orden. */
+function applyActFilters(acts, soloContar){
   let filtered = acts;
   // 'retrasadas', 'sinfecha' y 'sincontratista' NO son estados (los estados son
   // pendiente/en-progreso/completado/pausada); son huecos de datos que hay que
@@ -5031,6 +5089,7 @@ function applyActFilters(acts){
       return hay.indexOf(_q)>=0;
     });
   }
+  if(soloContar) return filtered;
   // Con el pedido de congeladas manda el orden por tiempo quieta: ver arriba las
   // más olvidadas es justamente para lo que sirve el filtro.
   if(soloCongeladas) return _ordenCongeladas(filtered);
@@ -5250,6 +5309,46 @@ function _actCintaHTML(){
 }
 
 function _actLimpiarFiltros(){S.actFiltroRapidos=[];S.actFiltroAvanzado={};S.actFiltroPlan='';S.actFiltroTexto='';S.actFiltroOpen=null;renderActs();}
+
+/* ── LAS CINCO PASTILLAS DE ARRIBA ───────────────────────────────────
+   Tres cosas cambian en v87:
+
+   1. CONMUTAN, no reemplazan. Hacían S.actFiltroRapidos=['x'], así que tocar
+      una borraba la anterior y desde la pastilla no había forma de quitarla:
+      había que buscar "Limpiar" o la cinta de abajo.
+   2. Se VEN puestas. Antes quedaban idénticas con el filtro activo — mirabas
+      la fila y no sabías qué estabas viendo.
+   3. El número es el que vas a ver. Contaban sobre S.acts entero: con Yelson
+      elegido, "vencidas" seguía diciendo 326 y al tocarla salían 85. Es el
+      mismo engaño de "863 vencidas" que al tocarlo daba cero. Se cuenta
+      llamando a applyActFilters con el filtro puesto — el criterio vive en un
+      solo sitio y no puede desviarse.
+
+   Y si con el filtro puesto no queda nada, la pastilla no se ofrece: no se
+   invita a tocar algo que deja la lista vacía. */
+function _actAtajoHTML(clave, lab, col){
+  var puestos=(S.actFiltroRapidos||[]).slice();
+  var on=puestos.indexOf(clave)>=0;
+  var prev=S.actFiltroRapidos, n=0;
+  S.actFiltroRapidos = on ? puestos : puestos.concat([clave]);
+  try{ n=applyActFilters(S.acts||[], true).length; }
+  catch(e){ n=0; }
+  finally{ S.actFiltroRapidos=prev; }
+  if(!n && !on) return '';
+  var borde = on?'var(--accent)':(col||'var(--border2)');
+  var fondo = on?'var(--accent-fill)':(col==='var(--red)'?'var(--red-light)':'var(--bg2)');
+  var letra = on?'var(--accent-on)':(col||'var(--text2)');
+  return '<button onclick="actAtajo(\''+clave+'\')" style="flex-shrink:0;padding:8px 13px;'+
+    'border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:'+(on?'800':'600')+';'+
+    'border:1.5px solid '+borde+';background:'+fondo+';color:'+letra+'">'+
+    (on?'✓ ':'')+n+' '+esc(lab)+'</button>';
+}
+function actAtajo(clave){
+  var a=(S.actFiltroRapidos||[]).slice(), i=a.indexOf(clave);
+  if(i>=0) a.splice(i,1); else a.push(clave);
+  S.actFiltroRapidos=a;
+  renderActs();
+}
 
 // ══════════════════════════════════════════════════════════════
 // ACTIVIDADES — SELECCIÓN MÚLTIPLE (solo vista Lista)
@@ -5863,12 +5962,12 @@ function renderActs(){
         ${ICO_FILT} Filtros${nF?` <span style="background:var(--accent-fill);color:var(--accent-on);border-radius:99px;padding:0 6px;font-size:11px;line-height:16px;font-weight:700">${nF}</span>`:''}
       </button>
       ${canEdit()?`<button onclick="actSelModo()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid ${S.actSelModo?'var(--accent-fill)':'var(--border2)'};background:${S.actSelModo?'var(--accent-fill)':'var(--bg2)'};color:${S.actSelModo?'var(--accent-on)':'var(--text2)'}">${S.actSelModo?'Salir':'Seleccionar'}</button>`:''}
-      <button onclick="S.actFiltroRapidos=['retrasadas'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--red);background:var(--red-light);color:var(--red)">${(S.acts||[]).filter(isRetrasada).length} vencidas</button>
-      <button onclick="S.actFiltroRapidos=['en-progreso'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">${(S.acts||[]).filter(a=>a.estado==='en-progreso').length} en curso</button>
-      ${(function(){var n=(S.acts||[]).filter(a=>a.estado!=='completado'&&!(a.fecha_fin||'').trim()).length; return n?`<button onclick="S.actFiltroRapidos=['sinfecha'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--amber);background:var(--bg2);color:var(--amber)">${n} sin fecha</button>`:'';})()}
-      ${(function(){var n=(S.acts||[]).filter(a=>a.estado!=='completado'&&!(a.personal_nombre||'').trim()).length; return n?`<button onclick="S.actFiltroRapidos=['sincontratista'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">${n} sin asignar</button>`:'';})()}
-      ${(function(){var n=_congeladasCount(); return n?`<button onclick="S.actFiltroRapidos=['congeladas'];renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">${n} congeladas</button>`:'';})()}
-      ${nF?`<button onclick="S.actFiltroRapidos=[];S.actFiltroPlan='';S.actFiltroAvanzado={};S.actMostrarTodas=false;renderActs()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Limpiar</button>`:''}
+      ${_actAtajoHTML('retrasadas','vencidas','var(--red)')}
+      ${_actAtajoHTML('en-progreso','en curso')}
+      ${_actAtajoHTML('sinfecha','sin fecha','var(--amber)')}
+      ${_actAtajoHTML('sincontratista','sin asignar')}
+      ${_actAtajoHTML('congeladas','congeladas')}
+      ${nF?`<button onclick="_actLimpiarFiltros()" style="flex-shrink:0;padding:8px 13px;border-radius:99px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Limpiar</button>`:''}
     </div>
 
     ${_actPillsRapidasHTML()}
@@ -6800,18 +6899,20 @@ function _actFilaCheckHTML(a){
 
    Aparece al abrir la fila, encima del detalle: un toque en la fila y las
    acciones estan ahi, sin cambiar de pantalla. */
-/* ── LO QUE SE VE SIN ABRIR LA FILA ──────────────────────────────────
-   Una sola linea por tarjeta con lo que se toca todo el dia: el avance, la
-   fecha que mas se mueve y el microfono. Antes habia que tocar la fila para
-   que apareciera; en obra eso es un toque de mas por cada partida.
-   Cerrar NO esta aqui: lo hace el ✓ verde de la cabecera, que ya estaba. */
+/* ── LO QUE SALE AL ABRIR LA FILA ────────────────────────────────────
+   El avance, la fecha que mas se mueve y el microfono. En v86 estaban
+   siempre a la vista; con 1.080 filas eso son seis botones por renglon y la
+   lista dejaba de poder leerse de un vistazo. Registrar rapido es lo que
+   hace el modulo Obra, que trabaja con decenas de tarjetas, no con mil.
+   Cerrar NO esta aqui: lo hace el ✓ verde de la cabecera, siempre visible. */
 function _actFilaRapidaHTML(a){
   if(!canEdit() || a.estado==='completado' || S.actSelModo) return '';
   var actual=parseInt(a.porcentaje)||0;
   var id=String(a.id).replace(/'/g,"\\'");
   var bs='flex:1;min-width:0;min-height:44px;border-radius:10px;font-size:12.5px;'+
          'font-weight:800;cursor:pointer;font-family:var(--font)';
-  var h='<div style="display:flex;gap:5px;padding:0 11px 9px" onclick="event.stopPropagation()">';
+  // Sin padding lateral: ya lo pone det-, y duplicarlo estrechaba los botones.
+  var h='<div style="display:flex;gap:5px;padding:8px 0 2px" onclick="event.stopPropagation()">';
   [25,50,75].forEach(function(v){
     var on=(actual===v);
     h+='<button onclick="actFilaPct(\''+id+'\','+v+')" style="'+bs+';'+
@@ -6947,12 +7048,14 @@ function actHTML(a, ai, tipo){
       ${_actFilaCheckHTML(a)}
       <span id="chev-${a.id}" style="color:var(--text3);font-size:15px;flex-shrink:0;transition:transform .15s;${_abierta?'transform:rotate(90deg)':''}">›</span>
     </div>
-    <!-- Las acciones de cada dia, SIEMPRE a la vista: no hay que abrir la
-         fila para marcar un avance. Van fuera de det- y sin condicionar a
-         S.actAbiertas — asi fue como en v79 se quedaron invisibles:
-         toggleActDet solo cambia el display de esa caja, no repinta. -->
-    ${_actFilaRapidaHTML(a)}
+    <!-- v87: las acciones vuelven DENTRO del pliegue. En v86 estaban siempre
+         a la vista y eran seis botones por fila sobre 1.080 filas: la lista
+         dejaba de leerse. Lo de registrar rápido ahora vive en el módulo Obra,
+         que es una cola corta; aquí manda la consulta.
+         Van dentro de det-, no fuera: toggleActDet solo cambia el display de
+         esa caja, no repinta — fuera no aparecerían nunca (v79). -->
     <div id="det-${a.id}" style="display:${_abierta?'block':'none'};padding:2px 11px 11px;border-top:1px solid var(--border)">
+    ${_actFilaRapidaHTML(a)}
     ${_actFilaAvanceHTML(a)}
 
     <div style="font-size:11.5px;color:var(--text3);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px">
@@ -8952,6 +9055,10 @@ function _repintarFila(id){
 }
 
 function reRenderActs(){
+  /* Con Obra delante, repintar la lista de Actividades cuesta ~1 s con las
+     1.080 abiertas y NO se ve: su contenedor está oculto. Al volver a la
+     pestaña, goTab la repinta igual. */
+  if(S.currentTab==='terreno'){ try{ renderTerreno(); }catch(e){ console.warn('renderTerreno:',e); } return; }
   var _s=_scrollActual();
   renderActs();
   if(S.obraVista==='kanban') renderKanban();
@@ -14623,7 +14730,9 @@ async function compartirEjecutivoWA(){
 }
 
 function goTab(tab){
-  if(moduloOculto(tab)) tab='hoy';
+  /* Caía en 'hoy', que no existe desde v84: la vista no se encontraba, no se
+     activaba ninguna, y la pantalla quedaba en blanco. Ahora cae en la lista. */
+  if(moduloOculto(tab)) tab='obra';
   // Legacy tab redirects — old internal calls still work
   var legacyMap={enobra:'obra',asistencia:'equipo',actividades:'obra',
     personal:'equipo',penalidades:'equipo',semana:'reportes',historial:'reportes'};
@@ -14640,7 +14749,7 @@ function goTab(tab){
     tab=legacyMap[tab];
   }
   S.currentTab=tab;
-  var VIEWS=['obra','equipo','reportes','fotos','planos','compras','plan','replan','bitacora','metodologia','gerencia'];
+  var VIEWS=['obra','terreno','equipo','reportes','fotos','planos','compras','plan','replan','bitacora','metodologia','gerencia'];
   VIEWS.forEach(function(v){
     var el=document.getElementById('view-'+v);
     if(el) el.classList.toggle('active', v===tab);
@@ -14658,6 +14767,7 @@ function goTab(tab){
   updateBNav(tab);
   updateFAB();
   if(tab==='obra')          renderObra();
+  else if(tab==='terreno')  renderTerreno();
   else if(tab==='equipo')   renderEquipo();
   else if(tab==='reportes') renderReportesHub();
   else if(tab==='fotos')    renderFotos();
@@ -18038,6 +18148,388 @@ async function campoMarcar(id, accion, pct){
   }catch(e){
     if(card){ card.style.opacity=''; card.style.pointerEvents=''; }
     showToast('No se pudo guardar — revisa la señal','err',5000);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MÓDULO OBRA — la cola de trabajo                            (v87)
+//
+// Actividades es el corazón: ahí está todo, con sus filtros, sus cuatro
+// vistas y el registro completo. Esto es otra cosa: una cola que SE VACÍA.
+// Se dice dónde estás —un apartamento, un contratista— y salen solo esas
+// partidas con los botones ya puestos. Lo que marcas desaparece de la cola
+// y el contador sube. Actividades no puede hacer eso: es un registro, tiene
+// que seguir enseñando la partida mientras cumpla el filtro.
+//
+// Por qué esto NO es "Hoy" ni "En Obra" otra vez —las dos se retiraron por
+// ser la lista con otra piel—: aquellas ABRÍAN con una lista larga y pedían
+// filtrarla. Esta no enseña ni una partida hasta que dices dónde estás, y
+// desde ahí son dos toques hasta registrar. El día en obra se recorre por
+// sitios y por contratistas, no por una lista de mil renglones.
+//
+// Todo lo que escribe pasa por Acciones, y cerrar va por
+// marcarActCompletada — el mismo camino del ✓ de la lista.
+//
+// Se llama 'terreno' por dentro porque el id 'obra' ya es el de Actividades,
+// heredado de la pestaña "En Obra" retirada en v77.
+// ══════════════════════════════════════════════════════════════
+
+function _trQ(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+/* JSON dentro de un atributo con comillas dobles: el navegador corta el valor
+   en la primera comilla si no se escapa. Ya pasó con el buscador de
+   predecesoras. */
+function _trJ(s){ return JSON.stringify(String(s==null?'':s)).replace(/"/g,'&quot;'); }
+
+function _trHechas(){ return (S._trHechas=S._trHechas||{}); }
+
+/* Lo abierto menos lo que ya tocaste hoy: eso es lo que hace que la cola baje.
+   No se borra nada — siguen en S.acts, y "Verlas" las devuelve. */
+function _trAbiertas(){
+  var h=_trHechas();
+  return (S.acts||[]).filter(function(a){
+    if(a.estado==='completado') return false;
+    return S._trVerHechas ? true : !h[a.id];
+  });
+}
+
+function _trCuenta(arr){
+  return {n:arr.length, v:arr.filter(FILTRO_HUECO.retrasadas).length};
+}
+// Quien más debe vencido primero; a igualdad, quien más tiene abierto.
+function _trPorVenc(mapa){
+  return function(x,y){
+    var vx=mapa[x].filter(FILTRO_HUECO.retrasadas).length,
+        vy=mapa[y].filter(FILTRO_HUECO.retrasadas).length;
+    return vy-vx || mapa[y].length-mapa[x].length || x.localeCompare(y);
+  };
+}
+/* Vencidas primero y la más vieja arriba, luego las empezadas, luego por
+   fecha. Es el orden en que se ataca un apartamento. */
+function _trOrdenar(arr){
+  var hoy=today();
+  return arr.slice().sort(function(x,y){
+    var fx=fechaVenc(x)||'', fy=fechaVenc(y)||'';
+    var vx=(fx&&fx<hoy)?0:1, vy=(fy&&fy<hoy)?0:1;
+    if(vx!==vy) return vx-vy;
+    if(vx===0) return fx.localeCompare(fy);
+    var ex=(x.estado==='en-progreso')?0:1, ey=(y.estado==='en-progreso')?0:1;
+    if(ex!==ey) return ex-ey;
+    return (fx||'zzzz').localeCompare(fy||'zzzz');
+  });
+}
+
+// La cola del contexto. Con sinCruce=true se salta el segundo filtro: es lo
+// que hacen falta para pintar las pastillas del cruce sin que se borren solas.
+function _trCola(sinCruce){
+  var c=S.trCtx; if(!c) return [];
+  var arr=_trAbiertas();
+  if(c.t==='apto')       arr=arr.filter(function(a){ return (a.area||'').trim()===c.v; });
+  else if(c.t==='quien') arr=arr.filter(function(a){ return _trEsDe(a,c.v); });
+  else {
+    var f=(c.v==='curso')?function(a){ return a.estado==='en-progreso'; }:FILTRO_HUECO[c.v];
+    if(f) arr=arr.filter(f);
+  }
+  if(!sinCruce && c.q){
+    arr = (c.t==='apto')
+      ? arr.filter(function(a){ return _trEsDe(a,c.q); })
+      : arr.filter(function(a){ return (a.area||'').trim()===c.q; });
+  }
+  return _trOrdenar(arr);
+}
+/* personal_nombre trae varios nombres separados por coma, y puede venir
+   vacío: los 30 sin asignar no están marcados 'contratista'. */
+function _trEsDe(a, quien){
+  if(quien==='Sin asignar') return !(a.personal_nombre||'').trim();
+  return _personaEn(a, quien);
+}
+
+// ── NAVEGACIÓN ────────────────────────────────────────────────
+function trIr(t,v){
+  S.trCtx={t:t, v:v, q:''};
+  renderTerreno();
+  var vw=document.getElementById('view-terreno'); if(vw) vw.scrollTop=0;
+}
+function trVolver(){ S.trCtx=null; renderTerreno(); }
+function trCruce(q){ if(!S.trCtx) return; S.trCtx.q=(S.trCtx.q===q?'':q); renderTerreno(); }
+function trVerHechas(){ S._trVerHechas=!S._trVerHechas; renderTerreno(); }
+function trOtras(){ S._trOtras=!S._trOtras; renderTerreno(); }
+function trTodaLaGente(){ S._trTodaLaGente=!S._trTodaLaGente; renderTerreno(); }
+
+// ── LO QUE ESCRIBE ────────────────────────────────────────────
+/* Marcada = fuera de la cola. La tarjeta se va sola y el contador sube: es
+   todo el punto del módulo. Repintar la cola entera aquí sí vale — son
+   decenas de tarjetas, no las 1.080 de la lista. */
+function _trSale(id){
+  _trHechas()[id]=1;
+  var el=document.getElementById('ob-'+id);
+  if(!el || S._trVerHechas){ renderTerreno(); return; }
+  el.classList.add('va');
+  el.style.pointerEvents='none';
+  setTimeout(function(){ if(S.currentTab==='terreno') renderTerreno(); }, 240);
+}
+async function trPct(id,v){
+  if(!canEdit()) return;
+  if(v>=100){ trListo(id); return; }
+  try{ await Acciones.setAvance(id,v); showToast(v+'% guardado ✓'); }
+  catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err',5000); return; }
+  _trSale(id);
+}
+async function trCorrer(id,dias){
+  if(!canEdit()) return;
+  var r=_correrPlan([id],'correr',dias);
+  if(!r.plan.length){ showToast('Esa partida no tiene fecha que correr','warn'); return; }
+  try{
+    await Acciones.editar(id, r.plan[0].patch, 'corrida '+dias+' días (en Obra)');
+    showToast('Movida '+dias+' días ✓');
+  }catch(e){ showToast('No se pudo mover: '+(e&&e.message||''),'err',5000); return; }
+  _trSale(id);
+}
+async function trFecha(id,f){
+  if(!canEdit()) return;
+  var a=Acciones.porId(id); if(!a) return;
+  var cambios={fecha_fin:f};
+  // El fin nunca antes del inicio — la misma regla de _correrPlan.
+  if((a.fecha_inicio||'') && a.fecha_inicio>f) cambios.fecha_inicio=f;
+  try{
+    await Acciones.editar(id, cambios, 'entrega → '+f+' (en Obra)');
+    showToast('Entrega: '+fmtF(f)+' ✓');
+  }catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err',5000); return; }
+  _trSale(id);
+}
+function trListo(id){
+  if(!canEdit()) return;
+  /* Cerrar SIEMPRE por marcarActCompletada. Con setAvance(100) cerraría
+     igual pero por otra puerta: dos botones que dicen lo mismo tienen que
+     hacer lo mismo, por el mismo camino. Se marca antes de llamar porque
+     doMarcarCompletada repinta. */
+  _trHechas()[id]=1;
+  marcarActCompletada(id);
+  _trSale(id);
+}
+
+/* Mover de golpe todo lo que está en la cola. Es lo que más se hace —247 de
+   349 ediciones del historial son fechas— y hasta ahora obligaba a irse a la
+   lista y entrar en modo selección. La aritmética es la de siempre. */
+async function trTodas(modo, arg){
+  if(!canEdit()) return;
+  var cola=_trCola();
+  if(!cola.length) return;
+  var ids=cola.map(function(a){ return a.id; }), plan, detalle, msg;
+  if(modo==='correr'){
+    var r=_correrPlan(ids,'correr',arg);
+    plan=r.plan; detalle='corridas '+arg+' días (todas, en Obra)';
+    if(!plan.length){ showToast('Nada que mover: sin fecha o ya estaban así','warn',5000); return; }
+    msg='Se van a correr '+arg+' días '+plan.length+' partida'+(plan.length!==1?'s':'')+'.'+
+        (r.saltadas?'\n\n('+r.saltadas+' se quedan como están: sin fecha o ya iguales.)':'');
+  } else {
+    plan=[];
+    ids.forEach(function(id){
+      var a=Acciones.porId(id); if(!a || a.estado==='completado') return;
+      if((a.fecha_fin||'')===arg) return;
+      var p={fecha_fin:arg};
+      if((a.fecha_inicio||'') && a.fecha_inicio>arg) p.fecha_inicio=arg;
+      plan.push({id:id, patch:p});
+    });
+    detalle='entrega → '+arg+' (todas, en Obra)';
+    if(!plan.length){ showToast('Ya estaban todas con esa entrega','warn'); return; }
+    msg='Se le pone entrega '+fmtF(arg)+' a '+plan.length+' partida'+(plan.length!==1?'s':'')+'.';
+  }
+  if(!confirm(msg+'\n\n¿Seguro?')) return;
+  await _correrAplicar(plan, detalle);
+  renderTerreno();
+}
+
+// ── LO QUE SE PINTA ───────────────────────────────────────────
+function _trPillHTML(lab, arr, js, roja){
+  var c=_trCuenta(arr);
+  return '<button class="ob-pill'+(roja?' roja':'')+'" onclick="'+js+'">'+
+    '<b>'+esc(lab)+'</b><s>'+c.n+' abierta'+(c.n!==1?'s':'')+
+    (c.v?' · <i>'+c.v+' vencida'+(c.v!==1?'s':'')+'</i>':'')+'</s></button>';
+}
+
+function _trHomeHTML(){
+  var ab=_trAbiertas(), hoy=today();
+  var nHechas=Object.keys(_trHechas()).length;
+  var porArea={}, porQuien={};
+  ab.forEach(function(a){
+    var k=(a.area||'').trim();
+    if(k) (porArea[k]=porArea[k]||[]).push(a);
+    var ns=_responsables(a.personal_nombre);
+    (ns.length?ns:['Sin asignar']).forEach(function(q){ (porQuien[q]=porQuien[q]||[]).push(a); });
+  });
+
+  var h='<div style="display:flex;align-items:baseline;gap:10px;margin:2px 0 3px;flex-wrap:wrap">'+
+    '<div style="font-size:21px;font-weight:800;letter-spacing:-.3px">Obra</div>'+
+    '<div style="font-size:12px;color:var(--text3);font-family:var(--mono)">'+fmtDia(hoy)+' '+fmtF(hoy)+'</div>'+
+  '</div>'+
+  '<div style="font-size:12.5px;color:var(--text3);line-height:1.5">Toca dónde estás y salen solo esas partidas, con los botones puestos.</div>';
+
+  if(nHechas){
+    h+='<div style="margin-top:11px"><span class="ob-cont">'+nHechas+' marcada'+(nHechas!==1?'s':'')+' hoy</span>'+
+      '<button onclick="trVerHechas()" style="margin-left:8px;min-height:38px;padding:0 13px;border-radius:99px;'+
+      'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);font-size:12px;font-weight:700;'+
+      'cursor:pointer;font-family:var(--font)">'+(S._trVerHechas?'Ocultarlas':'Verlas')+'</button></div>';
+  }
+
+  /* Los atajos van primero: dos de cada tres partidas abiertas están
+     vencidas, así que casi siempre se empieza por ahí. */
+  var venc=ab.filter(FILTRO_HUECO.retrasadas),
+      curso=ab.filter(function(a){ return a.estado==='en-progreso'; }),
+      sinf=ab.filter(FILTRO_HUECO.sinfecha);
+  h+='<div class="ob-h">Lo que aprieta</div><div class="ob-grid">'+
+    (venc.length?_trPillHTML('Vencidas',venc,"trIr('atajo','retrasadas')",true):'')+
+    (curso.length?_trPillHTML('Empezadas',curso,"trIr('atajo','curso')"):'')+
+    (sinf.length?_trPillHTML('Sin fecha',sinf,"trIr('atajo','sinfecha')"):'')+
+  '</div>';
+
+  var aptos=REC_ORDEN.filter(function(k){ return porArea[k] && porArea[k].length; });
+  if(aptos.length){
+    h+='<div class="ob-h">¿En qué apartamento?</div><div class="ob-grid">';
+    aptos.forEach(function(k){ h+=_trPillHTML(_recNom(k), porArea[k], "trIr('apto',"+_trJ(k)+")"); });
+    h+='</div>';
+  }
+  /* Fachada, escaleras, parqueo y áreas comunes van detrás de un pliegue: son
+     muchas y el día se pasa dentro de los apartamentos. Alfabético las metía
+     ANTES del 2A, que es por donde se empieza. */
+  var otras=Object.keys(porArea).filter(function(k){ return REC_ORDEN.indexOf(k)<0; }).sort(_trPorVenc(porArea));
+  if(otras.length){
+    if(S._trOtras){
+      h+='<div class="ob-h">Otras áreas</div><div class="ob-grid">';
+      otras.forEach(function(k){ h+=_trPillHTML(k, porArea[k], "trIr('apto',"+_trJ(k)+")"); });
+      h+='</div><button class="ob-mas" onclick="trOtras()">Ocultar las otras áreas</button>';
+    } else {
+      h+='<button class="ob-mas" onclick="trOtras()">Otras áreas ('+otras.length+') ▾</button>';
+    }
+  }
+
+  var gente=Object.keys(porQuien).sort(_trPorVenc(porQuien));
+  if(gente.length){
+    var tope=S._trTodaLaGente?gente.length:8;
+    h+='<div class="ob-h">¿Con quién estás?</div><div class="ob-grid">';
+    gente.slice(0,tope).forEach(function(q){ h+=_trPillHTML(q, porQuien[q], "trIr('quien',"+_trJ(q)+")"); });
+    h+='</div>';
+    if(gente.length>tope)      h+='<button class="ob-mas" onclick="trTodaLaGente()">Ver los '+gente.length+' ▾</button>';
+    else if(S._trTodaLaGente)  h+='<button class="ob-mas" onclick="trTodaLaGente()">Ver menos</button>';
+  }
+  return h;
+}
+
+function _trTituloCtx(){
+  var c=S.trCtx;
+  if(c.t==='apto')  return _recNom(c.v)||c.v;
+  if(c.t==='quien') return c.v;
+  return c.v==='retrasadas'?'Vencidas':c.v==='curso'?'Empezadas':'Sin fecha';
+}
+
+function _trTarjetaHTML(a){
+  var hoy=today(), f=fechaVenc(a);
+  var d=f?Math.round((new Date(hoy+'T12:00:00')-new Date(f+'T12:00:00'))/864e5):null;
+  var quien=_responsables(a.personal_nombre)[0]||'Sin asignar';
+  var meta=esc(_recNom(a.area)||a.area||'—')+' · '+esc(quien);
+  if(!f)            meta+=' · sin fecha';
+  else if(d>0)      meta+=' · <i>'+d+' día'+(d!==1?'s':'')+' vencida</i>';
+  else if(d===0)    meta+=' · para hoy';
+  else              meta+=' · '+fmtF(f);
+  var pct=parseInt(a.porcentaje)||0;
+  if(pct) meta+=' · '+pct+'%';
+
+  var id=_trQ(a.id), vie=_finDeSemana();
+  var h='<div class="ob-card" id="ob-'+esc(a.id)+'">'+
+    '<div class="ob-d">'+esc(a.descripcion)+'</div>'+
+    '<div class="ob-m">'+meta+'</div>';
+  if(canEdit()){
+    h+='<div class="ob-r">'+
+      [25,50,75].map(function(v){
+        return '<button class="'+(pct===v?'on':'')+'" onclick="trPct(\''+id+'\','+v+')">'+v+'%</button>';
+      }).join('')+
+      '<button class="ok" onclick="trListo(\''+id+'\')">✓ Ya está</button>'+
+    '</div>'+
+    '<div class="ob-r">'+
+      '<button onclick="trCorrer(\''+id+'\',7)">+1 sem</button>'+
+      (vie!==hoy?'<button onclick="trFecha(\''+id+'\',\''+vie+'\')">Viernes</button>':'')+
+      '<button onclick="trFecha(\''+id+'\',\''+hoy+'\')">Hoy</button>'+
+      '<button class="mic" onclick="dictarSobre(\''+id+'\')" aria-label="Dictar">🎙️</button>'+
+    '</div>';
+  }
+  return h+'</div>';
+}
+
+function _trColaHTML(){
+  var c=S.trCtx, cola=_trCola(), base=_trCola(true), cu=_trCuenta(cola), hoy=today();
+
+  var h='<div class="ob-bar">'+
+    '<button class="ob-volver" onclick="trVolver()">‹ Obra</button>'+
+    '<div class="ob-tit"><b>'+esc(_trTituloCtx())+
+      (c.q?' · '+esc(c.t==='apto'?c.q:(_recNom(c.q)||c.q)):'')+'</b>'+
+      '<s>'+cu.n+' por hacer'+(cu.v?' · '+cu.v+' vencidas':'')+'</s></div>'+
+  '</div>';
+
+  /* El cruce: dentro de un apartamento se trabaja por contratista —a cada uno
+     se le entrega su hoja—, y dentro de un contratista por apartamento. Se
+     calcula sobre la cola SIN cruce: si no, al elegir uno los demás
+     desaparecían y no había forma de cambiar. */
+  var cruce={};
+  if(c.t==='apto'){
+    base.forEach(function(a){
+      var ns=_responsables(a.personal_nombre);
+      (ns.length?ns:['Sin asignar']).forEach(function(q){ (cruce[q]=cruce[q]||[]).push(a); });
+    });
+  } else {
+    base.forEach(function(a){ var k=(a.area||'').trim()||'Sin área'; (cruce[k]=cruce[k]||[]).push(a); });
+  }
+  var ks=Object.keys(cruce);
+  if(ks.length>1){
+    // Los apartamentos en REC_ORDEN; la gente, por quien más debe vencido.
+    ks.sort(c.t==='apto' ? _trPorVenc(cruce) : function(x,y){
+      var ix=REC_ORDEN.indexOf(x), iy=REC_ORDEN.indexOf(y);
+      if(ix<0) ix=99; if(iy<0) iy=99;
+      return ix-iy || cruce[y].length-cruce[x].length || x.localeCompare(y);
+    });
+    h+='<div style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:12px;padding-bottom:2px">';
+    ks.forEach(function(k){
+      var on=(c.q===k), n=cruce[k].length;
+      h+='<button onclick="trCruce('+_trJ(k)+')" style="flex-shrink:0;min-height:42px;padding:0 13px;'+
+        'border-radius:99px;border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+        'background:'+(on?'var(--accent-fill)':'var(--bg2)')+';color:'+(on?'var(--accent-on)':'var(--text2)')+';'+
+        'font-size:12.5px;font-weight:'+(on?'800':'600')+';cursor:pointer;font-family:var(--font);'+
+        'white-space:nowrap">'+(on?'✓ ':'')+esc(c.t==='apto'?k:(_recNom(k)||k))+' '+n+'</button>';
+    });
+    h+='</div>';
+  }
+
+  if(canEdit() && cola.length>1){
+    var vie=_finDeSemana();
+    h+='<div class="ob-todas">'+
+      '<button onclick="trTodas(\'correr\',7)">Todas +1 sem</button>'+
+      (vie!==hoy?'<button onclick="trTodas(\'fecha\',\''+vie+'\')">Todas al viernes</button>':'')+
+      '<button onclick="trTodas(\'fecha\',\''+_isoAddDias(hoy,14)+'\')">Todas en 2 sem</button>'+
+    '</div>';
+  }
+
+  if(!cola.length){
+    h+='<div class="ob-vacio">'+(Object.keys(_trHechas()).length
+      ? 'Nada más por aquí — ya marcaste todo lo de este sitio.'
+      : 'Aquí no queda nada abierto.')+'</div>';
+  } else {
+    h+=cola.map(_trTarjetaHTML).join('');
+  }
+  return h;
+}
+
+function renderTerreno(){
+  var host=document.getElementById('c-terreno'); if(!host) return;
+  if(!(S.acts||[]).length){
+    host.innerHTML='<div class="ob-vacio">Cargando la obra…</div>';
+    return;
+  }
+  try{
+    host.innerHTML = S.trCtx ? _trColaHTML() : _trHomeHTML();
+  }catch(e){
+    /* El app no puede quedarse en blanco en medio de un recorrido: si algo
+       revienta aquí, se dice y se deja la puerta de vuelta. */
+    console.warn('renderTerreno:',e);
+    host.innerHTML='<div class="ob-vacio">No se pudo pintar esta pantalla.<br>'+
+      '<button class="ob-volver" style="margin-top:14px" onclick="trVolver()">Volver a Obra</button></div>';
   }
 }
 

@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v86 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v87 — 14 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,17 +109,50 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v77 (14 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v87 (14 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
-El menú es: **Actividades · Equipo · Reportes · Fotos · Planos · Compras ·
-Bitácora · Gerencia · Metodología.** El app **abre en Actividades**.
+El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
+Compras · Bitácora · Gerencia · Metodología.** El app **abre en
+Actividades**.
+
+**Actividades es el corazón y Obra es la cola.** Lo dijo el dueño en una
+línea: en Actividades están *todas* las opciones de modificación, registro
+y actualización —y sus botones pueden ir plegados, no hace falta verlos de
+entrada—; Obra es para la agilidad, el manejo de la información en obra y
+un flujo de trabajo fluido. Son dos pantallas con dos trabajos distintos,
+no dos pieles de lo mismo.
 
 Dos módulos se retiraron por la misma razón — eran Actividades con otra
 cara: **«En Obra» en v77** y **«Hoy» en v84**. Lo de Hoy estaba tres veces
 en otro sitio (el plan ya era un filtro de la lista, el edificio es una
 vista, la asistencia está en Equipo); lo único suyo era repartir el plan,
 y eso se mudó. **No los vuelvas a crear.**
+
+### El módulo Obra (v87) — qué lo hace distinto, y cómo no arruinarlo
+
+Se llama **`terreno`** por dentro: el id `obra` ya es el de Actividades,
+heredado de la pestaña «En Obra» retirada. La vista es `view-terreno`, el
+contenedor `c-terreno`, el CSS `.ob-*` y las funciones `tr*` / `_tr*`.
+
+La diferencia con Actividades **no es la piel, son tres cosas**:
+
+1. **Abre por contexto, no por lista.** La primera pantalla no enseña ni
+   una partida: enseña sitios y contratistas con sus números. Hoy y En Obra
+   abrían con una lista larga y pedían filtrarla — por eso sobraban.
+2. **La cola se vacía.** Lo que marcas sale de la tarjetería y el contador
+   sube (`S._trHechas`, «N marcadas hoy», con «Verlas» para deshacer la
+   vista). Actividades no puede hacer eso: es un registro, tiene que seguir
+   enseñando la partida mientras cumpla el filtro.
+3. **Dos toques hasta registrar.** Sitio (o contratista) → tarjeta con los
+   botones ya puestos. El cruce apartamento × contratista es un tercer
+   toque opcional, y se calcula sobre la cola **sin** cruce (si no, al
+   elegir uno los demás desaparecen y no hay forma de cambiar).
+
+Escribe **todo** por `Acciones`, y cerrar por `marcarActCompletada` — el
+mismo camino del ✓ de la lista. `trTodas()` mueve la cola entera reusando
+`_correrPlan` / `_correrAplicar`: es lo que más se hace y hasta v86
+obligaba a irse a la lista y entrar en modo selección.
 
 **El plan del día vive en la lista**, como pastilla: `Plan hoy N` /
 `Plan mañana N` al principio de la fila de filtros (`S.actFiltroPlan`, que
@@ -136,26 +169,43 @@ mismos botones que cualquier otra.
 | **Revisar por contratista** | **Actividades → Revisión** — `renderRevision()`, `revAbrir()` |
 | **El panel de un apartamento, por contratista** | Tocar el apartamento en la torre, **en Hoy o en Actividades → Edificio** — `abrirAptoTorre()`, `_recPanelApto()` |
 | **Mover fechas en bloque** | Modo selección en la lista, **o** el panel del apartamento por contratista — `_correrPlan()`, `_correrAplicar()` |
-| **REGISTRAR: avance, cerrar, fecha** | **En la fila de la lista** — `_actFilaAvanceHTML()` |
+| **REGISTRAR rápido, de pie, en la obra** | **Obra** — `renderTerreno()`, `trPct()`, `trListo()`, `trFecha()`, `trCorrer()` |
+| **Mover TODAS las fechas de un sitio o un contratista** | **Obra**, barra «Todas a…» — `trTodas()` |
+| **REGISTRAR con todo el detalle** | **Actividades**, al abrir la fila — `_actFilaRapidaHTML()`, `_actFilaAvanceHTML()` |
 
 
-**Se registra con LOS MISMOS botones en los dos sitios donde se trabaja:
-la fila de la lista y las tarjetas del Plan del día en Hoy.** Las dos
-llaman a `_actFilaAvanceHTML()` y al ✓ de `_actFilaCheckHTML()`. Hasta v83
-Hoy tenía sus propios controles —un select de 11px, una casilla de 52px y
-tres botones diminutos— que además registraban por otra vía: se aprendía
-dos veces y en obra no se aciertan.
+**Los botones de registrar son LOS MISMOS en los dos sitios, aunque no
+estén en el mismo lugar de la pantalla.** En Obra van siempre a la vista
+en la tarjeta; en Actividades van **dentro del pliegue** (`det-`), y salen
+al tocar la fila. Los dos escriben por `Acciones` y cierran por
+`marcarActCompletada`. Hasta v83 Hoy tenía sus propios controles —un select
+de 11px, una casilla de 52px y tres botones diminutos— que además
+registraban por otra vía: se aprendía dos veces y en obra no se aciertan.
 
-**Se registra en UN sitio: la fila de la lista, y los botones se ven SIN
-abrir nada** (`_actFilaRapidaHTML`, v86): `25% · 50% · 75% · +1 sem · 🎙️`
-en cada tarjeta. Dentro de la tarjeta abierta quedan solo las fechas
-concretas (`Entrega hoy · El viernes`, `_actFilaAvanceHTML`).
+**En Actividades los botones van PLEGADOS** (`_actFilaRapidaHTML` y
+`_actFilaAvanceHTML`, ambos dentro de `det-` desde v87). En v86 estuvieron
+siempre a la vista: son seis botones por renglón sobre 1.080 filas y la
+lista dejaba de poder leerse. Registrar rápido lo hace Obra, que trabaja
+con decenas de tarjetas. **Van dentro de `det-`, nunca fuera**:
+`toggleActDet` solo cambia el `display` de esa caja, no repinta — fuera no
+aparecerían nunca (v79).
 
 **Nunca repintes la lista entera para cambiar una tarjeta.** Con las 1.080
 abiertas, `renderActs()` tarda **~1,1 s** en escritorio y bastante más en el
 teléfono. Usa **`_repintarFila(id)`**, que cambia solo esa tarjeta (16 ms
 medidos) y devuelve `false` si con el cambio dejaría de cumplir el filtro —
 ahí sí hay que repintar de verdad.
+
+**Las cinco pastillas de arriba conmutan** (`_actAtajoHTML`,
+`actAtajo`, v87): se ven puestas, se quitan tocándolas otra vez, se
+combinan, y **su número es el que vas a ver** — se cuenta llamando a
+`applyActFilters(acts, true)` con ese filtro añadido a los que ya están.
+Antes hacían `S.actFiltroRapidos=['x']`, no se marcaban, y contaban sobre
+`S.acts` entero: con Yelson elegido, «vencidas» decía 326 y al tocarla
+salían 85. Si con el filtro puesto no queda nada, la pastilla no se
+ofrece. El segundo argumento de `applyActFilters` **solo** salta el
+ordenado: ordenar 2.465 filas cinco veces por repintado costaba ~58 ms de
+cada toque.
 
 **Contratista y apartamento son pastillas de un toque**
 (`_actPillsRapidasHTML`), fuera del panel de Filtros: los seis que más
@@ -394,6 +444,11 @@ pertenece a ningún nivel.
 | **v83** — se llegaba a la lista filtrada desde el panel y no había vuelta: la cinta de chips deja **quitar** el filtro, que no es lo mismo que **volver**. | Todo camino que lleve a otra pantalla con estado puesto necesita su camino de vuelta, visible. |
 | **v83** — en Hoy había ocho filas de controles —fecha, asistencia, HOY/MAÑANA, título, PDF, organizar, chips, buscar— antes de la primera actividad, y la cabecera «Plan del día · HOY» salía dos veces. | Cada fila de controles empuja el trabajo fuera de la pantalla. Con menos de diez partidas, filtrar y organizar sobran: plégalos. |
 | **v82** — el panel pedía a la base los pendientes del apartamento (`cargarPendRec`, `S._recPend`) cuando `S.acts` ya los tenía desde v77. Una consulta por apartamento, y dos copias que podían decir números distintos. | Desde la carga única, **nada** necesita su propia consulta de actividades. Si vas a pedir a `obra_actividades`, mira primero si ya está en `S.acts`. |
+
+| **v86→v87** — los botones de avance se pusieron siempre a la vista en la lista. Con 1.080 filas son seis botones por renglón: la lista dejó de poder leerse de un vistazo, que es para lo que sirve. | Un atajo que se repite mil veces deja de ser un atajo. Si algo hace falta a cada rato, merece **su propia pantalla corta** —no meterlo en la larga. |
+| **v87** — las cinco pastillas de filtro hacían `S.actFiltroRapidos=['x']`: reemplazaban en vez de conmutar, no se marcaban al estar puestas, y su número se contaba sobre `S.acts` entero en vez de sobre lo que ya estaba filtrado. | Una pastilla de filtro tiene que decir tres cosas: cuántas, si está puesta, y cómo quitarla. Si falta una, el usuario deja de creerle al número — es el mismo engaño de «863 vencidas → cero». |
+| **v87** — contar las cinco pastillas llamaba a `applyActFilters` cinco veces, y cada llamada **ordenaba** las 2.465 filas: `renderActs` pasó de 442 ms a 468 ms sin que nadie lo notara. | Mide **después** también. Un cambio que solo añade un conteo puede pagar el precio de toda la cadena que hay detrás. |
+| **v87** — una prueba usaba `#c-act [id^="act-"]` para coger la primera fila y cogía `act-filtros-box`. Los clics no hacían nada y la prueba decía que el pliegue no abría. | Un selector por prefijo de `id` casa con más de lo que crees. Usa la clase de la fila (`.act-item`), y comprueba que lo que cogiste es lo que querías. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
