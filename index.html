@@ -801,7 +801,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260914_84';
+const APP_VERSION='20260914_85';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1772,8 +1772,24 @@ async function sbTodo(path, opts){
     path = path.replace(/(order=[^&]*)/, '$1,id.asc');
   var todo=[], desde=0;
   for(var v=0; v<tope; v++){
-    var lote=await sb(path,{headers:{'Range-Unit':'items',
-      'Range':desde+'-'+(desde+pagina-1)}});
+    /* Cada pagina se reintenta antes de darse por vencida. En la obra la señal
+       se cae un segundo y ya: "Todas" son TRES peticiones seguidas de 1.000
+       filas, y que una sola fallara tiraba las 2.465 y dejaba al usuario con
+       un "Error cargando" que no explicaba nada. Se espera un poco mas en cada
+       intento, que es lo que hace falta cuando la red viene mal. */
+    var lote=null, ultimo=null;
+    for(var intento=0; intento<3; intento++){
+      try{
+        lote=await sb(path,{headers:{'Range-Unit':'items',
+          'Range':desde+'-'+(desde+pagina-1)}});
+        ultimo=null;
+        break;
+      }catch(e){
+        ultimo=e;
+        if(intento<2) await new Promise(function(r){ setTimeout(r, 600*(intento+1)); });
+      }
+    }
+    if(ultimo) throw ultimo;
     if(!lote || !lote.length) break;
     todo=todo.concat(lote);
     if(lote.length<pagina) break;
@@ -2085,7 +2101,29 @@ async function limpiarFotosInvalidas(){
 
 function setSS(t,m){
   const b=document.getElementById('sync'),d=document.getElementById('sdot'),s=document.getElementById('smsg');
+  /* Sin la guarda, una llamada antes de que exista la barra tumbaba toda la
+     funcion que la hizo — y setSS se llama desde casi todas. */
+  if(!b||!d||!s) return;
   b.className='sync '+t;d.className='sdot '+t;s.textContent=m;
+  /* En rojo, la barra se toca y reintenta. Antes era un cartel muerto: decia
+     que algo fallo y no daba nada que hacer, en una obra sin teclado ni
+     paciencia. */
+  if(t==='err'){
+    b.style.cursor='pointer';
+    b.onclick=function(){ reintentarCarga(); };
+    b.setAttribute('role','button');
+    b.setAttribute('title','Toca para reintentar');
+  } else {
+    b.style.cursor=''; b.onclick=null;
+    b.removeAttribute('role'); b.removeAttribute('title');
+  }
+}
+
+/* Vuelve a pedir lo que se estaba viendo. Si la lista ya tiene algo se pide
+   solo la lista; si el app ni arranco, se pide todo. */
+function reintentarCarga(){
+  if((S.acts||[]).length) loadActsAll().then(function(){ renderActs(); });
+  else loadAll();
 }
 
 async function loadAll(){
@@ -8955,7 +8993,18 @@ async function loadActsAll(){
     _derivarAbiertas();
     revisarConsistencia();
     setSS('ok','✓ '+hhmm());
-  }catch(e){setSS('err','Error cargando');}
+  }catch(e){
+    /* El catch decia "Error cargando" y se tragaba el motivo: en obra eso es
+       un cartel rojo que no dice que paso ni que hacer. Ahora dice si fue la
+       red o el app, avisa de que lo de antes SIGUE en pantalla, y ofrece
+       reintentar. */
+    var esRed = /fetch|network|timeout|load failed|conexi/i.test(String(e&&e.message||''));
+    setSS('err', esRed?'Sin conexión — toca para reintentar':'Error al cargar — toca para reintentar');
+    showToast((esRed?'No se pudo traer la lista: la conexión falló.'
+                   :'No se pudo traer la lista: '+(e&&e.message||''))+
+              ' Se quedó lo último que se había cargado.','err',6000);
+    console.warn('loadActsAll:',e);
+  }
   // Se refresca junto con las actividades pero sin esperarlo: si el historial
   // falla o tarda, la carga de actividades ya terminó igual.
   loadTocadasRecientes().catch(function(){});
