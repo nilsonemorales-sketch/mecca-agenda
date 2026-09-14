@@ -817,7 +817,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260914_82';
+const APP_VERSION='20260914_83';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -2663,8 +2663,10 @@ function renderPlanDia(){
   // Conteos para el selector
   var nHoy=(S.abiertas||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===today();}).length;
   var nMan=(S.abiertas||[]).filter(function(a){return (a.fecha_plan||'').slice(0,10)===tomorrow();}).length;
-  var h='<div class="sec-title" style="margin:16px 0 8px">Plan del día · '+diaTag+
-    '<span style="font-weight:400;color:var(--text3);margin-left:8px;font-size:10px;">actividades asignadas · <span id="plan-dia-count">'+countLbl+'</span></span></div>';
+  /* Se quito el titulo suelto: la barra de abajo ya dice "Plan del día · HOY"
+     con el conteo. Eran dos cabeceras seguidas diciendo lo mismo, y en un
+     telefono cada fila de mas empuja el trabajo fuera de la pantalla. */
+  var h='<span id="plan-dia-count" style="display:none">'+countLbl+'</span>';
   // Selector de día HOY / MAÑANA (visible también para view)
   var _selBtn=function(active,label,onclick){
     return '<button onclick="'+onclick+'" style="flex:1;padding:8px 6px;border:1.5px solid '+(active?'var(--accent-fill)':'var(--border2)')+';background:'+(active?'var(--accent-fill)':'var(--bg2)')+';color:'+(active?'#fff':'var(--text2)')+';font-size:12px;font-weight:800;cursor:pointer;font-family:var(--font);border-radius:8px;white-space:nowrap">'+label+'</button>';
@@ -2681,7 +2683,21 @@ function renderPlanDia(){
        '<button onclick="generarPDFPlan()" style="padding:8px 16px;background:var(--accent-fill);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);box-shadow:0 4px 12px rgba(124,58,237,.25)">Generar PDF</button>'+
        '<button onclick="compartirPlanWA()" style="padding:8px 16px;background:var(--green);color:#fff;border:none;border-radius:var(--r2);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">WhatsApp</button>'+
      '</div></div>';
+  /* Organizar, filtrar y buscar: tres filas de controles para, casi siempre,
+     menos de diez partidas. Van plegadas. Con el plan corto no se necesitan, y
+     con el plan largo estan a un toque. */
   if(sp.delDia.length){
+    var _pfOpen=!!S.planFiltrosOpen;
+    h+='<button onclick="S.planFiltrosOpen=!S.planFiltrosOpen;renderHoy()" '+
+      'style="width:100%;min-height:40px;margin-bottom:8px;border-radius:10px;'+
+      'border:1.5px solid '+((_pfOpen||filtroActivo)?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(filtroActivo?'var(--accent-soft)':'var(--bg2)')+';'+
+      'color:'+((_pfOpen||filtroActivo)?'var(--accent)':'var(--text3)')+';font-size:12px;'+
+      'font-weight:700;cursor:pointer;font-family:var(--font)">'+
+      'Organizar y filtrar'+(filtroActivo?' · '+pend.length+' de '+sp.delDia.length:'')+
+      (_pfOpen?' ▴':' ▾')+'</button>';
+  }
+  if(sp.delDia.length && S.planFiltrosOpen){
     // Selector de agrupación (compartido con el PDF)
     var _ag=S.planAgrupacion||'contratista';
     var agSeg=function(val,label){return '<button onclick="planSetAgrupacion(\''+val+'\')" style="padding:5px 10px;border:1.5px solid '+(_ag===val?'var(--accent-fill)':'var(--border2)')+';background:'+(_ag===val?'var(--accent-soft)':'var(--bg2)')+';color:'+(_ag===val?'var(--accent)':'var(--text2)')+';font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);border-radius:8px;white-space:nowrap">'+label+'</button>';};
@@ -2810,15 +2826,35 @@ function _planDiaCard(a,editable,esDup,esHoy){
      (venc?' <span style="color:var(--red);font-weight:700;">· '+atraso+'d atraso</span>':'')+'</div>';
   h+='<div style="height:3px;background:var(--bg3);border-radius:2px;margin:7px 0 9px;overflow:hidden"><div style="height:100%;width:'+Math.min(100,pct)+'%;border-radius:2px;background:var(--accent-fill)"></div></div>';
   if(editable){
-    h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'+
-       '<select onchange="planDiaAsignar(\''+a.id+'\', this.value)" style="font-size:11px;color:var(--text2);background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:4px 8px;font-family:var(--font)">'+_planDiaPersonalOpts(a.personal_nombre)+'</select>'+
-       (esHoy
-         ? '<input type="number" min="0" max="100" value="'+pct+'" id="pct-'+a.id+'" style="width:52px;font-size:12px;text-align:center;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:5px 6px;color:var(--text);font-family:var(--font)">'+
-           '<button onclick="planDiaGuardar(\''+a.id+'\')" style="padding:5px 12px;background:var(--accent-fill);color:#fff;border:none;border-radius:var(--r);font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--font)">Guardar</button>'+
-           '<button onclick="planDiaSinCambios(\''+a.id+'\')" style="padding:5px 10px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:var(--r);font-size:11px;cursor:pointer;font-family:var(--font)">Sin cambios hoy</button>'
-         : '<button onclick="planQuitar(\''+a.id+'\')" title="Quitar del plan" style="padding:5px 10px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);border-radius:var(--r);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font)">Quitar del plan</button>')+
-       (isAdmin()?'<button onclick="planDiaEliminar(\''+a.id+'\')" title="Eliminar (duplicada)" style="margin-left:auto;padding:5px 10px;background:var(--red-light);color:var(--red);border:1px solid #ffc9c9;border-radius:var(--r);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>':'')+
-       '</div>';
+    /* Los MISMOS botones que la fila de la lista. Antes esto eran controles de
+       formulario diminutos —un select de 11px, una casilla de 52px y tres
+       botones de 5px de relleno— que en obra, con guantes y sol, no se
+       aciertan. Y eran OTRA forma de registrar: se aprendia dos veces.
+       Ahora Hoy y la lista se tocan igual. */
+    if(esHoy){
+      h+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:2px">'+
+         _actFilaCheckHTML(a)+
+         '<button onclick="planDiaSinCambios(\''+a.id+'\')" style="flex:1;min-height:44px;'+
+           'border-radius:10px;border:1.5px solid var(--border2);background:var(--bg2);'+
+           'color:var(--text2);font-size:12.5px;font-weight:700;cursor:pointer;'+
+           'font-family:var(--font)">Sin cambios hoy</button>'+
+         (isAdmin()?'<button onclick="planDiaEliminar(\''+a.id+'\')" title="Eliminar (duplicada)" '+
+           'style="flex:0 0 auto;width:44px;height:44px;border-radius:10px;background:var(--red-light);'+
+           'color:var(--red);border:1px solid #ffc9c9;font-size:15px;font-weight:700;cursor:pointer;'+
+           'font-family:var(--font)">🗑</button>':'')+
+         '</div>';
+      h+=_actFilaAvanceHTML(a);
+    } else {
+      h+='<div style="display:flex;gap:6px;align-items:center">'+
+         '<button onclick="planQuitar(\''+a.id+'\')" style="flex:1;min-height:44px;border-radius:10px;'+
+           'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:12.5px;'+
+           'font-weight:700;cursor:pointer;font-family:var(--font)">Quitar del plan</button>'+
+         '</div>';
+    }
+    h+='<div style="margin-top:7px"><select onchange="planDiaAsignar(\''+a.id+'\', this.value)" '+
+       'style="width:100%;min-height:40px;font-size:12.5px;color:var(--text2);background:var(--bg3);'+
+       'border:1.5px solid var(--border2);border-radius:10px;padding:8px 10px;font-family:var(--font)">'+
+       _planDiaPersonalOpts(a.personal_nombre)+'</select></div>';
   }
   h+='</div>';
   return h;
@@ -2831,20 +2867,6 @@ async function planDiaAsignar(actId, nombre){
     showToast('Reasignado ✓');
     loadAbiertas().then(function(){renderHoy();});
   }catch(e){showToast('Error: '+e.message,'err');}
-}
-async function planDiaGuardar(actId){
-  if(!canEdit())return;
-  var el=document.getElementById('pct-'+actId);
-  var n=Math.min(100,Math.max(0,parseInt(el&&el.value)||0));
-  /* El Plan del dia se queda —planificar no es registrar— pero ya no manda su
-     propio PATCH: se saltaba el sellado de horas y la coherencia. Por
-     Acciones.setAvance, que ademas cuadra el estado solo. */
-  try{
-    await Acciones.setAvance(actId,n);
-    _hoyMarcarLocal(actId);
-    showToast(n>=100?'Completada ✓':'Avance '+n+'% ✓');
-    loadAbiertas().then(function(){renderHoy();});
-  }catch(e){showToast('Error: '+(e&&e.message||''),'err');}
 }
 function planDiaSinCambios(actId){
   if(!canEdit())return;
@@ -4533,6 +4555,10 @@ function irApto(area){
    antes hacia torreVer() desde el menu del dibujo. */
 function aptoVerEnLista(filtro){
   var area=S.recorrido && S.recorrido.area; if(!area) return;
+  /* De donde vengo. Sin esto la lista te deja filtrada por el apartamento y
+     para seguir trabajando hay que soltar el filtro a mano: no hay vuelta.
+     Con esto queda un boton para volver al panel donde estabas. */
+  S._vengoDeApto=area;
   S.actFiltroAvanzado=S.actFiltroAvanzado||{};
   S.actFiltroAvanzado.ubicaciones=[area];
   if(S.torrePersona) S.actFiltroAvanzado.personas=[S.torrePersona];
@@ -4819,7 +4845,6 @@ function renderHoy(){
   var _planDiaHTML=renderPlanDia();
 
   document.getElementById('c-hoy').innerHTML=`
-    ${torreHTML()}
     ${dateNavHTML()}
     ${(S.user&&S.user.rol==='view')?'<div style="background:#ecfeff;border:1.5px solid #0d9488;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700;color:#0f766e;display:flex;align-items:center;gap:6px">Modo solo visualización — puedes ver todo, pero no editar</div>':''}
 
@@ -4834,7 +4859,13 @@ function renderHoy(){
       <button onclick="goTab('equipo');S.equipoVista='asistencia';renderEquipo()" style="padding:6px 12px;border-radius:var(--r);border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">Marcar →</button>
     </div>
 
-    ${_planDiaHTML}`;
+    ${_planDiaHTML}
+
+    <!-- El edificio, DEBAJO del plan. Estaba arriba y se comia la primera
+         pantalla entera del telefono: abrias Hoy para el seguimiento del dia
+         y lo primero —y a veces lo unico sin bajar— era un dibujo. El plan es
+         a lo que se entra; el dibujo es para mirar como va la obra. -->
+    <div style="margin-top:18px">${torreHTML()}</div>`;
 
   // la torre: si los numeros ya estan se dibuja de una, si no se piden
   if(S._torre) dibujarTorre(); else cargarTorre();
@@ -5458,6 +5489,19 @@ function actQuitarFiltro(tipo, valor){
   renderActs();
 }
 
+/* Vuelve al panel del apartamento del que saliste, con su filtro ya soltado:
+   si volvieras con el filtro puesto, al salir otra vez a la lista te
+   encontrarias lo mismo y no habrias avanzado. */
+function volverAlApto(){
+  var area=S._vengoDeApto; if(!area) return;
+  S._vengoDeApto='';
+  var av=S.actFiltroAvanzado||{};
+  av.ubicaciones=(av.ubicaciones||[]).filter(function(u){ return u!==area; });
+  S.actFiltroAvanzado=av;
+  S.actFiltroRapidos=[];
+  abrirAptoTorre(area);
+}
+
 function _actCintaHTML(){
   var av=S.actFiltroAvanzado||{}, trozos=[];
   function chip(txt, tipo, valor){
@@ -5469,6 +5513,15 @@ function _actCintaHTML(){
       'background:var(--accent-soft);color:var(--accent);font-size:14px;font-weight:800;line-height:1;'+
       'font-family:var(--font);padding:0">×</button></span>');
   }
+  /* El camino de vuelta va PRIMERO y no es un chip: no se quita, se usa.
+     Quitar el filtro no es volver — te deja donde estabas pero perdido. */
+  var volver='';
+  if(S._vengoDeApto && (av.ubicaciones||[]).indexOf(S._vengoDeApto)>=0){
+    volver='<button onclick="volverAlApto()" style="display:inline-flex;align-items:center;gap:6px;'+
+      'min-height:38px;padding:7px 14px 7px 11px;border-radius:99px;border:1.5px solid var(--accent);'+
+      'background:var(--accent-fill);color:var(--accent-on);font-size:12.5px;font-weight:800;'+
+      'cursor:pointer;font-family:var(--font);white-space:nowrap">‹ '+esc(_recNom(S._vengoDeApto))+'</button>';
+  }
   (av.ubicaciones||[]).forEach(function(u){ chip(_recNom(u),'ubicaciones',u); });
   (av.personas||[]).forEach(function(n){ chip(n,'personas',n); });
   (av.contratistas||[]).forEach(function(n){ chip(n==='__sin_asignar__'?'Sin asignar':n,'contratistas',n); });
@@ -5477,14 +5530,14 @@ function _actCintaHTML(){
   if(S.actFiltroPlan) chip(S.actFiltroPlan==='manana'?'plan de mañana':'plan de hoy','plan','');
   if(S.actFiltroTexto) chip('«'+S.actFiltroTexto+'»','texto','');
   if(av.prioridad) chip(av.prioridad,'prioridad',av.prioridad);
-  if(!trozos.length) return '';
+  if(!trozos.length && !volver) return '';
   /* La etiqueta va en su propia linea y no al lado: con dos o tres chips mas
      el boton de limpiar, la fila no cabia en un telefono y "Viendo" se salia
      por la izquierda. */
   return '<div style="margin-bottom:12px">'+
     '<div style="font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;'+
     'letter-spacing:.06em;margin-bottom:6px">Viendo</div>'+
-    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;max-width:100%">'+trozos.join('')+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;max-width:100%">'+volver+trozos.join('')+
     (trozos.length>1?'<button onclick="_actLimpiarFiltros()" style="min-height:36px;padding:6px 12px;'+
       'border-radius:99px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);'+
       'font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Quitar todo</button>':'')+
@@ -7181,6 +7234,10 @@ function actHTML(a, ai, tipo){
     ${a.notas?`<div style="font-size:11.5px;color:var(--text2);padding:6px 9px;background:var(--bg3);border-radius:8px;margin-top:8px;border-left:2px solid var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.notas)}</div>`:''}
     ${fotos.length?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">${fotos.map(f=>`<img src="${f}" style="width:46px;height:46px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border)" onclick="verFotoInfo('${f}','${esc(a.descripcion)}','${a.fecha}','','','','${a.id}')">`).join('')}</div>`:''}
 
+    <!-- De aqui abajo es CONSULTA, no accion: horas, registro de tiempo y
+         verificacion. Va plegado porque abrir una partida en obra es para
+         cambiarla, no para leerla; el que necesite el historial lo abre. -->
+    <div id="mas-${a.id}" style="display:${(S.actMas&&S.actMas[a.id])?'block':'none'}">
     ${(function(){
       var ti=a.hora_inicio?fmt12h(a.hora_inicio):'';
       var tf=a.hora_fin?fmt12h(a.hora_fin):'';
@@ -7233,6 +7290,11 @@ function actHTML(a, ai, tipo){
     <div id="notabox-${a.id}" style="display:none;margin-top:7px"></div>
 `:''}
     ${(canEdit()||S.user?.rol==='ing')&&!a.verificado&&a.estado!=='pendiente'?`<div style="margin-top:6px"><button onclick="verificarAct('${a.id}')" style="${btn};width:100%;border:1.5px solid var(--green);background:var(--green-light);color:var(--green);font-size:12px">${_ic('checkc',13)} Verificar trabajo</button></div>`:''}
+    </div>
+    <button onclick="event.stopPropagation();toggleActMas('${a.id}')" style="width:100%;margin-top:7px;
+      min-height:40px;border:none;background:transparent;color:var(--text3);font-size:11.5px;
+      font-weight:700;cursor:pointer;font-family:var(--font)">
+      <span id="masl-${a.id}">${(S.actMas&&S.actMas[a.id])?'Menos ▴':'Horas, registro y verificación ▾'}</span></button>
     </div>
   </div>`;
 }
@@ -7317,6 +7379,18 @@ function _mismaEnOtras(a){
    se queda arriba: es el buscador que usa ese formulario.               */
 
 // Abre o cierra el detalle de una actividad sin volver a dibujar la lista.
+/* Pliega el detalle de consulta. Como toggleActDet, cambia el display y no
+   repinta: repintar cerraria la fila entera y perderias el sitio. */
+function toggleActMas(id){
+  if(!S.actMas) S.actMas={};
+  var d=document.getElementById('mas-'+id), l=document.getElementById('masl-'+id);
+  if(!d) return;
+  var abrir = d.style.display==='none';
+  d.style.display = abrir?'block':'none';
+  if(l) l.textContent = abrir?'Menos ▴':'Horas, registro y verificación ▾';
+  if(abrir) S.actMas[id]=1; else delete S.actMas[id];
+}
+
 function toggleActDet(id){
   if(!S.actAbiertas) S.actAbiertas={};
   var d=document.getElementById('det-'+id), c=document.getElementById('chev-'+id);

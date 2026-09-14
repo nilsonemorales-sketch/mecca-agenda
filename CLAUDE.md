@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v82 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v83 — 14 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -128,6 +128,13 @@ v77**: era el mismo módulo que Actividades con otra cara.
 | **REGISTRAR: avance, cerrar, fecha** | **En la fila de la lista** — `_actFilaAvanceHTML()` |
 
 
+**Se registra con LOS MISMOS botones en los dos sitios donde se trabaja:
+la fila de la lista y las tarjetas del Plan del día en Hoy.** Las dos
+llaman a `_actFilaAvanceHTML()` y al ✓ de `_actFilaCheckHTML()`. Hasta v83
+Hoy tenía sus propios controles —un select de 11px, una casilla de 52px y
+tres botones diminutos— que además registraban por otra vía: se aprendía
+dos veces y en obra no se aciertan.
+
 **Se registra en UN sitio: la fila de la lista.** Un toque en la fila abre
 sus acciones ahí mismo: `25% · 50% · 75%`, `Entrega hoy · El viernes`, y el
 micrófono. `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`, todo
@@ -162,6 +169,19 @@ otra con la lista y otra con el conteo.
 **La propuesta del plan del día se probó en v81 y se retiró en v82**: le
 decía al dueño lo que ya sabía y lo único que hacía era alejar el plan.
 No la vuelvas a construir.
+
+**Volver.** Cuando algo te manda a la lista con un filtro puesto
+(`aptoVerEnLista`), se guarda `S._vengoDeApto` y la cinta de filtros
+muestra un botón **«‹ Apto 2A»** (`volverAlApto()`) que reabre el panel y
+suelta ese filtro. Quitar el filtro **no es volver**: te deja donde estabas
+pero perdido. Si abres un camino nuevo hacia la lista, deja también el de
+vuelta.
+
+**Lo que es consulta va plegado.** En la tarjeta abierta, las horas, el
+registro de tiempo y «Verificar trabajo» están tras un pliegue
+(`toggleActMas`). Abrir una partida en obra es para cambiarla, no para
+leerla. Igual en el Plan del día: organizar, filtrar y buscar van tras un
+solo botón (`S.planFiltrosOpen`).
 
 La aritmética de mover fechas vive en **un solo sitio**, `_correrPlan(ids,
 modo, dias)` y `_correrAplicar(plan, detalle)` — los usan el modo selección
@@ -339,6 +359,8 @@ pertenece a ningún nivel.
 | **v76→v81** — el recorrido paso a paso: cinco versiones construyéndolo y moviéndole la puerta, y nunca se usó en obra. Se retiró entero. | Una pantalla que hay que seguir rescatando no tiene un problema de puerta: no encaja en cómo se trabaja. Pregunta antes de la tercera versión. |
 | **v81** — se estuvo a punto de añadir un filtro «esta semana» que la lista no sabe enseñar ni soltar: habría recortado la lista sin nada en pantalla que lo dijera. | No filtres con estado invisible. Si el usuario no lo ve, no lo puede quitar — y entonces la lista miente. |
 | **v76→v82** — tres pantallas seguidas rechazadas en obra: el recorrido, la propuesta del plan y el panel de tres pestañas. Las tres **guiaban** al usuario. Lo que sí funcionó: acciones en la fila, y fechas por contratista dentro del apartamento. | Este usuario no quiere que lo lleven de la mano; quiere menos toques para lo que ya sabe hacer. Antes de construir una pantalla, pregunta **qué le hace el día más largo**, no qué le gustaría ver. |
+| **v83** — se llegaba a la lista filtrada desde el panel y no había vuelta: la cinta de chips deja **quitar** el filtro, que no es lo mismo que **volver**. | Todo camino que lleve a otra pantalla con estado puesto necesita su camino de vuelta, visible. |
+| **v83** — en Hoy había ocho filas de controles —fecha, asistencia, HOY/MAÑANA, título, PDF, organizar, chips, buscar— antes de la primera actividad, y la cabecera «Plan del día · HOY» salía dos veces. | Cada fila de controles empuja el trabajo fuera de la pantalla. Con menos de diez partidas, filtrar y organizar sobran: plégalos. |
 | **v82** — el panel pedía a la base los pendientes del apartamento (`cargarPendRec`, `S._recPend`) cuando `S.acts` ya los tenía desde v77. Una consulta por apartamento, y dos copias que podían decir números distintos. | Desde la carga única, **nada** necesita su propia consulta de actividades. Si vas a pedir a `obra_actividades`, mira primero si ya está en `S.acts`. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
