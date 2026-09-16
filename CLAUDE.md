@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v93 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v94 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v93 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v94 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -202,6 +202,7 @@ mismos botones que cualquier otra.
 | Ver taller × apartamento | **Actividades → Matriz** |
 | Ver el edificio por niveles | **Actividades → Edificio** (v55) |
 | **Revisar por contratista** | **Actividades → Revisión** — `renderRevision()`, `revAbrir()` |
+| **Poner la obra al día por partida repetida** | **Actividades → Revisión → Por partida** — `revListaPartidas()`, `revPartidaAbierta()` |
 | **El panel de un apartamento, por contratista** | Tocar el apartamento en la torre, **en Hoy o en Actividades → Edificio** — `abrirAptoTorre()`, `_recPanelApto()` |
 | **Mover fechas en bloque** | Modo selección en la lista, **o** el panel del apartamento por contratista — `_correrPlan()`, `_correrAplicar()` |
 | **REGISTRAR rápido, de pie, en la obra** | **Obra** — `renderTerreno()`, `trPct()`, `trListo()`, `trFecha()`, `trCorrer()` |
@@ -253,6 +254,48 @@ de fiar.
 El resto de la explicación: `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`, todo
 por `Acciones`. **Cerrar NO está ahí**: lo hace el ✓ verde de la fila, que
 está siempre a la vista y a un toque. Una sola forma de cerrar por tarjeta.
+
+### El Repaso por partida repetida (v94) — por qué existe
+
+**El dueño pone la obra al día por PARTIDA REPETIDA, no por apartamento.** Ese
+es el modo principal, y el app no sabía hacer esa pregunta.
+
+Las 1.077 abiertas son solo **394 descripciones distintas**: 124 repetidas
+cubren **807 partidas**, el 75% de la obra. «Enderezar las llaves de codo de
+los aparatos de baño y los fregaderos» está abierta en los **once**
+apartamentos, toda de Daniel Espinal. Para actualizarlas había que entrar once
+veces —unos 60 toques— y la pregunta es UNA: «¿en cuáles ya está?».
+
+Vive **dentro de Revisión**, como segunda forma de agrupar el nivel 2
+(`S.revAgrupar`, **'partida' por defecto**), más un nivel 3 nuevo.
+
+- **Nivel 2** `revListaPartidas` — agrupa por descripción **EXACTA**. Sin
+  normalizar y sin recortar **a propósito**: si dos textos difieren son dos
+  grupos, y que se vean los dos es lo que destapa los duplicados. Cabecera:
+  «138 partidas · 36 preguntas». Las de una sola vez van tras «Sueltas (n)».
+- **Nivel 3** `revPartidaAbierta` — una línea por apartamento en `REC_ORDEN`,
+  con **Completada · Sin cambios · %**. Los nombres de los dos primeros los
+  eligió el dueño y **no se cambian**.
+
+**Por qué NO es la Matriz.** La Matriz agrupa por `Parecido` (difuso), así que
+**junta los textos distintos y esconde los duplicados**; solo cubre los once
+apartamentos; hace su propia consulta; y para actuar abre el editor completo de
+UNA partida. El Repaso agrupa por texto exacto y contesta por apartamento sin
+salir de la pantalla.
+
+Cuatro reglas que no se tocan:
+
+- **Los ids del grupo se fijan AL ABRIR** (`S._revPartidaIds`). Si se
+  recalcularan, cada una que marcas Completada desaparecería de la pantalla y
+  «fecha de una vez» no sabría a cuáles no aplicar.
+- **Uno por uno, con su propio catch.** Si una falla, ESA línea se marca en
+  rojo (`S._revPtdErr`) y las demás sí se guardan.
+- **La fecha de grupo toca `fecha_fin`, no `fecha_plan`.** En todo el app
+  «ponle fecha» es la entrega; `fecha_plan` es el plan del día, otra cosa.
+  (`Acciones.planificar` escribe `fecha_plan` — no sirve aquí.)
+- **«Falta una aquí» SIEMPRE pregunta el apartamento**, aunque quede uno solo
+  libre. Elegirlo solo ahorraba un toque y creaba la partida donde el ingeniero
+  no la nombró.
 
 ### Las cadenas (`predecesoras`) — dos formatos en la misma columna
 
@@ -565,6 +608,10 @@ pertenece a ningún nivel.
 | **v92** — la comparación lado a lado dijo «idénticos» y no probaba nada: en los datos de `comp87` las «sin fecha» tienen `fecha` FUTURA, así que nunca caían en vencidas. El caso real —sin `fecha_fin` y con `fecha` pasada— no estaba montado. | Que la comparación no cambie puede querer decir que el cambio no rompió nada… o que los datos de prueba no tienen el caso. Antes de darla por buena, comprueba que el escenario existe **en el doble**, no solo en la base. |
 
 | **v93** — una prueba dio por hecho que una partida sin fecha de entrega no debía tocarse al correr la cadena. `_correrPlan` sí le corre el INICIO (tiene uno) y no le inventa entrega — que es lo mismo que hace en el modo selección y en el panel. La equivocada era la prueba. | Cuando una prueba choca con una regla que ya vive en un solo sitio, sospecha primero de la prueba. Cambiar el criterio «solo para este caso» crea una segunda aritmética de fechas, y dos criterios terminan dando números distintos. |
+
+| **v94** — `revAbrir(nm)` no soltaba `S.revPartida`: al cambiar de contratista desde el nivel 3 se seguía pintando el grupo del anterior, con sus ids fijados al abrir. Parecía que el contratista nuevo tenía las partidas del viejo. | Todo estado de «lo que tengo abierto» se suelta al cambiar de contexto. Si guardas ids fijados a propósito, quien cambia el contexto tiene que limpiarlos — si no, la pantalla enseña datos que no son de ahí. |
+| **v94** — «Falta una aquí» elegía el apartamento SOLO cuando quedaba uno libre, sin decirlo. Ahorraba un toque y creaba la partida en un sitio que nadie nombró. | Adivinar está bien para ordenar y para sugerir. Para **crear** no: una partida que aparece donde nadie la puso cuesta más que el toque que ahorró. |
+| **v94** — el prompt venía escrito contra `8201afa`/v76 y citaba `_pasoGuardar` y `pasoFecha`, que se fueron con el paso a paso en v81. Las CIFRAS, en cambio, estaban exactas: 1.077 / 394 / 124→807 / 138/36 / el duplicado de 12 filas en 10 aptos. | Un prompt viejo puede tener el diagnóstico perfecto y las referencias podridas. Comprueba **las dos cosas por separado**: los números contra la base, y los nombres contra el código. Descartarlo entero por los segundos habría tirado un diagnóstico bueno. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base

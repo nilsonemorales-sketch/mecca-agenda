@@ -858,7 +858,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_93';
+const APP_VERSION='20260916_94';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -15398,6 +15398,12 @@ function renderRevision(){
     return;
   }
   if(!S.revContratista) return revListaContratistas(el);
+  /* Dos formas de agrupar en el nivel 2. Por defecto «por partida»: el dueño
+     pone la obra al día por partida repetida, no por apartamento. */
+  if(_revAgrupar()==='partida'){
+    if(S.revPartida) return revPartidaAbierta(el);
+    return revListaPartidas(el);
+  }
   return revListaActividades(el);
 }
 
@@ -15596,8 +15602,13 @@ function revListaContratistas(el){
     (lista.length?'':'<div class="empty" style="padding:30px">Sin actividades abiertas</div>');
 }
 
-function revAbrir(nm){ S.revContratista=nm; S.revAreaAbierta=''; renderRevision(); window.scrollTo(0,0); }
-function revVolver(){ S.revContratista=null; S.revAreaAbierta=''; renderRevision(); window.scrollTo(0,0); }
+/* Cambiar de contratista tiene que SOLTAR la partida abierta. Sin esto, al
+   elegir otro contratista desde el nivel 3 se seguía pintando el grupo del
+   anterior —con sus ids fijados al abrir— y parecía que el contratista nuevo
+   tenía las partidas del viejo. */
+function _revSoltarPartida(){ S.revPartida=''; S._revPartidaIds=null; S._revPtdErr={}; S._revPtdPct={}; }
+function revAbrir(nm){ S.revContratista=nm; S.revAreaAbierta=''; _revSoltarPartida(); renderRevision(); window.scrollTo(0,0); }
+function revVolver(){ S.revContratista=null; S.revAreaAbierta=''; _revSoltarPartida(); renderRevision(); window.scrollTo(0,0); }
 
 function revCard(a){
   var id=a.id, sid=String(id).replace(/'/g,"\\'");
@@ -15694,6 +15705,7 @@ function revListaActividades(el){
       '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">'+
         hechas+' revisadas de '+mias.length+'</div>'+
     '</div></div>'+
+    _revToggleHTML()+
     revAvisoFiltro()+
     /* Los cuatro numeros con los que se decide: cuanto hay, cuanto se paso de
        fecha, cuanto no tiene fecha ninguna y cuanto esta de verdad andando. */
@@ -15736,6 +15748,362 @@ function revListaActividades(el){
     }).join('')+
     (mias.length?'':'<div class="empty" style="padding:30px">'+
       (_revRapidos().length?'Nada de este contratista con ese filtro':'Todo revisado en este contratista ✓')+'</div>');
+}
+
+// ══════════════════════════════════════════════════════════════
+// REPASO POR PARTIDA REPETIDA                                  (v94)
+//
+// POR QUÉ EXISTE. Las 1.077 partidas abiertas son solo 394 descripciones
+// distintas: 124 descripciones repetidas cubren 807 partidas — el 75% de la
+// obra. «Enderezar las llaves de codo de los aparatos de baño y los
+// fregaderos» está abierta en los ONCE apartamentos, toda de Daniel Espinal.
+//
+// Para ponerlas al día había que entrar once veces —torre, apartamento,
+// buscar entre 86 partidas, tocar, cambiar, volver—, unos 60 toques. Y la
+// pregunta es UNA SOLA: «¿en cuáles ya está?». El app no sabía hacer la
+// pregunta que el dueño sabe contestar.
+//
+// Esto es para SENTARSE a poner la obra al día. El módulo Obra es para
+// estar de pie en el sitio. Son dos modos del mismo trabajo.
+//
+// POR QUÉ NO ES LA MATRIZ. La Matriz agrupa por `Parecido` (difuso), así que
+// JUNTA los textos distintos y esconde los duplicados; solo cubre los once
+// apartamentos; y para actuar abre el editor completo de UNA partida. Aquí se
+// agrupa por texto EXACTO —si dos textos difieren son dos grupos, y que se
+// vean los dos es justamente lo que destapa los duplicados— y se contesta por
+// apartamento sin salir de la pantalla.
+// ══════════════════════════════════════════════════════════════
+
+function _revAgrupar(){ return S.revAgrupar==='area' ? 'area' : 'partida'; }
+function revSetAgrupar(v){
+  S.revAgrupar=(v==='area'?'area':'partida');
+  S.revPartida=''; S.revAreaAbierta='';
+  renderRevision(); _revArriba();
+}
+function _revArriba(){
+  var v=document.getElementById('view-obra');
+  if(v) v.scrollTop=0;
+  try{ window.scrollTo(0,0); }catch(e){}
+}
+function _revEsc(s){ return JSON.stringify(String(s==null?'':s)).replace(/"/g,'&quot;'); }
+
+/* Agrupa por descripción EXACTA. Sin normalizar y sin recortar a propósito:
+   ver dos grupos casi iguales es la señal de que hay un duplicado. */
+function _revGrupos(nm){
+  var mias=revAbiertas().filter(function(a){ return _personaEn(a,nm); });
+  var g={};
+  mias.forEach(function(a){
+    var k=String(a.descripcion||'(sin descripción)');
+    (g[k]=g[k]||[]).push(a);
+  });
+  var arr=Object.keys(g).map(function(k){
+    var items=g[k], areas={};
+    items.forEach(function(a){ areas[a.area||'(sin área)']=1; });
+    return {desc:k, items:items, n:items.length,
+            aptos:Object.keys(areas).length,
+            venc:items.filter(FILTRO_HUECO.retrasadas).length,
+            prog:items.filter(function(a){ return a.estado==='en-progreso'; }).length};
+  });
+  // Las más repetidas primero: son las que ahorran más toques. A igualdad, las
+  // que más deben.
+  arr.sort(function(u,v){ return v.n-u.n || v.venc-u.venc || u.desc.localeCompare(v.desc); });
+  return {grupos:arr, total:mias.length};
+}
+
+// ── El conmutador del nivel 2 ──
+function _revToggleHTML(){
+  var p=_revAgrupar()==='partida';
+  var b=function(v,lab,on){
+    return '<button onclick="revSetAgrupar(\''+v+'\')" style="flex:1;min-height:44px;border-radius:10px;'+
+      'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
+      'color:'+(on?'var(--accent-on)':'var(--text2)')+';font-size:13px;font-weight:'+(on?'800':'600')+';'+
+      'cursor:pointer;font-family:var(--font)">'+lab+'</button>';
+  };
+  return '<div style="display:flex;gap:6px;margin-bottom:12px">'+
+    b('partida','Por partida',p)+b('area','Por área',!p)+'</div>';
+}
+
+/* Lo hecho en esta sentada. Se lleva la cuenta aquí y no del historial porque
+   el resumen es de LA SESIÓN: cuántas cerraste hoy sentado con el teléfono. */
+function _revSesion(){
+  return (S._revSesion=S._revSesion||{cerradas:0,igual:0,avance:0,fechas:0,creadas:[]});
+}
+function _revResumenHTML(){
+  var s=_revSesion();
+  var n=s.cerradas+s.igual+s.avance+s.fechas+s.creadas.length;
+  if(!n) return '';
+  var t=[];
+  if(s.cerradas) t.push(s.cerradas+' cerrada'+(s.cerradas!==1?'s':''));
+  if(s.igual)    t.push(s.igual+' sin cambios');
+  if(s.avance)   t.push(s.avance+' con avance');
+  if(s.fechas)   t.push(s.fechas+' refechada'+(s.fechas!==1?'s':''));
+  if(s.creadas.length) t.push(s.creadas.length+' creada'+(s.creadas.length!==1?'s':''));
+  return '<div style="margin-bottom:12px;padding:10px 12px;border-radius:10px;'+
+    'background:var(--green-light);border:1.5px solid var(--green)">'+
+    '<div style="font-size:12.5px;font-weight:800;color:var(--green)">En este repaso: '+t.join(' · ')+'</div>'+
+    (s.creadas.length?'<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">'+
+      s.creadas.map(function(c){ return '+ '+esc(c.desc)+' — '+esc(_recNom(c.area)||c.area); }).join('<br>')+
+    '</div>':'')+'</div>';
+}
+
+// ══ NIVEL 2 — «Por partida» ══════════════════════════════════
+function revListaPartidas(el){
+  var nm=S.revContratista;
+  var r=_revGrupos(nm);
+  var reps=r.grupos.filter(function(g){ return g.n>1; });
+  var sueltas=r.grupos.filter(function(g){ return g.n===1; });
+
+  var fila=function(g){
+    var sub=g.aptos+(g.aptos===1?' apartamento':' apartamentos')+
+      (g.n!==g.aptos?' <span style="color:var(--amber);font-weight:800">· '+g.n+' filas</span>':'')+
+      (g.venc?' · <span style="color:var(--red);font-weight:800">'+g.venc+' vencida'+(g.venc!==1?'s':'')+'</span>':'')+
+      (g.prog?' · <span style="color:var(--blue);font-weight:700">'+g.prog+' en curso</span>':'');
+    return '<button onclick="revAbrirPartida('+_revEsc(g.desc)+')" '+
+      'style="display:block;width:100%;text-align:left;min-height:56px;padding:12px 14px;'+
+      'margin-bottom:7px;border-radius:12px;cursor:pointer;font-family:var(--font);'+
+      'background:var(--bg2);border:1.5px solid '+(g.venc?'var(--red)':'var(--border)')+'">'+
+      /* La descripción va COMPLETA y sin cortar: dos textos que solo se
+         diferencian al final son justo el duplicado que hay que ver. */
+      '<span style="display:block;font-size:13.5px;font-weight:700;color:var(--text);line-height:1.35">'+
+        esc(g.desc)+'</span>'+
+      '<span style="display:block;font-size:11px;color:var(--text3);margin-top:4px;font-family:var(--mono)">'+
+        sub+'</span></button>';
+  };
+
+  el.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+      '<button onclick="revVolver()" style="background:none;border:0;color:var(--text2);font-size:13px;'+
+        'font-weight:600;cursor:pointer;padding:8px 0;font-family:var(--font);min-height:44px">‹ Todos los contratistas</button>'+
+    '</div>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:14px;font-weight:600">'+esc(nm)+'</div>'+
+      /* El dato que justifica la pantalla: 138 partidas, pero solo 36
+         preguntas que contestar. */
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">'+
+        r.total+' partidas · '+r.grupos.length+' pregunta'+(r.grupos.length!==1?'s':'')+'</div>'+
+    '</div></div>'+
+    _revToggleHTML()+
+    revAvisoFiltro()+
+    _revResumenHTML()+
+    (reps.length?reps.map(fila).join(''):'')+
+    (sueltas.length
+      ? '<button onclick="revSueltasToggle()" style="width:100%;min-height:46px;margin-top:6px;'+
+          'border-radius:11px;border:1.5px dashed var(--border2);background:none;color:var(--text3);'+
+          'font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font)">'+
+          (S.revSueltasOpen?'Ocultar las sueltas':'Sueltas ('+sueltas.length+') ▾')+'</button>'+
+        (S.revSueltasOpen?'<div style="margin-top:8px">'+sueltas.map(fila).join('')+'</div>':'')
+      : '')+
+    (r.total?'':'<div class="empty" style="padding:30px">'+
+      (_revRapidos().length?'Nada de este contratista con ese filtro':'Todo revisado en este contratista ✓')+'</div>');
+}
+function revSueltasToggle(){ S.revSueltasOpen=!S.revSueltasOpen; renderRevision(); }
+
+// ══ NIVEL 3 — la partida abierta, un apartamento por línea ══
+/* Los ids se fijan AL ABRIR y no se recalculan. Si se recalcularan desde
+   revAbiertas(), cada una que marcas Completada desaparecería de la pantalla y
+   perderías de vista lo que acabas de contestar — y «fecha de una vez» no
+   sabría a cuáles no aplicar. */
+function revAbrirPartida(desc){
+  var nm=S.revContratista;
+  S.revPartida=String(desc==null?'':desc);
+  S._revPartidaIds=revAbiertas().filter(function(a){
+    return _personaEn(a,nm) && String(a.descripcion||'')===S.revPartida;
+  }).map(function(a){ return a.id; });
+  S._revPtdErr={}; S._revPtdPct={};
+  renderRevision(); _revArriba();
+}
+function revVolverPartidas(){
+  S.revPartida=''; S._revPartidaIds=null; S._revPtdErr={}; S._revPtdPct={};
+  renderRevision(); _revArriba();
+}
+function _revPartidaItems(){
+  return (S._revPartidaIds||[]).map(function(id){ return Acciones.porId(id); })
+    .filter(Boolean)
+    .sort(function(x,y){
+      return _revOrdenArea(x.area||'')-_revOrdenArea(y.area||'') ||
+             String(x.area||'').localeCompare(String(y.area||''));
+    });
+}
+// Las que siguen abiertas: a esas y solo a esas les toca la fecha de grupo.
+function _revPartidaAbiertas(){
+  return _revPartidaItems().filter(function(a){ return a.estado!=='completado'; });
+}
+
+function revPartidaAbierta(el){
+  var nm=S.revContratista, items=_revPartidaItems();
+  var abiertas=_revPartidaAbiertas();
+  var bs='min-height:56px;border-radius:11px;cursor:pointer;font-family:var(--font);'+
+         'font-size:12.5px;font-weight:800;padding:0 10px';
+
+  var linea=function(a){
+    var err=(S._revPtdErr||{})[a.id];
+    var hecha=a.estado==='completado';
+    var id=String(a.id).replace(/'/g,"\\'");
+    var abrePct=(S._revPtdPct||{})[a.id];
+    var h='<div style="margin-bottom:8px;padding:11px 12px;border-radius:12px;background:var(--bg2);'+
+      'border:1.5px solid '+(err?'var(--red)':(hecha?'var(--green)':'var(--border)'))+'">'+
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:'+(hecha?'0':'9px')+'">'+
+        '<span style="font-size:13.5px;font-weight:800;color:var(--text)">'+esc(_recNom(a.area)||a.area||'(sin área)')+'</span>'+
+        revChipEstado(a)+revChipFecha(a)+
+        (hecha?'<span style="margin-left:auto;font-size:12px;font-weight:800;color:var(--green)">✓ Completada</span>':'')+
+      '</div>'+
+      (err?'<div style="font-size:11.5px;color:var(--red);font-weight:700;margin-bottom:8px">No se guardó: '+esc(err)+'</div>':'');
+    if(!hecha && canEdit()){
+      h+='<div style="display:flex;gap:6px">'+
+        '<button onclick="revPtdCompletar(\''+id+'\')" style="'+bs+';flex:1.2;border:1.5px solid var(--green);'+
+          'background:var(--green-light);color:var(--green)">Completada</button>'+
+        '<button onclick="revPtdIgual(\''+id+'\')" style="'+bs+';flex:1.1;border:1.5px solid var(--border2);'+
+          'background:var(--bg3);color:var(--text2)">Sin cambios</button>'+
+        '<button onclick="revPtdPctAbrir(\''+id+'\')" style="'+bs+';flex:0 0 62px;border:1.5px solid var(--accent);'+
+          'background:var(--accent-soft);color:var(--accent)">%</button>'+
+      '</div>';
+      if(abrePct){
+        h+='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">'+
+          [25,50,75,85].map(function(v){
+            return '<button onclick="revPtdPct(\''+id+'\','+v+')" style="'+bs+';flex:1;min-width:60px;'+
+              'border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)">'+v+'%</button>';
+          }).join('')+
+          '<div style="display:flex;gap:5px;width:100%;margin-top:5px">'+
+            '<input id="revptd-'+esc(a.id)+'" type="number" min="0" max="100" placeholder="otro %" '+
+              'style="flex:1;min-height:56px;padding:0 12px;border:1.5px solid var(--border2);border-radius:11px;'+
+              'background:var(--bg);color:var(--text);font-size:15px;font-family:var(--font);box-sizing:border-box">'+
+            '<button onclick="revPtdPctLibre(\''+id+'\')" style="'+bs+';flex:0 0 96px;border:1.5px solid var(--accent);'+
+              'background:var(--accent-fill);color:var(--accent-on)">Guardar</button>'+
+          '</div>'+
+        '</div>';
+      }
+    }
+    return h+'</div>';
+  };
+
+  var vie=_finDeSemana(), prox=_isoAddDias(vie,7);
+  el.innerHTML=
+    '<button onclick="revVolverPartidas()" style="background:none;border:0;color:var(--text2);font-size:13px;'+
+      'font-weight:600;cursor:pointer;padding:8px 0;font-family:var(--font);min-height:44px">‹ '+esc(nm)+'</button>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:14px;font-weight:700;line-height:1.35">'+esc(S.revPartida)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
+        items.length+' fila'+(items.length!==1?'s':'')+' · '+abiertas.length+' abierta'+(abiertas.length!==1?'s':'')+'</div>'+
+    '</div></div>'+
+    items.map(linea).join('')+
+    (canEdit()
+      ? '<div style="margin-top:14px;padding:12px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--border)">'+
+          '<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.6px;'+
+            'text-transform:uppercase;margin-bottom:9px">Fecha de una vez — a las '+abiertas.length+' que siguen abiertas</div>'+
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+            '<button onclick="revPtdFechaGrupo(\''+today()+'\')" style="'+bs+';flex:1;min-width:84px;'+
+              'border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)">Hoy</button>'+
+            (vie!==today()?'<button onclick="revPtdFechaGrupo(\''+vie+'\')" style="'+bs+';flex:1;min-width:84px;'+
+              'border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)">El viernes</button>':'')+
+            '<button onclick="revPtdFechaGrupo(\''+prox+'\')" style="'+bs+';flex:1;min-width:110px;'+
+              'border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)">Semana que viene</button>'+
+          '</div>'+
+          '<div style="display:flex;gap:6px;margin-top:6px">'+
+            '<input id="rev-fecha-grupo" type="date" style="flex:1;min-height:56px;padding:0 12px;'+
+              'border:1.5px solid var(--border2);border-radius:11px;background:var(--bg);color:var(--text);'+
+              'font-size:15px;font-family:var(--font);box-sizing:border-box">'+
+            '<button onclick="revPtdFechaLibre()" style="'+bs+';flex:0 0 96px;border:1.5px solid var(--accent);'+
+              'background:var(--accent-fill);color:var(--accent-on)">Aplicar</button>'+
+          '</div>'+
+        '</div>'+
+        '<button onclick="revPtdFaltaAqui()" style="width:100%;min-height:56px;margin-top:10px;border-radius:12px;'+
+          'border:1.5px dashed var(--accent);background:var(--accent-soft);color:var(--accent);'+
+          'font-size:13px;font-weight:800;cursor:pointer;font-family:var(--font)">+ Falta una aquí</button>'
+      : '');
+}
+
+/* Las tres respuestas. Cada una va sola y con su propio catch: si una falla,
+   ESA línea se marca en rojo y las demás se quedan guardadas. Nunca dar por
+   bueno lo que no se guardó, y nunca perder las otras porque una falló. */
+async function revPtdCompletar(id){
+  if(!canEdit()) return;
+  try{ await Acciones.completar(id); delete (S._revPtdErr||{})[id]; _revSesion().cerradas++; }
+  catch(e){ (S._revPtdErr=S._revPtdErr||{})[id]=(e&&e.message)||'error'; }
+  renderRevision();
+}
+async function revPtdIgual(id){
+  if(!canEdit()) return;
+  try{ await Acciones.revisar(id); delete (S._revPtdErr||{})[id]; _revSesion().igual++; _actMarcarRevisadaLocal(id); }
+  catch(e){ (S._revPtdErr=S._revPtdErr||{})[id]=(e&&e.message)||'error'; }
+  renderRevision();
+}
+function revPtdPctAbrir(id){
+  (S._revPtdPct=S._revPtdPct||{})[id]=!S._revPtdPct[id];
+  renderRevision();
+}
+async function revPtdPct(id,pct){
+  if(!canEdit()) return;
+  try{ await Acciones.setAvance(id,pct); delete (S._revPtdErr||{})[id]; _revSesion().avance++; delete (S._revPtdPct||{})[id]; }
+  catch(e){ (S._revPtdErr=S._revPtdErr||{})[id]=(e&&e.message)||'error'; }
+  renderRevision();
+}
+function revPtdPctLibre(id){
+  var el=document.getElementById('revptd-'+id);
+  var v=parseInt(el&&el.value,10);
+  if(isNaN(v)||v<0||v>100){ showToast('Pon un número de 0 a 100','warn'); return; }
+  return revPtdPct(id,v);
+}
+
+/* La fecha de grupo toca la ENTREGA (fecha_fin), no fecha_plan: en todo el app
+   «ponle fecha» significa la entrega, y fecha_plan es el plan del día, que es
+   otra cosa. Y solo a las que SIGUEN ABIERTAS después de lo recién marcado. */
+async function revPtdFechaGrupo(f){
+  if(!canEdit() || !f) return;
+  var abiertas=_revPartidaAbiertas();
+  if(!abiertas.length){ showToast('No queda ninguna abierta en esta partida','warn'); return; }
+  if(!confirm('Entrega '+fmtF(f)+' para '+abiertas.length+' partida'+(abiertas.length!==1?'s':'')+'.\n\n¿Seguro?')) return;
+  var bien=0;
+  for(var i=0;i<abiertas.length;i++){
+    var a=abiertas[i], cambios={fecha_fin:f};
+    // El fin nunca antes del inicio — la misma regla de _correrPlan.
+    if((a.fecha_inicio||'') && a.fecha_inicio>f) cambios.fecha_inicio=f;
+    try{
+      await Acciones.editar(a.id,cambios,'entrega → '+f+' (repaso por partida)');
+      delete (S._revPtdErr||{})[a.id]; bien++;
+    }catch(e){ (S._revPtdErr=S._revPtdErr||{})[a.id]=(e&&e.message)||'error'; }
+  }
+  _revSesion().fechas+=bien;
+  showToast(bien+' con entrega '+fmtF(f)+' ✓');
+  renderRevision();
+}
+function revPtdFechaLibre(){
+  var el=document.getElementById('rev-fecha-grupo');
+  var f=el&&el.value;
+  if(!f){ showToast('Elige una fecha','warn'); return; }
+  return revPtdFechaGrupo(f);
+}
+
+/* «Falta una aquí». En lo que va de septiembre se crearon 245 partidas contra
+   1.077 editadas: una nueva por cada seis actualizaciones. Revisar y descubrir
+   van juntos — un repaso que solo deje tocar lo que ya existe se queda corto.
+   Va por Acciones.crear, que valida y registra. */
+async function revPtdFaltaAqui(){
+  if(!canEdit()) return;
+  var nm=S.revContratista;
+  var usadas={}; _revPartidaItems().forEach(function(a){ usadas[a.area||'']=1; });
+  var libres=REC_ORDEN.filter(function(k){ return !usadas[k]; });
+  /* SIEMPRE se pregunta el apartamento, aunque quede uno solo libre. Elegirlo
+     solo ahorraba un toque y creaba la partida en un sitio que el ingeniero no
+     nombró: una partida que aparece donde nadie la puso es peor que un toque
+     de más. Se ofrecen primero los que le faltan a esta partida. */
+  var lista=(libres.length?libres:REC_ORDEN);
+  var op=prompt('¿En cuál falta?\n\n'+lista.map(function(k,i){ return (i+1)+') '+_recNom(k); }).join('\n'));
+  var i=parseInt(op,10);
+  if(!i || i<1 || i>lista.length) return;
+  var area=lista[i-1];
+  var desc=prompt('¿Qué falta en '+_recNom(area)+'?', S.revPartida||'');
+  if(!desc || !desc.trim()) return;
+  var f=prompt('Fecha de entrega (AAAA-MM-DD). Vacío = sin fecha.', _finDeSemana());
+  f=(f||'').trim();
+  try{
+    await Acciones.crear({descripcion:desc.trim(), area:area, personal_nombre:nm,
+                          fecha_fin:f||'', fecha_inicio:'', prioridad:'normal'});
+    _revSesion().creadas.push({desc:desc.trim(), area:area});
+    showToast('Creada en '+_recNom(area)+' ✓');
+    // Entra de una vez en el grupo si es la misma descripción.
+    if(desc.trim()===S.revPartida) revAbrirPartida(S.revPartida);
+    else renderRevision();
+  }catch(e){ showToast('No se pudo crear: '+((e&&e.message)||''),'err',6000); }
 }
 
 async function revEstado(id, modo, pct){
