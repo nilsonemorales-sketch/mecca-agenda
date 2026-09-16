@@ -865,7 +865,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_98';
+const APP_VERSION='20260916_100';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -15112,13 +15112,28 @@ function goTab(tab){
 }
 
 // ══════════════════════════════════════════════════════════════
-// CATÁLOGO DE PARTIDAS — MÓDULO DE PRUEBA, SOLO ADMIN        (v98)
+// CATÁLOGO DE PARTIDAS — MÓDULO DE PRUEBA, SOLO ADMIN   (v98, v100)
 //
 // Contesta UNA pregunta: ¿le conviene a la obra trabajar con partidas
 // agrupadas, o las actividades sueltas están bien así? Palabras del dueño:
 // «una prueba para ver si conviene que el app trabaje de esa manera, para
 // que sea más eficiente dar seguimiento y no haya tantas actividades que se
 // sientan sueltas».
+//
+// TRES NIVELES, Y CADA UNO VIENE DE UN SITIO DISTINTO (v100):
+//
+//   1 · Capítulo    — la partida madre del PRESUPUESTO. 46 códigos fijos.
+//   2 · Subpartida  — lo que se mide y se paga. Las 274 del presupuesto
+//                     original, con cantidad, unidad y precio unitario.
+//   3 · Partida     — lo que se hace en cada apartamento. Sale de las
+//                     descripciones de la AGENDA.
+//
+// Debajo cuelgan las actividades abiertas.
+//
+// Por qué hacía falta el nivel 2: la agenda arranca el 27 de mayo de 2026 y
+// toda la estructura se construyó antes. «Se vaciaron las zapatas, luego la
+// platea, luego la columna» no está en ninguna actividad y no podía estarlo.
+// El presupuesto sí lo tiene, línea por línea.
 //
 // DOS REGLAS QUE MANDAN SOBRE TODO LO DEMÁS:
 //
@@ -15127,60 +15142,421 @@ function goTab(tab){
 //    dos tablas propias —`obra_partidas` y `obra_partida_actividad`— y en
 //    esta pestaña. Si la prueba no convence:
 //        DROP TABLE obra_partida_actividad;  DROP TABLE obra_partidas;
-//    y se borra este bloque. El app queda EXACTAMENTE como hoy.
-// 2. El dueño no escribe el catálogo a mano. El app lo siembra de los datos
-//    reales y él lo cura adentro, viéndolo. Ya se intentó por conversación y
-//    no sirvió: nadie juzga un catálogo sin verlo.
+//    y se borra este bloque. El app queda EXACTAMENTE como antes.
+// 2. El dueño no escribe el catálogo a mano. El app lo siembra —el nivel 2
+//    del presupuesto, el nivel 3 de la agenda— y él lo cura adentro,
+//    viéndolo. Ya se intentó por conversación y no sirvió: nadie juzga un
+//    catálogo sin verlo.
 //
-// El amarre es una TABLA, no una columna en obra_actividades. Así el módulo
-// se borra sin rastro y ninguna consulta de las que ya existen tiene que
-// enterarse. Si la prueba gradúa, entonces sí se vuelve columna.
+// El amarre actividad→partida es una TABLA, no una columna en
+// obra_actividades. Así el módulo se borra sin rastro y ninguna consulta de
+// las que ya existen tiene que enterarse. Si la prueba gradúa, entonces sí
+// se vuelve columna.
 // ══════════════════════════════════════════════════════════════
 
-/* El capítulo es LO QUE SE ENTREGA; el oficio es QUIÉN LO HACE. Por eso
-   «Terminación de muros y techos» junta a Secre, Eddy, Jordy y Félix: el
-   comprador ve una pared, no cuatro contratistas. Decidido con el dueño.
-   El ÁREA no es un nivel: la platea de la caseta es obra gris en el Parqueo.
-   Si el área fuera capítulo, la plomería quedaría partida en dos y nunca se
-   sabría cuánta plomería lleva la obra. */
+/* Los 46 códigos del presupuesto de Bridex, con su escritura exacta. NO son
+   los once capítulos inventados de la v98: son las partidas madre reales, las
+   mismas de `resumenCostos.js` de la app de costos. El 18.00, el 20.00, el
+   22.00 y el 29.00 NO existen en este presupuesto — no los rellenes. */
 var CAT_CAPITULOS=[
-  {n:1,  t:'Preliminares'},
-  {n:2,  t:'Estructura y obra gris'},
-  {n:3,  t:'Terminación de muros y techos'},
-  {n:4,  t:'Pisos y revestimientos'},
-  {n:5,  t:'Carpintería y ebanistería'},
-  {n:6,  t:'Instalaciones sanitarias y gas'},
-  {n:7,  t:'Instalaciones eléctricas'},
-  {n:8,  t:'Ventanería y cristalería'},
-  {n:9,  t:'Herrería'},
-  {n:10, t:'Áreas exteriores y obras complementarias'},
-  {n:11, t:'Limpieza y entrega'},
-  {n:0,  t:'Sin clasificar'}
+  {n:'1.00',  t:'Reconocimiento del Solar'},
+  {n:'2.00',  t:'Movimiento de Tierra'},
+  {n:'3.00',  t:'Hormigón Armado'},
+  {n:'4.00',  t:'Instalación Sanitaria'},
+  {n:'5.00',  t:'Instalación Eléctrica'},
+  {n:'6.00',  t:'Terminación Superficie Cisterna'},
+  {n:'7.00',  t:'Muros No Estructurales (Bloques y/o Foam)'},
+  {n:'8.00',  t:'Terminación Superficie Interior'},
+  {n:'9.00',  t:'Revestimientos'},
+  {n:'10.00', t:'Pisos'},
+  {n:'11.00', t:'Portaje'},
+  {n:'12.00', t:'Cocina, Pantry y Muebles de Baño'},
+  {n:'13.00', t:'Escalera'},
+  {n:'14.00', t:'Herrería y Barandas'},
+  {n:'15.00', t:'Ventanas'},
+  {n:'16.00', t:'Terminación Superficie Exterior'},
+  {n:'17.00', t:'Pintura'},
+  {n:'19.00', t:'Fachada'},
+  {n:'21.00', t:'Subida de Materiales'},
+  {n:'23.00', t:'Instalación Equipos de Seguridad'},
+  {n:'24.00', t:'Instalación Eléctrica Media Tensión'},
+  {n:'25.00', t:'Suministro e Instalación de Ascensor'},
+  {n:'26.00', t:'Suministro e Instalación de Mobiliario'},
+  {n:'27.00', t:'Línea Blanca'},
+  {n:'28.00', t:'Mobiliario Gimnasio'},
+  {n:'30.00', t:'Instalación Medidores y Tanques'},
+  {n:'31.00', t:'Jardinería'},
+  {n:'32.00', t:'Misceláneos'},
+  {n:'CI.01', t:'Sereno y Guarda Almacén'},
+  {n:'CI.02', t:'Confección de Planos'},
+  {n:'CI.03', t:'Impuesto Planeamiento Urbano'},
+  {n:'CI.04', t:'Impuestos MIVED + CODIA'},
+  {n:'CI.05', t:'Impuestos Medio Ambiente'},
+  {n:'CI.06', t:'Dirección Técnica y Responsabilidad'},
+  {n:'CI.07', t:'Gastos Administrativos'},
+  {n:'CI.08', t:'Seguro Social y Póliza Contra Accidente'},
+  {n:'CI.09', t:'Transporte'},
+  {n:'CI.10', t:'Plan de Jubilación de Obreros (Ley 6-86)'},
+  {n:'CI.11', t:'Prueba de Calidad de Materiales'},
+  {n:'CI.12', t:'Supervisiones MIVED y Organismos Reguladores'},
+  {n:'CI.13', t:'Régimen de Condominio y Deslinde'},
+  {n:'CI.14', t:'Contrato Temporal de Servicios Agua y Luz'},
+  {n:'CI.15', t:'Personal Transitorio'},
+  {n:'CI.16', t:'Derecho de Interconexión EDENORTE'},
+  {n:'CI.17', t:'Derecho de Interconexión CORAASAN'},
+  {n:'IMP.1', t:'Imprevisto'},
+  {n:'0',     t:'Sin clasificar'}
 ];
 function _catCapNom(n){
-  var c=CAT_CAPITULOS.find(function(x){ return x.n===Number(n); });
+  var c=CAT_CAPITULOS.find(function(x){ return String(x.n)===String(n); });
   return c?c.t:'Sin clasificar';
 }
-/* Del oficio al capítulo. La siembra VA A QUEDAR MAL en varios sitios y está
-   bien: el ayudante limpia desagües de duchas, que es plomería, y cae en
-   Limpieza; el pintor de fachada cae con la pintura interior. NO se arregla
-   con más reglas — que el dueño lo mueva viendo la lista ES la prueba. */
-var CAT_OFICIO_CAP={
-  'Varillero':2, 'Encofrados':2, 'Vaciado Hormigon':2, 'Hormigon Celular':2,
-  'Mdo andamios':2, 'Albañileria y Foam':2,
-  'Albañilería':3, 'Sheetrock':3, 'Estuco':3, 'Pintura':3, 'Pintor Fachada':3,
-  'Pisero':4, 'Pulidor':4, 'Topes y revestimientos en cuarzo':4,
-  'Ebanista':5, 'Carpintería':5,
-  'Plomería e Instalaciones':6, 'Equipo de Bombeo':6,
-  'Electricidad':7, 'Eléctrico Alta Tensión y Planta':7,
-  'Seguridad y Bajo Voltaje':7, 'Aires acondicionados':7,
-  'Ventanero':8,
-  'Herrero':9,
-  'Ayudante':11
-};
-function _catCapDeOficio(of){
-  var c=CAT_OFICIO_CAP[String(of||'').trim()];
-  return c==null?0:c;
+
+/* Las 274 subpartidas del presupuesto de Mecca (Presupuesto 2-10-2024.xlsx,
+   hoja «Res. Presupuesto»). Van DENTRO del código porque el app es un solo
+   archivo: no hay dónde poner un JSON. Orden de los campos:
+   [ id, capitulo, seccion, madre_presupuesto, codigo_excel, nombre, cantidad, unidad, precio_unitario ]
+
+   Dos defectos del Excel ya vienen corregidos aquí y NO se recalculan:
+   126 de las 274 traían el código como decimal (6.029999999999999 en vez de
+   6.03) porque se escribió como cifra y no como texto; y el presupuesto repite
+   el número de madre dentro de una misma sección —en Primer Nivel hay dos «14»,
+   Equipos de Seguridad y Eléctrica Media Tensión—, por eso el id se arma con
+   sección + capítulo + secuencia. 274 ids, 274 únicos. */
+var CAT_SECCIONES={BNP:'BAJO NIVEL DE PISO', N1:'PRIMER NIVEL — PARQUEOS GENERALES',
+                   N2:'SEGUNDO NIVEL', N7:'SEPTIMO NIVEL', SM:'SUBIDA DE MATERIALES'};
+var CAT_SUBPARTIDAS=[
+['BNP-1.00-01','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.01','Desmonte y limpieza del solar',661,'M²',120],
+['BNP-1.00-02','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.02','Levantamiento Topografico',1,'P.A',75000],
+['BNP-1.00-03','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.03','Estudio de Suelo y Diseño Pavimento',1,'P.A',150000],
+['BNP-1.00-04','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.04','Caseta de materiales y verja temporal',1,'P.A',150000],
+['BNP-1.00-05','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.05','Replanteo',1,'P.A',28000],
+['BNP-2.00-01','2.00','BNP','MOVIMIENTO DE TIERRA','2.01','Corte y bote con equipos',2098.32,'M³',250],
+['BNP-2.00-02','2.00','BNP','MOVIMIENTO DE TIERRA','2.02','Relleno granular compactado',2168.81,'M³',919.72],
+['BNP-3.00-01','3.00','BNP','HORMIGÓN ARMADO','3.01','Replanteo',1,'P.A',28000],
+['BNP-3.00-02','3.00','BNP','HORMIGÓN ARMADO','3.02','Zapata ZR-1',6.12,'M³',29565.81],
+['BNP-3.00-03','3.00','BNP','HORMIGÓN ARMADO','3.03','Zapata ZR-2',1.2,'M³',23548.26],
+['BNP-3.00-04','3.00','BNP','HORMIGÓN ARMADO','3.04','Zapata ZR-3',4.76,'M³',28605.68],
+['BNP-3.00-05','3.00','BNP','HORMIGÓN ARMADO','3.05','Zapata ZR-4',4.18,'M³',42169.51],
+['BNP-3.00-06','3.00','BNP','HORMIGÓN ARMADO','3.06','Zapata ZR-5',9.7,'M³',17864.48],
+['BNP-3.00-07','3.00','BNP','HORMIGÓN ARMADO','3.07','Zapata ZR-6',5.73,'M³',35433.85],
+['BNP-3.00-08','3.00','BNP','HORMIGÓN ARMADO','3.08','Platea de fundación ( H=0.35 M)',115.99,'M³',19946.21],
+['BNP-3.00-09','3.00','BNP','HORMIGÓN ARMADO','3.09','Terminacion de Platea',11.41,'M³',27685.72],
+['BNP-3.00-10','3.00','BNP','HORMIGÓN ARMADO','3.10','Muro Cisterna',16.04,'M³',33732.57],
+['BNP-3.00-11','3.00','BNP','HORMIGÓN ARMADO','3.11','Muro M-1',0.66,'M³',62160.25],
+['BNP-3.00-12','3.00','BNP','HORMIGÓN ARMADO','3.12','Muro M-6',0.79,'M³',55462.8],
+['BNP-3.00-13','3.00','BNP','HORMIGÓN ARMADO','3.13','Platea Cisterna',22.88,'M³',30234.81],
+['BNP-3.00-14','3.00','BNP','HORMIGÓN ARMADO','3.14','Viga Cisterna',0.66,'M³',28804.28],
+['BNP-3.00-15','3.00','BNP','HORMIGÓN ARMADO','3.15','Losa Cisterna',6.46,'M³',33377.64],
+['BNP-3.00-16','3.00','BNP','HORMIGÓN ARMADO','3.16','Tapa Cisterna',1,'P.A',4200],
+['BNP-3.00-17','3.00','BNP','HORMIGÓN ARMADO','3.17','Rampa de Acceso y Parqueo Ext.',19.94,'M³',14427.23],
+['BNP-6.00-01','6.00','BNP','TERMINACIÓN DE SUPERFICIE CISTERNA','4.01','Pañete Interior Cisterna Muros',68.77,'M²',953],
+['BNP-6.00-02','6.00','BNP','TERMINACIÓN DE SUPERFICIE CISTERNA','4.02','Pañete Techo Interior Cisterna',51.25,'M²',953],
+['BNP-6.00-03','6.00','BNP','TERMINACIÓN DE SUPERFICIE CISTERNA','4.03','Zabaleta',24.15,'ML',207.91],
+['N1-3.00-01','3.00','N1','HORMIGÓN ARMADO','1.01','Muro M-1',4.07,'M³',62160.25],
+['N1-3.00-02','3.00','N1','HORMIGÓN ARMADO','1.02','Muro M-1 Sobre Cisterna',0.81,'M³',63240.23],
+['N1-3.00-03','3.00','N1','HORMIGÓN ARMADO','1.03','Muro M-1A',4.07,'M³',81403.23],
+['N1-3.00-04','3.00','N1','HORMIGÓN ARMADO','1.04','Muro M-2',0.68,'M³',75945.28],
+['N1-3.00-05','3.00','N1','HORMIGÓN ARMADO','1.05','Muro M-4',5.99,'M³',52399.36],
+['N1-3.00-06','3.00','N1','HORMIGÓN ARMADO','1.06','Muro M-5',6.84,'M³',48256.1],
+['N1-3.00-07','3.00','N1','HORMIGÓN ARMADO','1.07','Muro M-6',1.95,'M³',55462.8],
+['N1-3.00-08','3.00','N1','HORMIGÓN ARMADO','1.08','Columna C-1',0.46,'M³',64320.53],
+['N1-3.00-09','3.00','N1','HORMIGÓN ARMADO','1.09','Dinteles (20 x 52)M',0.65,'M³',27053.84],
+['N1-3.00-10','3.00','N1','HORMIGÓN ARMADO','1.10','Viga V1 (52x20)M',0.94,'M³',44801.84],
+['N1-3.00-11','3.00','N1','HORMIGÓN ARMADO','1.11','Viga V2 (0.52x0.30)M',1.17,'M³',29646.91],
+['N1-3.00-12','3.00','N1','HORMIGÓN ARMADO','1.12','Viga Eje A (30 X 60)M',1.79,'M³',33978.49],
+['N1-3.00-13','3.00','N1','HORMIGÓN ARMADO','1.13','Viga Eje B (V 30 X 60)',1.83,'M³',37796.09],
+['N1-3.00-14','3.00','N1','HORMIGÓN ARMADO','1.14','Viga Eje F (V 20 X 60)',0.94,'M³',47160.68],
+['N1-3.00-15','3.00','N1','HORMIGÓN ARMADO','1.15','Viga Eje G (V 30 X 60)',2.45,'M³',34887.64],
+['N1-3.00-16','3.00','N1','HORMIGÓN ARMADO','1.16','Viga Eje 4 (V 30 X 60)',1.28,'M³',34396.59],
+['N1-3.00-17','3.00','N1','HORMIGÓN ARMADO','1.17','Viga Eje 8 (V 30 X 60)',1.28,'M³',30511.31],
+['N1-3.00-18','3.00','N1','HORMIGÓN ARMADO','1.18','Viga Eje 1 (V 30 X 60)',1.28,'M³',33273.89],
+['N1-3.00-19','3.00','N1','HORMIGÓN ARMADO','1.19','Viga Eje 1 Descanso Esc. P.(V 30 X 60)',0.49,'M³',30215.27],
+['N1-3.00-20','3.00','N1','HORMIGÓN ARMADO','1.20','Viga Eje 6 (V 30 X 60)',4.03,'M³',33241.28],
+['N1-3.00-21','3.00','N1','HORMIGÓN ARMADO','1.21','Viga Eje 5 S2 (V 30 X 60)',1.28,'M³',32707.75],
+['N1-3.00-22','3.00','N1','HORMIGÓN ARMADO','1.22','Viga Eje 5 S1 (V 20 X 60)',0.54,'M³',30802.36],
+['N1-3.00-23','3.00','N1','HORMIGÓN ARMADO','1.23','Viga (V 20 X 52) Eje 9',0.24,'M³',35852.74],
+['N1-3.00-24','3.00','N1','HORMIGÓN ARMADO','1.24','Cepos de Muros M1',400,'M²',120],
+['N1-3.00-25','3.00','N1','HORMIGÓN ARMADO','1.25','Cepos de Muros M6',40,'M²',120],
+['N1-3.00-26','3.00','N1','HORMIGÓN ARMADO','1.26','Andamios de muros M2,M3,M4,M5',321.3,'M²',120],
+['N1-3.00-27','3.00','N1','HORMIGÓN ARMADO','1.27','Losa Aligerada',52.06,'M³',24445.96],
+['N1-3.00-28','3.00','N1','HORMIGÓN ARMADO','1.28','Vuelos',8.1,'M³',23355.5],
+['N1-3.00-29','3.00','N1','HORMIGÓN ARMADO','1.29','Rampa Escalera Principal',0.99,'M³',53986.34],
+['N1-3.00-30','3.00','N1','HORMIGÓN ARMADO','1.30','Formado de Escalones',0.58,'M³',8200],
+['N1-7.00-01','7.00','N1','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.01','Muros de 6" con bastones 3/8"@0.80m',82.98,'M²',2207.16],
+['N1-7.00-02','7.00','N1','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.02','Muros de Foam',0,'M²',0],
+['N1-8.00-01','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.01','Fraguache Area Comun Interior',924.07,'M²',149.3],
+['N1-8.00-02','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.02','Resane Interior Area Comun Interior',1,'P.A',59852.81],
+['N1-8.00-03','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.03','Pañete Interior Area Comun',532.28,'M²',749.63],
+['N1-8.00-04','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.04','Pañete Techo Interior Area Comun',391.79,'M²',1069.29],
+['N1-8.00-05','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.05','Cantos interiores Area comun',847.04,'M',198.05],
+['N1-8.00-06','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.06','Mochetas interiores Area comun',108.38,'M',284.53],
+['N1-9.00-01','9.00','N1','REVESTIMIENTOS','4.01','Cerámica de Pared en Baños h= 2.60 m',20.25,'M²',4158.99],
+['N1-9.00-02','9.00','N1','REVESTIMIENTOS','4.02','Plafones Machenbrados PVC en baños',1,'PA',15960],
+['N1-9.00-03','9.00','N1','REVESTIMIENTOS','4.03','Facias en techos de Sheetrock',28,'M²',2937.26],
+['N1-10.00-01','10.00','N1','PISOS','5.01','Porcelanato interior 40x40',37,'M²',2956.15],
+['N1-10.00-02','10.00','N1','PISOS','5.02','Zócalos de pocelanato interior',48.03,'M²',450.57],
+['N1-10.00-03','10.00','N1','PISOS','5.03','Cerámica en baños',3.21,'M²',2502.4],
+['N1-11.00-01','11.00','N1','PORTAJE','7.01','Puerta Flotante de Acceso Principal Edif',1,'P.U',24000],
+['N1-11.00-02','11.00','N1','PORTAJE','7.02','P. de paso 0.80 x 2.20 MTS. MDP hidrofugo + PVC',1,'P.U',25505.18],
+['N1-11.00-03','11.00','N1','PORTAJE','7.03','Puerta Flotante de Acceso desde Parqueo',1,'P.U',21600],
+['N1-13.00-01','13.00','N1','ESCALERA','8.01','Escalones principal',18,'ML',4768.06],
+['N1-13.00-02','13.00','N1','ESCALERA','8.02','Descansos de porcelanato',24.53,'M²',2892.9],
+['N1-13.00-03','13.00','N1','ESCALERA','8.03','Zócalos',30.76,'ML',450.57],
+['N1-14.00-01','14.00','N1','HERRERIA y BARANDAS','9.01','Materiales Herreria',1,'P.A',460622.75],
+['N1-14.00-02','14.00','N1','HERRERIA y BARANDAS','9.02','Mdo Herreria',1,'P.A',377879.06],
+['N1-14.00-03','14.00','N1','HERRERIA y BARANDAS','9.03','Baranda Escalera Principal Acero Inoxidable',5.68,'ML',5000],
+['N1-15.00-01','15.00','N1','VENTANAS','10.01','Ventanas en General p92 (Lantigua)',1,'P.A',159263.94],
+['N1-17.00-01','17.00','N1','PINTURA','11.01','Primer en muros interiores',574.87,'M²',122],
+['N1-17.00-02','17.00','N1','PINTURA','11.02','Acrílica en muros interiores',574.87,'M²',280.89],
+['N1-17.00-03','17.00','N1','PINTURA','11.03','Economica en techos',391.79,'M²',225.87],
+['N1-4.00-01','4.00','N1','INSTALACIÓN SANITARIA','12.01','Piezas y tuberías para AN y AP (cotizaciones varias/ Eusebio)',1,'PA',282521.52],
+['N1-4.00-02','4.00','N1','INSTALACIÓN SANITARIA','12.02','Mano de obra plomero',1,'PA',156354.51],
+['N1-4.00-03','4.00','N1','INSTALACIÓN SANITARIA','12.03','Bomba sumergible todo Costo',1,'PA',670000],
+['N1-5.00-01','5.00','N1','INSTALACIÓN ELÉCTRICA (Cotización por Uriel goemz)','13.01','Presupuesto de Materiales Primer Nivel',1,'PA',130860.56],
+['N1-5.00-02','5.00','N1','INSTALACIÓN ELÉCTRICA (Cotización por Uriel goemz)','13.02','MDO Instalación Electrica Primer Nivel',1,'PA',75150.78],
+['N1-23.00-01','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.01','Sistema de Camaras de Seguridad ( 16 Camaras)',1,'P.A',191820.8],
+['N1-23.00-02','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.02','Sistema de Control de Acceso',1,'P.A',131865],
+['N1-23.00-03','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.03','Sistema de intercom IP',1,'P.A',158297],
+['N1-23.00-04','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.04','Cerraduras Inteligentes Puerta P.',11,'UND',22500],
+['N1-23.00-05','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.05','Motor Electrico Came',1,'P.A',77880],
+['N1-24.00-01','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.01','Suministro e instalacion de Equipos',1,'PA',1342132.42],
+['N1-24.00-02','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.02','Suministro e Instalacion de Alimentadores',1,'PA',219252.73],
+['N1-24.00-03','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.03','Suministro e Instalacion de Media Tension.',1,'PA',48500],
+['N1-24.00-04','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.04','Conexión de Planta, sistema de escape y combustible.',1,'PA',383367.67],
+['N1-24.00-05','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.05','Siste de Puesta a Tierra',1,'PA',242626.05],
+['N1-24.00-06','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.06','Supervicion y Direccion Tecnica',1,'PA',223587.89],
+['N1-24.00-07','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.07','ITEBIS 18% del 10%',2,'PA',40245.82],
+['N1-24.00-08','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.08','Suministro de Planta de 93Kw, Tipo Silenciosa Himoinsa',1,'PA',1388883.6],
+['N1-25.00-01','25.00','N1','SUMINISTRO E INSTALACION DE Ascensor','15.01','Ascensor de Pasajeros Modelo HD6000-MRL (Equipos + Instalacion)',1,'PA',2021539],
+['N1-25.00-02','25.00','N1','SUMINISTRO E INSTALACION DE Ascensor','15.02','Mobiliario Lobby',1,'PA',75000],
+['N1-31.00-01','31.00','N1','JARDINERIA','17.01','Jardineria Todo Costo',1,'PA',65000],
+['N1-30.00-01','30.00','N1','INSTALACION MEDIDORES Y TANQUES','18.01','INSTALACION TODO COSTO METRO GAS',1,'PA',110000],
+['N1-32.00-01','32.00','N1','MISCELÁNEOS','19.01','Acera perimetral',7.83,'M³',14364.99],
+['N1-32.00-02','32.00','N1','MISCELÁNEOS','19.02','Pintura delimitacion Parqueo',1,'PA',16000],
+['N1-32.00-03','32.00','N1','MISCELÁNEOS','19.03','Letreros Informativos',1,'PA',14000],
+['N1-32.00-04','32.00','N1','MISCELÁNEOS','19.04','Limpieza final',1,'PA',12000],
+['N2-3.00-01','3.00','N2','HORMIGÓN ARMADO','1.01','Muro M-1',5.88,'M³',63240.23],
+['N2-3.00-02','3.00','N2','HORMIGÓN ARMADO','1.02','Muro M-1A',3.36,'M³',81403.23],
+['N2-3.00-03','3.00','N2','HORMIGÓN ARMADO','1.03','Muro M-2',0.7,'M³',76964.65],
+['N2-3.00-04','3.00','N2','HORMIGÓN ARMADO','1.04','Muro M-4',4.26,'M³',53461.9],
+['N2-3.00-05','3.00','N2','HORMIGÓN ARMADO','1.05','Muro M-5',5.82,'M³',46449.16],
+['N2-3.00-06','3.00','N2','HORMIGÓN ARMADO','1.06','Muro M-6',2.02,'M³',55462.8],
+['N2-3.00-07','3.00','N2','HORMIGÓN ARMADO','1.07','Dinteles (20 x 52)M',0.55,'M³',27053.84],
+['N2-3.00-08','3.00','N2','HORMIGÓN ARMADO','1.08','Viga V1 (0.52x0.20)M',0.57,'M³',44801.84],
+['N2-3.00-09','3.00','N2','HORMIGÓN ARMADO','1.09','Viga V2 (0.52x0.30)M',1.17,'M³',29646.91],
+['N2-3.00-10','3.00','N2','HORMIGÓN ARMADO','1.10','Viga Eje A (30 X 60)M',1.79,'M³',33978.49],
+['N2-3.00-11','3.00','N2','HORMIGÓN ARMADO','1.11','Viga Eje B (V 30 X 60)',10.15,'M³',37796.09],
+['N2-3.00-12','3.00','N2','HORMIGÓN ARMADO','1.12','Viga Eje F (V 20 X 60)',0.94,'M³',47160.68],
+['N2-3.00-13','3.00','N2','HORMIGÓN ARMADO','1.13','Viga Eje G (V 30 X 60)',2.45,'M³',34887.64],
+['N2-3.00-14','3.00','N2','HORMIGÓN ARMADO','1.14','Viga Eje 4 (V 30 X 60)',1.28,'M³',33193.76],
+['N2-3.00-15','3.00','N2','HORMIGÓN ARMADO','1.15','Viga Eje 8 (V 30 X 60)',1.28,'M³',33273.89],
+['N2-3.00-16','3.00','N2','HORMIGÓN ARMADO','1.16','Viga Eje 1 (V 30 X 60)',1.28,'M³',33273.89],
+['N2-3.00-17','3.00','N2','HORMIGÓN ARMADO','1.17','Viga Eje 1 Descanso Esc. P.(V 30 X 60)',0.49,'M³',30215.27],
+['N2-3.00-18','3.00','N2','HORMIGÓN ARMADO','1.18','Viga Eje 6 (V 30 X 60)',4.03,'M³',33241.28],
+['N2-3.00-19','3.00','N2','HORMIGÓN ARMADO','1.19','Viga Eje 5 S2 (V 30 X 60)',1.28,'M³',32707.75],
+['N2-3.00-20','3.00','N2','HORMIGÓN ARMADO','1.20','Viga Eje 5 S1 (V 20 X 60)',0.54,'M³',30802.36],
+['N2-3.00-21','3.00','N2','HORMIGÓN ARMADO','1.21','Viga (V 20 X 52) Eje 9',0.24,'M³',35852.74],
+['N2-3.00-22','3.00','N2','HORMIGÓN ARMADO','1.22','Cepos de Muros M1',400,'M²',120],
+['N2-3.00-23','3.00','N2','HORMIGÓN ARMADO','1.23','Cepos de Muros M6',50,'M²',120],
+['N2-3.00-24','3.00','N2','HORMIGÓN ARMADO','1.24','Andamios de muros M2,M3,M4,M5',350,'M²',120],
+['N2-3.00-25','3.00','N2','HORMIGÓN ARMADO','1.25','Losa Aligerada',52.06,'M³',24445.96],
+['N2-3.00-26','3.00','N2','HORMIGÓN ARMADO','1.26','Vuelos',8.1,'M³',23355.5],
+['N2-3.00-27','3.00','N2','HORMIGÓN ARMADO','1.27','Rampa Escalera Principal',2.43,'M³',53986.34],
+['N2-7.00-01','7.00','N2','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.01','Muros de 6" con bastones 3/8"@0.80m',213.07,'M²',2207.16],
+['N2-7.00-02','7.00','N2','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.02','Muros de Foam 0.10M',92.22,'M²',1332.85],
+['N2-7.00-03','7.00','N2','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.03','Muros de Foam 0.15M',148.24,'M²',1479.25],
+['N2-8.00-01','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.01','Fraguache',743.93,'M²',149.3],
+['N2-8.00-02','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.02','Resane Interior',1,'P.A',81523.11],
+['N2-8.00-03','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.03','Pañete Interior',679.69,'M²',749.63],
+['N2-8.00-04','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.04','Pañete Techo Interior',64.24,'M²',1069.29],
+['N2-8.00-05','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.05','Cantos interiores',560.95,'M',198.05],
+['N2-8.00-06','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.06','Mochetas interiores',156.29,'M',284.53],
+['N2-8.00-07','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.07','Fraguache Area Comun',132.48,'M²',149.3],
+['N2-8.00-08','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.08','Resane Interior Area Comun',1,'P.A',12650.09],
+['N2-8.00-09','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.09','Pañete Interior Area Comun',93.75,'M²',749.63],
+['N2-8.00-10','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.10','Pañete Techo Interior Area Comun',38.73,'M²',1069.29],
+['N2-8.00-11','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.11','Cantos interiores Area comun',69.6,'M',198.05],
+['N2-8.00-12','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.12','Mochetas interiores Area comun',34.8,'M',284.53],
+['N2-9.00-01','9.00','N2','REVESTIMIENTOS','4.01','Cerámica de Pared en Baños h= 2.30 m',99.98,'M²',4158.99],
+['N2-9.00-02','9.00','N2','REVESTIMIENTOS','4.02','Cerámica de Pared en Cocinas h=.60 m',15.99,'M²',4093.72],
+['N2-9.00-03','9.00','N2','REVESTIMIENTOS','4.03','Cerámica Pared Lavado h=.60 m',7.98,'M²',4093.72],
+['N2-9.00-04','9.00','N2','REVESTIMIENTOS','4.04','Plafones Machenbrados PVC en baños',6,'PA',5040],
+['N2-9.00-05','9.00','N2','REVESTIMIENTOS','4.05','Facias en techos de Sheetrock',135.92,'M²',2937.26],
+['N2-12.00-01','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.01','Tope de Granito Natural (Material)',9.07,'M²',6500],
+['N2-12.00-02','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.02','Tope de Granito Natural (Mano de Obra )',11.65,'ML',2800],
+['N2-12.00-03','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.03','Gabinetes Cocina en Melamina Doorvitech',2,'P.U',231187.8],
+['N2-12.00-04','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.04','Mueble de Baño Principal 80 x 50 x 48 MTS',2,'P.U',25042.8],
+['N2-12.00-05','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.05','Mueble de Baño Comun 60 x 45 x 48 MTS',2,'P.U',24590.81],
+['N2-12.00-06','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.06','Mueble de Medio Baño 60 x 45 x 48 MTS',2,'P.U',25674.98],
+['N2-10.00-01','10.00','N2','PISOS','6.01','Porcelanato interior 40x40',259.57,'M²',2956.15],
+['N2-10.00-02','10.00','N2','PISOS','6.02','Zócalos de pocelanato interior',259.24,'ML',450.57],
+['N2-10.00-03','10.00','N2','PISOS','6.03','Cerámica en baños',21.26,'M²',2502.4],
+['N2-10.00-04','10.00','N2','PISOS','6.04','Sobre Piso Closets',2,'P.A',10000],
+['N2-11.00-01','11.00','N2','PORTAJE','7.01','Puerta Principal 1.00 x 2.20 MTS MDP hidrofugo + Madera',2,'P.U',31272.96],
+['N2-11.00-02','11.00','N2','PORTAJE','7.02','P. de paso 0.90 x 2.20 MTS. MDP hidrofugo + PVC',8,'P.U',24954.23],
+['N2-11.00-03','11.00','N2','PORTAJE','7.03','P. de paso 0.80 x 2.20 MTS. MDP hidrofugo + PVC',14,'P.U',24832.07],
+['N2-11.00-04','11.00','N2','PORTAJE','7.04','Puerta Closet RB 0.70*2.40 MTS MDP hidrofugo + Melamina',2,'P.U',28646.52],
+['N2-11.00-05','11.00','N2','PORTAJE','7.05','Closet Dormitorio 1 Aptos A 2.20 x 2.40 MTS MDP hidrofugo + Melamina',1,'P.U',26264.4],
+['N2-11.00-06','11.00','N2','PORTAJE','7.06','Closet Dormitorio 2 Aptos A 2.70 x 2.40 MTS MDP hidrofugo + Melamina',1,'P.U',31761.6],
+['N2-11.00-07','11.00','N2','PORTAJE','7.07','Closet Dormitorio P. Aptos A 1.65 x 2.40 MTS MDP hidrofugo + Melamina',1,'P.U',21378],
+['N2-11.00-08','11.00','N2','PORTAJE','7.08','Closet Dormitorio .Aptos B 2.35 x 2.40 MTS MDP hidrofugo + Melamina',2,'P.U',29868.12],
+['N2-11.00-09','11.00','N2','PORTAJE','7.09','Mampara de Baño',4,'P.U',6500],
+['N2-11.00-10','11.00','N2','PORTAJE','7.10','Tramos Ventilados Para Closet',2,'P.A',15500],
+['N2-13.00-01','13.00','N2','ESCALERA','8.01','Escalones de Granito',18,'ML',4768.06],
+['N2-13.00-02','13.00','N2','ESCALERA','8.02','Descansos de porcelanato',15,'M²',2892.9],
+['N2-13.00-03','13.00','N2','ESCALERA','8.03','Zócalos',25.91,'ML',418.79],
+['N2-14.00-01','14.00','N2','HERRERIA y BARANDAS','9.01','Lavaderos en Hierro 0,75 x 0,90',2,'P.A',4000],
+['N2-14.00-02','14.00','N2','HERRERIA y BARANDAS','9.02','Baranda para Balcones Inoxidable con vidrio templado',11.4,'ML',16000],
+['N2-14.00-03','14.00','N2','HERRERIA y BARANDAS','9.03','Baranda Escalera Principal Acero Inoxidable',5.68,'ML',8000],
+['N2-15.00-01','15.00','N2','VENTANAS','10.01','Ventanas en General p92 (Lantigua)',1,'P.A',451247.83],
+['N2-17.00-01','17.00','N2','PINTURA','11.01','Primer en muros interiores',679.69,'M²',122],
+['N2-17.00-02','17.00','N2','PINTURA','11.02','Acrílica en muros interiores',679.69,'M²',280.89],
+['N2-17.00-03','17.00','N2','PINTURA','11.03','Economica en techos',342,'M²',225.87],
+['N2-4.00-01','4.00','N2','INSTALACIÓN SANITARIA','12.01','Piezas y tuberías para AN y AP (cotizaciones varias/ Eusebio)',1,'PA',282521.52],
+['N2-4.00-02','4.00','N2','INSTALACIÓN SANITARIA','12.02','Mano de obra plomero',1,'PA',156354.51],
+['N2-5.00-01','5.00','N2','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.01','Presupuesto de Materiales por Nivel',1,'PA',357132.39],
+['N2-5.00-02','5.00','N2','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.02','MDO Instalación Electrica por Nivel',1,'PA',198858.59],
+['N2-27.00-01','27.00','N2','Linea Blanca','14.01','Extractores KTC',2,'PA',14486.33],
+['N2-27.00-02','27.00','N2','Linea Blanca','14.02','Estufas KTC',2,'PA',17200.45],
+['N2-27.00-03','27.00','N2','Linea Blanca','14.03','Horno KTC',2,'PA',28503.2],
+['N2-32.00-01','32.00','N2','MISCELÁNEOS','14.01','Limpieza final',1,'PA',12000],
+['N7-3.00-01','3.00','N7','HORMIGÓN ARMADO','1.01','Losa Aligerada',26.32,'M³',24445.96],
+['N7-3.00-02','3.00','N7','HORMIGÓN ARMADO','1.02','Muro M-1',0.81,'M³',63240.23],
+['N7-3.00-03','3.00','N7','HORMIGÓN ARMADO','1.03','Muro M-2',0.77,'M³',76964.65],
+['N7-3.00-04','3.00','N7','HORMIGÓN ARMADO','1.04','Muro M-6',0.98,'M³',54146.21],
+['N7-3.00-05','3.00','N7','HORMIGÓN ARMADO','1.05','Muro M-4',4.26,'M³',52399.36],
+['N7-3.00-06','3.00','N7','HORMIGÓN ARMADO','1.06','Muro M-5',5.82,'M³',48256.1],
+['N7-3.00-07','3.00','N7','HORMIGÓN ARMADO','1.07','Losa',5.42,'M³',23355.5],
+['N7-3.00-08','3.00','N7','HORMIGÓN ARMADO','1.08','Viga (V 20 X 52) Eje 9',0.48,'M³',35852.74],
+['N7-3.00-09','3.00','N7','HORMIGÓN ARMADO','1.09','Viga V1 (0.52x0.20)M',0.57,'M³',44801.84],
+['N7-3.00-10','3.00','N7','HORMIGÓN ARMADO','1.10','Dinteles (20 x 52)M',0.55,'M³',27685.72],
+['N7-3.00-11','3.00','N7','HORMIGÓN ARMADO','1.11','Viga Eje 5 S1 (V 20 X 60)',0.64,'M³',27053.84],
+['N7-7.00-01','7.00','N7','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.01','Muros de Foam 0.15M',202.57,'M²',1479.25],
+['N7-7.00-02','7.00','N7','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.02','Ante Pecho',65.05,'M²',2207.16],
+['N7-8.00-01','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.01','Fraguache',301,'M²',149.3],
+['N7-8.00-02','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.02','Resane Interior',1,'P.A',36102.84],
+['N7-8.00-03','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.03','Pañete Interior',301,'M²',749.63],
+['N7-8.00-04','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.04','Pañete Techo Interior',105.29,'M²',1069.29],
+['N7-8.00-05','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.05','Cantos interiores',109,'M',198.05],
+['N7-8.00-06','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.06','Mochetas interiores',49.8,'M',284.53],
+['N7-8.00-07','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.07','Fraguache Area Comun',112.75,'M²',149.3],
+['N7-8.00-08','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.08','Resane Interior Area Comun',1,'P.A',15214.11],
+['N7-8.00-09','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.09','Pañete Interior Area Comun',112.75,'M²',749.63],
+['N7-8.00-10','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.10','Cantos interiores Area comun',69.6,'M',198.05],
+['N7-8.00-11','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.11','Mochetas interiores Area comun',34.8,'M',284.53],
+['N7-16.00-01','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.12','Cantos exteriores',1742.57,'M',198.05],
+['N7-16.00-02','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.13','Fraguache Exterior',1547.21,'M²',149.3],
+['N7-16.00-03','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.14','Repello Exteriores',1,'P.A',173976.7],
+['N7-16.00-04','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.15','Pañete Exterior',1547.21,'M²',749.63],
+['N7-16.00-05','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.16','Goteros en Balcones y vuelos',103.68,'M',281.75],
+['N7-8.00-12','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.17','Primer',1547.21,'M²',122],
+['N7-8.00-13','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.18','Pintura',1547.21,'M²',280.89],
+['N7-16.00-06','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.19','Fachada',1,'P.A',920000],
+['N7-8.00-14','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.20','Columnas Falsas interiores en SheetRock 2 caras 20 x 20',1,'P.A',65000],
+['N7-16.00-07','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.21','Columnas Falsas exterior en Denglass 3 caras',1,'P.A',65000],
+['N7-9.00-01','9.00','N7','REVESTIMIENTOS','4.01','Cerámica de Pared en Baños h= 2.70 m',18.01,'M²',4158.99],
+['N7-9.00-02','9.00','N7','REVESTIMIENTOS','4.02','Cerámica de Pared en Cocinas h=.50 m',8.35,'M²',4093.72],
+['N7-9.00-03','9.00','N7','REVESTIMIENTOS','4.03','Cerámica Pared Lavado h=.60 m',1.2,'M²',4093.72],
+['N7-9.00-04','9.00','N7','REVESTIMIENTOS','4.04','Facias en techos de Sheetrock',21,'M²',2937.26],
+['N7-9.00-05','9.00','N7','REVESTIMIENTOS','4.05','Plafones PVC en baños',0,'P.A',4200],
+['N7-12.00-01','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.01','Tope de Granito Natural (Material)',9.07,'M²',6500],
+['N7-12.00-02','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.02','Tope de Granito Natural (Mano de Obra )',11.65,'ML',2800],
+['N7-12.00-03','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.03','Gabinetes Cocina en Melamina Doorvitech',2,'P.U',177437.4],
+['N7-12.00-04','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.04','Mueble de Baño Principal 80 x 50 x 48 MTS',1,'P.U',25042.8],
+['N7-12.00-05','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.05','Mueble de Baño Comun 60 x 45 x 48 MTS',1,'P.U',24590.81],
+['N7-10.00-01','10.00','N7','PISOS','6.01','Porcelanato interior 40x40',44.69,'M²',2956.15],
+['N7-10.00-02','10.00','N7','PISOS','6.02','Zócalos de pocelanato interior',70.72,'M²',450.57],
+['N7-10.00-03','10.00','N7','PISOS','6.03','Cerámica en baños',8.31,'M²',2502.4],
+['N7-10.00-04','10.00','N7','PISOS','6.04','Ceramica Exterior',70.02,'M²',2892.9],
+['N7-10.00-05','10.00','N7','PISOS','6.05','Zocalo Exterior',71.02,'M²',442.98],
+['N7-11.00-01','11.00','N7','PORTAJE','7.01','Puerta Principal 1.00 x 2.20 MTS MDP hidrofugo + Melamina',1,'P.U',31272.96],
+['N7-11.00-02','11.00','N7','PORTAJE','7.02','P. de paso 0.90 x 2.20 MTS. MDP hidrofugo + PVC',1,'P.U',24954.23],
+['N7-11.00-03','11.00','N7','PORTAJE','7.03','P. de paso 0.80 x 2.20 MTS. MDP hidrofugo + PVC',1,'P.U',24832.07],
+['N7-11.00-04','11.00','N7','PORTAJE','7.04','Puerta Flotante de Acceso Gym',1,'P.U',21600],
+['N7-11.00-05','11.00','N7','PORTAJE','7.05','Closet Dormitorio 1 Aptos A 2.20 x 2.40 MTS MDP hidrofugo + Melamina',1,'P.U',31761.6],
+['N7-11.00-06','11.00','N7','PORTAJE','7.06','Mampara de Baño',1,'P.U',6500],
+['N7-11.00-07','11.00','N7','PORTAJE','7.07','Tramos Ventilados Para Closet',1,'P.A',10000],
+['N7-14.00-01','14.00','N7','HERRERIA y BARANDAS','9.01','Lavaderos en Hierro 0,75 x 0,90',1,'',4000],
+['N7-15.00-01','15.00','N7','VENTANAS','10.01','Ventanas en General p92 (Lantigua)',1,'P.A',238895.91],
+['N7-17.00-01','17.00','N7','PINTURA','11.01','Primer en muros interiores',301,'M²',122],
+['N7-17.00-02','17.00','N7','PINTURA','11.02','Acrílica en muros interiores',301,'M²',280.89],
+['N7-17.00-03','17.00','N7','PINTURA','11.03','Economica en techos',342,'M²',225.87],
+['N7-4.00-01','4.00','N7','INSTALACIÓN SANITARIA','12.01','Piezas y tuberías para AN y AP (cotizaciones varias/ Eusebio)',1,'PA',282521.52],
+['N7-4.00-02','4.00','N7','INSTALACIÓN SANITARIA','12.02','Mano de obra plomero',1,'PA',156354.51],
+['N7-5.00-01','5.00','N7','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.01','Presupuesto de Materiales por Nivel',1,'PA',135071.14],
+['N7-5.00-02','5.00','N7','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.02','MDO Instalación Electrica por Nivel',1,'PA',74609.55],
+['N7-27.00-01','27.00','N7','Linea Blanca','14.01','Extractores KTC',1,'PA',14486.33],
+['N7-27.00-02','27.00','N7','Linea Blanca','14.02','Estufas KTC',1,'PA',17200.45],
+['N7-27.00-03','27.00','N7','Linea Blanca','14.03','Horno KTC',1,'PA',28503.2],
+['N7-31.00-01','31.00','N7','JARDINERIA','14.01','Jardineria a Todo Costo',1,'PA',35000],
+['N7-28.00-01','28.00','N7','MOBILIARIO GIMNASIO','15.01','Equipo de Gimnasio',1,'P.A',544040.09],
+['N7-26.00-01','26.00','N7','MOBILIARIO','16.01','Mobiliario Terraza',1,'P.A',70000],
+['N7-28.00-02','28.00','N7','PICUZZI','17.01','Picuzz a Todo costo',1,'PA',685000],
+['N7-32.00-01','32.00','N7','MISCELÁNEOS','18.01','Limpieza final',1,'PA',10000],
+['SM-8.00-01','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.01','Subida de materiales a Nivel 2',1,'P.A',58000],
+['SM-8.00-02','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.02','Subida de materiales a Nivel 3',1,'P.A',68000],
+['SM-8.00-03','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.03','Subida de materiales a Nivel 4',1,'P.A',78000],
+['SM-8.00-04','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.04','Subida de materiales a Nivel 5',1,'P.A',88000],
+['SM-8.00-05','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.05','Subida de materiales a Nivel 6',1,'P.A',100000],
+['SM-8.00-06','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.06','Subida de materiales a Nivel 7',1,'P.A',130000]
+];
+
+var CAT_SECC_ORDEN=['BNP','N1','N2','N7','SM'];
+/* Al sembrar se guarda el texto largo de la sección, que es lo que se lee en
+   pantalla. Para ORDENAR hace falta volver a la clave: sin esto el Séptimo
+   Nivel saldría antes que el Primero, por alfabético. */
+function _catSeccOrden(txt){
+  for(var i=0;i<CAT_SECC_ORDEN.length;i++)
+    if(CAT_SECCIONES[CAT_SECC_ORDEN[i]]===txt) return i;
+  return 9;
+}
+
+/* Del oficio Y LA DESCRIPCIÓN al capítulo del presupuesto.
+   El oficio solo NO basta: tres contratistas se parten entre dos códigos.
+   Dimedes hace portaje y ebanistería de cocina; Yelson hace pisos y también
+   revestimiento cerámico; y los ayudantes —decisión del dueño— se reparten a
+   la partida DONDE AYUDAN, no a una línea de limpieza que no existe.
+   Ojo con los acentos y los plurales: la primera versión decía `mueble de ba`
+   y `closet`, y mandaba 22 actividades al capítulo equivocado porque
+   «Instalación de muebles de baño» y «Pintar puertas del clóset» no casaban.
+   Si tocas una regla, pruébala contra la base antes de darla por buena. */
+function _catCapDe(oficio, desc){
+  var o=String(oficio||'').trim(), d=String(desc||'');
+  var tiene=function(re){ return re.test(d); };
+
+  if(o==='Ebanista')
+    return tiene(/gabinete|mueble[s]? de ba|cl[oó]set|isla|pantry/i) ? '12.00' : '11.00';
+  if(o==='Pisero')  return tiene(/revestimiento/i) ? '9.00' : '10.00';
+  if(o==='Pulidor') return '10.00';
+  if(o==='Topes y revestimientos en cuarzo') return '9.00';
+  if(o==='Plomería e Instalaciones' || o==='Equipo de Bombeo') return '4.00';
+  if(o==='Electricidad') return '5.00';
+  if(o==='Eléctrico Alta Tensión y Planta') return '24.00';
+  if(o==='Seguridad y Bajo Voltaje') return '23.00';
+  if(o==='Sheetrock' || o==='Estuco' || o==='Albañilería') return '8.00';
+  if(o==='Albañileria y Foam') return '7.00';
+  if(o==='Pintura') return '17.00';
+  if(o==='Pintor Fachada') return '19.00';
+  if(o==='Ventanero') return '15.00';
+  if(o==='Herrero')   return '14.00';
+  if(o==='Carpintería') return '11.00';
+  if(o==='Mdo andamios') return '21.00';
+  if(o==='Aires acondicionados') return '32.00';
+  if(o==='Varillero' || o==='Encofrados' ||
+     o==='Vaciado Hormigon' || o==='Hormigon Celular') return '3.00';
+
+  if(o==='Ayudante'){
+    if(tiene(/desag[uü]e de las duchas|vuelos de los aires/i)) return '4.00';
+    if(tiene(/previa a masilla|paredes con cemento/i))         return '17.00';
+    if(tiene(/protecci[oó]n del piso|piso terminado/i))        return '10.00';
+    if(tiene(/calzar/i))                                       return '11.00';
+    if(tiene(/subida de materiales/i))                         return '21.00';
+    if(tiene(/excavaci[oó]n|compactaci[oó]n|nivelaci[oó]n de/i))return '2.00';
+    if(tiene(/antepecho/i))                                    return '3.00';
+    return '0';   // limpieza de entrega y escombros: no hay línea de presupuesto, decide el dueño
+  }
+  return '0';
 }
 
 // ── Los datos del catálogo. Viven aparte de S.acts y no lo tocan. ──
@@ -15188,6 +15564,32 @@ function _catP(){ return S.catPartidas||[]; }
 function _catA(){ return S.catAmarres||{}; }        // actividad_id -> partida_id
 function _catPorId(id){ return _catP().find(function(p){ return p.id===id; })||null; }
 function _catActivas(){ return _catP().filter(function(p){ return p.activo!==false; }); }
+
+/* CÓMO SE DISTINGUE UN NIVEL DEL OTRO. `padre_id` NO sirve: al sembrar, las
+   274 del presupuesto y las de la agenda lo tienen todas en nulo —a la
+   agenda nadie le adivina la subpartida—, así que mirarlo confundiría las
+   dos cosas. Lo que sí las separa siempre es la SECCIÓN: toda línea del
+   presupuesto viene de una (Bajo Nivel, Primer Nivel…) y ninguna partida de
+   la agenda tiene ni tendrá. */
+function _catEsSub(p){ return !!String((p&&p.seccion)||'').trim(); }
+function _catSubs(){    return _catActivas().filter(_catEsSub); }
+function _catAgenda(){  return _catActivas().filter(function(p){ return !_catEsSub(p); }); }
+function _catSubsDe(cap){
+  return _catSubs().filter(function(p){ return String(p.capitulo)===String(cap); })
+    .sort(function(a,b){
+      return _catSeccOrden(a.seccion)-_catSeccOrden(b.seccion) ||
+             String(a.numero).localeCompare(String(b.numero),'es',{numeric:true});
+    });
+}
+function _catAgendaDe(cap){
+  return _catAgenda().filter(function(p){ return String(p.capitulo)===String(cap); })
+    .sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre)); });
+}
+function _catHijasDe(subId){
+  return _catAgenda().filter(function(p){ return p.padre_id===subId; })
+    .sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre)); });
+}
+function _catSinSub(cap){ return _catAgendaDe(cap).filter(function(p){ return !p.padre_id; }); }
 
 /* «Abierta» = el mismo criterio que usa el resto del app, más el porcentaje.
    Si esto no coincide, los conteos del catálogo no cuadran con la lista. */
@@ -15204,6 +15606,10 @@ function _catActsDe(pid){
              String(x.area||'').localeCompare(String(y.area||''));
     });
 }
+function _catActsDeCap(cap){
+  var n=0; _catAgendaDe(cap).forEach(function(p){ n+=_catActsDe(p.id).length; });
+  return n;
+}
 function _catSueltas(){
   var am=_catA();
   return _catAbiertas().filter(function(a){ return !am[a.id]; });
@@ -15214,6 +15620,10 @@ function _catOficioDe(a){
   var n=_responsables(a&&a.personal_nombre)[0]||'';
   var p=(S.personal||[]).find(function(x){ return x.nombre===n; });
   return (p&&p.oficio)||'';
+}
+function _catMoneda(v){
+  var n=Number(v)||0;
+  return 'RD$ '+n.toLocaleString('es-DO',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
 async function cargarCatalogo(){
@@ -15232,83 +15642,64 @@ async function cargarCatalogo(){
   }
 }
 
-/* Renumera un capítulo entero: «3.1», «3.2»… Se llama después de cualquier
-   cosa que cambie qué partidas tiene un capítulo. */
-function _catRenumerar(cap){
-  var ps=_catActivas().filter(function(p){ return Number(p.capitulo)===Number(cap); })
-    .sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre)); });
-  var cambios=[];
-  ps.forEach(function(p,i){
-    var nn=cap+'.'+(i+1);
-    if(p.numero!==nn){ p.numero=nn; cambios.push({id:p.id, numero:nn}); }
-  });
-  return cambios;
-}
-/* De un tirón, no una por una. Renumerar el capítulo 3 —99 partidas— mandaba
-   99 PATCH seguidos; en la obra, con la señal a medias, eso es medio minuto
-   colgado. El upsert por la clave `id` hace lo mismo en una sola petición, y
-   las demás columnas ni se mencionan: PostgREST solo toca las que van. */
-async function _catAplicarNumeros(cambios){
-  cambios=cambios||[];
-  for(var i=0;i<cambios.length;i+=200)
-    await sb('obra_partidas',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
-             body:JSON.stringify(cambios.slice(i,i+200).map(function(c){
-               return {id:c.id, numero:c.numero}; }))});
-}
-async function _catRenumerarCaps(caps){
-  var vistos={}, todos=[];
-  (caps||[]).forEach(function(c){ if(c!=null && !vistos[c]){ vistos[c]=1; todos=todos.concat(_catRenumerar(Number(c))); } });
-  await _catAplicarNumeros(todos);
-}
-
 // ══ LA SIEMBRA ══════════════════════════════════════════════
 /* NO es automática al cargar: se toca un botón, dice cuántas va a crear, y se
-   puede repetir borrando lo sembrado. Una partida por cada `descripcion`
-   distinta, TAL CUAL — sin agrupar, sin limpiar, sin adivinar. */
+   puede repetir borrando lo sembrado.
+
+   NIVEL 2 — las 274 del presupuesto, tal cual, con el id de la constante. Ese
+   id es el del Excel (sección + capítulo + secuencia), así que resembrar no
+   duplica y cada línea se rastrea hasta la hoja original.
+
+   NIVEL 3 — una partida por cada `descripcion` abierta distinta, TAL CUAL —
+   sin agrupar, sin limpiar, sin adivinar. `padre_id` en nulo: de qué
+   subpartida cuelga lo decide el dueño, no una regla. */
 function _catPlanSiembra(){
+  var subs=CAT_SUBPARTIDAS.map(function(r){
+    return {id:r[0], capitulo:r[1], seccion:CAT_SECCIONES[r[2]]||r[2],
+            numero:r[4], nombre:r[5],
+            cantidad:Number(r[6])||0, unidad:r[7]||'',
+            precio_unitario:Number(r[8])||0,
+            valor:Math.round((Number(r[6])||0)*(Number(r[8])||0)*100)/100,
+            oficio:'', aplica:'general', codigo_presupuesto:r[3]||'',
+            padre_id:null, activo:true};
+  });
   var ab=_catAbiertas(), grupos={}, orden=[];
   ab.forEach(function(a){
     var k=String(a.descripcion||'(sin descripción)');
     if(!grupos[k]){ grupos[k]=[]; orden.push(k); }
     grupos[k].push(a);
   });
-  var partidas=[], amarres=[], porCap={};
+  var partidas=[], amarres=[];
   orden.forEach(function(desc){
     var items=grupos[desc];
     var of=_catOficioDe(items[0]);
-    var cap=_catCapDeOficio(of);
     // `aplica`: apartamento solo si TODAS caen en un «N# — Apto …»
     var soloAptos=items.every(function(a){ return REC_ORDEN.indexOf(String(a.area||'').trim())>=0; });
     var id='p'+uid();
-    partidas.push({id:id, capitulo:cap, numero:'', nombre:desc, oficio:of,
-                   unidad:'', aplica:soloAptos?'apartamento':'general',
-                   codigo_presupuesto:'', activo:true});
-    (porCap[cap]=porCap[cap]||[]).push(id);
+    partidas.push({id:id, capitulo:_catCapDe(of, desc), numero:'', nombre:desc,
+                   oficio:of, unidad:'', aplica:soloAptos?'apartamento':'general',
+                   codigo_presupuesto:'', seccion:null, padre_id:null,
+                   cantidad:null, precio_unitario:null, valor:null, activo:true});
     items.forEach(function(a){ amarres.push({actividad_id:a.id, partida_id:id}); });
   });
-  // numeración inicial, por capítulo y por nombre
-  Object.keys(porCap).forEach(function(cap){
-    var ids=porCap[cap];
-    partidas.filter(function(p){ return ids.indexOf(p.id)>=0; })
-      .sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre)); })
-      .forEach(function(p,i){ p.numero=cap+'.'+(i+1); });
-  });
-  return {partidas:partidas, amarres:amarres, actividades:ab.length};
+  return {subpartidas:subs, partidas:partidas, amarres:amarres, actividades:ab.length};
 }
 
 async function catSembrar(){
   if(!isAdmin()) return;
   var plan=_catPlanSiembra();
   var hay=_catP().length;
+  var total=plan.subpartidas.length+plan.partidas.length;
   if(hay){
-    if(!confirm('Ya hay '+hay+' partidas sembradas.\n\n'+
+    if(!confirm('Ya hay '+hay+' filas sembradas.\n\n'+
       'Se BORRA todo lo sembrado —y lo que hayas curado— y se vuelve a empezar con '+
-      plan.partidas.length+' partidas y '+plan.amarres.length+' amarres.\n\n'+
+      plan.subpartidas.length+' subpartidas del presupuesto, '+plan.partidas.length+
+      ' partidas de la agenda y '+plan.amarres.length+' amarres.\n\n'+
       'No se toca ninguna actividad de la obra.\n\n¿Seguro?')) return;
   } else {
-    if(!confirm('Se van a crear '+plan.partidas.length+' partidas y '+
-      plan.amarres.length+' amarres, de '+plan.actividades+' actividades abiertas.\n\n'+
-      'No se toca ninguna actividad de la obra.\n\n¿Seguro?')) return;
+    if(!confirm('Se van a crear:\n\n• '+plan.subpartidas.length+' subpartidas del presupuesto\n• '+
+      plan.partidas.length+' partidas de la agenda, de '+plan.actividades+' actividades abiertas\n• '+
+      plan.amarres.length+' amarres\n\nNo se toca ninguna actividad de la obra.\n\n¿Seguro?')) return;
   }
   setSS('syncing','Sembrando el catálogo...');
   try{
@@ -15316,19 +15707,21 @@ async function catSembrar(){
       await sb('obra_partida_actividad?actividad_id=neq.__nada__',{method:'DELETE',prefer:'return=minimal'});
       await sb('obra_partidas?id=neq.__nada__',{method:'DELETE',prefer:'return=minimal'});
     }
-    // De 200 en 200: mandar 394 filas de un tirón satura la conexión en obra.
-    for(var i=0;i<plan.partidas.length;i+=200)
+    // De 200 en 200: mandar 668 filas de un tirón satura la conexión en obra.
+    var todas=plan.subpartidas.concat(plan.partidas);
+    for(var i=0;i<todas.length;i+=200)
       await sb('obra_partidas',{method:'POST',prefer:'return=minimal',
-               body:JSON.stringify(plan.partidas.slice(i,i+200))});
+               body:JSON.stringify(todas.slice(i,i+200))});
     for(i=0;i<plan.amarres.length;i+=200)
       await sb('obra_partida_actividad',{method:'POST',prefer:'return=minimal',
                body:JSON.stringify(plan.amarres.slice(i,i+200))});
     logCambio('sembrado','partida','catalogo','Catálogo de partidas',
-              plan.partidas.length+' partidas y '+plan.amarres.length+' amarres');
+              plan.subpartidas.length+' subpartidas del presupuesto, '+plan.partidas.length+
+              ' partidas de la agenda y '+plan.amarres.length+' amarres');
     await cargarCatalogo();
     S.catUndo=null; S.catSel={};
     setSS('ok','✓ Catálogo sembrado');
-    showToast(plan.partidas.length+' partidas creadas ✓');
+    showToast(total+' filas creadas ✓');
   }catch(e){
     setSS('err','Error al sembrar');
     showToast('No se pudo sembrar: '+((e&&e.message)||''),'err',6000);
@@ -15351,9 +15744,9 @@ async function catDeshacer(){
   try{
     for(var i=0;i<u.partidas.length;i++){
       var p=u.partidas[i];
-      await sb('obra_partidas?id=eq.'+p.id,{method:'PATCH',prefer:'return=minimal',
+      await sb('obra_partidas?id=eq.'+encodeURIComponent(p.id),{method:'PATCH',prefer:'return=minimal',
         body:JSON.stringify({capitulo:p.capitulo,numero:p.numero,nombre:p.nombre,
-          oficio:p.oficio,unidad:p.unidad,aplica:p.aplica,
+          oficio:p.oficio,unidad:p.unidad,aplica:p.aplica,padre_id:p.padre_id,
           codigo_presupuesto:p.codigo_presupuesto,activo:p.activo})});
     }
     /* Los amarres se reponen uno a uno, solo los que cambiaron: así no hay que
@@ -15367,22 +15760,54 @@ async function catDeshacer(){
                body:JSON.stringify(cambiados.slice(i,i+200))});
     logCambio('deshecho','partida','catalogo','Catálogo de partidas','Deshecho: '+u.que);
     await cargarCatalogo();
-    var caps=u.partidas.map(function(x){ return x.capitulo; });
     S.catUndo=null; S.catSel={};
-    await _catRenumerarCaps(caps);
     setSS('ok','✓ Deshecho');
     showToast('Deshecho ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo deshacer: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
 }
 
-// ══ LAS CUATRO HERRAMIENTAS ═════════════════════════════════
-function _catSelIds(){ var m=S.catSel||{}; return Object.keys(m).filter(function(k){ return m[k]; }); }
-function catSelToggle(id){ (S.catSel=S.catSel||{})[id]=!S.catSel[id]; renderCatalogo(); }
+// ══ COLGAR Y DESCOLGAR — el trabajo del dueño ═══════════════
+/* Es lo único que hace falta curar para que el catálogo sirva: decir de qué
+   línea del presupuesto cuelga cada partida de la agenda. Nadie lo adivina. */
+async function catColgar(pid, subId){
+  var p=_catPorId(pid); if(!p || _catEsSub(p)) return;
+  var sub=subId?_catPorId(subId):null;
+  if(subId && !sub) return;
+  if(String(p.padre_id||'')===String(subId||'')) return;
+  _catGuardarUndo(subId?'colgar':'quitar de la subpartida',[pid]);
+  try{
+    await sb('obra_partidas?id=eq.'+encodeURIComponent(pid),{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify({padre_id:subId||null})});
+    logCambio(subId?'colgada':'descolgada','partida',pid,p.nombre,
+              subId?('colgada de «'+sub.nombre+'» ('+sub.numero+')'):'quitada de su subpartida');
+    await cargarCatalogo();
+    showToast(subId?'Colgada ✓':'Quitada de la subpartida ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',6000); }
+  renderCatalogo();
+}
+function catDescolgar(pid){ return catColgar(pid, ''); }
 
-/* El escogedor es una PANTALLA, no un prompt() numerado. Escoger entre 60
-   partidas escribiendo un número en un diálogo del navegador no se hace de
-   pie ni sentado. Mismo motivo que el alta del Repaso en v95. */
+// ══ LAS HERRAMIENTAS — SOLO sobre partidas de la agenda ═════
+/* Las subpartidas del presupuesto NO se juntan, ni se renombran, ni se
+   mueven de capítulo: son el presupuesto, y si se editan deja de cuadrar con
+   lo que se contrató y con lo que se paga. Solo se pueden DESACTIVAR cuando
+   una no aplica. La interfaz no ofrece lo que no debe hacerse, y además está
+   el guardia por si alguien llega por otro camino. */
+function _catSelIds(){
+  var m=S.catSel||{};
+  return Object.keys(m).filter(function(k){
+    var p=_catPorId(k); return m[k] && p && !_catEsSub(p);
+  });
+}
+function catSelToggle(id){
+  var p=_catPorId(id); if(!p || _catEsSub(p)) return;
+  (S.catSel=S.catSel||{})[id]=!S.catSel[id]; renderCatalogo();
+}
+
+/* El escogedor es una PANTALLA, no un prompt() numerado. Escoger entre
+   cientos de partidas escribiendo un número en un diálogo del navegador no se
+   hace de pie ni sentado. Mismo motivo que el alta del Repaso en v95. */
 function catPickCerrar(){ S.catPick=null; renderCatalogo(); _catArriba(); }
 function _catPickBuscar(v){
   if(!S.catPick) return;
@@ -15390,19 +15815,24 @@ function _catPickBuscar(v){
   var el=document.getElementById('cat-pick-lista');
   if(el) el.innerHTML=_catPickListaHTML();   // NO repinta entero: el campo pierde el foco
 }
+/* Minusculas y sin tildes, para buscar sin pelear con el teclado. No se usa
+   `normalizar` del motor Parecido: vive dentro de su cierre y no es global. */
+function _catNorm(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+}
 
 /* JUNTAR — las actividades de todas pasan a la que queda; las otras se
    DESACTIVAN, no se borran. Así se puede deshacer y queda el rastro. */
 function catJuntar(){
   var ids=_catSelIds();
-  if(ids.length<2){ showToast('Marca dos o más partidas','warn'); return; }
+  if(ids.length<2){ showToast('Marca dos o más partidas de la agenda','warn'); return; }
   S.catPick={modo:'juntar', ids:ids, q:''};
   renderCatalogo(); _catArriba();
 }
 async function catJuntarEn(quedaId){
   var ids=(S.catPick&&S.catPick.ids)||[];
-  var queda=_catPorId(quedaId); if(!queda) return;
-  var otras=ids.map(_catPorId).filter(function(p){ return p && p.id!==queda.id; });
+  var queda=_catPorId(quedaId); if(!queda || _catEsSub(queda)) return;
+  var otras=ids.map(_catPorId).filter(function(p){ return p && !_catEsSub(p) && p.id!==queda.id; });
   var mover=[]; otras.forEach(function(p){
     _catActsDe(p.id).forEach(function(a){ mover.push({actividad_id:a.id, partida_id:queda.id}); });
   });
@@ -15416,13 +15846,11 @@ async function catJuntarEn(quedaId){
       await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
                body:JSON.stringify(mover.slice(i,i+200))});
     for(i=0;i<otras.length;i++)
-      await sb('obra_partidas?id=eq.'+otras[i].id,{method:'PATCH',prefer:'return=minimal',
+      await sb('obra_partidas?id=eq.'+encodeURIComponent(otras[i].id),{method:'PATCH',prefer:'return=minimal',
                body:JSON.stringify({activo:false})});
     logCambio('juntadas','partida',queda.id,queda.nombre,
               otras.length+' partidas juntadas en esta ('+mover.length+' actividades)');
-    var caps=otras.map(function(p){ return p.capitulo; }).concat([queda.capitulo]);
     await cargarCatalogo();
-    await _catRenumerarCaps(caps);
     S.catSel={}; setSS('ok','✓'); showToast('Juntadas ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo juntar: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
@@ -15432,7 +15860,7 @@ async function catJuntarEn(quedaId){
    caso del masillado y el primer dentro de la pintura de muros. */
 function catBajar(){
   var ids=_catSelIds();
-  if(ids.length!==1){ showToast('Marca UNA partida para bajarla','warn'); return; }
+  if(ids.length!==1){ showToast('Marca UNA partida de la agenda para bajarla','warn'); return; }
   S.catPick={modo:'bajar', ids:ids, q:''};
   renderCatalogo(); _catArriba();
 }
@@ -15440,6 +15868,7 @@ async function catBajarEn(destinoId){
   var baja=_catPorId((S.catPick&&S.catPick.ids||[])[0]);
   var destino=_catPorId(destinoId);
   if(!baja||!destino||baja.id===destino.id) return;
+  if(_catEsSub(baja)||_catEsSub(destino)) return;
   var mover=_catActsDe(baja.id).map(function(a){ return {actividad_id:a.id, partida_id:destino.id}; });
   if(!confirm('«'+destino.nombre+'» se queda con '+(_catActsDe(destino.id).length+mover.length)+
       ' actividades.\n\n«'+baja.nombre+'» se desactiva.\n\n¿Seguro?')) return;
@@ -15450,11 +15879,10 @@ async function catBajarEn(destinoId){
     for(var i=0;i<mover.length;i+=200)
       await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
                body:JSON.stringify(mover.slice(i,i+200))});
-    await sb('obra_partidas?id=eq.'+baja.id,{method:'PATCH',prefer:'return=minimal',
+    await sb('obra_partidas?id=eq.'+encodeURIComponent(baja.id),{method:'PATCH',prefer:'return=minimal',
              body:JSON.stringify({activo:false})});
     logCambio('bajada','partida',baja.id,baja.nombre,'bajada dentro de «'+destino.nombre+'»');
     await cargarCatalogo();
-    await _catRenumerarCaps([baja.capitulo, destino.capitulo]);
     S.catSel={}; setSS('ok','✓'); showToast('Bajada ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo bajar: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
@@ -15462,20 +15890,18 @@ async function catBajarEn(destinoId){
 
 async function catMover(cap){
   var ids=_catSelIds();
-  if(!ids.length){ showToast('Marca una o más partidas','warn'); return; }
-  var caps=[Number(cap)];
-  ids.forEach(function(id){ var p=_catPorId(id); if(p) caps.push(Number(p.capitulo)); });
+  if(!ids.length){ showToast('Marca una o más partidas de la agenda','warn'); return; }
   _catGuardarUndo('mover', ids);
   setSS('syncing','Moviendo...');
   try{
     for(var i=0;i<ids.length;i++)
-      await sb('obra_partidas?id=eq.'+ids[i],{method:'PATCH',prefer:'return=minimal',
-               body:JSON.stringify({capitulo:Number(cap)})});
+      /* Al cambiar de capítulo se SUELTA la subpartida: la que tenía es de
+         otro capítulo y colgarla de ahí sería mentir sobre el presupuesto. */
+      await sb('obra_partidas?id=eq.'+encodeURIComponent(ids[i]),{method:'PATCH',prefer:'return=minimal',
+               body:JSON.stringify({capitulo:String(cap), padre_id:null})});
     logCambio('movidas','partida',ids[0],_catCapNom(cap),
               ids.length+' partidas movidas al capítulo '+cap+' — '+_catCapNom(cap));
     await cargarCatalogo();
-    // se renumeran el capítulo de destino Y los de origen
-    await _catRenumerarCaps(caps);
     S.catSel={}; setSS('ok','✓'); showToast(ids.length+' movidas ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo mover: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
@@ -15485,23 +15911,42 @@ async function catMover(cap){
    así el repintado nunca cae mientras se está escribiendo. */
 async function catFichaSet(pid, campo, valor){
   var p=_catPorId(pid); if(!p) return;
-  var v=(campo==='capitulo')?Number(valor):String(valor==null?'':valor).trim();
+  if(_catEsSub(p) && campo!=='activo'){
+    showToast('Una subpartida del presupuesto no se edita','warn'); renderCatalogo(); return;
+  }
+  var v=(campo==='capitulo')?String(valor):String(valor==null?'':valor).trim();
   if(String(p[campo]==null?'':p[campo])===String(v)) return;
   if(campo==='nombre' && !v){ renderCatalogo(); return; }   // no se deja sin nombre
   _catGuardarUndo(campo==='nombre'?'renombrar':'editar',[pid]);
-  var antes=p[campo];
+  var antes=p[campo], body={};
+  body[campo]=v;
+  if(campo==='capitulo') body.padre_id=null;   // ver catMover
   try{
-    var body={}; body[campo]=v;
-    await sb('obra_partidas?id=eq.'+pid,{method:'PATCH',prefer:'return=minimal',
+    await sb('obra_partidas?id=eq.'+encodeURIComponent(pid),{method:'PATCH',prefer:'return=minimal',
              body:JSON.stringify(body)});
     /* NO toca la descripción de ninguna actividad: el nombre de la partida y
        lo que dice la actividad son dos cosas distintas. */
     logCambio(campo==='nombre'?'renombrada':'editada','partida',pid,
               campo==='nombre'?v:p.nombre, campo+': «'+(antes||'—')+'» → «'+(v||'—')+'»');
     await cargarCatalogo();
-    if(campo==='nombre'||campo==='capitulo') await _catRenumerarCaps([antes,v,p.capitulo]);
     showToast('Guardado ✓');
   }catch(e){ showToast('No se pudo guardar: '+((e&&e.message)||''),'err',6000); }
+  renderCatalogo();
+}
+
+async function catDesactivarSub(pid){
+  var p=_catPorId(pid); if(!p||!_catEsSub(p)) return;
+  if(!confirm('«'+p.numero+' '+p.nombre+'» se desactiva: deja de verse en el capítulo.\n\n'+
+              'No se borra, y se puede reponer resembrando.\n\n¿Seguro?')) return;
+  _catGuardarUndo('desactivar subpartida',[pid]);
+  try{
+    await sb('obra_partidas?id=eq.'+encodeURIComponent(pid),{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify({activo:false})});
+    logCambio('desactivada','partida',pid,p.nombre,'subpartida del presupuesto desactivada');
+    await cargarCatalogo();
+    S.catPartida=null;
+    showToast('Desactivada ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
 }
 
@@ -15516,29 +15961,29 @@ async function catAsignarEn(pid){
   S.catPick=null;
   setSS('syncing','Amarrando...');
   try{
-    var cap=null;
     if(pid==='__nueva__'){
       pid='p'+uid();
-      cap=_catCapDeOficio(_catOficioDe(a));
+      var of=_catOficioDe(a);
       await sb('obra_partidas',{method:'POST',prefer:'return=minimal',body:JSON.stringify([{
-        id:pid, capitulo:cap, numero:'',
-        nombre:(a&&a.descripcion)||'Nueva partida', oficio:_catOficioDe(a),
+        id:pid, capitulo:_catCapDe(of,(a&&a.descripcion)||''), numero:'',
+        nombre:(a&&a.descripcion)||'Nueva partida', oficio:of,
         unidad:'', aplica:REC_ORDEN.indexOf(String((a&&a.area)||'').trim())>=0?'apartamento':'general',
-        codigo_presupuesto:'', activo:true}])});
+        codigo_presupuesto:'', seccion:null, padre_id:null,
+        cantidad:null, precio_unitario:null, valor:null, activo:true}])});
     }
     await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
              body:JSON.stringify([{actividad_id:actId, partida_id:pid}])});
     logCambio('asignada','partida',pid,(a&&a.descripcion)||'','actividad amarrada desde la bandeja de sueltas');
     await cargarCatalogo();
-    if(cap!==null) await _catRenumerarCaps([cap]);
     setSS('ok','✓'); showToast('Amarrada ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo amarrar: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
 }
 
 // ══ LAS PANTALLAS ═══════════════════════════════════════════
-function catIrCap(c){ S.catCap=(c===null?null:Number(c)); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catSel={}; renderCatalogo(); _catArriba(); }
+function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catSel={}; renderCatalogo(); _catArriba(); }
 function catIrPartida(id){ S.catPartida=id; S.catPick=null; renderCatalogo(); _catArriba(); }
+function catVerVacios(){ S.catVacios=!S.catVacios; renderCatalogo(); }
 function catVolver(){
   if(S.catPick) S.catPick=null;
   else if(S.catPartida) S.catPartida=null;
@@ -15594,49 +16039,62 @@ var _catVolverBS='background:none;border:0;color:var(--text2);font-size:13px;fon
 
 function _catCabecera(){
   var ab=_catAbiertas().length, am=_catAbiertas().filter(function(a){ return _catA()[a.id]; }).length;
+  var ag=_catAgenda().length, colg=_catAgenda().filter(function(p){ return !!p.padre_id; }).length;
   return '<div style="display:flex;align-items:baseline;gap:10px;margin:2px 0 3px;flex-wrap:wrap">'+
       '<div style="font-size:20px;font-weight:800;letter-spacing:-.3px">Catálogo de partidas</div>'+
       '<div style="font-size:11px;color:var(--amber);font-weight:800;font-family:var(--mono)">PRUEBA</div>'+
     '</div>'+
-    /* El número que contesta la pregunta de la prueba. */
+    /* Los dos números que contestan la pregunta de la prueba. */
     '<div style="margin:10px 0 14px;padding:11px 13px;border-radius:12px;background:var(--bg2);'+
       'border:1.5px solid '+(ab-am?'var(--amber)':'var(--green)')+'">'+
       '<div style="font-size:13.5px;font-weight:800">'+am+' de '+ab+' actividades amarradas</div>'+
       '<div style="font-size:11.5px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
-        (ab-am)+' siguen sueltas</div>'+
+        (ab-am)+' siguen sueltas · '+colg+' de '+ag+' partidas colgadas del presupuesto</div>'+
     '</div>';
 }
 
 function _catCapitulosHTML(){
-  var ps=_catActivas();
   var h=_catCabecera();
-  if(!ps.length){
+  if(!_catActivas().length){
     var plan=_catPlanSiembra();
     h+='<div style="padding:16px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--border)">'+
       '<div style="font-size:13.5px;font-weight:700;line-height:1.5;margin-bottom:10px">'+
-        'El catálogo está vacío. Se siembra de las actividades abiertas: <b>'+plan.partidas.length+
-        ' partidas</b> de <b>'+plan.actividades+' actividades</b>.</div>'+
+        'El catálogo está vacío. Se siembra de dos sitios: <b>'+plan.subpartidas.length+
+        ' subpartidas</b> del presupuesto y <b>'+plan.partidas.length+' partidas</b> de la agenda, '+
+        'de <b>'+plan.actividades+' actividades abiertas</b>.</div>'+
       '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
-        'Va a quedar mal en varios sitios — el ayudante que limpia desagües cae en Limpieza y no en '+
-        'Plomería. Eso es lo esperado: moverlo viendo la lista <b>es</b> la prueba.</div>'+
+        'Los capítulos van a quedar mal en varios sitios — la limpieza de entrega no tiene línea de '+
+        'presupuesto y cae en Sin clasificar. Eso es lo esperado: moverlo viendo la lista <b>es</b> la prueba. '+
+        'De qué subpartida cuelga cada partida no lo adivina nadie: lo decides tú aquí dentro.</div>'+
       '<button onclick="catSembrar()" style="'+_catBS+';width:100%;min-height:52px;border:1.5px solid var(--green);'+
         'background:var(--green-light);color:var(--green);font-size:14px">Sembrar el catálogo</button>'+
     '</div>';
     return h;
   }
-  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">';
+  var llenos=[], vacios=[];
   CAT_CAPITULOS.forEach(function(c){
-    var mias=ps.filter(function(p){ return Number(p.capitulo)===c.n; });
-    var nAct=0; mias.forEach(function(p){ nAct+=_catActsDe(p.id).length; });
-    h+='<button onclick="catIrCap('+c.n+')" style="'+_catBS+';min-height:70px;width:100%;'+
-      'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
-      'text-align:left;border:1.5px solid '+(c.n===0&&mias.length?'var(--amber)':'var(--border2)')+';'+
-      'background:var(--bg2);color:var(--text)">'+
-      '<span style="font-size:12.5px;font-weight:800;line-height:1.25">'+c.n+'. '+esc(c.t)+'</span>'+
-      '<span style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+
-        mias.length+' partidas · '+nAct+' actividades</span></button>';
+    var s=_catSubsDe(c.n).length, p=_catAgendaDe(c.n).length;
+    (s||p ? llenos : vacios).push({c:c, s:s, p:p, a:_catActsDeCap(c.n)});
   });
-  h+='</div>';
+  var tarjeta=function(x){
+    return '<button onclick="catIrCap(\''+x.c.n+'\')" style="'+_catBS+';min-height:78px;width:100%;'+
+      'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
+      'text-align:left;border:1.5px solid '+(x.c.n==='0'&&x.p?'var(--amber)':'var(--border2)')+';'+
+      'background:var(--bg2);color:var(--text)">'+
+      '<span style="font-size:12.5px;font-weight:800;line-height:1.25">'+esc(x.c.n)+' · '+esc(x.c.t)+'</span>'+
+      '<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
+        x.s+' subpartidas · '+x.p+' partidas<br>'+x.a+' actividades</span></button>';
+  };
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'+
+     llenos.map(tarjeta).join('')+'</div>';
+  if(vacios.length){
+    h+='<button onclick="catVerVacios()" style="'+_catBS+';width:100%;margin-top:10px;'+
+      'border:1.5px dashed var(--border2);background:none;color:var(--text3);font-weight:700">'+
+      (S.catVacios?'Esconder los '+vacios.length+' vacíos':'Ver los '+vacios.length+' vacíos')+'</button>';
+    if(S.catVacios)
+      h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:8px">'+
+         vacios.map(tarjeta).join('')+'</div>';
+  }
   var sue=_catSueltas().length;
   h+='<button onclick="catSueltasAbrir()" style="'+_catBS+';width:100%;margin-top:12px;min-height:52px;'+
     'border:1.5px dashed '+(sue?'var(--amber)':'var(--border2)')+';background:none;'+
@@ -15651,7 +16109,8 @@ function _catHerramientasHTML(){
   return '<div style="margin:10px 0 12px;padding:10px 12px;border-radius:12px;background:var(--bg3);'+
     'border:1.5px solid '+(n?'var(--accent)':'var(--border)')+'">'+
     '<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
-      'text-transform:uppercase;margin-bottom:8px">'+(n?n+' marcadas':'Marca partidas para usar las herramientas')+'</div>'+
+      'text-transform:uppercase;margin-bottom:8px">'+
+      (n?n+' marcadas':'Marca partidas de la agenda para usar las herramientas')+'</div>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
       '<button onclick="catJuntar()" style="'+_catBS+';flex:1;min-width:92px;border:1.5px solid '+(n>1?'var(--accent)':'var(--border2)')+';'+
         'background:var(--bg2);color:'+(n>1?'var(--accent)':'var(--text3)')+'">Juntar</button>'+
@@ -15662,7 +16121,7 @@ function _catHerramientasHTML(){
       'style="width:100%;margin-top:6px;min-height:44px;padding:0 10px;border:1.5px solid '+(n?'var(--accent)':'var(--border2)')+';'+
       'border-radius:11px;background:var(--bg2);color:var(--text);font-size:12.5px;font-family:var(--font)">'+
       '<option value="">Mover a otro capítulo…</option>'+
-      CAT_CAPITULOS.map(function(c){ return '<option value="'+c.n+'">'+c.n+'. '+esc(c.t)+'</option>'; }).join('')+
+      CAT_CAPITULOS.map(function(c){ return '<option value="'+esc(c.n)+'">'+esc(c.n)+' · '+esc(c.t)+'</option>'; }).join('')+
     '</select>'+
     (S.catUndo?'<button onclick="catDeshacer()" style="'+_catBS+';width:100%;margin-top:6px;'+
       'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
@@ -15670,76 +16129,168 @@ function _catHerramientasHTML(){
   '</div>';
 }
 
+/* Una fila de partida de la agenda: la casilla de marcar y el nombre. Se usa
+   dentro de una subpartida y en el bloque de las que no cuelgan de ninguna. */
+function _catFilaAgendaHTML(p, sangria){
+  var n=_catActsDe(p.id).length, on=!!(S.catSel||{})[p.id];
+  return '<div class="cat-fila" style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px'+
+      (sangria?';margin-left:14px':'')+'">'+
+    '<button onclick="catSelToggle(\''+p.id+'\')" aria-label="Marcar" style="'+_catBS+';flex:0 0 46px;'+
+      'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(on?'var(--accent-fill)':'var(--bg2)')+';color:'+(on?'var(--accent-on)':'var(--text3)')+';'+
+      'font-size:16px">'+(on?'✓':'')+'</button>'+
+    '<button onclick="catIrPartida(\''+p.id+'\')" style="'+_catBS+';flex:1;min-width:0;text-align:left;'+
+      'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
+      'padding:9px 12px;border:1.5px solid var(--border);background:var(--bg2);color:var(--text)">'+
+      '<span style="font-size:12.5px;font-weight:700;line-height:1.3">'+esc(p.nombre)+'</span>'+
+      '<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono)">'+
+        (p.oficio?esc(p.oficio)+' · ':'')+n+' actividad'+(n!==1?'es':'')+'</span>'+
+    '</button></div>';
+}
+
 function _catPartidasHTML(){
-  var cap=Number(S.catCap);
-  var ps=_catActivas().filter(function(p){ return Number(p.capitulo)===cap; }).sort(_catOrdenNum);
-  var nAct=0; ps.forEach(function(p){ nAct+=_catActsDe(p.id).length; });
-  var sel=S.catSel||{};
+  var cap=String(S.catCap);
+  var subs=_catSubsDe(cap), sin=_catSinSub(cap);
   var h='<button onclick="catVolver()" style="'+_catVolverBS+'">‹ Capítulos</button>'+
     '<div class="obranow-header"><div>'+
-      '<div style="font-size:15px;font-weight:800">'+cap+'. '+esc(_catCapNom(cap))+'</div>'+
+      '<div style="font-size:15px;font-weight:800">'+esc(cap)+' · '+esc(_catCapNom(cap))+'</div>'+
       '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
-        ps.length+' partidas · '+nAct+' actividades</div>'+
+        subs.length+' subpartidas · '+_catAgendaDe(cap).length+' partidas · '+_catActsDeCap(cap)+' actividades</div>'+
     '</div></div>'+
     _catHerramientasHTML();
-  if(!ps.length) return h+'<div class="empty" style="padding:30px;color:var(--text3)">Este capítulo está vacío.</div>';
-  h+=ps.map(function(p){
-    var n=_catActsDe(p.id).length, on=!!sel[p.id];
-    return '<div class="cat-fila" style="display:flex;gap:8px;align-items:stretch;margin-bottom:7px">'+
-      '<button onclick="catSelToggle(\''+p.id+'\')" aria-label="Marcar" style="'+_catBS+';flex:0 0 48px;'+
-        'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
-        'background:'+(on?'var(--accent-fill)':'var(--bg2)')+';color:'+(on?'var(--accent-on)':'var(--text3)')+';'+
-        'font-size:16px">'+(on?'✓':'')+'</button>'+
-      '<button onclick="catIrPartida(\''+p.id+'\')" style="'+_catBS+';flex:1;min-width:0;text-align:left;'+
+
+  h+='<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
+     'text-transform:uppercase;margin:14px 0 8px">Subpartidas del presupuesto ('+subs.length+')</div>';
+  if(!subs.length)
+    h+='<div class="empty" style="padding:18px;color:var(--text3);font-size:12px">'+
+       'Este capítulo no tiene líneas en el presupuesto.</div>';
+  subs.forEach(function(s){
+    var hijas=_catHijasDe(s.id);
+    h+='<div class="cat-sub" style="margin-bottom:8px">'+
+      '<button onclick="catIrPartida(\''+s.id+'\')" style="'+_catBS+';width:100%;text-align:left;'+
         'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
-        'padding:10px 12px;border:1.5px solid var(--border);background:var(--bg2);color:var(--text)">'+
-        '<span style="font-size:13px;font-weight:700;line-height:1.3">'+esc(p.numero)+'  '+esc(p.nombre)+'</span>'+
-        '<span style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+
-          (p.oficio?esc(p.oficio)+' · ':'')+n+' actividad'+(n!==1?'es':'')+'</span>'+
-      '</button></div>';
-  }).join('');
+        'padding:10px 12px;min-height:58px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text)">'+
+        '<span style="font-size:12.5px;font-weight:800;line-height:1.3">'+esc(s.numero)+' · '+esc(s.nombre)+'</span>'+
+        /* El id se enseña a propósito: es sección + capítulo + secuencia, y es
+           lo que rastrea la línea hasta la hoja del Excel cuando algo no
+           cuadra con lo contratado. */
+        '<span class="cat-sub-meta" style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
+          esc(s.id)+' · '+(Number(s.cantidad)||0).toLocaleString('es-DO')+' '+esc(s.unidad||'—')+
+          ' · '+_catMoneda(s.valor)+'<br>'+esc(s.seccion)+'</span>'+
+      '</button>'+
+      hijas.map(function(p){ return _catFilaAgendaHTML(p,true); }).join('')+
+    '</div>';
+  });
+
+  /* El trabajo del dueño está aquí: de este bloque salen las partidas hacia
+     su línea del presupuesto. Va al final y con su número a la vista. */
+  h+='<div style="font-size:11px;font-weight:800;color:'+(sin.length?'var(--amber)':'var(--text3)')+';'+
+     'letter-spacing:.5px;text-transform:uppercase;margin:18px 0 8px">Sin subpartida ('+sin.length+')</div>';
+  if(!sin.length)
+    h+='<div class="empty" style="padding:18px;color:var(--text3);font-size:12px">'+
+       'Todas las partidas de este capítulo cuelgan de una subpartida ✓</div>';
+  else
+    h+=sin.map(function(p){ return _catFilaAgendaHTML(p,false); }).join('');
   return h;
-}
-/* «3.10» detrás de «3.9»: comparando el texto quedaría al revés. */
-function _catOrdenNum(a,b){
-  var na=parseInt(String(a.numero).split('.')[1]||'0',10), nb=parseInt(String(b.numero).split('.')[1]||'0',10);
-  return na-nb || String(a.nombre).localeCompare(String(b.nombre));
 }
 
 function _catFichaHTML(){
   var p=_catPorId(S.catPartida);
   if(!p) return '<button onclick="catVolver()" style="'+_catVolverBS+'">‹ Volver</button>'+
     '<div class="empty" style="padding:30px;color:var(--text3)">Esa partida ya no está.</div>';
-  var acts=_catActsDe(p.id);
-  var estBS='min-height:44px;width:100%;padding:0 10px;border:1.5px solid var(--border2);border-radius:11px;'+
-            'background:var(--bg2);color:var(--text);font-size:13px;font-family:var(--font)';
-  var lab=function(t){ return '<div style="font-size:10px;font-weight:700;color:var(--text3);'+
-      'text-transform:uppercase;letter-spacing:.5px;margin:0 0 4px">'+t+'</div>'; };
-  var texto=function(campo,t,ph){
-    return '<div style="flex:1;min-width:140px;margin-bottom:8px">'+lab(t)+
-      '<input type="text" value="'+esc(p[campo])+'" placeholder="'+ph+'" '+
-      'onchange="catFichaSet(\''+p.id+'\',\''+campo+'\',this.value)" style="'+estBS+'"></div>';
+  return _catEsSub(p) ? _catFichaSubHTML(p) : _catFichaAgendaHTML(p);
+}
+
+var _catCampoBS='min-height:44px;width:100%;padding:0 10px;border:1.5px solid var(--border2);'+
+                'border-radius:11px;background:var(--bg2);color:var(--text);font-size:13px;font-family:var(--font)';
+function _catLab(t){
+  return '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;'+
+    'letter-spacing:.5px;margin:0 0 4px">'+t+'</div>';
+}
+
+/* La ficha de una SUBPARTIDA es de solo lectura, a propósito. Lo único que se
+   puede hacer es desactivarla si no aplica. */
+function _catFichaSubHTML(p){
+  var hijas=_catHijasDe(p.id);
+  var dato=function(lab,val){
+    return '<div style="flex:1;min-width:120px;margin-bottom:8px">'+_catLab(lab)+
+      '<div style="font-size:13px;font-weight:600">'+(val?esc(String(val)):'<span style="color:var(--text3)">—</span>')+'</div></div>';
   };
-  var h='<button onclick="catVolver()" style="'+_catVolverBS+'">‹ '+esc(_catCapNom(p.capitulo))+'</button>'+
+  var h='<button onclick="catVolver()" style="'+_catVolverBS+'">‹ '+esc(String(p.capitulo))+' · '+esc(_catCapNom(p.capitulo))+'</button>'+
     '<div class="obranow-header"><div>'+
-      '<div style="font-size:15px;font-weight:800;line-height:1.3">'+esc(p.numero)+'  '+esc(p.nombre)+'</div>'+
+      '<div style="font-size:15px;font-weight:800;line-height:1.3">'+esc(p.numero)+' · '+esc(p.nombre)+'</div>'+
+      '<div style="font-size:11px;color:var(--amber);margin-top:3px;font-weight:800;font-family:var(--mono)">'+
+        'DEL PRESUPUESTO · NO SE EDITA</div>'+
     '</div></div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;padding:12px;border-radius:12px;background:var(--bg2);'+
+      'border:1.5px solid var(--border);margin-bottom:10px">'+
+      dato('Sección', p.seccion)+
+      dato('Madre del presupuesto', p.codigo_presupuesto)+
+      dato('Cantidad', (Number(p.cantidad)||0).toLocaleString('es-DO')+' '+(p.unidad||''))+
+      dato('Precio unitario', _catMoneda(p.precio_unitario))+
+      dato('Valor', _catMoneda(p.valor))+
+      dato('Código del Excel', p.numero)+
+    '</div>'+
+    '<div style="font-size:11.5px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
+      'Es una línea del presupuesto: no se junta, no se renombra y no se mueve de capítulo. '+
+      'Si se editara, dejaría de cuadrar con lo que se contrató y con lo que se paga.</div>'+
+    '<button onclick="catDesactivarSub(\''+p.id+'\')" style="'+_catBS+';width:100%;margin-bottom:14px;'+
+      'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Desactivar — no aplica en esta obra</button>'+
+    '<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
+      'text-transform:uppercase;margin-bottom:8px">Sus '+hijas.length+' partidas de la agenda</div>';
+  if(!hijas.length) return h+'<div class="empty" style="padding:24px;color:var(--text3);font-size:12px">'+
+    'Nada colgado todavía. Se cuelga desde la ficha de cada partida.</div>';
+  return h+hijas.map(function(x){ return _catFilaAgendaHTML(x,false); }).join('');
+}
+
+function _catFichaAgendaHTML(p){
+  var acts=_catActsDe(p.id);
+  var subs=_catSubsDe(p.capitulo);
+  var texto=function(campo,t,ph){
+    return '<div style="flex:1;min-width:140px;margin-bottom:8px">'+_catLab(t)+
+      '<input type="text" value="'+esc(p[campo])+'" placeholder="'+ph+'" '+
+      'onchange="catFichaSet(\''+p.id+'\',\''+campo+'\',this.value)" style="'+_catCampoBS+'"></div>';
+  };
+  var madre=p.padre_id?_catPorId(p.padre_id):null;
+  var h='<button onclick="catVolver()" style="'+_catVolverBS+'">‹ '+esc(String(p.capitulo))+' · '+esc(_catCapNom(p.capitulo))+'</button>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:15px;font-weight:800;line-height:1.3">'+esc(p.nombre)+'</div>'+
+    '</div></div>'+
+    /* De qué línea del presupuesto cuelga: es LA decisión de la curación, así
+       que va arriba del todo y no escondida entre los campos. */
+    '<div style="padding:12px;border-radius:12px;background:var(--bg3);border:1.5px solid '+
+      (madre?'var(--border)':'var(--amber)')+';margin-bottom:12px">'+
+      _catLab('Cuelga de la subpartida')+
+      '<select onchange="catColgar(\''+p.id+'\',this.value)" style="'+_catCampoBS+'">'+
+        '<option value=""'+(madre?'':' selected')+'>— sin subpartida —</option>'+
+        subs.map(function(s){
+          return '<option value="'+esc(s.id)+'"'+(madre&&madre.id===s.id?' selected':'')+'>'+
+            esc(s.numero)+' · '+esc(s.nombre)+'  ('+esc(s.seccion)+')</option>';
+        }).join('')+
+      '</select>'+
+      (madre?'<button onclick="catDescolgar(\''+p.id+'\')" style="'+_catBS+';width:100%;margin-top:8px;'+
+        'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Quitar de la subpartida</button>'
+        :'<div style="font-size:11.5px;color:var(--text3);margin-top:7px;line-height:1.45">'+
+         (subs.length?'Todavía no cuelga de ninguna línea del presupuesto.'
+                     :'Este capítulo no tiene líneas en el presupuesto: no hay de qué colgarla.')+'</div>')+
+    '</div>'+
     '<div style="padding:12px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--border);margin-bottom:14px">'+
-      '<div style="margin-bottom:8px">'+lab('Nombre')+
+      '<div style="margin-bottom:8px">'+_catLab('Nombre')+
         '<textarea rows="2" onchange="catFichaSet(\''+p.id+'\',\'nombre\',this.value)" '+
-        'style="'+estBS+';min-height:56px;padding:9px 10px;line-height:1.4;resize:vertical">'+esc(p.nombre)+'</textarea></div>'+
-      '<div style="margin-bottom:8px">'+lab('Capítulo')+
-        '<select onchange="catFichaSet(\''+p.id+'\',\'capitulo\',this.value)" style="'+estBS+'">'+
+        'style="'+_catCampoBS+';min-height:56px;padding:9px 10px;line-height:1.4;resize:vertical">'+esc(p.nombre)+'</textarea></div>'+
+      '<div style="margin-bottom:8px">'+_catLab('Capítulo')+
+        '<select onchange="catFichaSet(\''+p.id+'\',\'capitulo\',this.value)" style="'+_catCampoBS+'">'+
         CAT_CAPITULOS.map(function(c){
-          return '<option value="'+c.n+'"'+(Number(p.capitulo)===c.n?' selected':'')+'>'+c.n+'. '+esc(c.t)+'</option>';
+          return '<option value="'+esc(c.n)+'"'+(String(p.capitulo)===String(c.n)?' selected':'')+'>'+
+            esc(c.n)+' · '+esc(c.t)+'</option>';
         }).join('')+'</select></div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
         texto('oficio','Oficio','quién lo hace')+
         texto('unidad','Unidad','m², ud, ml…')+
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-        '<div style="flex:1;min-width:140px;margin-bottom:8px">'+lab('Aplica')+
-          '<select onchange="catFichaSet(\''+p.id+'\',\'aplica\',this.value)" style="'+estBS+'">'+
+        '<div style="flex:1;min-width:140px;margin-bottom:8px">'+_catLab('Aplica')+
+          '<select onchange="catFichaSet(\''+p.id+'\',\'aplica\',this.value)" style="'+_catCampoBS+'">'+
           '<option value="apartamento"'+(p.aplica==='apartamento'?' selected':'')+'>Por apartamento</option>'+
           '<option value="general"'+(p.aplica!=='apartamento'?' selected':'')+'>General</option>'+
           '</select></div>'+
@@ -15761,37 +16312,32 @@ function _catFichaHTML(){
   return h;
 }
 
-/* Minusculas y sin tildes, para buscar sin pelear con el teclado. No se usa
-   `normalizar` del motor Parecido: vive dentro de su cierre y no es global. */
-function _catNorm(s){
-  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-}
 function _catPickListaHTML(){
   var pk=S.catPick||{}, q=_catNorm(pk.q);
   var lista;
   if(pk.modo==='juntar') lista=(pk.ids||[]).map(_catPorId).filter(Boolean);
   else {
     var fuera=(pk.ids||[])[0];
-    lista=_catActivas().filter(function(p){ return p.id!==fuera; }).sort(_catOrdenNum);
+    // Solo partidas de la agenda: nada se junta ni se baja dentro del presupuesto.
+    lista=_catAgenda().filter(function(p){ return p.id!==fuera; })
+      .sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre)); });
     if(q) lista=lista.filter(function(p){ return _catNorm(p.nombre).indexOf(q)>=0; });
   }
   var accion=pk.modo==='juntar'?'catJuntarEn':pk.modo==='bajar'?'catBajarEn':'catAsignarEn';
   var h='';
-  if(pk.modo==='asignar'){
-    var a=Acciones.porId(pk.act);
+  if(pk.modo==='asignar')
     h+='<button onclick="catAsignarEn(\'__nueva__\')" style="'+_catBS+';width:100%;margin-bottom:10px;'+
       'min-height:52px;border:1.5px dashed var(--green);background:none;color:var(--green);text-align:left">'+
       '+ Crear una partida nueva con este nombre</button>';
-    if(!a) h+='';
-  }
   if(!lista.length) return h+'<div class="empty" style="padding:24px;color:var(--text3)">Nada que escoger.</div>';
   h+=lista.slice(0,80).map(function(p){
     var n=_catActsDe(p.id).length;
     return '<button class="cat-pick" onclick="'+accion+'(\''+p.id+'\')" style="'+_catBS+';width:100%;margin-bottom:6px;'+
       'text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
       'padding:10px 12px;min-height:52px;border:1.5px solid var(--border);background:var(--bg2);color:var(--text)">'+
-      '<span style="font-size:13px;font-weight:700;line-height:1.3">'+esc(p.numero)+'  '+esc(p.nombre)+'</span>'+
-      '<span style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+n+' actividad'+(n!==1?'es':'')+'</span>'+
+      '<span style="font-size:12.5px;font-weight:700;line-height:1.3">'+esc(p.nombre)+'</span>'+
+      '<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono)">'+
+        esc(String(p.capitulo))+' · '+n+' actividad'+(n!==1?'es':'')+'</span>'+
     '</button>';
   }).join('');
   if(lista.length>80) h+='<div style="font-size:11.5px;color:var(--text3);padding:10px 0">'+

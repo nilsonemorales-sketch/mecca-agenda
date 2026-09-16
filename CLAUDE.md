@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v98 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v100 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v98 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v100 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -214,7 +214,7 @@ mismos botones que cualquier otra.
 | **Lo que nadie ha mirado hace semanas** | **Obra**, atajo «Sin mirar» — `FILTRO_HUECO.congeladas`, `_ordenCongeladas()`, `_diasQuieta()` |
 | **Mover TODAS las fechas de un sitio o un contratista** | **Obra**, barra «Todas a…» — `trTodas()` |
 | **REGISTRAR con todo el detalle** | **Actividades**, al abrir la fila — `_actFilaRapidaHTML()`, `_actFilaAvanceHTML()` |
-| **Agrupar la obra en capítulos y partidas (PRUEBA)** | **Partidas** — `renderCatalogo()`, solo admin. Ver «El Catálogo de partidas» en §3.5 |
+| **Agrupar la obra en capítulos, subpartidas y partidas (PRUEBA)** | **Partidas** — `renderCatalogo()`, solo admin. Ver «El Catálogo de partidas» en §3.5 |
 
 
 **Los botones de registrar son LOS MISMOS en los dos sitios, aunque no
@@ -316,7 +316,7 @@ de ÓRDENES y crea la partida por esa vía — **no vuelca el texto en el campo*
 Volcarlo exigiría tocar el motor de voz, que apunta a `#cmd-txt` en nueve
 sitios y en el iPhone va por el Worker. No se hizo a ciegas.
 
-### El Catálogo de partidas (v98) — un módulo de PRUEBA que se borra entero
+### El Catálogo de partidas (v98, v100) — un módulo de PRUEBA que se borra entero
 
 Pestaña **«Partidas»**, `style="display:none"` en el HTML y encendida con
 `isAdmin()` en el mismo bloque que Gerencia. Por dentro se llama `catalogo`:
@@ -327,15 +327,62 @@ si conviene que el app trabaje de esa manera, para que sea más eficiente dar
 seguimiento y no haya tantas actividades que se sientan sueltas»*. No es una
 pantalla de trabajo: es un experimento con fecha de caducidad.
 
-**Tres niveles: Capítulo → Partida → Actividad.** Once capítulos fijos más
-«Sin clasificar», en `CAT_CAPITULOS`. **El capítulo es LO QUE SE ENTREGA; el
-oficio es QUIÉN LO HACE** — por eso «Terminación de muros y techos» junta a
-cuatro contratistas: el comprador ve una pared. **El área NO es un nivel**: la
-platea de la caseta es obra gris en el Parqueo, y si el área fuera capítulo la
-plomería quedaría partida en dos.
+#### Tres niveles, y CADA UNO VIENE DE UN SITIO DISTINTO
 
-**Cómo se borra entero, si no convence.** Son tres cosas y ninguna toca nada
-más:
+| Nivel | Qué es | De dónde sale | Cuántos |
+|---|---|---|---|
+| **1 · Capítulo** | La partida madre del **presupuesto** | `resumenCostos.js` de la app de costos | **46** códigos fijos, en `CAT_CAPITULOS` |
+| **2 · Subpartida** | Lo que **se mide y se paga** | el presupuesto original (`Presupuesto 2-10-2024.xlsx`, hoja «Res. Presupuesto») | **274**, en `CAT_SUBPARTIDAS` |
+| **3 · Partida** | Lo que **se hace** en cada apartamento | las descripciones de la **agenda** | ~391, una por descripción abierta distinta |
+
+Debajo cuelgan las actividades abiertas.
+
+**Por qué hacía falta el nivel 2.** La agenda **arranca el 27 de mayo de 2026**
+y toda la estructura se construyó antes: «se vaciaron las zapatas, luego la
+platea, luego la columna» no está en ninguna actividad y no podía estarlo. El
+presupuesto sí lo tiene, línea por línea, con cantidad, unidad y precio.
+
+**El capítulo es LO QUE SE ENTREGA; el oficio es QUIÉN LO HACE.** Y **el área
+NO es un nivel**: la platea de la caseta es Hormigón Armado en el Parqueo, y si
+el área fuera capítulo la plomería quedaría partida en dos.
+
+**El 18.00, el 20.00, el 22.00 y el 29.00 no existen** en este presupuesto. No
+los rellenes.
+
+#### Las subpartidas del presupuesto NO SE EDITAN
+
+No se juntan, no se renombran y no se mueven de capítulo. **Son el
+presupuesto**: si se editan, deja de cuadrar con lo que se contrató y con lo
+que se paga. Lo único que se puede hacer es **desactivarlas** (`activo=false`)
+cuando una no aplica. La interfaz no lo ofrece —ni casilla de marcar, ni ficha
+editable— y además `catFichaSet`, `catJuntarEn`, `catBajarEn` y `_catSelIds`
+llevan guardia por si alguien llega por otro camino.
+
+**Las cuatro herramientas —Juntar, Renombrar, Mover y Bajar a actividad— son
+SOLO para las partidas de la agenda (nivel 3).**
+
+#### Cómo se distingue un nivel del otro: por `seccion`, no por `padre_id`
+
+Parece que `padre_id` debería bastar —nulo es subpartida, con valor es
+partida— y **no basta**: al sembrar, las 274 del presupuesto y las de la agenda
+lo tienen **todas en nulo**, porque a la agenda nadie le adivina la subpartida.
+Lo que sí las separa siempre es la **sección**: toda línea del presupuesto
+viene de una (`BNP`, `N1`, `N2`, `N7`, `SM`) y ninguna partida de la agenda
+tiene ni tendrá. Eso es `_catEsSub(p)`.
+
+La sección **también se muestra**: «HORMIGÓN ARMADO» aparece en cuatro
+secciones (Bajo Nivel 17, Primer Nivel 30, Segundo 27, Séptimo 11) y sin ella
+el usuario vería cuatro «Replanteo» sin saber cuál es cuál.
+
+#### Colgar y descolgar — es el trabajo del dueño
+
+`catColgar(pid, subId)` y `catDescolgar(pid)`. El bloque **«Sin subpartida (N)»**
+de cada capítulo es la bandeja de ese trabajo: de ahí salen las partidas hacia
+su línea del presupuesto. **Al mover una partida de capítulo se le suelta la
+subpartida**: la que tenía es de otro capítulo y dejarla sería mentir sobre el
+presupuesto.
+
+#### Cómo se borra entero, si no convence
 
 ```sql
 DROP TABLE IF EXISTS obra_partida_actividad;
@@ -347,35 +394,49 @@ DROP TABLE IF EXISTS obra_partidas;
 rama de `goTab` y las dos líneas de la puerta de admin). **El app queda
 exactamente como en v97.** Está montado así a propósito.
 
-Cuatro reglas que no se tocan:
+#### Reglas que no se tocan
 
 - **CERO escrituras a `obra_actividades`.** Ni una. El amarre es una **tabla**
   (`obra_partida_actividad`), **no una columna**: por eso se borra sin rastro y
   ninguna consulta de las que ya existen tiene que enterarse. Si la prueba
   gradúa, **entonces** se vuelve columna.
-- **Cero cambios en pantallas existentes.** Verificado lado a lado con v97:
-  los ocho filtros y las cuatro vistas dan byte a byte lo mismo.
-- **La siembra no es automática.** `catSembrar()` dice cuántas va a crear
-  antes de crearlas y se puede repetir. Crea **una partida por `descripcion`
-  distinta, tal cual** — sin agrupar, sin limpiar, sin adivinar.
-- **La siembra VA A QUEDAR MAL en varios sitios y está bien.** El ayudante que
-  limpia desagües de duchas cae en Limpieza y no en Plomería; el pintor de
-  fachada cae con la pintura interior. **No lo arregles con más reglas**: que
-  el dueño lo mueva viendo la lista **es** la prueba.
+- **Cero cambios en pantallas existentes.** Verificado lado a lado: los ocho
+  filtros y las cuatro vistas dan byte a byte lo mismo.
+- **La siembra no es automática.** `catSembrar()` dice cuántas va a crear antes
+  de crearlas y se puede repetir. Crea las 274 del presupuesto **con el id de
+  la constante** (por eso resembrar no duplica) y **una partida por
+  `descripcion` abierta distinta, tal cual** — sin agrupar, sin limpiar.
+- **`padre_id` nace en nulo, siempre.** Nadie adivina de qué subpartida cuelga
+  una partida de la agenda.
+- **La siembra VA A QUEDAR MAL en varios sitios y está bien.** La limpieza de
+  entrega y los escombros caen en «Sin clasificar» **a propósito**: no hay
+  línea de presupuesto para eso y la decisión es del dueño. **No inventes una.**
 
-**Las cuatro herramientas** —Juntar, Renombrar (en la ficha), Mover y Bajar a
-actividad— desactivan (`activo=false`), **nunca borran**, y todas se pueden
-deshacer con `catDeshacer()` mientras no se salga de la pantalla.
+#### `_catCapDe(oficio, descripcion)` — el oficio solo NO basta
+
+Tres contratistas se parten entre dos códigos: Dimedes (puertas y jambas →
+Portaje; gabinetes, muebles de baño, clósets e islas → Cocina y Muebles),
+Yelson (pisos y zócalos → Pisos; revestimiento cerámico → Revestimientos) y los
+ayudantes, que por decisión del dueño **se reparten a la partida donde ayudan**.
+
+**Ojo con los acentos y los plurales.** La primera versión de la regla decía
+`mueble de ba` y `closet`, y mandaba **22 actividades al capítulo equivocado**:
+«Instalación de muebles de baño» y «Pintar puertas del clóset» no casaban. Está
+en `mueble[s]? de ba` y `cl[oó]set`. **Si tocas una regla, pruébala contra la
+base antes de darla por buena.**
+
+#### Lo que NO hace, a propósito
+
+**No calcula avance ni dinero por subpartida.** Hace falta que el dueño cure
+primero —que cuelgue las partidas de su línea—; si el cálculo sale ahora, sale
+mal y después nadie vuelve a confiar en el módulo. Esto es solo la estructura.
+
+#### Dos detalles de implementación que ya costaron
 
 **El escogedor es una PANTALLA, no un `prompt()`** (`S.catPick`,
-`_catPickHTML`). Escoger entre 394 partidas escribiendo un número en un
+`_catPickHTML`). Escoger entre cientos de partidas escribiendo un número en un
 diálogo del navegador no se hace ni de pie ni sentado — mismo motivo que el
 alta del Repaso en v95.
-
-**`_catAplicarNumeros` renumera de un tirón**, con un upsert por `id`, no con
-un PATCH por partida: renumerar el capítulo 3 son 99 partidas, y 99 peticiones
-seguidas con la señal a medias es medio minuto colgado. Medido: **229 → 43**
-escrituras en el recorrido completo de la prueba.
 
 **Cuidado con `sbTodo` en tablas sin `id`.** Pagina con `Range` y exige un
 orden único: si el path no trae `order=…id.…`, le pega `order=id.asc`. Por eso
@@ -637,6 +698,12 @@ mismo:**
 - **El Catálogo de partidas no escribe en `obra_actividades`.** Cuenta los
   `PATCH` y `POST` interceptados y mira a qué tabla va cada uno: los de
   `obra_actividades` tienen que ser **cero**
+- **El catálogo se comprueba contra INVARIANTES, no contra cifras.** La obra se
+  mueve mientras programas —un día se cerraron 13 partidas en una tarde y el
+  reparto dejó de cuadrar contra una tabla congelada—. Lo que tiene que dar
+  siempre: **274 subpartidas** fijas, **una partida por descripción abierta
+  distinta** y **un amarre por actividad abierta**, contra lo que diga la base
+  en ese momento
 
 Sobre el orden de las áreas: **alfabético no sirve.** Para los once
 apartamentos suena igual — `N2 — Apto 2A` … `N7 — Penthouse B` ya ordenan
@@ -769,7 +836,7 @@ orden de magnitud.
 | `obra_ordenes_compra` | Órdenes a proveedores. | ~72 |
 | `obra_config` | Configuración compartida, clave/valor. | — |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
-| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98).** Se borran las dos y el app queda como en v97. Ver «El Catálogo de partidas» en §3.5. | 394 / 1.077 al sembrar |
+| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100).** Guarda DOS niveles en la misma tabla: las 274 subpartidas del presupuesto (con `seccion`) y las partidas de la agenda (sin ella). Se borran las dos y el app queda como en v97. | 274 + ~391 al sembrar |
 
 ### Cosas de los datos que hay que saber
 
