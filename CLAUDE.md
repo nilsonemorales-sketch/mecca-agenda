@@ -297,6 +297,20 @@ Cuatro reglas que no se tocan:
   libre. Elegirlo solo ahorraba un toque y creaba la partida donde el ingeniero
   no la nombró.
 
+**El alta tiene pantalla propia desde v95** (`revAltaAbrir`, `revAltaPantalla`,
+`revAltaCrear`, estado en `S.revAlta`). **Cero `prompt()`, `confirm()` ni
+`alert()`**: hasta v94 eran tres diálogos del navegador seguidos, y el primero
+obligaba a escribir un número. Los apartamentos que le FALTAN a la partida van
+primero y marcados «falta aquí»; los demás debajo. Las fechas son los mismos
+botones que la fecha de grupo — no se inventa un cuarto juego.
+**`_revAltaLeer()` guarda lo escrito antes de cada repintado**: sin eso, tocar
+un apartamento borraba la descripción a medio escribir.
+
+*Limitación conocida:* el micrófono llama a `abrirComando()`, que abre la caja
+de ÓRDENES y crea la partida por esa vía — **no vuelca el texto en el campo**.
+Volcarlo exigiría tocar el motor de voz, que apunta a `#cmd-txt` en nueve
+sitios y en el iPhone va por el Worker. No se hizo a ciegas.
+
 ### Las cadenas (`predecesoras`) — dos formatos en la misma columna
 
 En la base conviven **objetos** `[{"id":"x","tipo":"FS","lag":0}]` (369 filas)

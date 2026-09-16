@@ -15422,6 +15422,7 @@ function renderRevision(){
   /* Dos formas de agrupar en el nivel 2. Por defecto «por partida»: el dueño
      pone la obra al día por partida repetida, no por apartamento. */
   if(_revAgrupar()==='partida'){
+    if(S.revAlta)    return revAltaPantalla(el);
     if(S.revPartida) return revPartidaAbierta(el);
     return revListaPartidas(el);
   }
@@ -15627,7 +15628,7 @@ function revListaContratistas(el){
    elegir otro contratista desde el nivel 3 se seguía pintando el grupo del
    anterior —con sus ids fijados al abrir— y parecía que el contratista nuevo
    tenía las partidas del viejo. */
-function _revSoltarPartida(){ S.revPartida=''; S._revPartidaIds=null; S._revPtdErr={}; S._revPtdPct={}; }
+function _revSoltarPartida(){ S.revPartida=''; S._revPartidaIds=null; S._revPtdErr={}; S._revPtdPct={}; S.revAlta=null; }
 function revAbrir(nm){ S.revContratista=nm; S.revAreaAbierta=''; _revSoltarPartida(); renderRevision(); window.scrollTo(0,0); }
 function revVolver(){ S.revContratista=null; S.revAreaAbierta=''; _revSoltarPartida(); renderRevision(); window.scrollTo(0,0); }
 
@@ -15934,7 +15935,7 @@ function revAbrirPartida(desc){
   renderRevision(); _revArriba();
 }
 function revVolverPartidas(){
-  S.revPartida=''; S._revPartidaIds=null; S._revPtdErr={}; S._revPtdPct={};
+  S.revPartida=''; S._revPartidaIds=null; S._revPtdErr={}; S._revPtdPct={}; S.revAlta=null;
   renderRevision(); _revArriba();
 }
 function _revPartidaItems(){
@@ -16027,7 +16028,7 @@ function revPartidaAbierta(el){
               'background:var(--accent-fill);color:var(--accent-on)">Aplicar</button>'+
           '</div>'+
         '</div>'+
-        '<button onclick="revPtdFaltaAqui()" style="width:100%;min-height:56px;margin-top:10px;border-radius:12px;'+
+        '<button onclick="revAltaAbrir()" style="width:100%;min-height:56px;margin-top:10px;border-radius:12px;'+
           'border:1.5px dashed var(--accent);background:var(--accent-soft);color:var(--accent);'+
           'font-size:13px;font-weight:800;cursor:pointer;font-family:var(--font)">+ Falta una aquí</button>'
       : '');
@@ -16094,37 +16095,157 @@ function revPtdFechaLibre(){
   return revPtdFechaGrupo(f);
 }
 
-/* «Falta una aquí». En lo que va de septiembre se crearon 245 partidas contra
-   1.077 editadas: una nueva por cada seis actualizaciones. Revisar y descubrir
-   van juntos — un repaso que solo deje tocar lo que ya existe se queda corto.
-   Va por Acciones.crear, que valida y registra. */
-async function revPtdFaltaAqui(){
+/* ── «FALTA UNA AQUÍ» — PANTALLA PROPIA (v95) ────────────────────────
+   Hasta v94 esto pedía los tres datos con TRES prompt() del navegador
+   seguidos, y el primero obligaba a escribir un número para escoger el
+   apartamento de una lista. En un iPad en obra, con guantes, eso es tosco.
+
+   Y no es un extra: en lo que va de septiembre se crearon 245 partidas contra
+   1.077 editadas — una nueva por cada seis actualizaciones. Revisar y
+   descubrir van juntos.
+
+   Se SIGUE preguntando el apartamento aunque quede uno solo libre. Eso se
+   decidió en v94 y sigue: crear una partida donde el ingeniero no la nombró es
+   peor que un toque de más. */
+function _revAltaLibres(){
+  var usadas={}; _revPartidaItems().forEach(function(a){ usadas[(a.area||'').trim()]=1; });
+  return REC_ORDEN.filter(function(k){ return !usadas[k]; });
+}
+function revAltaAbrir(){
   if(!canEdit()) return;
-  var nm=S.revContratista;
-  var usadas={}; _revPartidaItems().forEach(function(a){ usadas[a.area||'']=1; });
-  var libres=REC_ORDEN.filter(function(k){ return !usadas[k]; });
-  /* SIEMPRE se pregunta el apartamento, aunque quede uno solo libre. Elegirlo
-     solo ahorraba un toque y creaba la partida en un sitio que el ingeniero no
-     nombró: una partida que aparece donde nadie la puso es peor que un toque
-     de más. Se ofrecen primero los que le faltan a esta partida. */
-  var lista=(libres.length?libres:REC_ORDEN);
-  var op=prompt('¿En cuál falta?\n\n'+lista.map(function(k,i){ return (i+1)+') '+_recNom(k); }).join('\n'));
-  var i=parseInt(op,10);
-  if(!i || i<1 || i>lista.length) return;
-  var area=lista[i-1];
-  var desc=prompt('¿Qué falta en '+_recNom(area)+'?', S.revPartida||'');
-  if(!desc || !desc.trim()) return;
-  var f=prompt('Fecha de entrega (AAAA-MM-DD). Vacío = sin fecha.', _finDeSemana());
-  f=(f||'').trim();
+  S.revAlta={area:'', desc:String(S.revPartida||''), fecha:_finDeSemana(),
+             libres:_revAltaLibres(), escoger:false, err:''};
+  renderRevision(); _revArriba();
+}
+function revAltaCerrar(){ S.revAlta=null; renderRevision(); _revArriba(); }
+/* Lo escrito se guarda ANTES de repintar. Sin esto, tocar un apartamento o una
+   fecha borraba la descripción a medio escribir. */
+function _revAltaLeer(){
+  if(!S.revAlta) return;
+  var d=document.getElementById('rev-alta-desc');
+  if(d) S.revAlta.desc=d.value;
+}
+function revAltaArea(a){ _revAltaLeer(); S.revAlta.area=a; S.revAlta.err=''; renderRevision(); }
+function revAltaFecha(f){ _revAltaLeer(); S.revAlta.fecha=f; S.revAlta.escoger=false; renderRevision(); }
+function revAltaEscoger(){ _revAltaLeer(); S.revAlta.escoger=true; renderRevision(); }
+function revAltaFechaLibre(v){ _revAltaLeer(); if(v) S.revAlta.fecha=v; renderRevision(); }
+/* El micrófono abre la caja de dictado del app. OJO: abre la caja de ÓRDENES
+   —"crear tapar boquete en el 3A"— y crea la partida por esa vía; no vuelca el
+   texto en el campo de abajo. Volcarlo exigiría tocar el motor de voz, que
+   apunta a #cmd-txt en nueve sitios y va por el Worker en el iPhone. */
+function revAltaDictar(){ _revAltaLeer(); abrirComando(); }
+
+function revAltaPantalla(el){
+  var A=S.revAlta, nm=S.revContratista;
+  var faltan=A.libres||[], resto=REC_ORDEN.filter(function(k){ return faltan.indexOf(k)<0; });
+  var hoy=today(), vie=_finDeSemana(), prox=_isoAddDias(vie,7);
+
+  var bs='min-height:56px;border-radius:12px;cursor:pointer;font-family:var(--font);'+
+         'font-size:13px;font-weight:800;padding:0 10px';
+  var titulo='font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.6px;'+
+             'text-transform:uppercase;margin:16px 0 8px';
+
+  var apto=function(k,marcado){
+    var on=(A.area===k);
+    return '<button onclick="revAltaArea('+_revEsc(k)+')" style="'+bs+';width:100%;'+
+      'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;'+
+      'border:1.5px solid '+(on?'var(--accent)':(marcado?'var(--amber)':'var(--border2)'))+';'+
+      'background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
+      'color:'+(on?'var(--accent-on)':'var(--text)')+'">'+
+      '<span style="font-size:13.5px;font-weight:800">'+(on?'✓ ':'')+esc(_recNom(k))+'</span>'+
+      (marcado?'<span style="font-size:10.5px;font-weight:700;color:'+(on?'var(--accent-on)':'var(--amber)')+'">falta aquí</span>':'')+
+      '</button>';
+  };
+  var fb=function(f,lab){
+    var on=(A.fecha===f && !A.escoger);
+    return '<button onclick="revAltaFecha(\''+f+'\')" style="'+bs+';flex:1;min-width:92px;'+
+      'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(on?'var(--accent-fill)':'var(--bg3)')+';'+
+      'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+(on?'✓ ':'')+lab+'</button>';
+  };
+
+  el.innerHTML=
+    '<button onclick="revAltaCerrar()" style="background:none;border:0;color:var(--text2);font-size:13px;'+
+      'font-weight:600;cursor:pointer;padding:8px 0;font-family:var(--font);min-height:44px">‹ Volver</button>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:15px;font-weight:800">Falta una aquí</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
+        esc(nm)+'</div>'+
+    '</div></div>'+
+    (A.err?'<div style="margin-bottom:12px;padding:10px 12px;border-radius:10px;background:var(--red-light);'+
+      'border:1.5px solid var(--red);font-size:12.5px;font-weight:700;color:var(--red)">'+esc(A.err)+'</div>':'')+
+
+    '<div style="'+titulo+'">¿En cuál falta?</div>'+
+    (faltan.length
+      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px">'+
+          faltan.map(function(k){ return apto(k,true); }).join('')+'</div>'
+      : '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Esta partida ya está en los once.</div>')+
+    (resto.length
+      ? '<div style="font-size:11px;color:var(--text3);margin:10px 0 7px">Los demás</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px">'+
+          resto.map(function(k){ return apto(k,false); }).join('')+'</div>'
+      : '')+
+
+    '<div style="'+titulo+'">¿Qué falta?</div>'+
+    '<div style="display:flex;gap:6px">'+
+      '<textarea id="rev-alta-desc" rows="2" placeholder="Descripción de la partida" '+
+        'style="flex:1;min-height:56px;padding:10px 12px;border:1.5px solid var(--border2);'+
+        'border-radius:12px;background:var(--bg);color:var(--text);font-size:15px;'+
+        'font-family:var(--font);box-sizing:border-box;resize:vertical">'+esc(A.desc)+'</textarea>'+
+      '<button onclick="revAltaDictar()" title="Dictar una orden" style="'+bs+';flex:0 0 56px;'+
+        'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);'+
+        'font-size:19px">🎙️</button>'+
+    '</div>'+
+
+    '<div style="'+titulo+'">¿Para cuándo?</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+      fb(hoy,'Hoy')+(vie!==hoy?fb(vie,'El viernes'):'')+fb(prox,'Semana que viene')+fb('','Sin fecha')+
+      '<button onclick="revAltaEscoger()" style="'+bs+';flex:1;min-width:92px;'+
+        'border:1.5px solid '+(A.escoger?'var(--accent)':'var(--border2)')+';'+
+        'background:'+(A.escoger?'var(--accent-fill)':'var(--bg3)')+';'+
+        'color:'+(A.escoger?'var(--accent-on)':'var(--text2)')+'">Escoger</button>'+
+    '</div>'+
+    (A.escoger
+      ? '<input type="date" value="'+esc(A.fecha||'')+'" onchange="revAltaFechaLibre(this.value)" '+
+        'style="width:100%;min-height:56px;margin-top:7px;padding:0 12px;border:1.5px solid var(--border2);'+
+        'border-radius:12px;background:var(--bg);color:var(--text);font-size:15px;'+
+        'font-family:var(--font);box-sizing:border-box">'
+      : '')+
+    '<div style="font-size:11.5px;color:var(--text3);margin-top:7px;font-family:var(--mono)">'+
+      (A.fecha?('Entrega: '+fmtF(A.fecha)):'Sin fecha de entrega')+'</div>'+
+
+    '<div style="display:flex;gap:7px;margin-top:20px">'+
+      '<button onclick="revAltaCerrar()" style="'+bs+';flex:1;border:1.5px solid var(--border2);'+
+        'background:var(--bg2);color:var(--text2)">Cancelar</button>'+
+      '<button onclick="revAltaCrear()" style="'+bs+';flex:1.4;border:1.5px solid var(--green);'+
+        'background:var(--green-light);color:var(--green)">Crear</button>'+
+    '</div>';
+}
+
+async function revAltaCrear(){
+  if(!canEdit() || !S.revAlta) return;
+  _revAltaLeer();
+  var A=S.revAlta;
+  /* Se avisa y NO se avanza: nada de dar por creada una partida a la que le
+     falta el sitio o el nombre. */
+  if(!A.area){ A.err='Falta decir en cuál apartamento.'; renderRevision(); _revArriba(); return; }
+  if(!String(A.desc||'').trim()){ A.err='Falta decir qué es lo que falta.'; renderRevision(); return; }
+  var desc=String(A.desc).trim(), area=A.area, f=A.fecha||'';
   try{
-    await Acciones.crear({descripcion:desc.trim(), area:area, personal_nombre:nm,
-                          fecha_fin:f||'', fecha_inicio:'', prioridad:'normal'});
-    _revSesion().creadas.push({desc:desc.trim(), area:area});
+    await Acciones.crear({descripcion:desc, area:area, personal_nombre:S.revContratista,
+                          fecha_fin:f, fecha_inicio:'', prioridad:'normal'});
+    _revSesion().creadas.push({desc:desc, area:area});
     showToast('Creada en '+_recNom(area)+' ✓');
-    // Entra de una vez en el grupo si es la misma descripción.
-    if(desc.trim()===S.revPartida) revAbrirPartida(S.revPartida);
+    S.revAlta=null;
+    /* Si es la misma partida del grupo, entra de una vez en la lista: se
+       vuelve a fijar el grupo para que la nueva salga con las demás. */
+    if(desc===S.revPartida) revAbrirPartida(S.revPartida);
     else renderRevision();
-  }catch(e){ showToast('No se pudo crear: '+((e&&e.message)||''),'err',6000); }
+    _revArriba();
+  }catch(e){
+    A.err='No se pudo crear: '+((e&&e.message)||'');
+    renderRevision(); _revArriba();
+  }
 }
 
 async function revEstado(id, modo, pct){
