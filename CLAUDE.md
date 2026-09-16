@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v94 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v95 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v94 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v95 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -613,6 +613,9 @@ pertenece a ningún nivel.
 | **v94** — «Falta una aquí» elegía el apartamento SOLO cuando quedaba uno libre, sin decirlo. Ahorraba un toque y creaba la partida en un sitio que nadie nombró. | Adivinar está bien para ordenar y para sugerir. Para **crear** no: una partida que aparece donde nadie la puso cuesta más que el toque que ahorró. |
 | **v94** — el prompt venía escrito contra `8201afa`/v76 y citaba `_pasoGuardar` y `pasoFecha`, que se fueron con el paso a paso en v81. Las CIFRAS, en cambio, estaban exactas: 1.077 / 394 / 124→807 / 138/36 / el duplicado de 12 filas en 10 aptos. | Un prompt viejo puede tener el diagnóstico perfecto y las referencias podridas. Comprueba **las dos cosas por separado**: los números contra la base, y los nombres contra el código. Descartarlo entero por los segundos habría tirado un diagnóstico bueno. |
 
+| **v95** — la Metodología documentaba **dos módulos que no existen**: el recorrido paso a paso (retirado en v81) con sus ocho botones, y «Hoy» (retirado en v84). Más un botón «Sin cambios hoy» que no existió nunca. La guía llevaba 14 versiones mandando a pantallas muertas. | Cuando retires una pantalla, **busca su nombre en la guía**. Un módulo se borra en un commit; su documentación se queda años diciendo que está ahí, y el usuario que la lee cree que hace algo mal. |
+| **v95** — el barrido de vocabulario encontró **«✓ Lista»**, un sexto nombre para cerrar que el prompt no tenía en su tabla, y la tarjeta de actividad enseñaba `completado` crudo (el valor de la base) cuando estaba cerrada. | La tabla de un prompt es un punto de partida, no el inventario. **Haz el barrido tú**: `grep` de cada palabra y mira lo que queda. Lo que el prompt no vio es justo lo que lleva más tiempo sin arreglarse. |
+
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
 real** — o el usuario, parado en la obra.
@@ -731,6 +734,37 @@ verbo se busca por orden de aparición en el texto, no por orden de la
 tabla — si no, «ajustar las puertas **insta**ladas» salía como «instalar».
 
 ---
+
+## 9.5 Una acción, una palabra — en un solo sitio
+
+**`PAL_COMPLETADA` y `PAL_SIN_CAMBIOS`** viven junto a `MODULOS_OCULTOS`
+(index.html, ~línea 880). **Toda pantalla las usa desde ahí.** 27 sitios usan
+la primera, 8 la segunda.
+
+Cerrar una partida llegó a llamarse de **seis** formas: «Hecha», «Ya está»,
+«✓ Ya está», «✓ Lista», «Completada» y «Completado». Revisar-sin-cambio, de
+**dos**: «Sigue igual» y «Sin cambios». El dueño pasó semanas arreglando ese
+mismo defecto **en los datos de la obra** — dos vocabularios para el mismo
+trabajo es la razón por la que un apartamento no cerró con su nivel. No tiene
+sentido que el app tenga el defecto que él corrige a mano.
+
+**La regla: si una acción se llama de dos formas, es un bug.** Si añades una
+pantalla que cierra o que registra «sin cambios», usa la constante. Escribir
+la palabra a mano es cómo se volvió seis.
+
+**Lo que NO se unifica:**
+
+- **Los patrones de voz** (`Comandos`, `REGLAS`). El botón se lee, la voz se
+  habla: el ingeniero dice «termínala», «está hecha», «al cien», y todas tienen
+  que seguir entendiéndose. **No las toques al renombrar botones.**
+- **El valor de la base** sigue siendo `completado`. Esto es solo lo visible.
+- **«Sin cambios registrados aún»** (historial vacío) y **«Ya estás en la
+  última versión»** no son botones.
+
+**Un hueco conocido de la voz, comprobado idéntico en v94 y v95:** decir
+**«ya está la instalación de luces»** NO se entiende — la regla exige la
+palabra de cierre **al final** de la frase. «La instalación de luces está
+hecha» sí. No es una regresión del renombrado; viene de antes.
 
 ## 10. Estilo
 

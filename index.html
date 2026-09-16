@@ -145,7 +145,7 @@ body{padding-left:var(--sl);padding-right:var(--sr)}
   background:var(--bg3);color:var(--text2);font-size:12.5px;font-weight:800;cursor:pointer;font-family:var(--font)}
 .ob-r button.on{border-color:var(--accent);background:var(--accent-fill);color:var(--accent-on)}
 .ob-r button.ok{flex:1.3;border-color:var(--green);background:var(--green-light);color:var(--green)}
-/* "Sigue igual" es la salida más común de una visita y la etiqueta más larga:
+/* «Sin cambios» es la salida más común de una visita y la etiqueta más larga:
    se le da más ancho y cuerpo propio para que no quede como un botón menor. */
 .ob-r button.igual{flex:1.45;border-color:var(--border2);background:var(--bg2);color:var(--text2)}
 .ob-r button.mic{flex:0 0 54px}
@@ -858,10 +858,28 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_94';
+const APP_VERSION='20260916_95';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
+/* ══ UNA ACCIÓN, UNA PALABRA ══════════════════════════════════════════
+   Cerrar una partida llegó a llamarse de CINCO formas distintas —«Hecha»,
+   «Ya está», «✓ Ya está», «Completada», «Completado»— y revisar-sin-cambio de
+   TRES. El dueño pasó semanas arreglando exactamente ese defecto en los datos
+   de la obra: dos vocabularios para el mismo trabajo son la razón por la que
+   un apartamento no cerró con su nivel. No tiene sentido que el app tenga el
+   defecto que él está corrigiendo a mano.
+
+   Las dos palabras las escogió él y viven AQUÍ. Toda pantalla las usa desde
+   esta constante; si se escriben a mano, dentro de tres versiones vuelven a
+   ser cinco.
+
+   OJO: esto es lo que se VE. El valor en la base sigue siendo 'completado', y
+   los patrones de voz siguen aceptando «ya está», «hecho», «listo» y los
+   demás — el botón se lee, la voz se habla, son dos cosas distintas. */
+var PAL_COMPLETADA='Completada';
+var PAL_SIN_CAMBIOS='Sin cambios';
+
 var MODULOS_OCULTOS={plan:true, replan:true};
 function moduloOculto(t){ return !!MODULOS_OCULTOS[t]; }
 function aplicarModulosOcultos(){
@@ -1443,7 +1461,7 @@ function _pintarFaltantes(area){
         '<button onclick="faltanCrear(\''+esc2()+'\','+i+',true)" style="flex:1;border:none;'+
           'background:var(--green-fill);color:#fff;border-radius:9px;padding:10px 4px;'+
           'font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;'+
-          'min-height:42px">Ya está</button>'+
+          'min-height:42px">'+PAL_COMPLETADA+'</button>'+
         '<button onclick="faltanOmitir(\''+esc2()+'\','+i+')" style="flex:1;border:none;'+
           'background:var(--bg3);color:var(--text3);border-radius:9px;padding:10px 4px;'+
           'font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;'+
@@ -3819,7 +3837,7 @@ var Reporte = (function(){
   }
 
   function _estado(e){
-    return e==='completado'?'Hecha': e==='en-progreso'?'En progreso':
+    return e==='completado'?PAL_COMPLETADA: e==='en-progreso'?'En progreso':
            e==='pausada'?'Pausada':'Pendiente';
   }
 
@@ -4471,7 +4489,7 @@ function verPendientesApto(area){
    y pintado — puerta principal", y son lo mismo. Compara con el
    motor de Parecido, que mira el sitio, el objeto y el verbo.
 
-   Cada fila se resuelve con un toque: Falta / Ya está / No aplica.
+   Cada fila se resuelve con un toque: Falta / Completada / No aplica.
    Y si se marca "en todos los que falten", lo crea de una vez en
    cada apartamento donde no exista — nunca donde ya está.
    ───────────────────────────────────────────────────────────────── */
@@ -4661,7 +4679,7 @@ function _faltaHTML(){
         '<button onclick="faltaCrear('+i+',true)" style="flex:1;border:none;'+
           'background:var(--green-fill);color:#fff;border-radius:9px;padding:10px 4px;'+
           'font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;'+
-          'min-height:42px">Ya está</button>'+
+          'min-height:42px">'+PAL_COMPLETADA+'</button>'+
         '<button onclick="faltaOmitir('+i+')" style="flex:1;border:none;'+
           'background:var(--bg3);color:var(--text3);border-radius:9px;padding:10px 4px;'+
           'font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;'+
@@ -4880,7 +4898,7 @@ const FILTROS_RAPIDOS_ACT = [
   {id:'',        label:'Todos'},
   {id:'en-progreso', label:'En progreso'},
   {id:'pendiente',   label:'Pendiente'},
-  {id:'completado',  label:'Completado'},
+  {id:'completado',  label:PAL_COMPLETADA},
 ];
 
 
@@ -5865,7 +5883,7 @@ function _actSigueIgualBtnHTML(a){
   if(!canEdit() || !a || a.estado==='completado') return '';
   if((S.actFiltroRapidos||[]).indexOf('congeladas')<0) return '';
   return '<button onclick="event.stopPropagation();actRevisarUna(\''+a.id+'\')" title="Revisada y sigue igual" '+
-    'style="flex-shrink:0;padding:3px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">Sigue igual</button>';
+    'style="flex-shrink:0;padding:3px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap">'+PAL_SIN_CAMBIOS+'</button>';
 }
 // Barra de acción: solo asoma cuando hay algo marcado.
 function _actSelBarraHTML(){
@@ -5952,7 +5970,7 @@ function buildActsFiltros(){
       ddItem('Activas',rapidos.indexOf('activas')>=0,"_actToggleRapido('activas')")+
       ddItem('En progreso',rapidos.indexOf('en-progreso')>=0,"_actToggleRapido('en-progreso')")+
       ddItem('Pendiente',rapidos.indexOf('pendiente')>=0,"_actToggleRapido('pendiente')")+
-      ddItem('Completado',rapidos.indexOf('completado')>=0,"_actToggleRapido('completado')")+
+      ddItem(PAL_COMPLETADA,rapidos.indexOf('completado')>=0,"_actToggleRapido('completado')")+
     '</div>';
   } else if(open==='ubicacion'&&allUbics.length){
     panel='<div style="'+panelSt+'">'+
@@ -6900,7 +6918,7 @@ function getActGroupsFromActs(acts){
       {titulo:'Vencidas',items:acts.filter(a=>a.estado==='pendiente'&&a.fecha_fin&&new Date(a.fecha_fin)<new Date())},
       {titulo:'En progreso',items:acts.filter(a=>a.estado==='en-progreso')},
       {titulo:'Pendiente',items:acts.filter(a=>a.estado==='pendiente')},
-      {titulo:'Completado',items:acts.filter(a=>a.estado==='completado')},
+      {titulo:PAL_COMPLETADA,items:acts.filter(a=>a.estado==='completado')},
     ].filter(g=>g.items.length);
   }
   return[{titulo:'Actividades',items:acts}];
@@ -7236,6 +7254,7 @@ function actHTML(a, ai, tipo){
   var el=retrasada?Math.round((new Date(hoy)-new Date(a.fecha))/(1000*60*60*24))+'d vencida'
        :proxima?'Vence '+(diasFv===0?'hoy':diasFv===1?'mañana':'en '+diasFv+'d')
        :a.estado==='en-progreso'?'en proceso '+(parseInt(a.porcentaje)||0)+'%'
+       :a.estado==='completado'?PAL_COMPLETADA
        :a.estado==='pendiente'?'sin empezar':a.estado;
   var bleft=retrasada?'var(--red)':a.estado==='en-progreso'?'var(--amber)':a.estado==='pausada'?'var(--amber)':tipo==='contratista'?'var(--blue)':'var(--accent)';
 
@@ -9895,7 +9914,7 @@ function showAddActPropio(ai, ctx){
         <select id="a-est" class="sel" onchange="syncEstadoPct(this)">
           <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>Pendiente</option>
           <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>En progreso</option>
-          <option value="completado" ${a.estado==='completado'?'selected':''}>Completado</option>
+          <option value="completado" ${a.estado==='completado'?'selected':''}>${PAL_COMPLETADA}</option>
         </select></div>
       <div class="fw"><label class="fl">Unidad</label>
         <input type="text" id="a-u" value="${esc(a.unidad)}" placeholder="m², ml, unid..."></div>
@@ -10120,7 +10139,7 @@ function showAddActContratista(ai, preContratista, ctx){
       <select id="a-est" class="sel" style="font-size:15px" onchange="syncEstadoPct(this)">
         <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>Pendiente</option>
         <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>En progreso</option>
-        <option value="completado" ${a.estado==='completado'?'selected':''}>Completado</option>
+        <option value="completado" ${a.estado==='completado'?'selected':''}>${PAL_COMPLETADA}</option>
       </select></div>
 
     <div class="fgrid">
@@ -10231,7 +10250,7 @@ function showAddActIngeniero(ai, ctx){
         <select id="a-est" class="sel" onchange="syncEstadoPct(this)">
           <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>Pendiente</option>
           <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>En progreso</option>
-          <option value="completado" ${a.estado==='completado'?'selected':''}>Completado</option>
+          <option value="completado" ${a.estado==='completado'?'selected':''}>${PAL_COMPLETADA}</option>
         </select></div>
       <div class="fw"><label class="fl">% Avance</label>
         <input type="range" id="a-pct" value="${a.porcentaje||0}" min="0" max="100" style="width:100%;accent-color:var(--accent);height:6px;margin:10px 0" oninput="document.getElementById('a-pct-lbl').textContent=this.value+'%'">
@@ -10691,7 +10710,7 @@ function renderReportes(){
 
   // Visual data for dashboard charts
   var dByStatus={completado:actDone,'en-progreso':S.acts.filter(function(a){return a.estado==='en-progreso';}).length,pausada:S.acts.filter(function(a){return a.estado==='pausada';}).length,pendiente:S.acts.filter(function(a){return a.estado==='pendiente';}).length};
-  var dStatDefs=[{k:'completado',c:'var(--green)',l:'Completado'},{k:'en-progreso',c:'var(--blue)',l:'En progreso'},{k:'pausada',c:'var(--amber)',l:'Pausada'},{k:'pendiente',c:'var(--text3)',l:'Pendiente'}];
+  var dStatDefs=[{k:'completado',c:'var(--green)',l:PAL_COMPLETADA},{k:'en-progreso',c:'var(--blue)',l:'En progreso'},{k:'pausada',c:'var(--amber)',l:'Pausada'},{k:'pendiente',c:'var(--text3)',l:'Pendiente'}];
   var dStatusBar='';
   if(actTotal){
     var dSegs=dStatDefs.map(function(s){var p2=Math.round(dByStatus[s.k]/actTotal*100);return p2>0?'<div style="flex:'+p2+';background:'+s.c+';min-width:2px" title="'+s.l+': '+dByStatus[s.k]+'"></div>':'';}).join('');
@@ -10851,7 +10870,7 @@ function renderReportes(){
         (hasFilter?'<button style="background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="S.repFiltros={tipos:[],contratistas:[],ingenieros:[],estados:[],areas:[],agrupar:\'\',sortBy:\'fecha\'};S.repBusca=\'\';renderReportes()">Limpiar todo</button>':'')+
       '</div>'+
       repChipRow('tipos',[{val:'propio',label:'Personal'},{val:'contratista',label:'Contratista'}],'TIPO')+
-      repChipRow('estados',[{val:'pendiente',label:'Pendiente'},{val:'en-progreso',label:'En progreso'},{val:'pausada',label:'Pausada'},{val:'completado',label:'Completado'}],'ESTADO')+
+      repChipRow('estados',[{val:'pendiente',label:'Pendiente'},{val:'en-progreso',label:'En progreso'},{val:'pausada',label:'Pausada'},{val:'completado',label:PAL_COMPLETADA}],'ESTADO')+
       (allAreas.length?repChipRow('areas',allAreas.map(function(a){return{val:a,label:a};}),'UBICACIÓN'):'')+
       (contOpts2.length?repChipRow('contratistas',contOpts2.map(function(o){return{val:o.val,label:o.label};}),'CONTRATISTA'):'')+
       (ingOpts2.length>1?repChipRow('ingenieros',ingOpts2,'INGENIERO'):'')+
@@ -11733,7 +11752,7 @@ function exportarPDF(){
           '<option value="pendiente">Pendiente</option>'+
           '<option value="en-progreso">En progreso</option>'+
           '<option value="pausada">Pausada</option>'+
-          '<option value="completado">Completado</option>'+
+          '<option value="completado">'+PAL_COMPLETADA+'</option>'+
         '</select></div>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
@@ -12025,7 +12044,7 @@ async function generarPDF(opts){
           GRN_BG=[235,245,235], PUR_BG=[245,235,248];
 
     const ESTADO_C={'completado':GRN,'en-progreso':BDX_PUR,'pendiente':MUT,'pausada':AMB,'retrasada':RED};
-    const ESTADO_L={'completado':'COMPLETADO','en-progreso':'EN PROGRESO','pendiente':'PENDIENTE','pausada':'PAUSADA','retrasada':'RETRASADA'};
+    const ESTADO_L={'completado':PAL_COMPLETADA.toUpperCase(),'en-progreso':'EN PROGRESO','pendiente':'PENDIENTE','pausada':'PAUSADA','retrasada':'RETRASADA'};
 
     // Build report title dynamically from active sections + filters
     var _tparts=[];
@@ -13131,7 +13150,7 @@ function exportarHistorialPDF(uid_){
     const DARK=[20,20,35],BDX_PUR=[107,35,142],BDX_GRN=[45,110,45];
     const GRN=[47,158,68],ACC=[26,86,219],AMB=[224,138,0],RED=[224,49,49];
     const WHT=[255,255,255],BOR=[222,226,230],TXT=[33,37,41],MUT=[108,117,125];
-    const ESTADO_L={'completado':'COMPLETADO','en-progreso':'EN PROGRESO','pendiente':'PENDIENTE','pausada':'PAUSADA'};
+    const ESTADO_L={'completado':PAL_COMPLETADA.toUpperCase(),'en-progreso':'EN PROGRESO','pendiente':'PENDIENTE','pausada':'PAUSADA'};
     const ESTADO_C={'completado':GRN,'en-progreso':BDX_PUR,'pendiente':MUT,'pausada':AMB};
 
     const per=S.histFecha&&S.histFechaFin?fmtF(S.histFecha)+' al '+fmtF(S.histFechaFin):S.histFecha?'Desde '+fmtF(S.histFecha):'Todos los registros';
@@ -13476,7 +13495,7 @@ function renderPlanosMapa(){
     html+='</div></div>';
 
     html+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--text3)">';
-    [{c:'#9ca3af',l:'Pendiente'},{c:'var(--blue)',l:'En progreso'},{c:'var(--amber)',l:'Pausada'},{c:'var(--green)',l:'Completada'},{c:'var(--red)',l:'Vencida'}]
+    [{c:'#9ca3af',l:'Pendiente'},{c:'var(--blue)',l:'En progreso'},{c:'var(--amber)',l:'Pausada'},{c:'var(--green)',l:PAL_COMPLETADA},{c:'var(--red)',l:'Vencida'}]
       .forEach(function(s){html+='<span style="display:flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:50%;background:'+s.c+';display:inline-block"></span>'+s.l+'</span>';});
     html+='</div>';
 
@@ -14266,18 +14285,18 @@ function guiaFichas(){ return [
  '<div style="margin-top:8px">El buscador de arriba filtra por nombre o por oficio.</div>'},
 
 {cat:'como',t:'Registrar el avance de una tarea (%)',k:'porcentaje avance guardar actualizar progreso recorrido paso a paso',
- c:_gRuta('Hoy → toca el apartamento en el edificio')+' — es la pantalla hecha para el celular en la mano.'+_gPasos([
-  'Toca el apartamento en el dibujo del edificio. Se abre su panel.',
-  'Toca '+_gB('Recorrer las N de esta semana')+'.',
-  'Te pasa las partidas de una en una. En cada una: '+_gB('Ya está')+', '+_gB('Sigue igual')+', '+_gB('Cambiar avance')+' o '+_gB('Ponle fecha')+'.'])+
- _gNota('Al terminar sale un resumen de lo que se cerró, lo que se refechó y lo que quedó marcado como que no aplica.')},
+ c:_gRuta('Obra')+' — es la pantalla hecha para el celular en la mano, y la que abre el app.'+_gPasos([
+  'Toca dónde estás: un apartamento, un contratista, o un atajo ('+_gB('Sin mirar')+', '+_gB('Vencidas')+', '+_gB('Empezadas')+').',
+  'Salen solo esas partidas, cada una con sus botones puestos.',
+  'En cada tarjeta: '+_gB('25%')+', '+_gB('50%')+', '+_gB('75%')+', '+_gB('✓ '+PAL_COMPLETADA)+', '+_gB(PAL_SIN_CAMBIOS)+', '+_gB('+1 sem')+', '+_gB('El viernes')+' y el micrófono.'])+
+ _gNota('Lo que marcas SALE de la cola y el contador de arriba sube: la pila baja mientras caminas la obra.')},
 
 {cat:'como',t:'Marcar una tarea como terminada',k:'completar completada terminar 100% cerrar',
- c:'En el recorrido paso a paso toca '+_gB('Ya está')+'. Queda en 100% y sale de las pendientes.'+
+ c:'Toca '+_gB('✓ '+PAL_COMPLETADA)+' en la tarjeta de '+_gB('Obra')+', o el ✓ verde de la fila en '+_gB('Actividades')+'. Queda en 100% y sale de las pendientes.'+
  _gOjo('Antes de completar, asegúrate de que el trabajo esté realmente terminado en el sitio. Una partida madre marcada como completa esconde los remates que faltan — eso fue lo que infló el avance en el pasado. Si falta un remate, no completes: crea la actividad del remate.')},
 
-{cat:'como',t:'Decir que una tarea no avanzó hoy',k:'sin cambios hoy no avanzo estancada parada',
- c:'Usa el botón '+_gB('Sin cambios hoy')+' en la tarjeta. La saca de «pendientes de marcar» sin tocar el porcentaje, y deja constancia de que sí la revisaste.'+
+{cat:'como',t:'Decir que una tarea no avanzó hoy',k:'sin cambios no avanzo estancada parada sigue igual',
+ c:'Usa el botón '+_gB(PAL_SIN_CAMBIOS)+' en la tarjeta de '+_gB('Obra')+'. No toca la partida —ni estado, ni avance, ni fecha—: solo deja constancia de que la miraste y seguía igual.'+
  _gNota('Es preferible marcar «sin cambios» que dejarla en blanco: en blanco parece que nadie la miró.')},
 
 {cat:'como',t:'Crear una actividad nueva',k:'agregar nueva tarea partida crear + boton',
@@ -14404,7 +14423,7 @@ function guiaFichas(){ return [
   'Qué '+_gB('trabajos dependen')+' de otro que aún no termina, para no mandar gente a esperar.'])},
 
 {cat:'flujo',t:'Dejar constancia de lo que miraste y sigue igual',k:'registradas revisado sin cambios sigue igual congeladas',
- c:'En el recorrido paso a paso, '+_gB('Sigue igual')+' no cambia la partida: solo deja escrito que alguien la miró hoy.'+
+ c:'En '+_gB('Obra')+', '+_gB(PAL_SIN_CAMBIOS)+' no cambia la partida: solo deja escrito que alguien la miró hoy.'+
  _gNota('Sirve para algo concreto: el detector de congeladas mira ese rastro. Una partida que revisas y saltas sin marcar vuelve a salir mañana como olvidada.')},
 
 {cat:'flujo',t:'Dependencias: qué va después de qué',k:'dependencia bloqueo secuencia orden antes despues trancado',
@@ -14418,17 +14437,19 @@ function guiaFichas(){ return [
  _gOjo('Mandar a alguien a trabajar sobre algo que todavía no está listo es la forma más cara de perder un día: se hace y hay que repetirlo.')},
 
 // ══ LOS MÓDULOS ════════════════════════════════════════════
-{cat:'modulos',t:'Hoy — el arranque del día',k:'modulo hoy plan del dia inicio',
- c:'Muestra el '+_gB('plan del día')+' con lo planificado para hoy, agrupado por contratista, área o ingeniero. Debajo, el bloque de '+_gB('sugeridas')+' con lo que vence hoy o está vencido. Desde aquí sale el PDF matutino.'},
+{cat:'modulos',t:'Obra — la cola de trabajo',k:'modulo obra campo registro rapido cola apartamento contratista',
+ c:'La pantalla con la que abre el app, hecha para estar de pie en la obra. No enseña ninguna partida hasta que dices dónde estás: los once apartamentos y los contratistas, cada uno con lo que tiene abierto y lo que debe vencido, más los atajos '+_gB('Sin mirar')+', '+_gB('Vencidas')+', '+_gB('Empezadas')+' y '+_gB('Sin fecha')+'. Tocas uno y salen solo esas, con los botones puestos. Lo que marcas sale de la cola.'+
+ _gNota('El plan del día vive ahora en '+_gB('Actividades')+', como pastilla '+_gB('Plan hoy')+'. De ahí sale el PDF matutino y el envío por WhatsApp.')},
 
-{cat:'modulos',t:'El recorrido paso a paso — para el celular en la mano',k:'modulo recorrido paso a paso campo registro apartamento panel edificio',
- c:'La pantalla de campo, y el único sitio donde se registra. Se llega tocando un apartamento en el dibujo del edificio, en '+_gB('Hoy')+' o en '+_gB('Actividades → Edificio')+'. El panel del apartamento da sus cuatro números — abiertas, vencidas, esta semana, en curso — y de ahí arranca el recorrido: una partida a la vez, a pantalla completa, con '+_gB('Ya está')+', '+_gB('Sigue igual')+', '+_gB('Cambiar avance')+', '+_gB('Ponle fecha')+', '+_gB('Iniciar')+', '+_gB('Interrumpir')+', '+_gB('No aplica aquí')+' y '+_gB('Saltar')+'. También se dicta desde ahí, con el apartamento y la partida ya puestos.'},
+{cat:'modulos',t:'Repaso por partida — para sentarse a poner la obra al día',k:'modulo repaso partida repetida revision contratista once apartamentos',
+ c:_gRuta('Actividades → Revisión → toca un contratista')+'Tus partidas abiertas son muchas menos preguntas de las que parece: una misma partida está abierta en varios apartamentos a la vez. Abre en '+_gB('Por partida')+' y dice, por ejemplo, «138 partidas · 36 preguntas». Tocas una y salen sus apartamentos, uno por línea, con '+_gB(PAL_COMPLETADA)+', '+_gB(PAL_SIN_CAMBIOS)+' y '+_gB('%')+'. Abajo, la fecha para todo el grupo de una vez y '+_gB('+ Falta una aquí')+'.'+
+ _gNota('Agrupa por el texto EXACTO, no por parecido. Por eso destapa los duplicados: si la misma partida está escrita dos veces en un apartamento, aquí se ve. No los junta — eso lo decides tú.')},
 
 {cat:'modulos',t:'Actividades — el listado completo',k:'modulo actividades lista general todas buscar agrupar',
  c:'Todo lo que existe en la obra, con buscador, filtros y el selector de '+_gB('agrupador')+' (apartamento, contratista, semana, ingeniero, nivel, estado, tipo). Es donde se gestiona y se reparte el trabajo.'},
 
 {cat:'modulos',t:'Kanban — el tablero por estado',k:'modulo kanban tablero columnas pendiente progreso pausada completado',
- c:'Cuatro columnas: '+_gB('Pendiente')+', '+_gB('En progreso')+', '+_gB('Pausada')+' y '+_gB('Completado')+'. Se desliza de lado. Sirve para ver de un golpe dónde está trancado el trabajo. El botón '+_gB('Filtros')+' abre el filtro por persona y por nivel.'},
+ c:'Cuatro columnas: '+_gB('Pendiente')+', '+_gB('En progreso')+', '+_gB('Pausada')+' y '+_gB(PAL_COMPLETADA)+'. Se desliza de lado. Sirve para ver de un golpe dónde está trancado el trabajo. El botón '+_gB('Filtros')+' abre el filtro por persona y por nivel.'},
 
 {cat:'modulos',t:'Equipo — asistencia y gente',k:'modulo equipo personal contratistas asistencia penalidades bonificaciones',
  c:_gLista([
@@ -15225,7 +15246,7 @@ function renderKanban(){
     {id:'pendiente',   label:'Pendiente',   color:'var(--text3)', bg:'var(--bg3)', border:'var(--border2)'},
     {id:'en-progreso', label:'En progreso', color:'var(--blue)', bg:'var(--blue-light)', border:'var(--blue)'},
     {id:'pausada',     label:'Pausada',      color:'var(--amber)', bg:'var(--amber-light)', border:'var(--amber)'},
-    {id:'completado',  label:'Completado',  color:'var(--green)', bg:'var(--green-light)', border:'var(--green)'},
+    {id:'completado',  label:PAL_COMPLETADA,  color:'var(--green)', bg:'var(--green-light)', border:'var(--green)'},
   ];
 
   function kanbanCard(a){
@@ -15951,9 +15972,9 @@ function revPartidaAbierta(el){
     if(!hecha && canEdit()){
       h+='<div style="display:flex;gap:6px">'+
         '<button onclick="revPtdCompletar(\''+id+'\')" style="'+bs+';flex:1.2;border:1.5px solid var(--green);'+
-          'background:var(--green-light);color:var(--green)">Completada</button>'+
+          'background:var(--green-light);color:var(--green)">'+PAL_COMPLETADA+'</button>'+
         '<button onclick="revPtdIgual(\''+id+'\')" style="'+bs+';flex:1.1;border:1.5px solid var(--border2);'+
-          'background:var(--bg3);color:var(--text2)">Sin cambios</button>'+
+          'background:var(--bg3);color:var(--text2)">'+PAL_SIN_CAMBIOS+'</button>'+
         '<button onclick="revPtdPctAbrir(\''+id+'\')" style="'+bs+';flex:0 0 62px;border:1.5px solid var(--accent);'+
           'background:var(--accent-soft);color:var(--accent)">%</button>'+
       '</div>';
@@ -17181,7 +17202,7 @@ function renderRepPersonalizado(){
   }
 
   var EC={'en-progreso':'var(--blue)','pendiente':'var(--text3)','pausada':'var(--amber)','completado':'var(--green)'};
-  var EL={'en-progreso':'En curso','pendiente':'Pendiente','pausada':'Pausada','completado':'✓ Lista'};
+  var EL={'en-progreso':'En curso','pendiente':'Pendiente','pausada':'Pausada','completado':'✓ '+PAL_COMPLETADA};
 
   function actRow(a){
     var retrasada=isRetrasada(a);
@@ -17436,7 +17457,7 @@ function renderReporteUrgentes(){
   }
 
   var EC={'en-progreso':'var(--blue)','pendiente':'var(--text3)','pausada':'var(--amber)','completado':'var(--green)'};
-  var EL={'en-progreso':'En curso','pendiente':'Pendiente','pausada':'Pausada','completado':'✓ Lista'};
+  var EL={'en-progreso':'En curso','pendiente':'Pendiente','pausada':'Pausada','completado':'✓ '+PAL_COMPLETADA};
 
   function actRow(a){
     var ec=isRetrasada(a)?'var(--red)':(EC[a.estado]||'var(--text3)');
@@ -18185,7 +18206,7 @@ async function generarPDFPorApto(selectedAreas){
     var TXT=[30,30,30],MUT=[100,100,100],WHT=[255,255,255],LGRAY=[245,246,248];
     var COL_PROG=[26,86,219],COL_PAUSA=[230,103,0],COL_COMP=[150,150,150],COL_PEND=[134,142,150];
     var ECOLS={'en-progreso':COL_PROG,'pausada':COL_PAUSA,'completado':COL_COMP,'pendiente':COL_PEND};
-    var ELABS={'en-progreso':'En progreso','pausada':'Pausada','completado':'Completado','pendiente':'Pendiente'};
+    var ELABS={'en-progreso':'En progreso','pausada':'Pausada','completado':PAL_COMPLETADA,'pendiente':'Pendiente'};
     function _fc(c){doc.setFillColor.apply(doc,c);}
     function _tc(c){doc.setTextColor.apply(doc,c);}
     function _s(s){return(s||'').replace(/[^\x00-\x7F]/g,function(ch){try{return ch;}catch(e){return '';}});}
@@ -19121,14 +19142,14 @@ function _trTarjetaHTML(a){
       [25,50,75].map(function(v){
         return '<button class="'+(pct===v?'on':'')+'" onclick="trPct(\''+id+'\','+v+')">'+v+'%</button>';
       }).join('')+
-      '<button class="ok" onclick="trListo(\''+id+'\')">✓ Ya está</button>'+
+      '<button class="ok" onclick="trListo(\''+id+'\')">✓ '+PAL_COMPLETADA+'</button>'+
     '</div>'+
     /* Cuatro botones por fila y no cinco: a 390px el quinto deja las
-       etiquetas ilegibles al sol. Entra "Sigue igual" y sale "Hoy" —poner la
+       etiquetas ilegibles al sol. Entra «Sin cambios» y sale "Hoy" —poner la
        entrega en hoy sobre una partida que tienes delante es lo que menos se
        hace de las tres fechas, y sigue estando en Actividades. */
     '<div class="ob-r">'+
-      '<button class="igual" onclick="trIgual(\''+id+'\')">Sigue igual</button>'+
+      '<button class="igual" onclick="trIgual(\''+id+'\')">'+PAL_SIN_CAMBIOS+'</button>'+
       '<button onclick="trCorrer(\''+id+'\',7)">+1 sem</button>'+
       (vie!==hoy?'<button onclick="trFecha(\''+id+'\',\''+vie+'\')">Viernes</button>'
                :'<button onclick="trFecha(\''+id+'\',\''+hoy+'\')">Hoy</button>')+
