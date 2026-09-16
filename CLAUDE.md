@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v95 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v97 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v95 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v97 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -630,6 +630,9 @@ pertenece a ningún nivel.
 | **v95** — la Metodología documentaba **dos módulos que no existen**: el recorrido paso a paso (retirado en v81) con sus ocho botones, y «Hoy» (retirado en v84). Más un botón «Sin cambios hoy» que no existió nunca. La guía llevaba 14 versiones mandando a pantallas muertas. | Cuando retires una pantalla, **busca su nombre en la guía**. Un módulo se borra en un commit; su documentación se queda años diciendo que está ahí, y el usuario que la lee cree que hace algo mal. |
 | **v95** — el barrido de vocabulario encontró **«✓ Lista»**, un sexto nombre para cerrar que el prompt no tenía en su tabla, y la tarjeta de actividad enseñaba `completado` crudo (el valor de la base) cuando estaba cerrada. | La tabla de un prompt es un punto de partida, no el inventario. **Haz el barrido tú**: `grep` de cada palabra y mira lo que queda. Lo que el prompt no vio es justo lo que lleva más tiempo sin arreglarse. |
 
+| **v97** — la tecla `C` abría la caja de órdenes y **tapaba el atajo de Compras** que anuncia la barra lateral (`H O A E R C`): el segundo `else if(k==='c')` de la cadena era **inalcanzable**. Con la voz escondida, `C` vuelve a ser Compras. | Dos ramas con la misma condición en un `if/else if`: la segunda no se ejecuta nunca y nadie lo nota, porque la primera hace *algo*. Cuando añadas un atajo, comprueba que la letra no esté ya cogida más arriba. |
+| **v97** — la tabla del prompt listaba siete sitios de voz. El barrido encontró **tres más**, y eran los que más se ven: el 🎙️ de la tarjeta de Obra, el de la fila de Actividades y el botón «Nota» de Revisión. Total real: **21 micrófonos visibles**. | Para esconder algo transversal no basta con la lista que te den: **cuenta lo VISIBLE antes y después**. 21 → 0 es una comprobación; «quité los siete que decía la tabla» no lo es. |
+
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
 real** — o el usuario, parado en la obra.
@@ -779,6 +782,49 @@ la palabra a mano es cómo se volvió seis.
 **«ya está la instalación de luces»** NO se entiende — la regla exige la
 palabra de cierre **al final** de la frase. «La instalación de luces está
 hecha» sí. No es una regresión del renombrado; viene de antes.
+
+## 9.6 La voz está ESCONDIDA, no retirada (v97)
+
+**`VOZ_ACTIVA = false`** y **`vozActiva()`**, junto a `MODULOS_OCULTOS`
+(index.html, ~línea 883). **Volver a encenderla es cambiar ese `false` por
+`true`. Nada más.**
+
+**No se borró ni una línea del motor.** Siguen enteros: el Worker, la clave en
+`obra_config` (`voz_api_url`, `voz_api_clave` — **no los borres de la base**),
+`Comandos` y sus patrones, `_cmdVoz`, `_cmdGrabar`, `_cmdAnalizar`,
+`dictarSobre` y `cargarVozApi`. Lo que hay son **diez guardias**, todas la
+misma línea.
+
+**Qué apaga:** el botón de la cabecera (`#btn-cmd`, se oculta en el arranque
+porque es HTML fijo), la tecla `C`, `abrirComando()`, `#cmd-mic`,
+`dictarEnRecorrido()`, `revAltaDictar()`, el botón «Nota» de Revisión, el 🎙️
+de la fila de Actividades, el 🎙️ de la tarjeta de Obra, y la llamada a
+`cargarVozApi()` al arrancar — **una consulta menos a `obra_config` en cada
+carga**. Medido: **21 micrófonos visibles → 0**, y con la bandera en `true`
+vuelven los 21.
+
+**El micrófono DEL TECLADO del teléfono no es esto.** Es del sistema operativo
+y sigue funcionando en todos los campos de texto. Los avisos que lo mencionan
+se quedan.
+
+### Los TRES problemas que hay que resolver antes de encenderla
+
+Se escondió porque **se comporta distinto según por dónde entre el audio**, y
+media función en obra es peor que ninguna: si no sabes si registró, la vuelves
+a hacer o la dejas sin hacer.
+
+1. **El patrón no entiende «ya está la X» ni «la X ya está»**, que es como se
+   dice en obra — la regla exige la palabra de cierre **al final**. Lo salva la
+   IA del Worker, pero **solo con señal**.
+2. **«Las luces están listas» entra, pero mal**: se lleva el «están» pegado al
+   nombre y busca una partida llamada «las luces están». **Un mal entendido es
+   peor que un no-entendido.**
+3. **Los dos caminos del audio no dan lo mismo.** El reconocedor del navegador
+   llama a `_cmdAnalizar(txt)` **sin** el segundo argumento, así que no permite
+   la IA; el camino del Worker sí (`_cmdAnalizar(txt, true)`). **La misma frase
+   da dos resultados distintos según por dónde entre.**
+
+**Arregla los tres —y unifica los dos caminos— antes de poner `true`.**
 
 ## 10. Estilo
 

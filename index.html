@@ -858,7 +858,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_95';
+const APP_VERSION='20260916_97';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -879,6 +879,32 @@ const APP_VERSION='20260916_95';
    demás — el botón se lee, la voz se habla, son dos cosas distintas. */
 var PAL_COMPLETADA='Completada';
 var PAL_SIN_CAMBIOS='Sin cambios';
+
+/* ══ LA VOZ, ESCONDIDA — NO RETIRADA ══════════════════════════════════
+   Decisión del dueño en v97. El motivo: la voz se comporta DISTINTO según
+   por dónde entre el audio, y media función en obra es peor que ninguna —
+   si no sabes si registró, la vuelves a hacer o la dejas sin hacer.
+
+   Los tres problemas, anotados para cuando se retome:
+
+   1. El patrón no entiende «ya está la X» ni «la X ya está», que es como se
+      dice en obra. Lo salva la IA del Worker, pero SOLO CON SEÑAL.
+   2. «Las luces están listas» sí entra por el patrón, pero se lleva el
+      «están» pegado al nombre: busca una partida llamada «las luces están».
+      Un mal entendido es peor que un no-entendido.
+   3. El reconocedor del navegador llama a `_cmdAnalizar(txt)` SIN el segundo
+      argumento, así que no permite la IA; el camino del Worker sí la permite
+      (`_cmdAnalizar(txt, true)`). La misma frase da dos resultados distintos
+      según por dónde entre el audio.
+
+   NO SE BORRÓ NI UNA LÍNEA del motor: ni el Worker, ni la clave, ni
+   `Comandos`, ni los patrones, ni `_cmdVoz`, ni `dictarSobre`, ni
+   `cargarVozApi`. Volver a encenderlo es cambiar este false por true.
+
+   OJO: el micrófono DEL TECLADO del teléfono no es esto. Es del sistema
+   operativo y sigue funcionando en todos los campos de texto del app. */
+var VOZ_ACTIVA = false;
+function vozActiva(){ return !!VOZ_ACTIVA; }
 
 var MODULOS_OCULTOS={plan:true, replan:true};
 function moduloOculto(t){ return !!MODULOS_OCULTOS[t]; }
@@ -2404,7 +2430,9 @@ async function loadDriveUrl(){
 async function loadSecundario(){
   // Each call independent — failure of one doesn't break others
   loadDriveUrl().catch(function(){});
-  cargarVozApi().catch(function(){});   // direccion y clave del Worker de voz
+  /* Con la voz escondida no se pide la clave del Worker: seria una consulta
+     a obra_config en cada carga, para nada. */
+  if(vozActiva()) cargarVozApi().catch(function(){});
   try{
     const semanas=await sb('obra_semanas?order=fecha_inicio.desc&limit=5');
     S.semanas=semanas;
@@ -4325,9 +4353,9 @@ function _recPanelApto(grupos){
   });
 
   h+='<div style="display:flex;gap:8px;margin-top:10px">'+
-      '<button onclick="dictarEnRecorrido()" style="flex:1;min-height:48px;border-radius:12px;'+
+      (vozActiva()?'<button onclick="dictarEnRecorrido()" style="flex:1;min-height:48px;border-radius:12px;'+
         'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);'+
-        'font-size:13.5px;font-weight:800;cursor:pointer;font-family:var(--font)">🎙️ Dictar</button>'+
+        'font-size:13.5px;font-weight:800;cursor:pointer;font-family:var(--font)">🎙️ Dictar</button>':'')+
       '<button onclick="anotarEnRecorrido()" style="flex:1;min-height:48px;border-radius:12px;'+
         'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);'+
         'font-size:13.5px;font-weight:800;cursor:pointer;font-family:var(--font)">+ Anotar</button>'+
@@ -4435,7 +4463,7 @@ function aptoVerEnLista(filtro){
   renderActs();
 }
 
-function dictarEnRecorrido(){ abrirComando(); }
+function dictarEnRecorrido(){ if(!vozActiva()) return; abrirComando(); }
 function anotarEnRecorrido(){ showAddActSmart(); }
 
 /* Tocar una partida en Pendientes entra al recorrido paso a paso, colocado en
@@ -7165,9 +7193,9 @@ function _actFilaRapidaHTML(a){
      —247 de 349 ediciones del historial— y casi siempre es correrla. */
   h+='<button onclick="actFilaCorrer(\''+id+'\',7)" style="'+bs+';'+
     'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">+1 sem</button>'+
-    '<button onclick="dictarSobre(\''+id+'\')" style="flex:0 0 auto;width:46px;min-height:44px;'+
+    (vozActiva()?'<button onclick="dictarSobre(\''+id+'\')" style="flex:0 0 auto;width:46px;min-height:44px;'+
     'border-radius:10px;border:1.5px solid var(--accent);background:var(--accent-soft);'+
-    'color:var(--accent);font-size:15px;cursor:pointer;font-family:var(--font)">🎙️</button>';
+    'color:var(--accent);font-size:15px;cursor:pointer;font-family:var(--font)">🎙️</button>':'');
   return h+'</div>';
 }
 
@@ -8798,6 +8826,7 @@ function _cmdPintarContexto(){
 }
 
 function abrirComando(){
+  if(!vozActiva()) return;          // v97: escondida. No revienta, no hace nada.
   if(!canEdit()){ requireEdit(abrirComando); return; }
   var ov=document.getElementById('cmd-ov');
   if(!ov){
@@ -8809,8 +8838,8 @@ function abrirComando(){
         '<div style="display:flex;gap:8px;align-items:center;padding:12px 12px 10px">'+
           '<input id="cmd-txt" placeholder="Di o escribe una orden…" autocomplete="off" '+
             'style="flex:1;height:46px;border:1.5px solid var(--border2);border-radius:11px;background:var(--bg3);color:var(--text);font-size:15px;padding:0 12px;font-family:var(--font)">'+
-          '<button id="cmd-mic" onclick="_cmdVoz()" title="Dictar" '+
-            'style="width:46px;height:46px;flex-shrink:0;border-radius:11px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:19px;cursor:pointer">🎤</button>'+
+          (vozActiva()?'<button id="cmd-mic" onclick="_cmdVoz()" title="Dictar" '+
+            'style="width:46px;height:46px;flex-shrink:0;border-radius:11px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:19px;cursor:pointer">🎤</button>':'')+
         '</div>'+
         '<div id="cmd-ctx" style="padding:0 14px 8px"></div>'+
         '<div id="cmd-panel" style="padding:0 12px 12px"></div>'+
@@ -9713,7 +9742,7 @@ document.addEventListener('keydown',function(e){
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redoAction();return;}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
   var k=e.key.toLowerCase();
-  if(k==='c'){e.preventDefault();abrirComando();}
+  if(k==='c' && vozActiva()){e.preventDefault();abrirComando();}
   else if(k==='n'){e.preventDefault();if(canEdit())fabAction();else requireEdit(fabAction);}
   else if(k==='escape'){closeModal();}
   else if(k==='h'){goTab('obra');}
@@ -15659,7 +15688,7 @@ function revCard(a){
       }).join('')+
     '</div>'+
     '<div style="display:flex;gap:6px;margin-top:8px">'+
-      '<button onclick="revNota(\''+sid+'\')" style="flex:1;'+bs+';font-size:11.5px">Nota</button>'+
+      (vozActiva()?'<button onclick="revNota(\''+sid+'\')" style="flex:1;'+bs+';font-size:11.5px">Nota</button>':'')+
       '<button onclick="abrirFotoUpload(\''+sid+'\')" style="flex:1;'+bs+';font-size:11.5px">Foto</button>'+
     '</div>'+
     (a.notas?'<div style="margin-top:8px;font-size:12px;color:var(--text2);background:var(--bg3);padding:8px 10px;border-radius:9px;border-left:3px solid var(--accent);white-space:pre-wrap">'+esc(a.notas)+'</div>':'')+
@@ -16133,7 +16162,7 @@ function revAltaFechaLibre(v){ _revAltaLeer(); if(v) S.revAlta.fecha=v; renderRe
    —"crear tapar boquete en el 3A"— y crea la partida por esa vía; no vuelca el
    texto en el campo de abajo. Volcarlo exigiría tocar el motor de voz, que
    apunta a #cmd-txt en nueve sitios y va por el Worker en el iPhone. */
-function revAltaDictar(){ _revAltaLeer(); abrirComando(); }
+function revAltaDictar(){ if(!vozActiva()) return; _revAltaLeer(); abrirComando(); }
 
 function revAltaPantalla(el){
   var A=S.revAlta, nm=S.revContratista;
@@ -16192,9 +16221,9 @@ function revAltaPantalla(el){
         'style="flex:1;min-height:56px;padding:10px 12px;border:1.5px solid var(--border2);'+
         'border-radius:12px;background:var(--bg);color:var(--text);font-size:15px;'+
         'font-family:var(--font);box-sizing:border-box;resize:vertical">'+esc(A.desc)+'</textarea>'+
-      '<button onclick="revAltaDictar()" title="Dictar una orden" style="'+bs+';flex:0 0 56px;'+
+      (vozActiva()?'<button onclick="revAltaDictar()" title="Dictar una orden" style="'+bs+';flex:0 0 56px;'+
         'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);'+
-        'font-size:19px">🎙️</button>'+
+        'font-size:19px">🎙️</button>':'')+
     '</div>'+
 
     '<div style="'+titulo+'">¿Para cuándo?</div>'+
@@ -16280,6 +16309,7 @@ async function revEstado(id, modo, pct){
 function revNota(id){ return dictarSobre(id); }
 
 async function dictarSobre(id){
+  if(!vozActiva()) return;          // v97: escondida
   if(!canEdit()) return;
   var a=Acciones.porId(id); if(!a) return;
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -19274,7 +19304,7 @@ function _trTarjetaHTML(a){
       '<button onclick="trCorrer(\''+id+'\',7)">+1 sem</button>'+
       (vie!==hoy?'<button onclick="trFecha(\''+id+'\',\''+vie+'\')">Viernes</button>'
                :'<button onclick="trFecha(\''+id+'\',\''+hoy+'\')">Hoy</button>')+
-      '<button class="mic" onclick="dictarSobre(\''+id+'\')" aria-label="Dictar">🎙️</button>'+
+      (vozActiva()?'<button class="mic" onclick="dictarSobre(\''+id+'\')" aria-label="Dictar">🎙️</button>':'')+
     '</div>';
   }
   return h+'</div>';
@@ -19996,6 +20026,9 @@ setInterval(function(){
 /* Se entra por Obra. Va por goTab y no por la clase del HTML para que la barra
    de abajo marque el botón que toca: updateBNav solo lo hace desde aquí. */
 try{ goTab('terreno'); }catch(e){ console.warn('arranque:',e); }
+/* La voz escondida (v97): el botón de la cabecera es HTML fijo, así que se
+   apaga aquí. No se borra del HTML — encender la bandera lo devuelve. */
+try{ if(!vozActiva()){ var _bc=document.getElementById('btn-cmd'); if(_bc) _bc.style.display='none'; } }catch(e){}
 /* La cola se arranca y se vacía de entrada: si ayer se quedó algo sin señal,
    sale hoy al abrir el app, sin que nadie tenga que acordarse. */
 try{ _colaArrancar(); _colaPintar(); setTimeout(colaEnviar, 2500); }catch(e){ console.warn('cola:',e); }
