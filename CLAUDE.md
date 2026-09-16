@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v100 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v101 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v100 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v101 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -316,7 +316,7 @@ de ÓRDENES y crea la partida por esa vía — **no vuelca el texto en el campo*
 Volcarlo exigiría tocar el motor de voz, que apunta a `#cmd-txt` en nueve
 sitios y en el iPhone va por el Worker. No se hizo a ciegas.
 
-### El Catálogo de partidas (v98, v100) — un módulo de PRUEBA que se borra entero
+### El Catálogo de partidas (v98, v100, v101) — un módulo de PRUEBA que se borra entero
 
 Pestaña **«Partidas»**, `style="display:none"` en el HTML y encendida con
 `isAdmin()` en el mismo bloque que Gerencia. Por dentro se llama `catalogo`:
@@ -332,7 +332,7 @@ pantalla de trabajo: es un experimento con fecha de caducidad.
 | Nivel | Qué es | De dónde sale | Cuántos |
 |---|---|---|---|
 | **1 · Capítulo** | La partida madre del **presupuesto** | `resumenCostos.js` de la app de costos | **46** códigos fijos, en `CAT_CAPITULOS` |
-| **2 · Subpartida** | Lo que **se mide y se paga** | el presupuesto original (`Presupuesto 2-10-2024.xlsx`, hoja «Res. Presupuesto») | **274**, en `CAT_SUBPARTIDAS` |
+| **2 · Subpartida** | La **línea del presupuesto** | el presupuesto original (`Presupuesto 2-10-2024.xlsx`, hoja «Res. Presupuesto») | **274**, en `CAT_SUBPARTIDAS` |
 | **3 · Partida** | Lo que **se hace** en cada apartamento | las descripciones de la **agenda** | ~391, una por descripción abierta distinta |
 
 Debajo cuelgan las actividades abiertas.
@@ -340,7 +340,46 @@ Debajo cuelgan las actividades abiertas.
 **Por qué hacía falta el nivel 2.** La agenda **arranca el 27 de mayo de 2026**
 y toda la estructura se construyó antes: «se vaciaron las zapatas, luego la
 platea, luego la columna» no está en ninguna actividad y no podía estarlo. El
-presupuesto sí lo tiene, línea por línea, con cantidad, unidad y precio.
+presupuesto sí lo tiene, línea por línea.
+
+#### El catálogo NO guarda medición (v101)
+
+Decisión del dueño, en sus palabras: **«fuera de todo — ni guardar»**. Ni
+cantidades, ni unidades, ni dinero. **El módulo prueba estructura, no costos**;
+el control de la plata vive en la app de costos.
+
+- `CAT_SUBPARTIDAS` pasó de 9 campos a **7**:
+  `[ id, capitulo, seccion, madre_presupuesto, codigo_excel, nombre, precio_unitario ]`
+- La columna `cantidad` **se borró** de `obra_partidas`.
+- `unidad` **se queda** —viene de la v98 y la usan las partidas de la agenda—,
+  pero ya no se llena ni se muestra en las subpartidas.
+- `_catMoneda()` sigue en el archivo **sin una sola llamada**, esperando a que
+  haya cubicación de verdad. No la borres: es lo que pintará el dinero el día
+  que vuelva.
+
+**El dato no se pierde: vive en el Excel del presupuesto.** Reponerlo es
+regenerar la constante, un paso.
+
+**Lo que quedó cojo y está avisado:** `precio_unitario` se sigue guardando —así
+se decidió antes de quitar las cantidades— pero **solo, sin cantidad, no
+calcula nada**, y `valor` quedó en nulo por lo mismo. Es una línea de la
+siembra; que el dueño decida si lo saca también.
+
+#### El nivel del edificio (v101) — se calcula, no se guarda
+
+De una **subpartida del presupuesto**, su nivel es su `seccion`, que ya tiene.
+
+De una **partida de la agenda** se calcula al pintar, de las áreas de sus
+actividades — y **no siempre es uno solo**. Medido: de 391 partidas, **284
+viven en un nivel y 107 en varios, hasta seis**. «Instalación de cerradura —
+puerta principal» está en los seis. **No le inventes un nivel único, y no
+añadas columna para esto.**
+
+`_catNivel(area)` corta el área en el guión largo: `N7 — Áreas Comunes N7` → N7,
+y lo que no lleva guión se queda igual (`Parqueo`, `Escalera Principal`,
+`General`, `techo`…). `_catNivelOrden` pone **N2…N7 primero y en orden**, el
+resto detrás y alfabético — los 15 niveles reales de hoy. En la lista caben
+cuatro y el resto se cuenta («+2»); la ficha los enseña todos.
 
 **El capítulo es LO QUE SE ENTREGA; el oficio es QUIÉN LO HACE.** Y **el área
 NO es un nivel**: la platea de la caseta es Hormigón Armado en el Parqueo, y si
@@ -361,18 +400,29 @@ llevan guardia por si alguien llega por otro camino.
 **Las cuatro herramientas —Juntar, Renombrar, Mover y Bajar a actividad— son
 SOLO para las partidas de la agenda (nivel 3).**
 
-#### Cómo se distingue un nivel del otro: por `seccion`, no por `padre_id`
+#### Cómo se distingue un nivel del otro: por `tipo`, no por `seccion` ni por `padre_id`
 
-Parece que `padre_id` debería bastar —nulo es subpartida, con valor es
-partida— y **no basta**: al sembrar, las 274 del presupuesto y las de la agenda
+`padre_id` **no sirve**: al sembrar, las 274 del presupuesto y las de la agenda
 lo tienen **todas en nulo**, porque a la agenda nadie le adivina la subpartida.
-Lo que sí las separa siempre es la **sección**: toda línea del presupuesto
-viene de una (`BNP`, `N1`, `N2`, `N7`, `SM`) y ninguna partida de la agenda
-tiene ni tendrá. Eso es `_catEsSub(p)`.
 
-La sección **también se muestra**: «HORMIGÓN ARMADO» aparece en cuatro
-secciones (Bajo Nivel 17, Primer Nivel 30, Segundo 27, Séptimo 11) y sin ella
-el usuario vería cuatro «Replanteo» sin saber cuál es cuál.
+Hasta v100 se miraba la **sección**, y funcionaba. Desde v101 **no**: las
+partidas de la agenda también enseñan nivel del edificio, y dejar que una
+columna signifique dos cosas —en qué nivel del edificio estás y de qué nivel
+del catálogo eres— es cómo se rompen las cosas más tarde. Ahora hay columna
+propia:
+
+```
+tipo = 'presupuesto'  →  una de las 274 líneas del presupuesto
+tipo = 'agenda'       →  una partida salida de las descripciones de la obra
+```
+
+`_catEsSub(p)` mira `p.tipo`, y **solo si no lo hay** recurre a la sección —
+para que una fila vieja, entre la migración y el repintado, no se enseñe como
+si fuera de la agenda.
+
+La sección **se sigue mostrando**, que para eso está: «HORMIGÓN ARMADO»
+aparece en cuatro (Bajo Nivel 17, Primer Nivel 30, Segundo 27, Séptimo 11) y
+sin ella el usuario vería cuatro «Replanteo» sin saber cuál es cuál.
 
 #### Colgar y descolgar — es el trabajo del dueño
 
@@ -698,6 +748,9 @@ mismo:**
 - **El Catálogo de partidas no escribe en `obra_actividades`.** Cuenta los
   `PATCH` y `POST` interceptados y mira a qué tabla va cada uno: los de
   `obra_actividades` tienen que ser **cero**
+- **El catálogo no enseña cantidad, unidad ni dinero.** Recorre la lista de
+  subpartidas y la ficha del 3.00: `RD$`, `M²`, `M³`, «Cantidad», «Precio
+  unitario» y «Valor» tienen que dar **cero**
 - **El catálogo se comprueba contra INVARIANTES, no contra cifras.** La obra se
   mueve mientras programas —un día se cerraron 13 partidas en una tarde y el
   reparto dejó de cuadrar contra una tabla congelada—. Lo que tiene que dar
@@ -836,7 +889,7 @@ orden de magnitud.
 | `obra_ordenes_compra` | Órdenes a proveedores. | ~72 |
 | `obra_config` | Configuración compartida, clave/valor. | — |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
-| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100).** Guarda DOS niveles en la misma tabla: las 274 subpartidas del presupuesto (con `seccion`) y las partidas de la agenda (sin ella). Se borran las dos y el app queda como en v97. | 274 + ~391 al sembrar |
+| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101.** Se borran las dos y el app queda como en v97. | 274 + ~391 al sembrar |
 
 ### Cosas de los datos que hay que saber
 

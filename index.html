@@ -865,7 +865,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_100';
+const APP_VERSION='20260916_101';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -15123,8 +15123,9 @@ function goTab(tab){
 // TRES NIVELES, Y CADA UNO VIENE DE UN SITIO DISTINTO (v100):
 //
 //   1 · Capítulo    — la partida madre del PRESUPUESTO. 46 códigos fijos.
-//   2 · Subpartida  — lo que se mide y se paga. Las 274 del presupuesto
-//                     original, con cantidad, unidad y precio unitario.
+//   2 · Subpartida  — la linea del presupuesto. Las 274, con su seccion y su
+//                     codigo. SIN cantidad ni unidad desde v101: el modulo
+//                     prueba estructura, no costos.
 //   3 · Partida     — lo que se hace en cada apartamento. Sale de las
 //                     descripciones de la AGENDA.
 //
@@ -15215,7 +15216,12 @@ function _catCapNom(n){
 /* Las 274 subpartidas del presupuesto de Mecca (Presupuesto 2-10-2024.xlsx,
    hoja «Res. Presupuesto»). Van DENTRO del código porque el app es un solo
    archivo: no hay dónde poner un JSON. Orden de los campos:
-   [ id, capitulo, seccion, madre_presupuesto, codigo_excel, nombre, cantidad, unidad, precio_unitario ]
+   [ id, capitulo, seccion, madre_presupuesto, codigo_excel, nombre, precio_unitario ]
+
+   SIN CANTIDAD NI UNIDAD desde v101, por decisión del dueño: «fuera de todo —
+   ni guardar». El módulo prueba ESTRUCTURA, no costos; el control de la plata
+   vive en la app de costos. El dato no se pierde, sigue en el Excel del
+   presupuesto: reponerlo es regenerar esta constante, un paso.
 
    Dos defectos del Excel ya vienen corregidos aquí y NO se recalculan:
    126 de las 274 traían el código como decimal (6.029999999999999 en vez de
@@ -15226,280 +15232,280 @@ function _catCapNom(n){
 var CAT_SECCIONES={BNP:'BAJO NIVEL DE PISO', N1:'PRIMER NIVEL — PARQUEOS GENERALES',
                    N2:'SEGUNDO NIVEL', N7:'SEPTIMO NIVEL', SM:'SUBIDA DE MATERIALES'};
 var CAT_SUBPARTIDAS=[
-['BNP-1.00-01','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.01','Desmonte y limpieza del solar',661,'M²',120],
-['BNP-1.00-02','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.02','Levantamiento Topografico',1,'P.A',75000],
-['BNP-1.00-03','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.03','Estudio de Suelo y Diseño Pavimento',1,'P.A',150000],
-['BNP-1.00-04','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.04','Caseta de materiales y verja temporal',1,'P.A',150000],
-['BNP-1.00-05','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.05','Replanteo',1,'P.A',28000],
-['BNP-2.00-01','2.00','BNP','MOVIMIENTO DE TIERRA','2.01','Corte y bote con equipos',2098.32,'M³',250],
-['BNP-2.00-02','2.00','BNP','MOVIMIENTO DE TIERRA','2.02','Relleno granular compactado',2168.81,'M³',919.72],
-['BNP-3.00-01','3.00','BNP','HORMIGÓN ARMADO','3.01','Replanteo',1,'P.A',28000],
-['BNP-3.00-02','3.00','BNP','HORMIGÓN ARMADO','3.02','Zapata ZR-1',6.12,'M³',29565.81],
-['BNP-3.00-03','3.00','BNP','HORMIGÓN ARMADO','3.03','Zapata ZR-2',1.2,'M³',23548.26],
-['BNP-3.00-04','3.00','BNP','HORMIGÓN ARMADO','3.04','Zapata ZR-3',4.76,'M³',28605.68],
-['BNP-3.00-05','3.00','BNP','HORMIGÓN ARMADO','3.05','Zapata ZR-4',4.18,'M³',42169.51],
-['BNP-3.00-06','3.00','BNP','HORMIGÓN ARMADO','3.06','Zapata ZR-5',9.7,'M³',17864.48],
-['BNP-3.00-07','3.00','BNP','HORMIGÓN ARMADO','3.07','Zapata ZR-6',5.73,'M³',35433.85],
-['BNP-3.00-08','3.00','BNP','HORMIGÓN ARMADO','3.08','Platea de fundación ( H=0.35 M)',115.99,'M³',19946.21],
-['BNP-3.00-09','3.00','BNP','HORMIGÓN ARMADO','3.09','Terminacion de Platea',11.41,'M³',27685.72],
-['BNP-3.00-10','3.00','BNP','HORMIGÓN ARMADO','3.10','Muro Cisterna',16.04,'M³',33732.57],
-['BNP-3.00-11','3.00','BNP','HORMIGÓN ARMADO','3.11','Muro M-1',0.66,'M³',62160.25],
-['BNP-3.00-12','3.00','BNP','HORMIGÓN ARMADO','3.12','Muro M-6',0.79,'M³',55462.8],
-['BNP-3.00-13','3.00','BNP','HORMIGÓN ARMADO','3.13','Platea Cisterna',22.88,'M³',30234.81],
-['BNP-3.00-14','3.00','BNP','HORMIGÓN ARMADO','3.14','Viga Cisterna',0.66,'M³',28804.28],
-['BNP-3.00-15','3.00','BNP','HORMIGÓN ARMADO','3.15','Losa Cisterna',6.46,'M³',33377.64],
-['BNP-3.00-16','3.00','BNP','HORMIGÓN ARMADO','3.16','Tapa Cisterna',1,'P.A',4200],
-['BNP-3.00-17','3.00','BNP','HORMIGÓN ARMADO','3.17','Rampa de Acceso y Parqueo Ext.',19.94,'M³',14427.23],
-['BNP-6.00-01','6.00','BNP','TERMINACIÓN DE SUPERFICIE CISTERNA','4.01','Pañete Interior Cisterna Muros',68.77,'M²',953],
-['BNP-6.00-02','6.00','BNP','TERMINACIÓN DE SUPERFICIE CISTERNA','4.02','Pañete Techo Interior Cisterna',51.25,'M²',953],
-['BNP-6.00-03','6.00','BNP','TERMINACIÓN DE SUPERFICIE CISTERNA','4.03','Zabaleta',24.15,'ML',207.91],
-['N1-3.00-01','3.00','N1','HORMIGÓN ARMADO','1.01','Muro M-1',4.07,'M³',62160.25],
-['N1-3.00-02','3.00','N1','HORMIGÓN ARMADO','1.02','Muro M-1 Sobre Cisterna',0.81,'M³',63240.23],
-['N1-3.00-03','3.00','N1','HORMIGÓN ARMADO','1.03','Muro M-1A',4.07,'M³',81403.23],
-['N1-3.00-04','3.00','N1','HORMIGÓN ARMADO','1.04','Muro M-2',0.68,'M³',75945.28],
-['N1-3.00-05','3.00','N1','HORMIGÓN ARMADO','1.05','Muro M-4',5.99,'M³',52399.36],
-['N1-3.00-06','3.00','N1','HORMIGÓN ARMADO','1.06','Muro M-5',6.84,'M³',48256.1],
-['N1-3.00-07','3.00','N1','HORMIGÓN ARMADO','1.07','Muro M-6',1.95,'M³',55462.8],
-['N1-3.00-08','3.00','N1','HORMIGÓN ARMADO','1.08','Columna C-1',0.46,'M³',64320.53],
-['N1-3.00-09','3.00','N1','HORMIGÓN ARMADO','1.09','Dinteles (20 x 52)M',0.65,'M³',27053.84],
-['N1-3.00-10','3.00','N1','HORMIGÓN ARMADO','1.10','Viga V1 (52x20)M',0.94,'M³',44801.84],
-['N1-3.00-11','3.00','N1','HORMIGÓN ARMADO','1.11','Viga V2 (0.52x0.30)M',1.17,'M³',29646.91],
-['N1-3.00-12','3.00','N1','HORMIGÓN ARMADO','1.12','Viga Eje A (30 X 60)M',1.79,'M³',33978.49],
-['N1-3.00-13','3.00','N1','HORMIGÓN ARMADO','1.13','Viga Eje B (V 30 X 60)',1.83,'M³',37796.09],
-['N1-3.00-14','3.00','N1','HORMIGÓN ARMADO','1.14','Viga Eje F (V 20 X 60)',0.94,'M³',47160.68],
-['N1-3.00-15','3.00','N1','HORMIGÓN ARMADO','1.15','Viga Eje G (V 30 X 60)',2.45,'M³',34887.64],
-['N1-3.00-16','3.00','N1','HORMIGÓN ARMADO','1.16','Viga Eje 4 (V 30 X 60)',1.28,'M³',34396.59],
-['N1-3.00-17','3.00','N1','HORMIGÓN ARMADO','1.17','Viga Eje 8 (V 30 X 60)',1.28,'M³',30511.31],
-['N1-3.00-18','3.00','N1','HORMIGÓN ARMADO','1.18','Viga Eje 1 (V 30 X 60)',1.28,'M³',33273.89],
-['N1-3.00-19','3.00','N1','HORMIGÓN ARMADO','1.19','Viga Eje 1 Descanso Esc. P.(V 30 X 60)',0.49,'M³',30215.27],
-['N1-3.00-20','3.00','N1','HORMIGÓN ARMADO','1.20','Viga Eje 6 (V 30 X 60)',4.03,'M³',33241.28],
-['N1-3.00-21','3.00','N1','HORMIGÓN ARMADO','1.21','Viga Eje 5 S2 (V 30 X 60)',1.28,'M³',32707.75],
-['N1-3.00-22','3.00','N1','HORMIGÓN ARMADO','1.22','Viga Eje 5 S1 (V 20 X 60)',0.54,'M³',30802.36],
-['N1-3.00-23','3.00','N1','HORMIGÓN ARMADO','1.23','Viga (V 20 X 52) Eje 9',0.24,'M³',35852.74],
-['N1-3.00-24','3.00','N1','HORMIGÓN ARMADO','1.24','Cepos de Muros M1',400,'M²',120],
-['N1-3.00-25','3.00','N1','HORMIGÓN ARMADO','1.25','Cepos de Muros M6',40,'M²',120],
-['N1-3.00-26','3.00','N1','HORMIGÓN ARMADO','1.26','Andamios de muros M2,M3,M4,M5',321.3,'M²',120],
-['N1-3.00-27','3.00','N1','HORMIGÓN ARMADO','1.27','Losa Aligerada',52.06,'M³',24445.96],
-['N1-3.00-28','3.00','N1','HORMIGÓN ARMADO','1.28','Vuelos',8.1,'M³',23355.5],
-['N1-3.00-29','3.00','N1','HORMIGÓN ARMADO','1.29','Rampa Escalera Principal',0.99,'M³',53986.34],
-['N1-3.00-30','3.00','N1','HORMIGÓN ARMADO','1.30','Formado de Escalones',0.58,'M³',8200],
-['N1-7.00-01','7.00','N1','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.01','Muros de 6" con bastones 3/8"@0.80m',82.98,'M²',2207.16],
-['N1-7.00-02','7.00','N1','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.02','Muros de Foam',0,'M²',0],
-['N1-8.00-01','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.01','Fraguache Area Comun Interior',924.07,'M²',149.3],
-['N1-8.00-02','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.02','Resane Interior Area Comun Interior',1,'P.A',59852.81],
-['N1-8.00-03','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.03','Pañete Interior Area Comun',532.28,'M²',749.63],
-['N1-8.00-04','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.04','Pañete Techo Interior Area Comun',391.79,'M²',1069.29],
-['N1-8.00-05','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.05','Cantos interiores Area comun',847.04,'M',198.05],
-['N1-8.00-06','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.06','Mochetas interiores Area comun',108.38,'M',284.53],
-['N1-9.00-01','9.00','N1','REVESTIMIENTOS','4.01','Cerámica de Pared en Baños h= 2.60 m',20.25,'M²',4158.99],
-['N1-9.00-02','9.00','N1','REVESTIMIENTOS','4.02','Plafones Machenbrados PVC en baños',1,'PA',15960],
-['N1-9.00-03','9.00','N1','REVESTIMIENTOS','4.03','Facias en techos de Sheetrock',28,'M²',2937.26],
-['N1-10.00-01','10.00','N1','PISOS','5.01','Porcelanato interior 40x40',37,'M²',2956.15],
-['N1-10.00-02','10.00','N1','PISOS','5.02','Zócalos de pocelanato interior',48.03,'M²',450.57],
-['N1-10.00-03','10.00','N1','PISOS','5.03','Cerámica en baños',3.21,'M²',2502.4],
-['N1-11.00-01','11.00','N1','PORTAJE','7.01','Puerta Flotante de Acceso Principal Edif',1,'P.U',24000],
-['N1-11.00-02','11.00','N1','PORTAJE','7.02','P. de paso 0.80 x 2.20 MTS. MDP hidrofugo + PVC',1,'P.U',25505.18],
-['N1-11.00-03','11.00','N1','PORTAJE','7.03','Puerta Flotante de Acceso desde Parqueo',1,'P.U',21600],
-['N1-13.00-01','13.00','N1','ESCALERA','8.01','Escalones principal',18,'ML',4768.06],
-['N1-13.00-02','13.00','N1','ESCALERA','8.02','Descansos de porcelanato',24.53,'M²',2892.9],
-['N1-13.00-03','13.00','N1','ESCALERA','8.03','Zócalos',30.76,'ML',450.57],
-['N1-14.00-01','14.00','N1','HERRERIA y BARANDAS','9.01','Materiales Herreria',1,'P.A',460622.75],
-['N1-14.00-02','14.00','N1','HERRERIA y BARANDAS','9.02','Mdo Herreria',1,'P.A',377879.06],
-['N1-14.00-03','14.00','N1','HERRERIA y BARANDAS','9.03','Baranda Escalera Principal Acero Inoxidable',5.68,'ML',5000],
-['N1-15.00-01','15.00','N1','VENTANAS','10.01','Ventanas en General p92 (Lantigua)',1,'P.A',159263.94],
-['N1-17.00-01','17.00','N1','PINTURA','11.01','Primer en muros interiores',574.87,'M²',122],
-['N1-17.00-02','17.00','N1','PINTURA','11.02','Acrílica en muros interiores',574.87,'M²',280.89],
-['N1-17.00-03','17.00','N1','PINTURA','11.03','Economica en techos',391.79,'M²',225.87],
-['N1-4.00-01','4.00','N1','INSTALACIÓN SANITARIA','12.01','Piezas y tuberías para AN y AP (cotizaciones varias/ Eusebio)',1,'PA',282521.52],
-['N1-4.00-02','4.00','N1','INSTALACIÓN SANITARIA','12.02','Mano de obra plomero',1,'PA',156354.51],
-['N1-4.00-03','4.00','N1','INSTALACIÓN SANITARIA','12.03','Bomba sumergible todo Costo',1,'PA',670000],
-['N1-5.00-01','5.00','N1','INSTALACIÓN ELÉCTRICA (Cotización por Uriel goemz)','13.01','Presupuesto de Materiales Primer Nivel',1,'PA',130860.56],
-['N1-5.00-02','5.00','N1','INSTALACIÓN ELÉCTRICA (Cotización por Uriel goemz)','13.02','MDO Instalación Electrica Primer Nivel',1,'PA',75150.78],
-['N1-23.00-01','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.01','Sistema de Camaras de Seguridad ( 16 Camaras)',1,'P.A',191820.8],
-['N1-23.00-02','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.02','Sistema de Control de Acceso',1,'P.A',131865],
-['N1-23.00-03','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.03','Sistema de intercom IP',1,'P.A',158297],
-['N1-23.00-04','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.04','Cerraduras Inteligentes Puerta P.',11,'UND',22500],
-['N1-23.00-05','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.05','Motor Electrico Came',1,'P.A',77880],
-['N1-24.00-01','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.01','Suministro e instalacion de Equipos',1,'PA',1342132.42],
-['N1-24.00-02','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.02','Suministro e Instalacion de Alimentadores',1,'PA',219252.73],
-['N1-24.00-03','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.03','Suministro e Instalacion de Media Tension.',1,'PA',48500],
-['N1-24.00-04','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.04','Conexión de Planta, sistema de escape y combustible.',1,'PA',383367.67],
-['N1-24.00-05','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.05','Siste de Puesta a Tierra',1,'PA',242626.05],
-['N1-24.00-06','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.06','Supervicion y Direccion Tecnica',1,'PA',223587.89],
-['N1-24.00-07','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.07','ITEBIS 18% del 10%',2,'PA',40245.82],
-['N1-24.00-08','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.08','Suministro de Planta de 93Kw, Tipo Silenciosa Himoinsa',1,'PA',1388883.6],
-['N1-25.00-01','25.00','N1','SUMINISTRO E INSTALACION DE Ascensor','15.01','Ascensor de Pasajeros Modelo HD6000-MRL (Equipos + Instalacion)',1,'PA',2021539],
-['N1-25.00-02','25.00','N1','SUMINISTRO E INSTALACION DE Ascensor','15.02','Mobiliario Lobby',1,'PA',75000],
-['N1-31.00-01','31.00','N1','JARDINERIA','17.01','Jardineria Todo Costo',1,'PA',65000],
-['N1-30.00-01','30.00','N1','INSTALACION MEDIDORES Y TANQUES','18.01','INSTALACION TODO COSTO METRO GAS',1,'PA',110000],
-['N1-32.00-01','32.00','N1','MISCELÁNEOS','19.01','Acera perimetral',7.83,'M³',14364.99],
-['N1-32.00-02','32.00','N1','MISCELÁNEOS','19.02','Pintura delimitacion Parqueo',1,'PA',16000],
-['N1-32.00-03','32.00','N1','MISCELÁNEOS','19.03','Letreros Informativos',1,'PA',14000],
-['N1-32.00-04','32.00','N1','MISCELÁNEOS','19.04','Limpieza final',1,'PA',12000],
-['N2-3.00-01','3.00','N2','HORMIGÓN ARMADO','1.01','Muro M-1',5.88,'M³',63240.23],
-['N2-3.00-02','3.00','N2','HORMIGÓN ARMADO','1.02','Muro M-1A',3.36,'M³',81403.23],
-['N2-3.00-03','3.00','N2','HORMIGÓN ARMADO','1.03','Muro M-2',0.7,'M³',76964.65],
-['N2-3.00-04','3.00','N2','HORMIGÓN ARMADO','1.04','Muro M-4',4.26,'M³',53461.9],
-['N2-3.00-05','3.00','N2','HORMIGÓN ARMADO','1.05','Muro M-5',5.82,'M³',46449.16],
-['N2-3.00-06','3.00','N2','HORMIGÓN ARMADO','1.06','Muro M-6',2.02,'M³',55462.8],
-['N2-3.00-07','3.00','N2','HORMIGÓN ARMADO','1.07','Dinteles (20 x 52)M',0.55,'M³',27053.84],
-['N2-3.00-08','3.00','N2','HORMIGÓN ARMADO','1.08','Viga V1 (0.52x0.20)M',0.57,'M³',44801.84],
-['N2-3.00-09','3.00','N2','HORMIGÓN ARMADO','1.09','Viga V2 (0.52x0.30)M',1.17,'M³',29646.91],
-['N2-3.00-10','3.00','N2','HORMIGÓN ARMADO','1.10','Viga Eje A (30 X 60)M',1.79,'M³',33978.49],
-['N2-3.00-11','3.00','N2','HORMIGÓN ARMADO','1.11','Viga Eje B (V 30 X 60)',10.15,'M³',37796.09],
-['N2-3.00-12','3.00','N2','HORMIGÓN ARMADO','1.12','Viga Eje F (V 20 X 60)',0.94,'M³',47160.68],
-['N2-3.00-13','3.00','N2','HORMIGÓN ARMADO','1.13','Viga Eje G (V 30 X 60)',2.45,'M³',34887.64],
-['N2-3.00-14','3.00','N2','HORMIGÓN ARMADO','1.14','Viga Eje 4 (V 30 X 60)',1.28,'M³',33193.76],
-['N2-3.00-15','3.00','N2','HORMIGÓN ARMADO','1.15','Viga Eje 8 (V 30 X 60)',1.28,'M³',33273.89],
-['N2-3.00-16','3.00','N2','HORMIGÓN ARMADO','1.16','Viga Eje 1 (V 30 X 60)',1.28,'M³',33273.89],
-['N2-3.00-17','3.00','N2','HORMIGÓN ARMADO','1.17','Viga Eje 1 Descanso Esc. P.(V 30 X 60)',0.49,'M³',30215.27],
-['N2-3.00-18','3.00','N2','HORMIGÓN ARMADO','1.18','Viga Eje 6 (V 30 X 60)',4.03,'M³',33241.28],
-['N2-3.00-19','3.00','N2','HORMIGÓN ARMADO','1.19','Viga Eje 5 S2 (V 30 X 60)',1.28,'M³',32707.75],
-['N2-3.00-20','3.00','N2','HORMIGÓN ARMADO','1.20','Viga Eje 5 S1 (V 20 X 60)',0.54,'M³',30802.36],
-['N2-3.00-21','3.00','N2','HORMIGÓN ARMADO','1.21','Viga (V 20 X 52) Eje 9',0.24,'M³',35852.74],
-['N2-3.00-22','3.00','N2','HORMIGÓN ARMADO','1.22','Cepos de Muros M1',400,'M²',120],
-['N2-3.00-23','3.00','N2','HORMIGÓN ARMADO','1.23','Cepos de Muros M6',50,'M²',120],
-['N2-3.00-24','3.00','N2','HORMIGÓN ARMADO','1.24','Andamios de muros M2,M3,M4,M5',350,'M²',120],
-['N2-3.00-25','3.00','N2','HORMIGÓN ARMADO','1.25','Losa Aligerada',52.06,'M³',24445.96],
-['N2-3.00-26','3.00','N2','HORMIGÓN ARMADO','1.26','Vuelos',8.1,'M³',23355.5],
-['N2-3.00-27','3.00','N2','HORMIGÓN ARMADO','1.27','Rampa Escalera Principal',2.43,'M³',53986.34],
-['N2-7.00-01','7.00','N2','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.01','Muros de 6" con bastones 3/8"@0.80m',213.07,'M²',2207.16],
-['N2-7.00-02','7.00','N2','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.02','Muros de Foam 0.10M',92.22,'M²',1332.85],
-['N2-7.00-03','7.00','N2','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.03','Muros de Foam 0.15M',148.24,'M²',1479.25],
-['N2-8.00-01','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.01','Fraguache',743.93,'M²',149.3],
-['N2-8.00-02','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.02','Resane Interior',1,'P.A',81523.11],
-['N2-8.00-03','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.03','Pañete Interior',679.69,'M²',749.63],
-['N2-8.00-04','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.04','Pañete Techo Interior',64.24,'M²',1069.29],
-['N2-8.00-05','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.05','Cantos interiores',560.95,'M',198.05],
-['N2-8.00-06','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.06','Mochetas interiores',156.29,'M',284.53],
-['N2-8.00-07','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.07','Fraguache Area Comun',132.48,'M²',149.3],
-['N2-8.00-08','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.08','Resane Interior Area Comun',1,'P.A',12650.09],
-['N2-8.00-09','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.09','Pañete Interior Area Comun',93.75,'M²',749.63],
-['N2-8.00-10','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.10','Pañete Techo Interior Area Comun',38.73,'M²',1069.29],
-['N2-8.00-11','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.11','Cantos interiores Area comun',69.6,'M',198.05],
-['N2-8.00-12','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.12','Mochetas interiores Area comun',34.8,'M',284.53],
-['N2-9.00-01','9.00','N2','REVESTIMIENTOS','4.01','Cerámica de Pared en Baños h= 2.30 m',99.98,'M²',4158.99],
-['N2-9.00-02','9.00','N2','REVESTIMIENTOS','4.02','Cerámica de Pared en Cocinas h=.60 m',15.99,'M²',4093.72],
-['N2-9.00-03','9.00','N2','REVESTIMIENTOS','4.03','Cerámica Pared Lavado h=.60 m',7.98,'M²',4093.72],
-['N2-9.00-04','9.00','N2','REVESTIMIENTOS','4.04','Plafones Machenbrados PVC en baños',6,'PA',5040],
-['N2-9.00-05','9.00','N2','REVESTIMIENTOS','4.05','Facias en techos de Sheetrock',135.92,'M²',2937.26],
-['N2-12.00-01','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.01','Tope de Granito Natural (Material)',9.07,'M²',6500],
-['N2-12.00-02','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.02','Tope de Granito Natural (Mano de Obra )',11.65,'ML',2800],
-['N2-12.00-03','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.03','Gabinetes Cocina en Melamina Doorvitech',2,'P.U',231187.8],
-['N2-12.00-04','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.04','Mueble de Baño Principal 80 x 50 x 48 MTS',2,'P.U',25042.8],
-['N2-12.00-05','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.05','Mueble de Baño Comun 60 x 45 x 48 MTS',2,'P.U',24590.81],
-['N2-12.00-06','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.06','Mueble de Medio Baño 60 x 45 x 48 MTS',2,'P.U',25674.98],
-['N2-10.00-01','10.00','N2','PISOS','6.01','Porcelanato interior 40x40',259.57,'M²',2956.15],
-['N2-10.00-02','10.00','N2','PISOS','6.02','Zócalos de pocelanato interior',259.24,'ML',450.57],
-['N2-10.00-03','10.00','N2','PISOS','6.03','Cerámica en baños',21.26,'M²',2502.4],
-['N2-10.00-04','10.00','N2','PISOS','6.04','Sobre Piso Closets',2,'P.A',10000],
-['N2-11.00-01','11.00','N2','PORTAJE','7.01','Puerta Principal 1.00 x 2.20 MTS MDP hidrofugo + Madera',2,'P.U',31272.96],
-['N2-11.00-02','11.00','N2','PORTAJE','7.02','P. de paso 0.90 x 2.20 MTS. MDP hidrofugo + PVC',8,'P.U',24954.23],
-['N2-11.00-03','11.00','N2','PORTAJE','7.03','P. de paso 0.80 x 2.20 MTS. MDP hidrofugo + PVC',14,'P.U',24832.07],
-['N2-11.00-04','11.00','N2','PORTAJE','7.04','Puerta Closet RB 0.70*2.40 MTS MDP hidrofugo + Melamina',2,'P.U',28646.52],
-['N2-11.00-05','11.00','N2','PORTAJE','7.05','Closet Dormitorio 1 Aptos A 2.20 x 2.40 MTS MDP hidrofugo + Melamina',1,'P.U',26264.4],
-['N2-11.00-06','11.00','N2','PORTAJE','7.06','Closet Dormitorio 2 Aptos A 2.70 x 2.40 MTS MDP hidrofugo + Melamina',1,'P.U',31761.6],
-['N2-11.00-07','11.00','N2','PORTAJE','7.07','Closet Dormitorio P. Aptos A 1.65 x 2.40 MTS MDP hidrofugo + Melamina',1,'P.U',21378],
-['N2-11.00-08','11.00','N2','PORTAJE','7.08','Closet Dormitorio .Aptos B 2.35 x 2.40 MTS MDP hidrofugo + Melamina',2,'P.U',29868.12],
-['N2-11.00-09','11.00','N2','PORTAJE','7.09','Mampara de Baño',4,'P.U',6500],
-['N2-11.00-10','11.00','N2','PORTAJE','7.10','Tramos Ventilados Para Closet',2,'P.A',15500],
-['N2-13.00-01','13.00','N2','ESCALERA','8.01','Escalones de Granito',18,'ML',4768.06],
-['N2-13.00-02','13.00','N2','ESCALERA','8.02','Descansos de porcelanato',15,'M²',2892.9],
-['N2-13.00-03','13.00','N2','ESCALERA','8.03','Zócalos',25.91,'ML',418.79],
-['N2-14.00-01','14.00','N2','HERRERIA y BARANDAS','9.01','Lavaderos en Hierro 0,75 x 0,90',2,'P.A',4000],
-['N2-14.00-02','14.00','N2','HERRERIA y BARANDAS','9.02','Baranda para Balcones Inoxidable con vidrio templado',11.4,'ML',16000],
-['N2-14.00-03','14.00','N2','HERRERIA y BARANDAS','9.03','Baranda Escalera Principal Acero Inoxidable',5.68,'ML',8000],
-['N2-15.00-01','15.00','N2','VENTANAS','10.01','Ventanas en General p92 (Lantigua)',1,'P.A',451247.83],
-['N2-17.00-01','17.00','N2','PINTURA','11.01','Primer en muros interiores',679.69,'M²',122],
-['N2-17.00-02','17.00','N2','PINTURA','11.02','Acrílica en muros interiores',679.69,'M²',280.89],
-['N2-17.00-03','17.00','N2','PINTURA','11.03','Economica en techos',342,'M²',225.87],
-['N2-4.00-01','4.00','N2','INSTALACIÓN SANITARIA','12.01','Piezas y tuberías para AN y AP (cotizaciones varias/ Eusebio)',1,'PA',282521.52],
-['N2-4.00-02','4.00','N2','INSTALACIÓN SANITARIA','12.02','Mano de obra plomero',1,'PA',156354.51],
-['N2-5.00-01','5.00','N2','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.01','Presupuesto de Materiales por Nivel',1,'PA',357132.39],
-['N2-5.00-02','5.00','N2','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.02','MDO Instalación Electrica por Nivel',1,'PA',198858.59],
-['N2-27.00-01','27.00','N2','Linea Blanca','14.01','Extractores KTC',2,'PA',14486.33],
-['N2-27.00-02','27.00','N2','Linea Blanca','14.02','Estufas KTC',2,'PA',17200.45],
-['N2-27.00-03','27.00','N2','Linea Blanca','14.03','Horno KTC',2,'PA',28503.2],
-['N2-32.00-01','32.00','N2','MISCELÁNEOS','14.01','Limpieza final',1,'PA',12000],
-['N7-3.00-01','3.00','N7','HORMIGÓN ARMADO','1.01','Losa Aligerada',26.32,'M³',24445.96],
-['N7-3.00-02','3.00','N7','HORMIGÓN ARMADO','1.02','Muro M-1',0.81,'M³',63240.23],
-['N7-3.00-03','3.00','N7','HORMIGÓN ARMADO','1.03','Muro M-2',0.77,'M³',76964.65],
-['N7-3.00-04','3.00','N7','HORMIGÓN ARMADO','1.04','Muro M-6',0.98,'M³',54146.21],
-['N7-3.00-05','3.00','N7','HORMIGÓN ARMADO','1.05','Muro M-4',4.26,'M³',52399.36],
-['N7-3.00-06','3.00','N7','HORMIGÓN ARMADO','1.06','Muro M-5',5.82,'M³',48256.1],
-['N7-3.00-07','3.00','N7','HORMIGÓN ARMADO','1.07','Losa',5.42,'M³',23355.5],
-['N7-3.00-08','3.00','N7','HORMIGÓN ARMADO','1.08','Viga (V 20 X 52) Eje 9',0.48,'M³',35852.74],
-['N7-3.00-09','3.00','N7','HORMIGÓN ARMADO','1.09','Viga V1 (0.52x0.20)M',0.57,'M³',44801.84],
-['N7-3.00-10','3.00','N7','HORMIGÓN ARMADO','1.10','Dinteles (20 x 52)M',0.55,'M³',27685.72],
-['N7-3.00-11','3.00','N7','HORMIGÓN ARMADO','1.11','Viga Eje 5 S1 (V 20 X 60)',0.64,'M³',27053.84],
-['N7-7.00-01','7.00','N7','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.01','Muros de Foam 0.15M',202.57,'M²',1479.25],
-['N7-7.00-02','7.00','N7','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.02','Ante Pecho',65.05,'M²',2207.16],
-['N7-8.00-01','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.01','Fraguache',301,'M²',149.3],
-['N7-8.00-02','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.02','Resane Interior',1,'P.A',36102.84],
-['N7-8.00-03','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.03','Pañete Interior',301,'M²',749.63],
-['N7-8.00-04','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.04','Pañete Techo Interior',105.29,'M²',1069.29],
-['N7-8.00-05','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.05','Cantos interiores',109,'M',198.05],
-['N7-8.00-06','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.06','Mochetas interiores',49.8,'M',284.53],
-['N7-8.00-07','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.07','Fraguache Area Comun',112.75,'M²',149.3],
-['N7-8.00-08','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.08','Resane Interior Area Comun',1,'P.A',15214.11],
-['N7-8.00-09','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.09','Pañete Interior Area Comun',112.75,'M²',749.63],
-['N7-8.00-10','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.10','Cantos interiores Area comun',69.6,'M',198.05],
-['N7-8.00-11','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.11','Mochetas interiores Area comun',34.8,'M',284.53],
-['N7-16.00-01','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.12','Cantos exteriores',1742.57,'M',198.05],
-['N7-16.00-02','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.13','Fraguache Exterior',1547.21,'M²',149.3],
-['N7-16.00-03','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.14','Repello Exteriores',1,'P.A',173976.7],
-['N7-16.00-04','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.15','Pañete Exterior',1547.21,'M²',749.63],
-['N7-16.00-05','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.16','Goteros en Balcones y vuelos',103.68,'M',281.75],
-['N7-8.00-12','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.17','Primer',1547.21,'M²',122],
-['N7-8.00-13','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.18','Pintura',1547.21,'M²',280.89],
-['N7-16.00-06','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.19','Fachada',1,'P.A',920000],
-['N7-8.00-14','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.20','Columnas Falsas interiores en SheetRock 2 caras 20 x 20',1,'P.A',65000],
-['N7-16.00-07','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.21','Columnas Falsas exterior en Denglass 3 caras',1,'P.A',65000],
-['N7-9.00-01','9.00','N7','REVESTIMIENTOS','4.01','Cerámica de Pared en Baños h= 2.70 m',18.01,'M²',4158.99],
-['N7-9.00-02','9.00','N7','REVESTIMIENTOS','4.02','Cerámica de Pared en Cocinas h=.50 m',8.35,'M²',4093.72],
-['N7-9.00-03','9.00','N7','REVESTIMIENTOS','4.03','Cerámica Pared Lavado h=.60 m',1.2,'M²',4093.72],
-['N7-9.00-04','9.00','N7','REVESTIMIENTOS','4.04','Facias en techos de Sheetrock',21,'M²',2937.26],
-['N7-9.00-05','9.00','N7','REVESTIMIENTOS','4.05','Plafones PVC en baños',0,'P.A',4200],
-['N7-12.00-01','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.01','Tope de Granito Natural (Material)',9.07,'M²',6500],
-['N7-12.00-02','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.02','Tope de Granito Natural (Mano de Obra )',11.65,'ML',2800],
-['N7-12.00-03','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.03','Gabinetes Cocina en Melamina Doorvitech',2,'P.U',177437.4],
-['N7-12.00-04','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.04','Mueble de Baño Principal 80 x 50 x 48 MTS',1,'P.U',25042.8],
-['N7-12.00-05','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.05','Mueble de Baño Comun 60 x 45 x 48 MTS',1,'P.U',24590.81],
-['N7-10.00-01','10.00','N7','PISOS','6.01','Porcelanato interior 40x40',44.69,'M²',2956.15],
-['N7-10.00-02','10.00','N7','PISOS','6.02','Zócalos de pocelanato interior',70.72,'M²',450.57],
-['N7-10.00-03','10.00','N7','PISOS','6.03','Cerámica en baños',8.31,'M²',2502.4],
-['N7-10.00-04','10.00','N7','PISOS','6.04','Ceramica Exterior',70.02,'M²',2892.9],
-['N7-10.00-05','10.00','N7','PISOS','6.05','Zocalo Exterior',71.02,'M²',442.98],
-['N7-11.00-01','11.00','N7','PORTAJE','7.01','Puerta Principal 1.00 x 2.20 MTS MDP hidrofugo + Melamina',1,'P.U',31272.96],
-['N7-11.00-02','11.00','N7','PORTAJE','7.02','P. de paso 0.90 x 2.20 MTS. MDP hidrofugo + PVC',1,'P.U',24954.23],
-['N7-11.00-03','11.00','N7','PORTAJE','7.03','P. de paso 0.80 x 2.20 MTS. MDP hidrofugo + PVC',1,'P.U',24832.07],
-['N7-11.00-04','11.00','N7','PORTAJE','7.04','Puerta Flotante de Acceso Gym',1,'P.U',21600],
-['N7-11.00-05','11.00','N7','PORTAJE','7.05','Closet Dormitorio 1 Aptos A 2.20 x 2.40 MTS MDP hidrofugo + Melamina',1,'P.U',31761.6],
-['N7-11.00-06','11.00','N7','PORTAJE','7.06','Mampara de Baño',1,'P.U',6500],
-['N7-11.00-07','11.00','N7','PORTAJE','7.07','Tramos Ventilados Para Closet',1,'P.A',10000],
-['N7-14.00-01','14.00','N7','HERRERIA y BARANDAS','9.01','Lavaderos en Hierro 0,75 x 0,90',1,'',4000],
-['N7-15.00-01','15.00','N7','VENTANAS','10.01','Ventanas en General p92 (Lantigua)',1,'P.A',238895.91],
-['N7-17.00-01','17.00','N7','PINTURA','11.01','Primer en muros interiores',301,'M²',122],
-['N7-17.00-02','17.00','N7','PINTURA','11.02','Acrílica en muros interiores',301,'M²',280.89],
-['N7-17.00-03','17.00','N7','PINTURA','11.03','Economica en techos',342,'M²',225.87],
-['N7-4.00-01','4.00','N7','INSTALACIÓN SANITARIA','12.01','Piezas y tuberías para AN y AP (cotizaciones varias/ Eusebio)',1,'PA',282521.52],
-['N7-4.00-02','4.00','N7','INSTALACIÓN SANITARIA','12.02','Mano de obra plomero',1,'PA',156354.51],
-['N7-5.00-01','5.00','N7','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.01','Presupuesto de Materiales por Nivel',1,'PA',135071.14],
-['N7-5.00-02','5.00','N7','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.02','MDO Instalación Electrica por Nivel',1,'PA',74609.55],
-['N7-27.00-01','27.00','N7','Linea Blanca','14.01','Extractores KTC',1,'PA',14486.33],
-['N7-27.00-02','27.00','N7','Linea Blanca','14.02','Estufas KTC',1,'PA',17200.45],
-['N7-27.00-03','27.00','N7','Linea Blanca','14.03','Horno KTC',1,'PA',28503.2],
-['N7-31.00-01','31.00','N7','JARDINERIA','14.01','Jardineria a Todo Costo',1,'PA',35000],
-['N7-28.00-01','28.00','N7','MOBILIARIO GIMNASIO','15.01','Equipo de Gimnasio',1,'P.A',544040.09],
-['N7-26.00-01','26.00','N7','MOBILIARIO','16.01','Mobiliario Terraza',1,'P.A',70000],
-['N7-28.00-02','28.00','N7','PICUZZI','17.01','Picuzz a Todo costo',1,'PA',685000],
-['N7-32.00-01','32.00','N7','MISCELÁNEOS','18.01','Limpieza final',1,'PA',10000],
-['SM-8.00-01','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.01','Subida de materiales a Nivel 2',1,'P.A',58000],
-['SM-8.00-02','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.02','Subida de materiales a Nivel 3',1,'P.A',68000],
-['SM-8.00-03','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.03','Subida de materiales a Nivel 4',1,'P.A',78000],
-['SM-8.00-04','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.04','Subida de materiales a Nivel 5',1,'P.A',88000],
-['SM-8.00-05','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.05','Subida de materiales a Nivel 6',1,'P.A',100000],
-['SM-8.00-06','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.06','Subida de materiales a Nivel 7',1,'P.A',130000]
+['BNP-1.00-01','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.01','Desmonte y limpieza del solar',120],
+['BNP-1.00-02','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.02','Levantamiento Topografico',75000],
+['BNP-1.00-03','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.03','Estudio de Suelo y Diseño Pavimento',150000],
+['BNP-1.00-04','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.04','Caseta de materiales y verja temporal',150000],
+['BNP-1.00-05','1.00','BNP','RECONOCIMIENTO DEL SOLAR','1.05','Replanteo',28000],
+['BNP-2.00-01','2.00','BNP','MOVIMIENTO DE TIERRA','2.01','Corte y bote con equipos',250],
+['BNP-2.00-02','2.00','BNP','MOVIMIENTO DE TIERRA','2.02','Relleno granular compactado',919.72],
+['BNP-3.00-01','3.00','BNP','HORMIGÓN ARMADO','3.01','Replanteo',28000],
+['BNP-3.00-02','3.00','BNP','HORMIGÓN ARMADO','3.02','Zapata ZR-1',29565.81],
+['BNP-3.00-03','3.00','BNP','HORMIGÓN ARMADO','3.03','Zapata ZR-2',23548.26],
+['BNP-3.00-04','3.00','BNP','HORMIGÓN ARMADO','3.04','Zapata ZR-3',28605.68],
+['BNP-3.00-05','3.00','BNP','HORMIGÓN ARMADO','3.05','Zapata ZR-4',42169.51],
+['BNP-3.00-06','3.00','BNP','HORMIGÓN ARMADO','3.06','Zapata ZR-5',17864.48],
+['BNP-3.00-07','3.00','BNP','HORMIGÓN ARMADO','3.07','Zapata ZR-6',35433.85],
+['BNP-3.00-08','3.00','BNP','HORMIGÓN ARMADO','3.08','Platea de fundación ( H=0.35 M)',19946.21],
+['BNP-3.00-09','3.00','BNP','HORMIGÓN ARMADO','3.09','Terminacion de Platea',27685.72],
+['BNP-3.00-10','3.00','BNP','HORMIGÓN ARMADO','3.10','Muro Cisterna',33732.57],
+['BNP-3.00-11','3.00','BNP','HORMIGÓN ARMADO','3.11','Muro M-1',62160.25],
+['BNP-3.00-12','3.00','BNP','HORMIGÓN ARMADO','3.12','Muro M-6',55462.8],
+['BNP-3.00-13','3.00','BNP','HORMIGÓN ARMADO','3.13','Platea Cisterna',30234.81],
+['BNP-3.00-14','3.00','BNP','HORMIGÓN ARMADO','3.14','Viga Cisterna',28804.28],
+['BNP-3.00-15','3.00','BNP','HORMIGÓN ARMADO','3.15','Losa Cisterna',33377.64],
+['BNP-3.00-16','3.00','BNP','HORMIGÓN ARMADO','3.16','Tapa Cisterna',4200],
+['BNP-3.00-17','3.00','BNP','HORMIGÓN ARMADO','3.17','Rampa de Acceso y Parqueo Ext.',14427.23],
+['BNP-6.00-01','6.00','BNP','TERMINACIÓN DE SUPERFICIE CISTERNA','4.01','Pañete Interior Cisterna Muros',953],
+['BNP-6.00-02','6.00','BNP','TERMINACIÓN DE SUPERFICIE CISTERNA','4.02','Pañete Techo Interior Cisterna',953],
+['BNP-6.00-03','6.00','BNP','TERMINACIÓN DE SUPERFICIE CISTERNA','4.03','Zabaleta',207.91],
+['N1-3.00-01','3.00','N1','HORMIGÓN ARMADO','1.01','Muro M-1',62160.25],
+['N1-3.00-02','3.00','N1','HORMIGÓN ARMADO','1.02','Muro M-1 Sobre Cisterna',63240.23],
+['N1-3.00-03','3.00','N1','HORMIGÓN ARMADO','1.03','Muro M-1A',81403.23],
+['N1-3.00-04','3.00','N1','HORMIGÓN ARMADO','1.04','Muro M-2',75945.28],
+['N1-3.00-05','3.00','N1','HORMIGÓN ARMADO','1.05','Muro M-4',52399.36],
+['N1-3.00-06','3.00','N1','HORMIGÓN ARMADO','1.06','Muro M-5',48256.1],
+['N1-3.00-07','3.00','N1','HORMIGÓN ARMADO','1.07','Muro M-6',55462.8],
+['N1-3.00-08','3.00','N1','HORMIGÓN ARMADO','1.08','Columna C-1',64320.53],
+['N1-3.00-09','3.00','N1','HORMIGÓN ARMADO','1.09','Dinteles (20 x 52)M',27053.84],
+['N1-3.00-10','3.00','N1','HORMIGÓN ARMADO','1.10','Viga V1 (52x20)M',44801.84],
+['N1-3.00-11','3.00','N1','HORMIGÓN ARMADO','1.11','Viga V2 (0.52x0.30)M',29646.91],
+['N1-3.00-12','3.00','N1','HORMIGÓN ARMADO','1.12','Viga Eje A (30 X 60)M',33978.49],
+['N1-3.00-13','3.00','N1','HORMIGÓN ARMADO','1.13','Viga Eje B (V 30 X 60)',37796.09],
+['N1-3.00-14','3.00','N1','HORMIGÓN ARMADO','1.14','Viga Eje F (V 20 X 60)',47160.68],
+['N1-3.00-15','3.00','N1','HORMIGÓN ARMADO','1.15','Viga Eje G (V 30 X 60)',34887.64],
+['N1-3.00-16','3.00','N1','HORMIGÓN ARMADO','1.16','Viga Eje 4 (V 30 X 60)',34396.59],
+['N1-3.00-17','3.00','N1','HORMIGÓN ARMADO','1.17','Viga Eje 8 (V 30 X 60)',30511.31],
+['N1-3.00-18','3.00','N1','HORMIGÓN ARMADO','1.18','Viga Eje 1 (V 30 X 60)',33273.89],
+['N1-3.00-19','3.00','N1','HORMIGÓN ARMADO','1.19','Viga Eje 1 Descanso Esc. P.(V 30 X 60)',30215.27],
+['N1-3.00-20','3.00','N1','HORMIGÓN ARMADO','1.20','Viga Eje 6 (V 30 X 60)',33241.28],
+['N1-3.00-21','3.00','N1','HORMIGÓN ARMADO','1.21','Viga Eje 5 S2 (V 30 X 60)',32707.75],
+['N1-3.00-22','3.00','N1','HORMIGÓN ARMADO','1.22','Viga Eje 5 S1 (V 20 X 60)',30802.36],
+['N1-3.00-23','3.00','N1','HORMIGÓN ARMADO','1.23','Viga (V 20 X 52) Eje 9',35852.74],
+['N1-3.00-24','3.00','N1','HORMIGÓN ARMADO','1.24','Cepos de Muros M1',120],
+['N1-3.00-25','3.00','N1','HORMIGÓN ARMADO','1.25','Cepos de Muros M6',120],
+['N1-3.00-26','3.00','N1','HORMIGÓN ARMADO','1.26','Andamios de muros M2,M3,M4,M5',120],
+['N1-3.00-27','3.00','N1','HORMIGÓN ARMADO','1.27','Losa Aligerada',24445.96],
+['N1-3.00-28','3.00','N1','HORMIGÓN ARMADO','1.28','Vuelos',23355.5],
+['N1-3.00-29','3.00','N1','HORMIGÓN ARMADO','1.29','Rampa Escalera Principal',53986.34],
+['N1-3.00-30','3.00','N1','HORMIGÓN ARMADO','1.30','Formado de Escalones',8200],
+['N1-7.00-01','7.00','N1','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.01','Muros de 6" con bastones 3/8"@0.80m',2207.16],
+['N1-7.00-02','7.00','N1','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.02','Muros de Foam',0],
+['N1-8.00-01','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.01','Fraguache Area Comun Interior',149.3],
+['N1-8.00-02','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.02','Resane Interior Area Comun Interior',59852.81],
+['N1-8.00-03','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.03','Pañete Interior Area Comun',749.63],
+['N1-8.00-04','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.04','Pañete Techo Interior Area Comun',1069.29],
+['N1-8.00-05','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.05','Cantos interiores Area comun',198.05],
+['N1-8.00-06','8.00','N1','TERMINACIÓN DE SUPERFICIE','3.06','Mochetas interiores Area comun',284.53],
+['N1-9.00-01','9.00','N1','REVESTIMIENTOS','4.01','Cerámica de Pared en Baños h= 2.60 m',4158.99],
+['N1-9.00-02','9.00','N1','REVESTIMIENTOS','4.02','Plafones Machenbrados PVC en baños',15960],
+['N1-9.00-03','9.00','N1','REVESTIMIENTOS','4.03','Facias en techos de Sheetrock',2937.26],
+['N1-10.00-01','10.00','N1','PISOS','5.01','Porcelanato interior 40x40',2956.15],
+['N1-10.00-02','10.00','N1','PISOS','5.02','Zócalos de pocelanato interior',450.57],
+['N1-10.00-03','10.00','N1','PISOS','5.03','Cerámica en baños',2502.4],
+['N1-11.00-01','11.00','N1','PORTAJE','7.01','Puerta Flotante de Acceso Principal Edif',24000],
+['N1-11.00-02','11.00','N1','PORTAJE','7.02','P. de paso 0.80 x 2.20 MTS. MDP hidrofugo + PVC',25505.18],
+['N1-11.00-03','11.00','N1','PORTAJE','7.03','Puerta Flotante de Acceso desde Parqueo',21600],
+['N1-13.00-01','13.00','N1','ESCALERA','8.01','Escalones principal',4768.06],
+['N1-13.00-02','13.00','N1','ESCALERA','8.02','Descansos de porcelanato',2892.9],
+['N1-13.00-03','13.00','N1','ESCALERA','8.03','Zócalos',450.57],
+['N1-14.00-01','14.00','N1','HERRERIA y BARANDAS','9.01','Materiales Herreria',460622.75],
+['N1-14.00-02','14.00','N1','HERRERIA y BARANDAS','9.02','Mdo Herreria',377879.06],
+['N1-14.00-03','14.00','N1','HERRERIA y BARANDAS','9.03','Baranda Escalera Principal Acero Inoxidable',5000],
+['N1-15.00-01','15.00','N1','VENTANAS','10.01','Ventanas en General p92 (Lantigua)',159263.94],
+['N1-17.00-01','17.00','N1','PINTURA','11.01','Primer en muros interiores',122],
+['N1-17.00-02','17.00','N1','PINTURA','11.02','Acrílica en muros interiores',280.89],
+['N1-17.00-03','17.00','N1','PINTURA','11.03','Economica en techos',225.87],
+['N1-4.00-01','4.00','N1','INSTALACIÓN SANITARIA','12.01','Piezas y tuberías para AN y AP (cotizaciones varias/ Eusebio)',282521.52],
+['N1-4.00-02','4.00','N1','INSTALACIÓN SANITARIA','12.02','Mano de obra plomero',156354.51],
+['N1-4.00-03','4.00','N1','INSTALACIÓN SANITARIA','12.03','Bomba sumergible todo Costo',670000],
+['N1-5.00-01','5.00','N1','INSTALACIÓN ELÉCTRICA (Cotización por Uriel goemz)','13.01','Presupuesto de Materiales Primer Nivel',130860.56],
+['N1-5.00-02','5.00','N1','INSTALACIÓN ELÉCTRICA (Cotización por Uriel goemz)','13.02','MDO Instalación Electrica Primer Nivel',75150.78],
+['N1-23.00-01','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.01','Sistema de Camaras de Seguridad ( 16 Camaras)',191820.8],
+['N1-23.00-02','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.02','Sistema de Control de Acceso',131865],
+['N1-23.00-03','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.03','Sistema de intercom IP',158297],
+['N1-23.00-04','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.04','Cerraduras Inteligentes Puerta P.',22500],
+['N1-23.00-05','23.00','N1','INSTALACIÓN Equipos de Seguridad ()','14.05','Motor Electrico Came',77880],
+['N1-24.00-01','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.01','Suministro e instalacion de Equipos',1342132.42],
+['N1-24.00-02','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.02','Suministro e Instalacion de Alimentadores',219252.73],
+['N1-24.00-03','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.03','Suministro e Instalacion de Media Tension.',48500],
+['N1-24.00-04','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.04','Conexión de Planta, sistema de escape y combustible.',383367.67],
+['N1-24.00-05','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.05','Siste de Puesta a Tierra',242626.05],
+['N1-24.00-06','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.06','Supervicion y Direccion Tecnica',223587.89],
+['N1-24.00-07','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.07','ITEBIS 18% del 10%',40245.82],
+['N1-24.00-08','24.00','N1','INSTALACIÓN ELÉCTRICA  Media Tension (Cotización por Uriel goemz)','14.08','Suministro de Planta de 93Kw, Tipo Silenciosa Himoinsa',1388883.6],
+['N1-25.00-01','25.00','N1','SUMINISTRO E INSTALACION DE Ascensor','15.01','Ascensor de Pasajeros Modelo HD6000-MRL (Equipos + Instalacion)',2021539],
+['N1-25.00-02','25.00','N1','SUMINISTRO E INSTALACION DE Ascensor','15.02','Mobiliario Lobby',75000],
+['N1-31.00-01','31.00','N1','JARDINERIA','17.01','Jardineria Todo Costo',65000],
+['N1-30.00-01','30.00','N1','INSTALACION MEDIDORES Y TANQUES','18.01','INSTALACION TODO COSTO METRO GAS',110000],
+['N1-32.00-01','32.00','N1','MISCELÁNEOS','19.01','Acera perimetral',14364.99],
+['N1-32.00-02','32.00','N1','MISCELÁNEOS','19.02','Pintura delimitacion Parqueo',16000],
+['N1-32.00-03','32.00','N1','MISCELÁNEOS','19.03','Letreros Informativos',14000],
+['N1-32.00-04','32.00','N1','MISCELÁNEOS','19.04','Limpieza final',12000],
+['N2-3.00-01','3.00','N2','HORMIGÓN ARMADO','1.01','Muro M-1',63240.23],
+['N2-3.00-02','3.00','N2','HORMIGÓN ARMADO','1.02','Muro M-1A',81403.23],
+['N2-3.00-03','3.00','N2','HORMIGÓN ARMADO','1.03','Muro M-2',76964.65],
+['N2-3.00-04','3.00','N2','HORMIGÓN ARMADO','1.04','Muro M-4',53461.9],
+['N2-3.00-05','3.00','N2','HORMIGÓN ARMADO','1.05','Muro M-5',46449.16],
+['N2-3.00-06','3.00','N2','HORMIGÓN ARMADO','1.06','Muro M-6',55462.8],
+['N2-3.00-07','3.00','N2','HORMIGÓN ARMADO','1.07','Dinteles (20 x 52)M',27053.84],
+['N2-3.00-08','3.00','N2','HORMIGÓN ARMADO','1.08','Viga V1 (0.52x0.20)M',44801.84],
+['N2-3.00-09','3.00','N2','HORMIGÓN ARMADO','1.09','Viga V2 (0.52x0.30)M',29646.91],
+['N2-3.00-10','3.00','N2','HORMIGÓN ARMADO','1.10','Viga Eje A (30 X 60)M',33978.49],
+['N2-3.00-11','3.00','N2','HORMIGÓN ARMADO','1.11','Viga Eje B (V 30 X 60)',37796.09],
+['N2-3.00-12','3.00','N2','HORMIGÓN ARMADO','1.12','Viga Eje F (V 20 X 60)',47160.68],
+['N2-3.00-13','3.00','N2','HORMIGÓN ARMADO','1.13','Viga Eje G (V 30 X 60)',34887.64],
+['N2-3.00-14','3.00','N2','HORMIGÓN ARMADO','1.14','Viga Eje 4 (V 30 X 60)',33193.76],
+['N2-3.00-15','3.00','N2','HORMIGÓN ARMADO','1.15','Viga Eje 8 (V 30 X 60)',33273.89],
+['N2-3.00-16','3.00','N2','HORMIGÓN ARMADO','1.16','Viga Eje 1 (V 30 X 60)',33273.89],
+['N2-3.00-17','3.00','N2','HORMIGÓN ARMADO','1.17','Viga Eje 1 Descanso Esc. P.(V 30 X 60)',30215.27],
+['N2-3.00-18','3.00','N2','HORMIGÓN ARMADO','1.18','Viga Eje 6 (V 30 X 60)',33241.28],
+['N2-3.00-19','3.00','N2','HORMIGÓN ARMADO','1.19','Viga Eje 5 S2 (V 30 X 60)',32707.75],
+['N2-3.00-20','3.00','N2','HORMIGÓN ARMADO','1.20','Viga Eje 5 S1 (V 20 X 60)',30802.36],
+['N2-3.00-21','3.00','N2','HORMIGÓN ARMADO','1.21','Viga (V 20 X 52) Eje 9',35852.74],
+['N2-3.00-22','3.00','N2','HORMIGÓN ARMADO','1.22','Cepos de Muros M1',120],
+['N2-3.00-23','3.00','N2','HORMIGÓN ARMADO','1.23','Cepos de Muros M6',120],
+['N2-3.00-24','3.00','N2','HORMIGÓN ARMADO','1.24','Andamios de muros M2,M3,M4,M5',120],
+['N2-3.00-25','3.00','N2','HORMIGÓN ARMADO','1.25','Losa Aligerada',24445.96],
+['N2-3.00-26','3.00','N2','HORMIGÓN ARMADO','1.26','Vuelos',23355.5],
+['N2-3.00-27','3.00','N2','HORMIGÓN ARMADO','1.27','Rampa Escalera Principal',53986.34],
+['N2-7.00-01','7.00','N2','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.01','Muros de 6" con bastones 3/8"@0.80m',2207.16],
+['N2-7.00-02','7.00','N2','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.02','Muros de Foam 0.10M',1332.85],
+['N2-7.00-03','7.00','N2','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.03','Muros de Foam 0.15M',1479.25],
+['N2-8.00-01','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.01','Fraguache',149.3],
+['N2-8.00-02','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.02','Resane Interior',81523.11],
+['N2-8.00-03','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.03','Pañete Interior',749.63],
+['N2-8.00-04','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.04','Pañete Techo Interior',1069.29],
+['N2-8.00-05','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.05','Cantos interiores',198.05],
+['N2-8.00-06','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.06','Mochetas interiores',284.53],
+['N2-8.00-07','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.07','Fraguache Area Comun',149.3],
+['N2-8.00-08','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.08','Resane Interior Area Comun',12650.09],
+['N2-8.00-09','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.09','Pañete Interior Area Comun',749.63],
+['N2-8.00-10','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.10','Pañete Techo Interior Area Comun',1069.29],
+['N2-8.00-11','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.11','Cantos interiores Area comun',198.05],
+['N2-8.00-12','8.00','N2','TERMINACIÓN DE SUPERFICIE','3.12','Mochetas interiores Area comun',284.53],
+['N2-9.00-01','9.00','N2','REVESTIMIENTOS','4.01','Cerámica de Pared en Baños h= 2.30 m',4158.99],
+['N2-9.00-02','9.00','N2','REVESTIMIENTOS','4.02','Cerámica de Pared en Cocinas h=.60 m',4093.72],
+['N2-9.00-03','9.00','N2','REVESTIMIENTOS','4.03','Cerámica Pared Lavado h=.60 m',4093.72],
+['N2-9.00-04','9.00','N2','REVESTIMIENTOS','4.04','Plafones Machenbrados PVC en baños',5040],
+['N2-9.00-05','9.00','N2','REVESTIMIENTOS','4.05','Facias en techos de Sheetrock',2937.26],
+['N2-12.00-01','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.01','Tope de Granito Natural (Material)',6500],
+['N2-12.00-02','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.02','Tope de Granito Natural (Mano de Obra )',2800],
+['N2-12.00-03','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.03','Gabinetes Cocina en Melamina Doorvitech',231187.8],
+['N2-12.00-04','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.04','Mueble de Baño Principal 80 x 50 x 48 MTS',25042.8],
+['N2-12.00-05','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.05','Mueble de Baño Comun 60 x 45 x 48 MTS',24590.81],
+['N2-12.00-06','12.00','N2','COCINA, PANTRY y MUEBLES DE BAÑO','5.06','Mueble de Medio Baño 60 x 45 x 48 MTS',25674.98],
+['N2-10.00-01','10.00','N2','PISOS','6.01','Porcelanato interior 40x40',2956.15],
+['N2-10.00-02','10.00','N2','PISOS','6.02','Zócalos de pocelanato interior',450.57],
+['N2-10.00-03','10.00','N2','PISOS','6.03','Cerámica en baños',2502.4],
+['N2-10.00-04','10.00','N2','PISOS','6.04','Sobre Piso Closets',10000],
+['N2-11.00-01','11.00','N2','PORTAJE','7.01','Puerta Principal 1.00 x 2.20 MTS MDP hidrofugo + Madera',31272.96],
+['N2-11.00-02','11.00','N2','PORTAJE','7.02','P. de paso 0.90 x 2.20 MTS. MDP hidrofugo + PVC',24954.23],
+['N2-11.00-03','11.00','N2','PORTAJE','7.03','P. de paso 0.80 x 2.20 MTS. MDP hidrofugo + PVC',24832.07],
+['N2-11.00-04','11.00','N2','PORTAJE','7.04','Puerta Closet RB 0.70*2.40 MTS MDP hidrofugo + Melamina',28646.52],
+['N2-11.00-05','11.00','N2','PORTAJE','7.05','Closet Dormitorio 1 Aptos A 2.20 x 2.40 MTS MDP hidrofugo + Melamina',26264.4],
+['N2-11.00-06','11.00','N2','PORTAJE','7.06','Closet Dormitorio 2 Aptos A 2.70 x 2.40 MTS MDP hidrofugo + Melamina',31761.6],
+['N2-11.00-07','11.00','N2','PORTAJE','7.07','Closet Dormitorio P. Aptos A 1.65 x 2.40 MTS MDP hidrofugo + Melamina',21378],
+['N2-11.00-08','11.00','N2','PORTAJE','7.08','Closet Dormitorio .Aptos B 2.35 x 2.40 MTS MDP hidrofugo + Melamina',29868.12],
+['N2-11.00-09','11.00','N2','PORTAJE','7.09','Mampara de Baño',6500],
+['N2-11.00-10','11.00','N2','PORTAJE','7.10','Tramos Ventilados Para Closet',15500],
+['N2-13.00-01','13.00','N2','ESCALERA','8.01','Escalones de Granito',4768.06],
+['N2-13.00-02','13.00','N2','ESCALERA','8.02','Descansos de porcelanato',2892.9],
+['N2-13.00-03','13.00','N2','ESCALERA','8.03','Zócalos',418.79],
+['N2-14.00-01','14.00','N2','HERRERIA y BARANDAS','9.01','Lavaderos en Hierro 0,75 x 0,90',4000],
+['N2-14.00-02','14.00','N2','HERRERIA y BARANDAS','9.02','Baranda para Balcones Inoxidable con vidrio templado',16000],
+['N2-14.00-03','14.00','N2','HERRERIA y BARANDAS','9.03','Baranda Escalera Principal Acero Inoxidable',8000],
+['N2-15.00-01','15.00','N2','VENTANAS','10.01','Ventanas en General p92 (Lantigua)',451247.83],
+['N2-17.00-01','17.00','N2','PINTURA','11.01','Primer en muros interiores',122],
+['N2-17.00-02','17.00','N2','PINTURA','11.02','Acrílica en muros interiores',280.89],
+['N2-17.00-03','17.00','N2','PINTURA','11.03','Economica en techos',225.87],
+['N2-4.00-01','4.00','N2','INSTALACIÓN SANITARIA','12.01','Piezas y tuberías para AN y AP (cotizaciones varias/ Eusebio)',282521.52],
+['N2-4.00-02','4.00','N2','INSTALACIÓN SANITARIA','12.02','Mano de obra plomero',156354.51],
+['N2-5.00-01','5.00','N2','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.01','Presupuesto de Materiales por Nivel',357132.39],
+['N2-5.00-02','5.00','N2','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.02','MDO Instalación Electrica por Nivel',198858.59],
+['N2-27.00-01','27.00','N2','Linea Blanca','14.01','Extractores KTC',14486.33],
+['N2-27.00-02','27.00','N2','Linea Blanca','14.02','Estufas KTC',17200.45],
+['N2-27.00-03','27.00','N2','Linea Blanca','14.03','Horno KTC',28503.2],
+['N2-32.00-01','32.00','N2','MISCELÁNEOS','14.01','Limpieza final',12000],
+['N7-3.00-01','3.00','N7','HORMIGÓN ARMADO','1.01','Losa Aligerada',24445.96],
+['N7-3.00-02','3.00','N7','HORMIGÓN ARMADO','1.02','Muro M-1',63240.23],
+['N7-3.00-03','3.00','N7','HORMIGÓN ARMADO','1.03','Muro M-2',76964.65],
+['N7-3.00-04','3.00','N7','HORMIGÓN ARMADO','1.04','Muro M-6',54146.21],
+['N7-3.00-05','3.00','N7','HORMIGÓN ARMADO','1.05','Muro M-4',52399.36],
+['N7-3.00-06','3.00','N7','HORMIGÓN ARMADO','1.06','Muro M-5',48256.1],
+['N7-3.00-07','3.00','N7','HORMIGÓN ARMADO','1.07','Losa',23355.5],
+['N7-3.00-08','3.00','N7','HORMIGÓN ARMADO','1.08','Viga (V 20 X 52) Eje 9',35852.74],
+['N7-3.00-09','3.00','N7','HORMIGÓN ARMADO','1.09','Viga V1 (0.52x0.20)M',44801.84],
+['N7-3.00-10','3.00','N7','HORMIGÓN ARMADO','1.10','Dinteles (20 x 52)M',27685.72],
+['N7-3.00-11','3.00','N7','HORMIGÓN ARMADO','1.11','Viga Eje 5 S1 (V 20 X 60)',27053.84],
+['N7-7.00-01','7.00','N7','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.01','Muros de Foam 0.15M',1479.25],
+['N7-7.00-02','7.00','N7','MUROS NO ESTRUCTURALES (BLOQUES Y/O FOAM)','2.02','Ante Pecho',2207.16],
+['N7-8.00-01','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.01','Fraguache',149.3],
+['N7-8.00-02','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.02','Resane Interior',36102.84],
+['N7-8.00-03','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.03','Pañete Interior',749.63],
+['N7-8.00-04','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.04','Pañete Techo Interior',1069.29],
+['N7-8.00-05','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.05','Cantos interiores',198.05],
+['N7-8.00-06','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.06','Mochetas interiores',284.53],
+['N7-8.00-07','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.07','Fraguache Area Comun',149.3],
+['N7-8.00-08','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.08','Resane Interior Area Comun',15214.11],
+['N7-8.00-09','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.09','Pañete Interior Area Comun',749.63],
+['N7-8.00-10','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.10','Cantos interiores Area comun',198.05],
+['N7-8.00-11','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.11','Mochetas interiores Area comun',284.53],
+['N7-16.00-01','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.12','Cantos exteriores',198.05],
+['N7-16.00-02','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.13','Fraguache Exterior',149.3],
+['N7-16.00-03','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.14','Repello Exteriores',173976.7],
+['N7-16.00-04','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.15','Pañete Exterior',749.63],
+['N7-16.00-05','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.16','Goteros en Balcones y vuelos',281.75],
+['N7-8.00-12','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.17','Primer',122],
+['N7-8.00-13','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.18','Pintura',280.89],
+['N7-16.00-06','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.19','Fachada',920000],
+['N7-8.00-14','8.00','N7','TERMINACIÓN DE SUPERFICIE','3.20','Columnas Falsas interiores en SheetRock 2 caras 20 x 20',65000],
+['N7-16.00-07','16.00','N7','TERMINACIÓN DE SUPERFICIE','3.21','Columnas Falsas exterior en Denglass 3 caras',65000],
+['N7-9.00-01','9.00','N7','REVESTIMIENTOS','4.01','Cerámica de Pared en Baños h= 2.70 m',4158.99],
+['N7-9.00-02','9.00','N7','REVESTIMIENTOS','4.02','Cerámica de Pared en Cocinas h=.50 m',4093.72],
+['N7-9.00-03','9.00','N7','REVESTIMIENTOS','4.03','Cerámica Pared Lavado h=.60 m',4093.72],
+['N7-9.00-04','9.00','N7','REVESTIMIENTOS','4.04','Facias en techos de Sheetrock',2937.26],
+['N7-9.00-05','9.00','N7','REVESTIMIENTOS','4.05','Plafones PVC en baños',4200],
+['N7-12.00-01','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.01','Tope de Granito Natural (Material)',6500],
+['N7-12.00-02','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.02','Tope de Granito Natural (Mano de Obra )',2800],
+['N7-12.00-03','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.03','Gabinetes Cocina en Melamina Doorvitech',177437.4],
+['N7-12.00-04','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.04','Mueble de Baño Principal 80 x 50 x 48 MTS',25042.8],
+['N7-12.00-05','12.00','N7','COCINA, PANTRY y MUEBLES DE BAÑO','5.05','Mueble de Baño Comun 60 x 45 x 48 MTS',24590.81],
+['N7-10.00-01','10.00','N7','PISOS','6.01','Porcelanato interior 40x40',2956.15],
+['N7-10.00-02','10.00','N7','PISOS','6.02','Zócalos de pocelanato interior',450.57],
+['N7-10.00-03','10.00','N7','PISOS','6.03','Cerámica en baños',2502.4],
+['N7-10.00-04','10.00','N7','PISOS','6.04','Ceramica Exterior',2892.9],
+['N7-10.00-05','10.00','N7','PISOS','6.05','Zocalo Exterior',442.98],
+['N7-11.00-01','11.00','N7','PORTAJE','7.01','Puerta Principal 1.00 x 2.20 MTS MDP hidrofugo + Melamina',31272.96],
+['N7-11.00-02','11.00','N7','PORTAJE','7.02','P. de paso 0.90 x 2.20 MTS. MDP hidrofugo + PVC',24954.23],
+['N7-11.00-03','11.00','N7','PORTAJE','7.03','P. de paso 0.80 x 2.20 MTS. MDP hidrofugo + PVC',24832.07],
+['N7-11.00-04','11.00','N7','PORTAJE','7.04','Puerta Flotante de Acceso Gym',21600],
+['N7-11.00-05','11.00','N7','PORTAJE','7.05','Closet Dormitorio 1 Aptos A 2.20 x 2.40 MTS MDP hidrofugo + Melamina',31761.6],
+['N7-11.00-06','11.00','N7','PORTAJE','7.06','Mampara de Baño',6500],
+['N7-11.00-07','11.00','N7','PORTAJE','7.07','Tramos Ventilados Para Closet',10000],
+['N7-14.00-01','14.00','N7','HERRERIA y BARANDAS','9.01','Lavaderos en Hierro 0,75 x 0,90',4000],
+['N7-15.00-01','15.00','N7','VENTANAS','10.01','Ventanas en General p92 (Lantigua)',238895.91],
+['N7-17.00-01','17.00','N7','PINTURA','11.01','Primer en muros interiores',122],
+['N7-17.00-02','17.00','N7','PINTURA','11.02','Acrílica en muros interiores',280.89],
+['N7-17.00-03','17.00','N7','PINTURA','11.03','Economica en techos',225.87],
+['N7-4.00-01','4.00','N7','INSTALACIÓN SANITARIA','12.01','Piezas y tuberías para AN y AP (cotizaciones varias/ Eusebio)',282521.52],
+['N7-4.00-02','4.00','N7','INSTALACIÓN SANITARIA','12.02','Mano de obra plomero',156354.51],
+['N7-5.00-01','5.00','N7','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.01','Presupuesto de Materiales por Nivel',135071.14],
+['N7-5.00-02','5.00','N7','INSTALACIÓN ELÉCTRICA (Cotización por Uriel Gomez)','13.02','MDO Instalación Electrica por Nivel',74609.55],
+['N7-27.00-01','27.00','N7','Linea Blanca','14.01','Extractores KTC',14486.33],
+['N7-27.00-02','27.00','N7','Linea Blanca','14.02','Estufas KTC',17200.45],
+['N7-27.00-03','27.00','N7','Linea Blanca','14.03','Horno KTC',28503.2],
+['N7-31.00-01','31.00','N7','JARDINERIA','14.01','Jardineria a Todo Costo',35000],
+['N7-28.00-01','28.00','N7','MOBILIARIO GIMNASIO','15.01','Equipo de Gimnasio',544040.09],
+['N7-26.00-01','26.00','N7','MOBILIARIO','16.01','Mobiliario Terraza',70000],
+['N7-28.00-02','28.00','N7','PICUZZI','17.01','Picuzz a Todo costo',685000],
+['N7-32.00-01','32.00','N7','MISCELÁNEOS','18.01','Limpieza final',10000],
+['SM-8.00-01','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.01','Subida de materiales a Nivel 2',58000],
+['SM-8.00-02','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.02','Subida de materiales a Nivel 3',68000],
+['SM-8.00-03','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.03','Subida de materiales a Nivel 4',78000],
+['SM-8.00-04','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.04','Subida de materiales a Nivel 5',88000],
+['SM-8.00-05','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.05','Subida de materiales a Nivel 6',100000],
+['SM-8.00-06','8.00','SM','TERMINACIÓN DE SUPERFICIE','2.06','Subida de materiales a Nivel 7',130000]
 ];
 
 var CAT_SECC_ORDEN=['BNP','N1','N2','N7','SM'];
@@ -15568,10 +15574,19 @@ function _catActivas(){ return _catP().filter(function(p){ return p.activo!==fal
 /* CÓMO SE DISTINGUE UN NIVEL DEL OTRO. `padre_id` NO sirve: al sembrar, las
    274 del presupuesto y las de la agenda lo tienen todas en nulo —a la
    agenda nadie le adivina la subpartida—, así que mirarlo confundiría las
-   dos cosas. Lo que sí las separa siempre es la SECCIÓN: toda línea del
-   presupuesto viene de una (Bajo Nivel, Primer Nivel…) y ninguna partida de
-   la agenda tiene ni tendrá. */
-function _catEsSub(p){ return !!String((p&&p.seccion)||'').trim(); }
+   dos cosas.
+   Hasta v100 se miraba la SECCIÓN, y funcionaba, pero desde v101 las partidas
+   de la agenda también enseñan nivel del edificio: dejar que una columna
+   signifique dos cosas —en qué nivel estás y de qué nivel del catálogo eres—
+   es cómo se rompen las cosas más tarde. Ahora hay columna propia, `tipo`.
+   El recurso a la sección se queda de respaldo para las filas viejas que
+   todavía no la tengan: sin eso, entre la migración y el repintado el módulo
+   enseñaría las 274 como si fueran de la agenda. */
+function _catEsSub(p){
+  if(!p) return false;
+  if(p.tipo) return p.tipo==='presupuesto';
+  return !!String(p.seccion||'').trim();
+}
 function _catSubs(){    return _catActivas().filter(_catEsSub); }
 function _catAgenda(){  return _catActivas().filter(function(p){ return !_catEsSub(p); }); }
 function _catSubsDe(cap){
@@ -15621,6 +15636,43 @@ function _catOficioDe(a){
   var p=(S.personal||[]).find(function(x){ return x.nombre===n; });
   return (p&&p.oficio)||'';
 }
+/* EL NIVEL DEL EDIFICIO. El de una subpartida del presupuesto es su
+   `seccion`, que ya viene guardada. El de una partida de la agenda NO se
+   guarda: se calcula de las áreas de sus actividades, y NO siempre es uno
+   solo — de 391 partidas medidas hoy, 107 viven en varios niveles y una llega
+   a seis («Instalación de cerradura — puerta principal»). Inventarle un nivel
+   único sería mentir sobre dónde está el trabajo. */
+function _catNivel(area){
+  var t=String(area||'').trim();
+  var i=t.indexOf('—');
+  return (i<0 ? t : t.slice(0,i).trim()) || '—';
+}
+/* N2…N7 primero y en orden; lo que no es nivel numerado (Parqueo, Escalera,
+   Fachada, General…) detrás y alfabético. */
+function _catNivelOrden(n){
+  var m=/^N(\d+)$/.exec(String(n||''));
+  return m ? parseInt(m[1],10) : 1000;
+}
+function _catNivelesDe(pid){
+  var vistos={}, out=[];
+  _catActsDe(pid).forEach(function(a){
+    var n=_catNivel(a.area);
+    if(!vistos[n]){ vistos[n]=1; out.push(n); }
+  });
+  return out.sort(function(a,b){
+    return _catNivelOrden(a)-_catNivelOrden(b) || String(a).localeCompare(String(b));
+  });
+}
+/* Cuatro caben a 390px; el resto se cuenta y se ve entero al abrir la partida. */
+function _catNivelesHTML(pid, tope){
+  var ns=_catNivelesDe(pid); if(!ns.length) return '';
+  var max=tope||4, m=ns.slice(0,max).join(' · ');
+  return esc(m)+(ns.length>max?' +'+(ns.length-max):'');
+}
+
+/* Se queda esperando a la cubicación: desde v101 no se enseña dinero en el
+   catálogo —es un módulo de estructura, y la plata vive en la app de costos—,
+   pero cuando haya cantidades de verdad esto es lo que las pinta. */
 function _catMoneda(v){
   var n=Number(v)||0;
   return 'RD$ '+n.toLocaleString('es-DO',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -15655,11 +15707,14 @@ async function cargarCatalogo(){
    subpartida cuelga lo decide el dueño, no una regla. */
 function _catPlanSiembra(){
   var subs=CAT_SUBPARTIDAS.map(function(r){
-    return {id:r[0], capitulo:r[1], seccion:CAT_SECCIONES[r[2]]||r[2],
+    /* `valor` va en nulo a proposito: era cantidad x precio, y desde v101 no
+       hay cantidad. `precio_unitario` se sigue guardando porque asi se decidio
+       antes de quitar las cantidades — pero solo, sin cantidad, no calcula
+       nada. Esta avisado; sacarlo es esta misma linea. */
+    return {id:r[0], tipo:'presupuesto', capitulo:r[1],
+            seccion:CAT_SECCIONES[r[2]]||r[2],
             numero:r[4], nombre:r[5],
-            cantidad:Number(r[6])||0, unidad:r[7]||'',
-            precio_unitario:Number(r[8])||0,
-            valor:Math.round((Number(r[6])||0)*(Number(r[8])||0)*100)/100,
+            precio_unitario:Number(r[6])||0, valor:null,
             oficio:'', aplica:'general', codigo_presupuesto:r[3]||'',
             padre_id:null, activo:true};
   });
@@ -15676,10 +15731,11 @@ function _catPlanSiembra(){
     // `aplica`: apartamento solo si TODAS caen en un «N# — Apto …»
     var soloAptos=items.every(function(a){ return REC_ORDEN.indexOf(String(a.area||'').trim())>=0; });
     var id='p'+uid();
-    partidas.push({id:id, capitulo:_catCapDe(of, desc), numero:'', nombre:desc,
+    partidas.push({id:id, tipo:'agenda', capitulo:_catCapDe(of, desc),
+                   numero:'', nombre:desc,
                    oficio:of, unidad:'', aplica:soloAptos?'apartamento':'general',
                    codigo_presupuesto:'', seccion:null, padre_id:null,
-                   cantidad:null, precio_unitario:null, valor:null, activo:true});
+                   precio_unitario:null, valor:null, activo:true});
     items.forEach(function(a){ amarres.push({actividad_id:a.id, partida_id:id}); });
   });
   return {subpartidas:subs, partidas:partidas, amarres:amarres, actividades:ab.length};
@@ -15965,11 +16021,11 @@ async function catAsignarEn(pid){
       pid='p'+uid();
       var of=_catOficioDe(a);
       await sb('obra_partidas',{method:'POST',prefer:'return=minimal',body:JSON.stringify([{
-        id:pid, capitulo:_catCapDe(of,(a&&a.descripcion)||''), numero:'',
+        id:pid, tipo:'agenda', capitulo:_catCapDe(of,(a&&a.descripcion)||''), numero:'',
         nombre:(a&&a.descripcion)||'Nueva partida', oficio:of,
         unidad:'', aplica:REC_ORDEN.indexOf(String((a&&a.area)||'').trim())>=0?'apartamento':'general',
         codigo_presupuesto:'', seccion:null, padre_id:null,
-        cantidad:null, precio_unitario:null, valor:null, activo:true}])});
+        precio_unitario:null, valor:null, activo:true}])});
     }
     await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
              body:JSON.stringify([{actividad_id:actId, partida_id:pid}])});
@@ -16133,6 +16189,7 @@ function _catHerramientasHTML(){
    dentro de una subpartida y en el bloque de las que no cuelgan de ninguna. */
 function _catFilaAgendaHTML(p, sangria){
   var n=_catActsDe(p.id).length, on=!!(S.catSel||{})[p.id];
+  var niv=_catNivelesHTML(p.id);
   return '<div class="cat-fila" style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px'+
       (sangria?';margin-left:14px':'')+'">'+
     '<button onclick="catSelToggle(\''+p.id+'\')" aria-label="Marcar" style="'+_catBS+';flex:0 0 46px;'+
@@ -16143,8 +16200,9 @@ function _catFilaAgendaHTML(p, sangria){
       'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
       'padding:9px 12px;border:1.5px solid var(--border);background:var(--bg2);color:var(--text)">'+
       '<span style="font-size:12.5px;font-weight:700;line-height:1.3">'+esc(p.nombre)+'</span>'+
-      '<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono)">'+
-        (p.oficio?esc(p.oficio)+' · ':'')+n+' actividad'+(n!==1?'es':'')+'</span>'+
+      '<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
+        (p.oficio?esc(p.oficio)+' · ':'')+n+' actividad'+(n!==1?'es':'')+
+        (niv?'<br>'+niv:'')+'</span>'+
     '</button></div>';
 }
 
@@ -16175,8 +16233,7 @@ function _catPartidasHTML(){
            lo que rastrea la línea hasta la hoja del Excel cuando algo no
            cuadra con lo contratado. */
         '<span class="cat-sub-meta" style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
-          esc(s.id)+' · '+(Number(s.cantidad)||0).toLocaleString('es-DO')+' '+esc(s.unidad||'—')+
-          ' · '+_catMoneda(s.valor)+'<br>'+esc(s.seccion)+'</span>'+
+          esc(s.id)+'<br>'+esc(s.seccion)+'</span>'+
       '</button>'+
       hijas.map(function(p){ return _catFilaAgendaHTML(p,true); }).join('')+
     '</div>';
@@ -16226,9 +16283,6 @@ function _catFichaSubHTML(p){
       'border:1.5px solid var(--border);margin-bottom:10px">'+
       dato('Sección', p.seccion)+
       dato('Madre del presupuesto', p.codigo_presupuesto)+
-      dato('Cantidad', (Number(p.cantidad)||0).toLocaleString('es-DO')+' '+(p.unidad||''))+
-      dato('Precio unitario', _catMoneda(p.precio_unitario))+
-      dato('Valor', _catMoneda(p.valor))+
       dato('Código del Excel', p.numero)+
     '</div>'+
     '<div style="font-size:11.5px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
@@ -16252,9 +16306,16 @@ function _catFichaAgendaHTML(p){
       'onchange="catFichaSet(\''+p.id+'\',\''+campo+'\',this.value)" style="'+_catCampoBS+'"></div>';
   };
   var madre=p.padre_id?_catPorId(p.padre_id):null;
+  /* Aquí van TODOS los niveles, sin el «+N» de la lista: la ficha es donde se
+     mira el detalle, y una partida repartida en seis es justo la que hay que
+     poder ver entera. */
+  var nivs=_catNivelesDe(p.id);
   var h='<button onclick="catVolver()" style="'+_catVolverBS+'">‹ '+esc(String(p.capitulo))+' · '+esc(_catCapNom(p.capitulo))+'</button>'+
     '<div class="obranow-header"><div>'+
       '<div style="font-size:15px;font-weight:800;line-height:1.3">'+esc(p.nombre)+'</div>'+
+      (nivs.length?'<div class="cat-nivs" style="font-size:11px;color:var(--text3);margin-top:4px;'+
+        'font-family:var(--mono);line-height:1.4">'+
+        (nivs.length===1?'Nivel: ':'En '+nivs.length+' niveles: ')+esc(nivs.join(' · '))+'</div>':'')+
     '</div></div>'+
     /* De qué línea del presupuesto cuelga: es LA decisión de la curación, así
        que va arriba del todo y no escondida entre los campos. */
