@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v91 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v92 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v91 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v92 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -468,6 +468,9 @@ mismo:**
 
 - Filtros: `retrasadas`, `sinfecha`, `sincontratista`, `congeladas`,
   `en-progreso`, `pendiente`, `completado`, `activas`
+  **`retrasadas` cambió a propósito en v92**: pasó de 383 a 325 porque las 58
+  sin fecha de entrega dejaron de contarse también ahí. Ese es el número
+  nuevo de referencia; si vuelve a 383, alguien deshizo el arreglo.
 - Vistas: **Lista**, **Por Apto**, **Matriz**, **Edificio**
 - Modo selección: reprogramar en bloque, cerrar en bloque, «Sigue igual»
 - **Revisión por contratista**: los cuatro números de la cabecera
@@ -541,6 +544,9 @@ pertenece a ningún nivel.
 | **v90** — la prueba del candado buscaba `/lock/i` en el HTML de la fila y casaba con `display:**block**`: daba verdadero para todas y no probaba nada. | Un selector flojo hace que la prueba diga que sí a todo. Busca el marcador exacto (el trazo del icono, un `title=`), no una palabra suelta que puede estar en un estilo. |
 
 | **v91** — una escritura que fallaba se revertía y se tiraba: quedaba un aviso de 6 segundos y ya. Las LECTURAS reintentaban desde v85; las escrituras, no. En una torre de siete niveles, marcando veinte partidas seguidas, las que caían desaparecían sin que nadie supiera cuáles. | Lo que el usuario ya hizo no se tira nunca. Si no se puede guardar ahora, se guarda en el teléfono y se manda después — y el aviso **se queda puesto** hasta que se resuelva. Y distingue «no hay red» (reintentable) de «la base dijo que no» (no lo es): encolar un rechazo es reintentarlo para siempre. |
+
+| **v92** — «383 vencidas» y «58 sin fecha» eran **las mismas 58 contadas dos veces**: `isRetrasada` usaba `fechaVenc()`, que cae en `fecha` cuando no hay `fecha_fin`. Las pastillas no sumaban contra nada. | Separa el helper de MOSTRAR del criterio de CONTAR. `fechaVenc` está bien para pintar y ordenar; para contar hay que preguntar por el campo exacto. Dos pastillas que se solapan hacen que el usuario deje de creerle a las dos. |
+| **v92** — la comparación lado a lado dijo «idénticos» y no probaba nada: en los datos de `comp87` las «sin fecha» tienen `fecha` FUTURA, así que nunca caían en vencidas. El caso real —sin `fecha_fin` y con `fecha` pasada— no estaba montado. | Que la comparación no cambie puede querer decir que el cambio no rompió nada… o que los datos de prueba no tienen el caso. Antes de darla por buena, comprueba que el escenario existe **en el doble**, no solo en la base. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
@@ -620,8 +626,10 @@ orden de magnitud.
 - **Las fechas son texto**, formato `AAAA-MM-DD`, y **pueden venir
   vacías**: 89 actividades abiertas no tienen fecha de fin. Compara
   siempre contra `''` antes de usarlas.
-  Ojo: `fechaVenc()` cae en `a.fecha` cuando `fecha_fin` viene vacía, así
-  que «sin fecha de entrega» y «vencida» **no** son excluyentes.
+  Ojo: `fechaVenc()` cae en `a.fecha` cuando `fecha_fin` viene vacía. Eso
+  vale para MOSTRAR y para ORDENAR, pero **no para contar**: desde v92
+  `isRetrasada` e `isProximaRetraso` miran `fecha_fin` a secas, y «vencida» y
+  «sin fecha de entrega» ya son excluyentes.
 - **`porcentaje` es texto**, no número. `'0'`, `'50'`, `'100'`.
 - **Dos de cada tres actividades abiertas están vencidas** (757 de 1,142).
   **No diseñes suponiendo que las fechas son confiables.**

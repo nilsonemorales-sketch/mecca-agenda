@@ -858,7 +858,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_91';
+const APP_VERSION='20260916_92';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -4102,7 +4102,10 @@ function _aptoCuentas(area, persona){
   return {
     abiertas: l.length,
     vencidas: l.filter(FILTRO_HUECO.retrasadas).length,
-    semana:   l.filter(function(a){ var f=fechaVenc(a); return !!f && f<=vie; }).length,
+    /* «Semana» también se mira contra la fecha de ENTREGA. Con fechaVenc, una
+       partida sin entrega caía aquí por su `fecha`, y el panel decía «58 esta
+       semana» de partidas que no tienen comprometida ninguna. */
+    semana:   l.filter(function(a){ var f=String(a.fecha_fin||'').trim(); return !!f && f<=vie; }).length,
     curso:    l.filter(function(a){ return a.estado==='en-progreso'; }).length
   };
 }
@@ -5049,16 +5052,31 @@ function getPreds(a){
 }
 // Vencimiento: usa fecha_fin si existe, si no usa fecha
 function fechaVenc(a){ return (a.fecha_fin&&a.fecha_fin>'')?a.fecha_fin:(a.fecha||''); }
+/* VENCIDA = tiene fecha de ENTREGA y ya pasó. Ni más ni menos.
+
+   Antes se resolvía con fechaVenc(), que cae en `fecha` cuando `fecha_fin`
+   viene vacía. Resultado: las 58 partidas abiertas SIN fecha de entrega se
+   contaban como vencidas **y** como sin fecha, a la vez. El app decía
+   «383 vencidas» y «58 sin fecha», y las 58 eran exactamente las mismas de
+   las 383. Los números no sumaban contra nada, y sumar mal dos pastillas es
+   la forma más rápida de que el usuario deje de creerle a las dos.
+
+   Con esto, «vencidas» pasa de 383 a 325 y las 58 quedan SOLO en «sin
+   fecha», que es donde de verdad hay que atacarlas: no se pierden de vista,
+   se dejan de contar dos veces. `fechaVenc()` sigue igual — se usa para
+   MOSTRAR y para ordenar, que es otra cosa. */
 function isRetrasada(a){
-  var fv=fechaVenc(a);
-  return !!fv && fv<today() && a.estado!=='completado';
+  if(!a || a.estado==='completado') return false;
+  var f=String(a.fecha_fin||'').trim();
+  return !!f && f<today();
 }
-// Próxima a retraso: vence en 0-2 días y aún no completada
+// Próxima a retraso: la entrega es en 0-2 días. Misma regla que arriba: sin
+// fecha de entrega no hay nada que esté "por vencer".
 function isProximaRetraso(a){
-  if(a.estado==='completado'||isRetrasada(a)) return false;
-  var fv=fechaVenc(a);
-  if(!fv) return false;
-  var diff=Math.round((new Date(fv+'T12:00:00')-new Date(today()+'T12:00:00'))/864e5);
+  if(!a || a.estado==='completado' || isRetrasada(a)) return false;
+  var f=String(a.fecha_fin||'').trim();
+  if(!f) return false;
+  var diff=Math.round((new Date(f+'T12:00:00')-new Date(today()+'T12:00:00'))/864e5);
   return diff>=0&&diff<=2;
 }
 function isBlocked(a){
@@ -18649,7 +18667,10 @@ function _trTarjetaHTML(a){
   var d=f?Math.round((new Date(hoy+'T12:00:00')-new Date(f+'T12:00:00'))/864e5):null;
   var quien=_responsables(a.personal_nombre)[0]||'Sin asignar';
   var meta=esc(_recNom(a.area)||a.area||'—')+' · '+esc(quien);
-  if(!f)            meta+=' · sin fecha';
+  /* «Sin fecha» se mira contra fecha_fin, no contra fechaVenc: fechaVenc cae
+     en `fecha` y entonces una partida sin entrega salía con días vencidos
+     inventados de una fecha que no es la de entrega. */
+  if(!String(a.fecha_fin||'').trim()) meta+=' · sin fecha';
   else if(d>0)      meta+=' · <i>'+d+' día'+(d!==1?'s':'')+' vencida</i>';
   else if(d===0)    meta+=' · para hoy';
   else              meta+=' · '+fmtF(f);
