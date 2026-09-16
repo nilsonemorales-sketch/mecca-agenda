@@ -858,7 +858,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_92';
+const APP_VERSION='20260916_93';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5615,6 +5615,59 @@ function _actSelCorrerPlan(modo, dias){ return _correrPlan(_actSelIds(), modo, d
 /* La aritmetica de correr fechas, sobre CUALQUIER lista de ids. Antes solo
    sabia leer del modo seleccion; el panel del apartamento necesita lo mismo y
    dos copias de esta regla terminarian moviendo distinto. */
+/* ── CORRER LA CADENA ─────────────────────────────────────────────────
+   Mover fechas es 247 de las últimas 349 ediciones, y esta obra se planifica
+   en cadenas: «esto va detrás de la pintura de Jordy», «una semana después
+   del piso». Hasta v92 mover un eslabón NO movía los de atrás — había que ir
+   partida por partida, así que las cadenas se desarmaban solas al primer
+   atraso.
+
+   Se OFRECE, no se hace solo: si el resto se corre o se aprieta para
+   recuperar es una decisión de quien manda la obra, no del app. */
+/* Cuántos días se corrió la entrega. Solo cuenta hacia ADELANTE: si la fecha
+   se adelanta, la cadena no se adelanta sola —que la predecesora termine
+   antes no significa que el contratista de atrás pueda entrar antes—, y si no
+   había fecha de entrega no hay corrimiento que arrastrar. */
+function _diasCorridos(a, nuevaFin){
+  var antes=String((a&&a.fecha_fin)||'').trim();
+  if(!antes || !nuevaFin) return 0;
+  var d=Math.round((new Date(nuevaFin+'T12:00:00')-new Date(antes+'T12:00:00'))/864e5);
+  return d>0?d:0;
+}
+function _sucesoresAbiertos(id){
+  return (S.acts||[]).filter(function(a){
+    return a.estado!=='completado' && getPreds(a).indexOf(id)>=0;
+  });
+}
+/* Toda la cadena hacia abajo, no solo el eslabón siguiente: si la pintura se
+   corre una semana, también el piso que va detrás y el zócalo que va detrás
+   del piso. `vistos` corta los ciclos — un amarre mal hecho no puede colgar
+   el app en un bucle infinito. */
+function _cadenaAbajo(id){
+  var vistos={}, orden=[], cola=[String(id)];
+  vistos[String(id)]=1;
+  while(cola.length){
+    _sucesoresAbiertos(cola.shift()).forEach(function(s){
+      if(vistos[s.id]) return;
+      vistos[s.id]=1; orden.push(s); cola.push(s.id);
+    });
+  }
+  return orden;
+}
+async function _ofrecerCorrerCadena(id, dias, detalle){
+  if(!canEdit() || !(dias>0)) return 0;
+  var hijos=_cadenaAbajo(id);
+  if(!hijos.length) return 0;
+  var r=_correrPlan(hijos.map(function(x){ return x.id; }), 'correr', dias);
+  if(!r.plan.length) return 0;
+  var n=r.plan.length;
+  if(!confirm(n+' partida'+(n!==1?'s':'')+' espera'+(n!==1?'n':'')+' por esta.\n\n'+
+      '¿Correrla'+(n!==1?'s':'')+' también '+dias+' día'+(dias!==1?'s':'')+'?'+
+      (r.saltadas?'\n\n('+r.saltadas+' se quedan como están: sin fecha o ya iguales.)':''))) return 0;
+  await _correrAplicar(r.plan, detalle||('corrida '+dias+' días con la cadena'));
+  return n;
+}
+
 function _correrPlan(ids, modo, dias){
   var hoy=today(), plan=[], saltadas=0;
   (ids||[]).forEach(function(id){
@@ -7110,6 +7163,7 @@ async function actFilaCorrer(id,dias){
   try{
     await Acciones.editar(id, r.plan[0].patch, 'corrida '+dias+' días desde la lista');
     showToast('Movida '+dias+' días ✓');
+    await _ofrecerCorrerCadena(id, dias, 'corrida '+dias+' días (arrastrada por su cadena)');
   }catch(e){ showToast('No se pudo mover: '+(e&&e.message||''),'err'); }
   if(!_repintarFila(id)) renderActs();
 }
@@ -7158,9 +7212,11 @@ async function actFilaFecha(id,f){
   var cambios={fecha_fin:f};
   // El fin nunca antes del inicio — la misma regla que en el recorrido.
   if((a.fecha_inicio||'') && a.fecha_inicio>f) cambios.fecha_inicio=f;
+  var _corrio=_diasCorridos(a,f);
   try{
     await Acciones.editar(id,cambios,'entrega → '+f+' (desde la lista)');
     showToast('Entrega: '+f+' ✓');
+    await _ofrecerCorrerCadena(id,_corrio,'corrida '+_corrio+' días (arrastrada por su cadena)');
   }catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err'); }
   if(!_repintarFila(id)) renderActs();
 }
@@ -18489,6 +18545,7 @@ async function trCorrer(id,dias){
   try{
     await Acciones.editar(id, r.plan[0].patch, 'corrida '+dias+' días (en Obra)');
     showToast('Movida '+dias+' días ✓');
+    await _ofrecerCorrerCadena(id, dias, 'corrida '+dias+' días (arrastrada por su cadena)');
   }catch(e){ showToast('No se pudo mover: '+(e&&e.message||''),'err',5000); return; }
   _trSale(id);
 }
@@ -18498,9 +18555,11 @@ async function trFecha(id,f){
   var cambios={fecha_fin:f};
   // El fin nunca antes del inicio — la misma regla de _correrPlan.
   if((a.fecha_inicio||'') && a.fecha_inicio>f) cambios.fecha_inicio=f;
+  var _corrio=_diasCorridos(a,f);
   try{
     await Acciones.editar(id, cambios, 'entrega → '+f+' (en Obra)');
     showToast('Entrega: '+fmtF(f)+' ✓');
+    await _ofrecerCorrerCadena(id,_corrio,'corrida '+_corrio+' días (arrastrada por su cadena)');
   }catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err',5000); return; }
   _trSale(id);
 }

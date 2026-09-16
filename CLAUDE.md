@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v92 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v93 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v92 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v93 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -313,9 +313,25 @@ registro de tiempo y «Verificar trabajo» están tras un pliegue
 leerla. Igual en el Plan del día: organizar, filtrar y buscar van tras un
 solo botón (`S.planFiltrosOpen`).
 
+**Correr la cadena (v93).** Al mover una entrega hacia adelante, el app
+ofrece correr también lo que espera por ella: `_cadenaAbajo(id)` baja por
+TODA la cadena (no solo el eslabón siguiente) con un `vistos` que corta los
+ciclos, y `_ofrecerCorrerCadena(id, dias, detalle)` pregunta y aplica.
+Lo usan `actFilaCorrer`, `trCorrer`, `actFilaFecha` y `trFecha`.
+
+Tres reglas de esto:
+- **Se ofrece, no se hace solo.** Si el resto se corre o se aprieta para
+  recuperar es decisión de quien manda la obra.
+- **Solo hacia adelante** (`_diasCorridos` devuelve 0 si se adelanta): que la
+  predecesora termine antes no significa que el de atrás pueda entrar antes.
+- **La aritmética no se toca.** Una partida sin fecha de entrega pero con
+  inicio recibe el corrimiento en el inicio y no se le inventa entrega —
+  igual que en el modo selección y en el panel. Hacer una excepción aquí
+  sería una segunda regla de fechas.
+
 La aritmética de mover fechas vive en **un solo sitio**, `_correrPlan(ids,
-modo, dias)` y `_correrAplicar(plan, detalle)` — los usan el modo selección
-y el panel del apartamento. El fin nunca queda antes del inicio, «correr»
+modo, dias)` y `_correrAplicar(plan, detalle)` — los usan el modo selección,
+el panel del apartamento y ahora la cadena. El fin nunca queda antes del inicio, «correr»
 se salta las que no tienen fecha, y se guarda de 5 en 5.
 
 **Cerrar una partida va SIEMPRE por `marcarActCompletada()`**, que es quien
@@ -547,6 +563,8 @@ pertenece a ningún nivel.
 
 | **v92** — «383 vencidas» y «58 sin fecha» eran **las mismas 58 contadas dos veces**: `isRetrasada` usaba `fechaVenc()`, que cae en `fecha` cuando no hay `fecha_fin`. Las pastillas no sumaban contra nada. | Separa el helper de MOSTRAR del criterio de CONTAR. `fechaVenc` está bien para pintar y ordenar; para contar hay que preguntar por el campo exacto. Dos pastillas que se solapan hacen que el usuario deje de creerle a las dos. |
 | **v92** — la comparación lado a lado dijo «idénticos» y no probaba nada: en los datos de `comp87` las «sin fecha» tienen `fecha` FUTURA, así que nunca caían en vencidas. El caso real —sin `fecha_fin` y con `fecha` pasada— no estaba montado. | Que la comparación no cambie puede querer decir que el cambio no rompió nada… o que los datos de prueba no tienen el caso. Antes de darla por buena, comprueba que el escenario existe **en el doble**, no solo en la base. |
+
+| **v93** — una prueba dio por hecho que una partida sin fecha de entrega no debía tocarse al correr la cadena. `_correrPlan` sí le corre el INICIO (tiene uno) y no le inventa entrega — que es lo mismo que hace en el modo selección y en el panel. La equivocada era la prueba. | Cuando una prueba choca con una regla que ya vive en un solo sitio, sospecha primero de la prueba. Cambiar el criterio «solo para este caso» crea una segunda aritmética de fechas, y dos criterios terminan dando números distintos. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
