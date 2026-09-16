@@ -583,7 +583,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       </div>
     </div>
     <div class="sb-toggle">
-      <div class="sb-section" style="padding:0;flex:1">NAVEGACIÓN <span style="font-size:9px;opacity:.5;font-weight:400">(H O A E R C)</span></div>
+      <div class="sb-section" style="padding:0;flex:1">NAVEGACIÓN <span id="sb-atajos" style="font-size:9px;opacity:.5;font-weight:400">(H O A E R)</span></div>
       <button class="sb-toggle-btn" id="sb-toggle-btn" onclick="toggleSidebar()" title="Ocultar menú">
         <svg id="sb-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
@@ -858,7 +858,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_97';
+const APP_VERSION='20260916_98';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -9750,7 +9750,10 @@ document.addEventListener('keydown',function(e){
   else if(k==='a'){goTab('actividades');}
   else if(k==='e'){goTab('equipo');}
   else if(k==='r'){goTab('reportes');}
-  else if(k==='c'){goTab('compras');}
+  /* La C es de la caja de órdenes. NO se le pone Compras aquí: hasta v97 había
+     dos ramas `k==='c'` y la segunda era inalcanzable, así que el atajo de
+     Compras nunca respondió aunque el cartel lo anunciara. Compras se alcanza
+     por el menú, la barra de abajo y el cajón. */
 });
 
 async function togglePrioridadAct(id){
@@ -20029,6 +20032,9 @@ try{ goTab('terreno'); }catch(e){ console.warn('arranque:',e); }
 /* La voz escondida (v97): el botón de la cabecera es HTML fijo, así que se
    apaga aquí. No se borra del HTML — encender la bandera lo devuelve. */
 try{ if(!vozActiva()){ var _bc=document.getElementById('btn-cmd'); if(_bc) _bc.style.display='none'; } }catch(e){}
+/* El cartel de atajos dice SOLO los que responden. Nunca se anuncia una tecla
+   que no hace nada: con la voz apagada la C no abre nada. */
+try{ if(vozActiva()){ var _sa=document.getElementById('sb-atajos'); if(_sa) _sa.textContent='(H O A E R C)'; } }catch(e){}
 /* La cola se arranca y se vacía de entrada: si ayer se quedó algo sin señal,
    sale hoy al abrir el app, sin que nadie tenga que acordarse. */
 try{ _colaArrancar(); _colaPintar(); setTimeout(colaEnviar, 2500); }catch(e){ console.warn('cola:',e); }
