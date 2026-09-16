@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v97 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v98 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,11 +109,13 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v97 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v98 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
-Compras · Bitácora · Gerencia · Metodología.** El app **abre en Obra**
+Compras · Bitácora · Gerencia · Partidas · Metodología.** *Partidas* es un
+módulo de PRUEBA y solo lo ve el administrador — ver «El Catálogo de
+partidas» más abajo. El app **abre en Obra**
 desde v88: se usa de pie en la obra, y Obra pregunta dónde estás en vez de
 soltar 1.080 renglones. Actividades queda a un toque en la barra de abajo.
 
@@ -212,6 +214,7 @@ mismos botones que cualquier otra.
 | **Lo que nadie ha mirado hace semanas** | **Obra**, atajo «Sin mirar» — `FILTRO_HUECO.congeladas`, `_ordenCongeladas()`, `_diasQuieta()` |
 | **Mover TODAS las fechas de un sitio o un contratista** | **Obra**, barra «Todas a…» — `trTodas()` |
 | **REGISTRAR con todo el detalle** | **Actividades**, al abrir la fila — `_actFilaRapidaHTML()`, `_actFilaAvanceHTML()` |
+| **Agrupar la obra en capítulos y partidas (PRUEBA)** | **Partidas** — `renderCatalogo()`, solo admin. Ver «El Catálogo de partidas» en §3.5 |
 
 
 **Los botones de registrar son LOS MISMOS en los dos sitios, aunque no
@@ -312,6 +315,76 @@ un apartamento borraba la descripción a medio escribir.
 de ÓRDENES y crea la partida por esa vía — **no vuelca el texto en el campo**.
 Volcarlo exigiría tocar el motor de voz, que apunta a `#cmd-txt` en nueve
 sitios y en el iPhone va por el Worker. No se hizo a ciegas.
+
+### El Catálogo de partidas (v98) — un módulo de PRUEBA que se borra entero
+
+Pestaña **«Partidas»**, `style="display:none"` en el HTML y encendida con
+`isAdmin()` en el mismo bloque que Gerencia. Por dentro se llama `catalogo`:
+vista `view-catalogo`, contenedor `c-catalogo`, funciones `cat*` / `_cat*`.
+
+**Contesta UNA pregunta**, con las palabras del dueño: *«una prueba para ver
+si conviene que el app trabaje de esa manera, para que sea más eficiente dar
+seguimiento y no haya tantas actividades que se sientan sueltas»*. No es una
+pantalla de trabajo: es un experimento con fecha de caducidad.
+
+**Tres niveles: Capítulo → Partida → Actividad.** Once capítulos fijos más
+«Sin clasificar», en `CAT_CAPITULOS`. **El capítulo es LO QUE SE ENTREGA; el
+oficio es QUIÉN LO HACE** — por eso «Terminación de muros y techos» junta a
+cuatro contratistas: el comprador ve una pared. **El área NO es un nivel**: la
+platea de la caseta es obra gris en el Parqueo, y si el área fuera capítulo la
+plomería quedaría partida en dos.
+
+**Cómo se borra entero, si no convence.** Son tres cosas y ninguna toca nada
+más:
+
+```sql
+DROP TABLE IF EXISTS obra_partida_actividad;
+DROP TABLE IF EXISTS obra_partidas;
+```
+
+…más el bloque `CATÁLOGO DE PARTIDAS` de `index.html` y sus seis enganches
+(`tab-catalogo`, `view-catalogo`, `dw-catalogo`, `'catalogo'` en `VIEWS`, la
+rama de `goTab` y las dos líneas de la puerta de admin). **El app queda
+exactamente como en v97.** Está montado así a propósito.
+
+Cuatro reglas que no se tocan:
+
+- **CERO escrituras a `obra_actividades`.** Ni una. El amarre es una **tabla**
+  (`obra_partida_actividad`), **no una columna**: por eso se borra sin rastro y
+  ninguna consulta de las que ya existen tiene que enterarse. Si la prueba
+  gradúa, **entonces** se vuelve columna.
+- **Cero cambios en pantallas existentes.** Verificado lado a lado con v97:
+  los ocho filtros y las cuatro vistas dan byte a byte lo mismo.
+- **La siembra no es automática.** `catSembrar()` dice cuántas va a crear
+  antes de crearlas y se puede repetir. Crea **una partida por `descripcion`
+  distinta, tal cual** — sin agrupar, sin limpiar, sin adivinar.
+- **La siembra VA A QUEDAR MAL en varios sitios y está bien.** El ayudante que
+  limpia desagües de duchas cae en Limpieza y no en Plomería; el pintor de
+  fachada cae con la pintura interior. **No lo arregles con más reglas**: que
+  el dueño lo mueva viendo la lista **es** la prueba.
+
+**Las cuatro herramientas** —Juntar, Renombrar (en la ficha), Mover y Bajar a
+actividad— desactivan (`activo=false`), **nunca borran**, y todas se pueden
+deshacer con `catDeshacer()` mientras no se salga de la pantalla.
+
+**El escogedor es una PANTALLA, no un `prompt()`** (`S.catPick`,
+`_catPickHTML`). Escoger entre 394 partidas escribiendo un número en un
+diálogo del navegador no se hace ni de pie ni sentado — mismo motivo que el
+alta del Repaso en v95.
+
+**`_catAplicarNumeros` renumera de un tirón**, con un upsert por `id`, no con
+un PATCH por partida: renumerar el capítulo 3 son 99 partidas, y 99 peticiones
+seguidas con la señal a medias es medio minuto colgado. Medido: **229 → 43**
+escrituras en el recorrido completo de la prueba.
+
+**Cuidado con `sbTodo` en tablas sin `id`.** Pagina con `Range` y exige un
+orden único: si el path no trae `order=…id.…`, le pega `order=id.asc`. Por eso
+`obra_partida_actividad` tiene una columna `id` que el app nunca lee — sin ella
+la lectura devolvía 400 y el catálogo no cargaba nunca. Su clave primaria sigue
+siendo `actividad_id`: **una actividad, una partida.**
+
+**Toda actividad creada en el app nace sin partida** y cae en la bandeja de
+sueltas. No se bloquea el alta pidiendo partida: en obra eso no se contesta.
 
 ### Las cadenas (`predecesoras`) — dos formatos en la misma columna
 
@@ -561,6 +634,9 @@ mismo:**
   ninguna puerta — pasó en v77 y es el mismo error de v58
 - **«Todas» carga las 2.465 filas**, no 500. El tope viejo estaba
   invertido: pedir «ver todas» lo bajaba
+- **El Catálogo de partidas no escribe en `obra_actividades`.** Cuenta los
+  `PATCH` y `POST` interceptados y mira a qué tabla va cada uno: los de
+  `obra_actividades` tienen que ser **cero**
 
 Sobre el orden de las áreas: **alfabético no sirve.** Para los once
 apartamentos suena igual — `N2 — Apto 2A` … `N7 — Penthouse B` ya ordenan
@@ -693,6 +769,7 @@ orden de magnitud.
 | `obra_ordenes_compra` | Órdenes a proveedores. | ~72 |
 | `obra_config` | Configuración compartida, clave/valor. | — |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
+| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98).** Se borran las dos y el app queda como en v97. Ver «El Catálogo de partidas» en §3.5. | 394 / 1.077 al sembrar |
 
 ### Cosas de los datos que hay que saber
 

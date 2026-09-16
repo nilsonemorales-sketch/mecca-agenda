@@ -681,6 +681,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="tab" data-tab="replan" id="tab-replan" onclick="goTab('replan')" style="display:none">Replnf.</div>
     <div class="tab" data-tab="bitacora" id="tab-bitacora" onclick="goTab('bitacora')" style="display:none">Bitácora</div>
     <div class="tab" data-tab="gerencia" id="tab-gerencia" onclick="goTab('gerencia')" style="display:none">Gerencia</div>
+    <div class="tab" data-tab="catalogo" id="tab-catalogo" onclick="goTab('catalogo')" style="display:none">Partidas</div>
     <div class="tab" data-tab="metodologia" onclick="goTab('metodologia')">Metodología</div>
   </div>
 
@@ -754,6 +755,11 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="view" id="view-gerencia">
       <div id="c-gerencia"></div>
     </div>
+    <!-- PARTIDAS: catalogo de prueba, solo admin. Vive en dos tablas propias
+         y no toca obra_actividades. Ver el bloque CATALOGO DE PARTIDAS. -->
+    <div class="view" id="view-catalogo">
+      <div id="c-catalogo"></div>
+    </div>
     <div class="view" id="view-metodologia">
       <div id="c-metodologia"></div>
     </div>
@@ -826,6 +832,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <button class="dw-btn" onclick="goTabD('compras')">Órdenes de Compra</button>
     <button class="dw-btn" id="dw-plan" onclick="goTabD('plan')">Planificación — Last Planner</button>
     <button class="dw-btn" id="dw-gerencia" onclick="goTabD('gerencia')" style="display:none">Gerencia — Panel ejecutivo</button>
+    <button class="dw-btn" id="dw-catalogo" onclick="goTabD('catalogo')" style="display:none">Partidas — Catálogo (prueba)</button>
     <button class="dw-btn" onclick="goTabD('metodologia')">Metodología — Guía de uso</button>
   </div>
   <div class="dw-sec">
@@ -2686,7 +2693,10 @@ function updateUserUI(){
   // Gerencia: solo admin (tab superior + entrada del drawer)
   var tG=document.getElementById('tab-gerencia'); if(tG) tG.style.display=adminVal?'':'none';
   var dG=document.getElementById('dw-gerencia'); if(dG) dG.style.display=adminVal?'':'none';
-  if(!adminVal&&(S.currentTab==='plan'||S.currentTab==='replan'||S.currentTab==='gerencia')) goTab('obra');
+  // Partidas (catalogo de prueba): mismo trato que Gerencia
+  var tC=document.getElementById('tab-catalogo'); if(tC) tC.style.display=adminVal?'':'none';
+  var dC=document.getElementById('dw-catalogo'); if(dC) dC.style.display=adminVal?'':'none';
+  if(!adminVal&&(S.currentTab==='plan'||S.currentTab==='replan'||S.currentTab==='gerencia'||S.currentTab==='catalogo')) goTab('obra');
   // Bitácora: visible para admin e ingenieros (canEdit)
   var tBit=document.getElementById('tab-bitacora');
   var editVal=canEdit();
@@ -15063,7 +15073,7 @@ function goTab(tab){
     tab=legacyMap[tab];
   }
   S.currentTab=tab;
-  var VIEWS=['obra','terreno','equipo','reportes','fotos','planos','compras','plan','replan','bitacora','metodologia','gerencia'];
+  var VIEWS=['obra','terreno','equipo','reportes','fotos','planos','compras','plan','replan','bitacora','metodologia','gerencia','catalogo'];
   VIEWS.forEach(function(v){
     var el=document.getElementById('view-'+v);
     if(el) el.classList.toggle('active', v===tab);
@@ -15095,6 +15105,757 @@ function goTab(tab){
     if(!isAdmin()){ showToast('Solo el administrador puede ver Gerencia','warn',3000); goTab('obra'); return; }
     renderGerencia(); loadGerencia().then(function(){ if(S.currentTab==='gerencia') renderGerencia(); });
   }
+  else if(tab==='catalogo') {
+    if(!isAdmin()){ showToast('Solo el administrador puede ver Partidas','warn',3000); goTab('obra'); return; }
+    renderCatalogo();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CATÁLOGO DE PARTIDAS — MÓDULO DE PRUEBA, SOLO ADMIN        (v98)
+//
+// Contesta UNA pregunta: ¿le conviene a la obra trabajar con partidas
+// agrupadas, o las actividades sueltas están bien así? Palabras del dueño:
+// «una prueba para ver si conviene que el app trabaje de esa manera, para
+// que sea más eficiente dar seguimiento y no haya tantas actividades que se
+// sientan sueltas».
+//
+// DOS REGLAS QUE MANDAN SOBRE TODO LO DEMÁS:
+//
+// 1. NO TOCA NADA DE LO QUE YA FUNCIONA. Ni una columna nueva en
+//    obra_actividades, ni un cambio en ninguna pantalla existente. Vive en
+//    dos tablas propias —`obra_partidas` y `obra_partida_actividad`— y en
+//    esta pestaña. Si la prueba no convence:
+//        DROP TABLE obra_partida_actividad;  DROP TABLE obra_partidas;
+//    y se borra este bloque. El app queda EXACTAMENTE como hoy.
+// 2. El dueño no escribe el catálogo a mano. El app lo siembra de los datos
+//    reales y él lo cura adentro, viéndolo. Ya se intentó por conversación y
+//    no sirvió: nadie juzga un catálogo sin verlo.
+//
+// El amarre es una TABLA, no una columna en obra_actividades. Así el módulo
+// se borra sin rastro y ninguna consulta de las que ya existen tiene que
+// enterarse. Si la prueba gradúa, entonces sí se vuelve columna.
+// ══════════════════════════════════════════════════════════════
+
+/* El capítulo es LO QUE SE ENTREGA; el oficio es QUIÉN LO HACE. Por eso
+   «Terminación de muros y techos» junta a Secre, Eddy, Jordy y Félix: el
+   comprador ve una pared, no cuatro contratistas. Decidido con el dueño.
+   El ÁREA no es un nivel: la platea de la caseta es obra gris en el Parqueo.
+   Si el área fuera capítulo, la plomería quedaría partida en dos y nunca se
+   sabría cuánta plomería lleva la obra. */
+var CAT_CAPITULOS=[
+  {n:1,  t:'Preliminares'},
+  {n:2,  t:'Estructura y obra gris'},
+  {n:3,  t:'Terminación de muros y techos'},
+  {n:4,  t:'Pisos y revestimientos'},
+  {n:5,  t:'Carpintería y ebanistería'},
+  {n:6,  t:'Instalaciones sanitarias y gas'},
+  {n:7,  t:'Instalaciones eléctricas'},
+  {n:8,  t:'Ventanería y cristalería'},
+  {n:9,  t:'Herrería'},
+  {n:10, t:'Áreas exteriores y obras complementarias'},
+  {n:11, t:'Limpieza y entrega'},
+  {n:0,  t:'Sin clasificar'}
+];
+function _catCapNom(n){
+  var c=CAT_CAPITULOS.find(function(x){ return x.n===Number(n); });
+  return c?c.t:'Sin clasificar';
+}
+/* Del oficio al capítulo. La siembra VA A QUEDAR MAL en varios sitios y está
+   bien: el ayudante limpia desagües de duchas, que es plomería, y cae en
+   Limpieza; el pintor de fachada cae con la pintura interior. NO se arregla
+   con más reglas — que el dueño lo mueva viendo la lista ES la prueba. */
+var CAT_OFICIO_CAP={
+  'Varillero':2, 'Encofrados':2, 'Vaciado Hormigon':2, 'Hormigon Celular':2,
+  'Mdo andamios':2, 'Albañileria y Foam':2,
+  'Albañilería':3, 'Sheetrock':3, 'Estuco':3, 'Pintura':3, 'Pintor Fachada':3,
+  'Pisero':4, 'Pulidor':4, 'Topes y revestimientos en cuarzo':4,
+  'Ebanista':5, 'Carpintería':5,
+  'Plomería e Instalaciones':6, 'Equipo de Bombeo':6,
+  'Electricidad':7, 'Eléctrico Alta Tensión y Planta':7,
+  'Seguridad y Bajo Voltaje':7, 'Aires acondicionados':7,
+  'Ventanero':8,
+  'Herrero':9,
+  'Ayudante':11
+};
+function _catCapDeOficio(of){
+  var c=CAT_OFICIO_CAP[String(of||'').trim()];
+  return c==null?0:c;
+}
+
+// ── Los datos del catálogo. Viven aparte de S.acts y no lo tocan. ──
+function _catP(){ return S.catPartidas||[]; }
+function _catA(){ return S.catAmarres||{}; }        // actividad_id -> partida_id
+function _catPorId(id){ return _catP().find(function(p){ return p.id===id; })||null; }
+function _catActivas(){ return _catP().filter(function(p){ return p.activo!==false; }); }
+
+/* «Abierta» = el mismo criterio que usa el resto del app, más el porcentaje.
+   Si esto no coincide, los conteos del catálogo no cuadran con la lista. */
+function _catAbiertas(){
+  return (S.acts||[]).filter(function(a){
+    return a.estado!=='completado' && (parseInt(a.porcentaje,10)||0)<100;
+  });
+}
+function _catActsDe(pid){
+  var am=_catA();
+  return _catAbiertas().filter(function(a){ return am[a.id]===pid; })
+    .sort(function(x,y){
+      return _revOrdenArea(String(x.area||'').trim())-_revOrdenArea(String(y.area||'').trim()) ||
+             String(x.area||'').localeCompare(String(y.area||''));
+    });
+}
+function _catSueltas(){
+  var am=_catA();
+  return _catAbiertas().filter(function(a){ return !am[a.id]; });
+}
+/* El oficio sale del PRIMER responsable: `personal_nombre` puede traer varios
+   separados por coma y el primero es de quien es el trabajo. */
+function _catOficioDe(a){
+  var n=_responsables(a&&a.personal_nombre)[0]||'';
+  var p=(S.personal||[]).find(function(x){ return x.nombre===n; });
+  return (p&&p.oficio)||'';
+}
+
+async function cargarCatalogo(){
+  try{
+    var ps=await sbTodo('obra_partidas?order=capitulo.asc,numero.asc');
+    var as=await sbTodo('obra_partida_actividad?select=actividad_id,partida_id');
+    S.catPartidas=ps||[];
+    var m={}; (as||[]).forEach(function(r){ m[r.actividad_id]=r.partida_id; });
+    S.catAmarres=m; S.catError='';
+    return true;
+  }catch(e){
+    /* No se deja en null: renderCatalogo volvería a pedirlo en cada repintado
+       y quedaría dando vueltas contra una base que no contesta. */
+    S.catError=(e&&e.message)||'no se pudo cargar';
+    return false;
+  }
+}
+
+/* Renumera un capítulo entero: «3.1», «3.2»… Se llama después de cualquier
+   cosa que cambie qué partidas tiene un capítulo. */
+function _catRenumerar(cap){
+  var ps=_catActivas().filter(function(p){ return Number(p.capitulo)===Number(cap); })
+    .sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre)); });
+  var cambios=[];
+  ps.forEach(function(p,i){
+    var nn=cap+'.'+(i+1);
+    if(p.numero!==nn){ p.numero=nn; cambios.push({id:p.id, numero:nn}); }
+  });
+  return cambios;
+}
+/* De un tirón, no una por una. Renumerar el capítulo 3 —99 partidas— mandaba
+   99 PATCH seguidos; en la obra, con la señal a medias, eso es medio minuto
+   colgado. El upsert por la clave `id` hace lo mismo en una sola petición, y
+   las demás columnas ni se mencionan: PostgREST solo toca las que van. */
+async function _catAplicarNumeros(cambios){
+  cambios=cambios||[];
+  for(var i=0;i<cambios.length;i+=200)
+    await sb('obra_partidas',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+             body:JSON.stringify(cambios.slice(i,i+200).map(function(c){
+               return {id:c.id, numero:c.numero}; }))});
+}
+async function _catRenumerarCaps(caps){
+  var vistos={}, todos=[];
+  (caps||[]).forEach(function(c){ if(c!=null && !vistos[c]){ vistos[c]=1; todos=todos.concat(_catRenumerar(Number(c))); } });
+  await _catAplicarNumeros(todos);
+}
+
+// ══ LA SIEMBRA ══════════════════════════════════════════════
+/* NO es automática al cargar: se toca un botón, dice cuántas va a crear, y se
+   puede repetir borrando lo sembrado. Una partida por cada `descripcion`
+   distinta, TAL CUAL — sin agrupar, sin limpiar, sin adivinar. */
+function _catPlanSiembra(){
+  var ab=_catAbiertas(), grupos={}, orden=[];
+  ab.forEach(function(a){
+    var k=String(a.descripcion||'(sin descripción)');
+    if(!grupos[k]){ grupos[k]=[]; orden.push(k); }
+    grupos[k].push(a);
+  });
+  var partidas=[], amarres=[], porCap={};
+  orden.forEach(function(desc){
+    var items=grupos[desc];
+    var of=_catOficioDe(items[0]);
+    var cap=_catCapDeOficio(of);
+    // `aplica`: apartamento solo si TODAS caen en un «N# — Apto …»
+    var soloAptos=items.every(function(a){ return REC_ORDEN.indexOf(String(a.area||'').trim())>=0; });
+    var id='p'+uid();
+    partidas.push({id:id, capitulo:cap, numero:'', nombre:desc, oficio:of,
+                   unidad:'', aplica:soloAptos?'apartamento':'general',
+                   codigo_presupuesto:'', activo:true});
+    (porCap[cap]=porCap[cap]||[]).push(id);
+    items.forEach(function(a){ amarres.push({actividad_id:a.id, partida_id:id}); });
+  });
+  // numeración inicial, por capítulo y por nombre
+  Object.keys(porCap).forEach(function(cap){
+    var ids=porCap[cap];
+    partidas.filter(function(p){ return ids.indexOf(p.id)>=0; })
+      .sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre)); })
+      .forEach(function(p,i){ p.numero=cap+'.'+(i+1); });
+  });
+  return {partidas:partidas, amarres:amarres, actividades:ab.length};
+}
+
+async function catSembrar(){
+  if(!isAdmin()) return;
+  var plan=_catPlanSiembra();
+  var hay=_catP().length;
+  if(hay){
+    if(!confirm('Ya hay '+hay+' partidas sembradas.\n\n'+
+      'Se BORRA todo lo sembrado —y lo que hayas curado— y se vuelve a empezar con '+
+      plan.partidas.length+' partidas y '+plan.amarres.length+' amarres.\n\n'+
+      'No se toca ninguna actividad de la obra.\n\n¿Seguro?')) return;
+  } else {
+    if(!confirm('Se van a crear '+plan.partidas.length+' partidas y '+
+      plan.amarres.length+' amarres, de '+plan.actividades+' actividades abiertas.\n\n'+
+      'No se toca ninguna actividad de la obra.\n\n¿Seguro?')) return;
+  }
+  setSS('syncing','Sembrando el catálogo...');
+  try{
+    if(hay){
+      await sb('obra_partida_actividad?actividad_id=neq.__nada__',{method:'DELETE',prefer:'return=minimal'});
+      await sb('obra_partidas?id=neq.__nada__',{method:'DELETE',prefer:'return=minimal'});
+    }
+    // De 200 en 200: mandar 394 filas de un tirón satura la conexión en obra.
+    for(var i=0;i<plan.partidas.length;i+=200)
+      await sb('obra_partidas',{method:'POST',prefer:'return=minimal',
+               body:JSON.stringify(plan.partidas.slice(i,i+200))});
+    for(i=0;i<plan.amarres.length;i+=200)
+      await sb('obra_partida_actividad',{method:'POST',prefer:'return=minimal',
+               body:JSON.stringify(plan.amarres.slice(i,i+200))});
+    logCambio('sembrado','partida','catalogo','Catálogo de partidas',
+              plan.partidas.length+' partidas y '+plan.amarres.length+' amarres');
+    await cargarCatalogo();
+    S.catUndo=null; S.catSel={};
+    setSS('ok','✓ Catálogo sembrado');
+    showToast(plan.partidas.length+' partidas creadas ✓');
+  }catch(e){
+    setSS('err','Error al sembrar');
+    showToast('No se pudo sembrar: '+((e&&e.message)||''),'err',6000);
+  }
+  renderCatalogo();
+}
+
+// ══ DESHACER ════════════════════════════════════════════════
+/* Un retrato de lo que había antes de la última herramienta. Se pierde al
+   salir de la pantalla — es un deshacer de la sesión, no un historial. */
+function _catGuardarUndo(que, ids){
+  S.catUndo={que:que,
+    partidas:_catP().filter(function(p){ return ids.indexOf(p.id)>=0; })
+                    .map(function(p){ return Object.assign({},p); }),
+    amarres:Object.assign({}, _catA())};
+}
+async function catDeshacer(){
+  var u=S.catUndo; if(!u) return;
+  setSS('syncing','Deshaciendo...');
+  try{
+    for(var i=0;i<u.partidas.length;i++){
+      var p=u.partidas[i];
+      await sb('obra_partidas?id=eq.'+p.id,{method:'PATCH',prefer:'return=minimal',
+        body:JSON.stringify({capitulo:p.capitulo,numero:p.numero,nombre:p.nombre,
+          oficio:p.oficio,unidad:p.unidad,aplica:p.aplica,
+          codigo_presupuesto:p.codigo_presupuesto,activo:p.activo})});
+    }
+    /* Los amarres se reponen uno a uno, solo los que cambiaron: así no hay que
+       adivinar cuáles movió la herramienta. */
+    var cambiados=[];
+    Object.keys(u.amarres).forEach(function(aid){
+      if(_catA()[aid]!==u.amarres[aid]) cambiados.push({actividad_id:aid, partida_id:u.amarres[aid]});
+    });
+    for(i=0;i<cambiados.length;i+=200)
+      await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+               body:JSON.stringify(cambiados.slice(i,i+200))});
+    logCambio('deshecho','partida','catalogo','Catálogo de partidas','Deshecho: '+u.que);
+    await cargarCatalogo();
+    var caps=u.partidas.map(function(x){ return x.capitulo; });
+    S.catUndo=null; S.catSel={};
+    await _catRenumerarCaps(caps);
+    setSS('ok','✓ Deshecho');
+    showToast('Deshecho ✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo deshacer: '+((e&&e.message)||''),'err',6000); }
+  renderCatalogo();
+}
+
+// ══ LAS CUATRO HERRAMIENTAS ═════════════════════════════════
+function _catSelIds(){ var m=S.catSel||{}; return Object.keys(m).filter(function(k){ return m[k]; }); }
+function catSelToggle(id){ (S.catSel=S.catSel||{})[id]=!S.catSel[id]; renderCatalogo(); }
+
+/* El escogedor es una PANTALLA, no un prompt() numerado. Escoger entre 60
+   partidas escribiendo un número en un diálogo del navegador no se hace de
+   pie ni sentado. Mismo motivo que el alta del Repaso en v95. */
+function catPickCerrar(){ S.catPick=null; renderCatalogo(); _catArriba(); }
+function _catPickBuscar(v){
+  if(!S.catPick) return;
+  S.catPick.q=v;
+  var el=document.getElementById('cat-pick-lista');
+  if(el) el.innerHTML=_catPickListaHTML();   // NO repinta entero: el campo pierde el foco
+}
+
+/* JUNTAR — las actividades de todas pasan a la que queda; las otras se
+   DESACTIVAN, no se borran. Así se puede deshacer y queda el rastro. */
+function catJuntar(){
+  var ids=_catSelIds();
+  if(ids.length<2){ showToast('Marca dos o más partidas','warn'); return; }
+  S.catPick={modo:'juntar', ids:ids, q:''};
+  renderCatalogo(); _catArriba();
+}
+async function catJuntarEn(quedaId){
+  var ids=(S.catPick&&S.catPick.ids)||[];
+  var queda=_catPorId(quedaId); if(!queda) return;
+  var otras=ids.map(_catPorId).filter(function(p){ return p && p.id!==queda.id; });
+  var mover=[]; otras.forEach(function(p){
+    _catActsDe(p.id).forEach(function(a){ mover.push({actividad_id:a.id, partida_id:queda.id}); });
+  });
+  if(!confirm('«'+queda.nombre+'» se queda con '+(_catActsDe(queda.id).length+mover.length)+
+      ' actividades.\n\nLas otras '+otras.length+' se desactivan.\n\n¿Seguro?')) return;
+  _catGuardarUndo('juntar', ids);
+  S.catPick=null;
+  setSS('syncing','Juntando...');
+  try{
+    for(var i=0;i<mover.length;i+=200)
+      await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+               body:JSON.stringify(mover.slice(i,i+200))});
+    for(i=0;i<otras.length;i++)
+      await sb('obra_partidas?id=eq.'+otras[i].id,{method:'PATCH',prefer:'return=minimal',
+               body:JSON.stringify({activo:false})});
+    logCambio('juntadas','partida',queda.id,queda.nombre,
+              otras.length+' partidas juntadas en esta ('+mover.length+' actividades)');
+    var caps=otras.map(function(p){ return p.capitulo; }).concat([queda.capitulo]);
+    await cargarCatalogo();
+    await _catRenumerarCaps(caps);
+    S.catSel={}; setSS('ok','✓'); showToast('Juntadas ✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo juntar: '+((e&&e.message)||''),'err',6000); }
+  renderCatalogo();
+}
+
+/* BAJAR A ACTIVIDAD — «esto no es una partida, es un paso de aquella». El
+   caso del masillado y el primer dentro de la pintura de muros. */
+function catBajar(){
+  var ids=_catSelIds();
+  if(ids.length!==1){ showToast('Marca UNA partida para bajarla','warn'); return; }
+  S.catPick={modo:'bajar', ids:ids, q:''};
+  renderCatalogo(); _catArriba();
+}
+async function catBajarEn(destinoId){
+  var baja=_catPorId((S.catPick&&S.catPick.ids||[])[0]);
+  var destino=_catPorId(destinoId);
+  if(!baja||!destino||baja.id===destino.id) return;
+  var mover=_catActsDe(baja.id).map(function(a){ return {actividad_id:a.id, partida_id:destino.id}; });
+  if(!confirm('«'+destino.nombre+'» se queda con '+(_catActsDe(destino.id).length+mover.length)+
+      ' actividades.\n\n«'+baja.nombre+'» se desactiva.\n\n¿Seguro?')) return;
+  _catGuardarUndo('bajar',[baja.id]);
+  S.catPick=null;
+  setSS('syncing','Bajando...');
+  try{
+    for(var i=0;i<mover.length;i+=200)
+      await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+               body:JSON.stringify(mover.slice(i,i+200))});
+    await sb('obra_partidas?id=eq.'+baja.id,{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify({activo:false})});
+    logCambio('bajada','partida',baja.id,baja.nombre,'bajada dentro de «'+destino.nombre+'»');
+    await cargarCatalogo();
+    await _catRenumerarCaps([baja.capitulo, destino.capitulo]);
+    S.catSel={}; setSS('ok','✓'); showToast('Bajada ✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo bajar: '+((e&&e.message)||''),'err',6000); }
+  renderCatalogo();
+}
+
+async function catMover(cap){
+  var ids=_catSelIds();
+  if(!ids.length){ showToast('Marca una o más partidas','warn'); return; }
+  var caps=[Number(cap)];
+  ids.forEach(function(id){ var p=_catPorId(id); if(p) caps.push(Number(p.capitulo)); });
+  _catGuardarUndo('mover', ids);
+  setSS('syncing','Moviendo...');
+  try{
+    for(var i=0;i<ids.length;i++)
+      await sb('obra_partidas?id=eq.'+ids[i],{method:'PATCH',prefer:'return=minimal',
+               body:JSON.stringify({capitulo:Number(cap)})});
+    logCambio('movidas','partida',ids[0],_catCapNom(cap),
+              ids.length+' partidas movidas al capítulo '+cap+' — '+_catCapNom(cap));
+    await cargarCatalogo();
+    // se renumeran el capítulo de destino Y los de origen
+    await _catRenumerarCaps(caps);
+    S.catSel={}; setSS('ok','✓'); showToast(ids.length+' movidas ✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo mover: '+((e&&e.message)||''),'err',6000); }
+  renderCatalogo();
+}
+
+/* La ficha se edita campo a campo, con `onchange` (o sea, al salir del campo):
+   así el repintado nunca cae mientras se está escribiendo. */
+async function catFichaSet(pid, campo, valor){
+  var p=_catPorId(pid); if(!p) return;
+  var v=(campo==='capitulo')?Number(valor):String(valor==null?'':valor).trim();
+  if(String(p[campo]==null?'':p[campo])===String(v)) return;
+  if(campo==='nombre' && !v){ renderCatalogo(); return; }   // no se deja sin nombre
+  _catGuardarUndo(campo==='nombre'?'renombrar':'editar',[pid]);
+  var antes=p[campo];
+  try{
+    var body={}; body[campo]=v;
+    await sb('obra_partidas?id=eq.'+pid,{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify(body)});
+    /* NO toca la descripción de ninguna actividad: el nombre de la partida y
+       lo que dice la actividad son dos cosas distintas. */
+    logCambio(campo==='nombre'?'renombrada':'editada','partida',pid,
+              campo==='nombre'?v:p.nombre, campo+': «'+(antes||'—')+'» → «'+(v||'—')+'»');
+    await cargarCatalogo();
+    if(campo==='nombre'||campo==='capitulo') await _catRenumerarCaps([antes,v,p.capitulo]);
+    showToast('Guardado ✓');
+  }catch(e){ showToast('No se pudo guardar: '+((e&&e.message)||''),'err',6000); }
+  renderCatalogo();
+}
+
+// ── Asignar una suelta ──
+function catAsignarSuelta(actId){
+  S.catPick={modo:'asignar', act:actId, ids:[], q:''};
+  renderCatalogo(); _catArriba();
+}
+async function catAsignarEn(pid){
+  var actId=S.catPick&&S.catPick.act; if(!actId) return;
+  var a=Acciones.porId(actId);
+  S.catPick=null;
+  setSS('syncing','Amarrando...');
+  try{
+    var cap=null;
+    if(pid==='__nueva__'){
+      pid='p'+uid();
+      cap=_catCapDeOficio(_catOficioDe(a));
+      await sb('obra_partidas',{method:'POST',prefer:'return=minimal',body:JSON.stringify([{
+        id:pid, capitulo:cap, numero:'',
+        nombre:(a&&a.descripcion)||'Nueva partida', oficio:_catOficioDe(a),
+        unidad:'', aplica:REC_ORDEN.indexOf(String((a&&a.area)||'').trim())>=0?'apartamento':'general',
+        codigo_presupuesto:'', activo:true}])});
+    }
+    await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+             body:JSON.stringify([{actividad_id:actId, partida_id:pid}])});
+    logCambio('asignada','partida',pid,(a&&a.descripcion)||'','actividad amarrada desde la bandeja de sueltas');
+    await cargarCatalogo();
+    if(cap!==null) await _catRenumerarCaps([cap]);
+    setSS('ok','✓'); showToast('Amarrada ✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo amarrar: '+((e&&e.message)||''),'err',6000); }
+  renderCatalogo();
+}
+
+// ══ LAS PANTALLAS ═══════════════════════════════════════════
+function catIrCap(c){ S.catCap=(c===null?null:Number(c)); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catSel={}; renderCatalogo(); _catArriba(); }
+function catIrPartida(id){ S.catPartida=id; S.catPick=null; renderCatalogo(); _catArriba(); }
+function catVolver(){
+  if(S.catPick) S.catPick=null;
+  else if(S.catPartida) S.catPartida=null;
+  else { S.catCap=null; S.catSueltas=false; S.catSel={}; }
+  renderCatalogo(); _catArriba();
+}
+function catSueltasAbrir(){ S.catSueltas=true; S.catCap=null; S.catPartida=null; S.catPick=null; renderCatalogo(); _catArriba(); }
+function _catArriba(){ var v=document.getElementById('view-catalogo'); if(v) v.scrollTop=0; }
+function catReintentar(){ S.catError=''; S.catPartidas=undefined; renderCatalogo(); }
+
+function renderCatalogo(){
+  var el=document.getElementById('c-catalogo'); if(!el) return;
+  if(!isAdmin()){
+    el.innerHTML='<div class="empty" style="padding:40px 20px">'+
+      '<div style="font-size:32px;margin-bottom:12px">🔒</div>'+
+      '<div style="font-size:14px;color:var(--text2)">Solo el administrador</div></div>';
+    return;
+  }
+  if(S.catError){
+    el.innerHTML='<div class="empty" style="padding:36px 16px;color:var(--text3)">'+
+      'No se pudo cargar el catálogo.<br><span style="font-size:11px;font-family:var(--mono)">'+
+      esc(S.catError)+'</span><br><button onclick="catReintentar()" style="'+_catBS+';margin-top:14px;'+
+      'border:1.5px solid var(--accent);background:var(--accent-fill);color:var(--accent-on)">Reintentar</button></div>';
+    return;
+  }
+  if(S.catPartidas===undefined){
+    el.innerHTML='<div class="empty" style="padding:40px 20px;color:var(--text3)">Cargando el catálogo…</div>';
+    if(!S._catCargando){
+      S._catCargando=true;
+      cargarCatalogo().then(function(){ S._catCargando=false; if(S.currentTab==='catalogo') renderCatalogo(); });
+    }
+    return;
+  }
+  try{
+    if(S.catPick)             el.innerHTML=_catPickHTML();
+    else if(S.catSueltas)     el.innerHTML=_catSueltasHTML();
+    else if(S.catPartida)     el.innerHTML=_catFichaHTML();
+    else if(S.catCap!==null && S.catCap!==undefined) el.innerHTML=_catPartidasHTML();
+    else                      el.innerHTML=_catCapitulosHTML();
+  }catch(e){
+    console.warn('renderCatalogo:',e);
+    el.innerHTML='<div class="empty" style="padding:36px 16px;color:var(--text3)">'+
+      'No se pudo pintar esta pantalla.<br><button onclick="catIrCap(null)" style="'+_catBS+';margin-top:14px;'+
+      'border:1.5px solid var(--accent);background:var(--accent-fill);color:var(--accent-on)">Volver</button></div>';
+  }
+}
+
+/* 44px de alto mínimo en TODO lo que se toca: se usa con el dedo. */
+var _catBS='min-height:44px;border-radius:11px;cursor:pointer;font-family:var(--font);'+
+           'font-size:12.5px;font-weight:800;padding:0 12px';
+var _catVolverBS='background:none;border:0;color:var(--text2);font-size:13px;font-weight:600;'+
+                 'cursor:pointer;padding:8px 0;font-family:var(--font);min-height:44px';
+
+function _catCabecera(){
+  var ab=_catAbiertas().length, am=_catAbiertas().filter(function(a){ return _catA()[a.id]; }).length;
+  return '<div style="display:flex;align-items:baseline;gap:10px;margin:2px 0 3px;flex-wrap:wrap">'+
+      '<div style="font-size:20px;font-weight:800;letter-spacing:-.3px">Catálogo de partidas</div>'+
+      '<div style="font-size:11px;color:var(--amber);font-weight:800;font-family:var(--mono)">PRUEBA</div>'+
+    '</div>'+
+    /* El número que contesta la pregunta de la prueba. */
+    '<div style="margin:10px 0 14px;padding:11px 13px;border-radius:12px;background:var(--bg2);'+
+      'border:1.5px solid '+(ab-am?'var(--amber)':'var(--green)')+'">'+
+      '<div style="font-size:13.5px;font-weight:800">'+am+' de '+ab+' actividades amarradas</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
+        (ab-am)+' siguen sueltas</div>'+
+    '</div>';
+}
+
+function _catCapitulosHTML(){
+  var ps=_catActivas();
+  var h=_catCabecera();
+  if(!ps.length){
+    var plan=_catPlanSiembra();
+    h+='<div style="padding:16px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--border)">'+
+      '<div style="font-size:13.5px;font-weight:700;line-height:1.5;margin-bottom:10px">'+
+        'El catálogo está vacío. Se siembra de las actividades abiertas: <b>'+plan.partidas.length+
+        ' partidas</b> de <b>'+plan.actividades+' actividades</b>.</div>'+
+      '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
+        'Va a quedar mal en varios sitios — el ayudante que limpia desagües cae en Limpieza y no en '+
+        'Plomería. Eso es lo esperado: moverlo viendo la lista <b>es</b> la prueba.</div>'+
+      '<button onclick="catSembrar()" style="'+_catBS+';width:100%;min-height:52px;border:1.5px solid var(--green);'+
+        'background:var(--green-light);color:var(--green);font-size:14px">Sembrar el catálogo</button>'+
+    '</div>';
+    return h;
+  }
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">';
+  CAT_CAPITULOS.forEach(function(c){
+    var mias=ps.filter(function(p){ return Number(p.capitulo)===c.n; });
+    var nAct=0; mias.forEach(function(p){ nAct+=_catActsDe(p.id).length; });
+    h+='<button onclick="catIrCap('+c.n+')" style="'+_catBS+';min-height:70px;width:100%;'+
+      'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
+      'text-align:left;border:1.5px solid '+(c.n===0&&mias.length?'var(--amber)':'var(--border2)')+';'+
+      'background:var(--bg2);color:var(--text)">'+
+      '<span style="font-size:12.5px;font-weight:800;line-height:1.25">'+c.n+'. '+esc(c.t)+'</span>'+
+      '<span style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+
+        mias.length+' partidas · '+nAct+' actividades</span></button>';
+  });
+  h+='</div>';
+  var sue=_catSueltas().length;
+  h+='<button onclick="catSueltasAbrir()" style="'+_catBS+';width:100%;margin-top:12px;min-height:52px;'+
+    'border:1.5px dashed '+(sue?'var(--amber)':'var(--border2)')+';background:none;'+
+    'color:'+(sue?'var(--amber)':'var(--text3)')+'">Sin partida ('+sue+') — la bandeja de sueltas</button>';
+  h+='<button onclick="catSembrar()" style="'+_catBS+';width:100%;margin-top:8px;border:1.5px solid var(--border2);'+
+    'background:var(--bg2);color:var(--text3);font-weight:700">Volver a sembrar (borra lo curado)</button>';
+  return h;
+}
+
+function _catHerramientasHTML(){
+  var n=_catSelIds().length;
+  return '<div style="margin:10px 0 12px;padding:10px 12px;border-radius:12px;background:var(--bg3);'+
+    'border:1.5px solid '+(n?'var(--accent)':'var(--border)')+'">'+
+    '<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
+      'text-transform:uppercase;margin-bottom:8px">'+(n?n+' marcadas':'Marca partidas para usar las herramientas')+'</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+      '<button onclick="catJuntar()" style="'+_catBS+';flex:1;min-width:92px;border:1.5px solid '+(n>1?'var(--accent)':'var(--border2)')+';'+
+        'background:var(--bg2);color:'+(n>1?'var(--accent)':'var(--text3)')+'">Juntar</button>'+
+      '<button onclick="catBajar()" style="'+_catBS+';flex:1;min-width:120px;border:1.5px solid '+(n===1?'var(--accent)':'var(--border2)')+';'+
+        'background:var(--bg2);color:'+(n===1?'var(--accent)':'var(--text3)')+'">Bajar a actividad</button>'+
+    '</div>'+
+    '<select onchange="if(this.value!==\'\'){var v=this.value;this.value=\'\';catMover(v);}" '+
+      'style="width:100%;margin-top:6px;min-height:44px;padding:0 10px;border:1.5px solid '+(n?'var(--accent)':'var(--border2)')+';'+
+      'border-radius:11px;background:var(--bg2);color:var(--text);font-size:12.5px;font-family:var(--font)">'+
+      '<option value="">Mover a otro capítulo…</option>'+
+      CAT_CAPITULOS.map(function(c){ return '<option value="'+c.n+'">'+c.n+'. '+esc(c.t)+'</option>'; }).join('')+
+    '</select>'+
+    (S.catUndo?'<button onclick="catDeshacer()" style="'+_catBS+';width:100%;margin-top:6px;'+
+      'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
+      'Deshacer «'+esc(S.catUndo.que)+'»</button>':'')+
+  '</div>';
+}
+
+function _catPartidasHTML(){
+  var cap=Number(S.catCap);
+  var ps=_catActivas().filter(function(p){ return Number(p.capitulo)===cap; }).sort(_catOrdenNum);
+  var nAct=0; ps.forEach(function(p){ nAct+=_catActsDe(p.id).length; });
+  var sel=S.catSel||{};
+  var h='<button onclick="catVolver()" style="'+_catVolverBS+'">‹ Capítulos</button>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:15px;font-weight:800">'+cap+'. '+esc(_catCapNom(cap))+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
+        ps.length+' partidas · '+nAct+' actividades</div>'+
+    '</div></div>'+
+    _catHerramientasHTML();
+  if(!ps.length) return h+'<div class="empty" style="padding:30px;color:var(--text3)">Este capítulo está vacío.</div>';
+  h+=ps.map(function(p){
+    var n=_catActsDe(p.id).length, on=!!sel[p.id];
+    return '<div class="cat-fila" style="display:flex;gap:8px;align-items:stretch;margin-bottom:7px">'+
+      '<button onclick="catSelToggle(\''+p.id+'\')" aria-label="Marcar" style="'+_catBS+';flex:0 0 48px;'+
+        'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+        'background:'+(on?'var(--accent-fill)':'var(--bg2)')+';color:'+(on?'var(--accent-on)':'var(--text3)')+';'+
+        'font-size:16px">'+(on?'✓':'')+'</button>'+
+      '<button onclick="catIrPartida(\''+p.id+'\')" style="'+_catBS+';flex:1;min-width:0;text-align:left;'+
+        'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
+        'padding:10px 12px;border:1.5px solid var(--border);background:var(--bg2);color:var(--text)">'+
+        '<span style="font-size:13px;font-weight:700;line-height:1.3">'+esc(p.numero)+'  '+esc(p.nombre)+'</span>'+
+        '<span style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+
+          (p.oficio?esc(p.oficio)+' · ':'')+n+' actividad'+(n!==1?'es':'')+'</span>'+
+      '</button></div>';
+  }).join('');
+  return h;
+}
+/* «3.10» detrás de «3.9»: comparando el texto quedaría al revés. */
+function _catOrdenNum(a,b){
+  var na=parseInt(String(a.numero).split('.')[1]||'0',10), nb=parseInt(String(b.numero).split('.')[1]||'0',10);
+  return na-nb || String(a.nombre).localeCompare(String(b.nombre));
+}
+
+function _catFichaHTML(){
+  var p=_catPorId(S.catPartida);
+  if(!p) return '<button onclick="catVolver()" style="'+_catVolverBS+'">‹ Volver</button>'+
+    '<div class="empty" style="padding:30px;color:var(--text3)">Esa partida ya no está.</div>';
+  var acts=_catActsDe(p.id);
+  var estBS='min-height:44px;width:100%;padding:0 10px;border:1.5px solid var(--border2);border-radius:11px;'+
+            'background:var(--bg2);color:var(--text);font-size:13px;font-family:var(--font)';
+  var lab=function(t){ return '<div style="font-size:10px;font-weight:700;color:var(--text3);'+
+      'text-transform:uppercase;letter-spacing:.5px;margin:0 0 4px">'+t+'</div>'; };
+  var texto=function(campo,t,ph){
+    return '<div style="flex:1;min-width:140px;margin-bottom:8px">'+lab(t)+
+      '<input type="text" value="'+esc(p[campo])+'" placeholder="'+ph+'" '+
+      'onchange="catFichaSet(\''+p.id+'\',\''+campo+'\',this.value)" style="'+estBS+'"></div>';
+  };
+  var h='<button onclick="catVolver()" style="'+_catVolverBS+'">‹ '+esc(_catCapNom(p.capitulo))+'</button>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:15px;font-weight:800;line-height:1.3">'+esc(p.numero)+'  '+esc(p.nombre)+'</div>'+
+    '</div></div>'+
+    '<div style="padding:12px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--border);margin-bottom:14px">'+
+      '<div style="margin-bottom:8px">'+lab('Nombre')+
+        '<textarea rows="2" onchange="catFichaSet(\''+p.id+'\',\'nombre\',this.value)" '+
+        'style="'+estBS+';min-height:56px;padding:9px 10px;line-height:1.4;resize:vertical">'+esc(p.nombre)+'</textarea></div>'+
+      '<div style="margin-bottom:8px">'+lab('Capítulo')+
+        '<select onchange="catFichaSet(\''+p.id+'\',\'capitulo\',this.value)" style="'+estBS+'">'+
+        CAT_CAPITULOS.map(function(c){
+          return '<option value="'+c.n+'"'+(Number(p.capitulo)===c.n?' selected':'')+'>'+c.n+'. '+esc(c.t)+'</option>';
+        }).join('')+'</select></div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+        texto('oficio','Oficio','quién lo hace')+
+        texto('unidad','Unidad','m², ud, ml…')+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+        '<div style="flex:1;min-width:140px;margin-bottom:8px">'+lab('Aplica')+
+          '<select onchange="catFichaSet(\''+p.id+'\',\'aplica\',this.value)" style="'+estBS+'">'+
+          '<option value="apartamento"'+(p.aplica==='apartamento'?' selected':'')+'>Por apartamento</option>'+
+          '<option value="general"'+(p.aplica!=='apartamento'?' selected':'')+'>General</option>'+
+          '</select></div>'+
+        texto('codigo_presupuesto','Código de presupuesto','del presupuesto')+
+      '</div>'+
+    '</div>'+
+    '<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
+      'text-transform:uppercase;margin-bottom:8px">Sus '+acts.length+' actividades</div>';
+  if(!acts.length) return h+'<div class="empty" style="padding:24px;color:var(--text3)">Sin actividades amarradas.</div>';
+  h+=acts.map(function(a){
+    var pct=parseInt(a.porcentaje,10)||0;
+    var est=a.estado==='en-progreso'?('en proceso · '+pct+'%'):a.estado==='pausada'?'interrumpida':'sin empezar';
+    return '<div class="cat-act" style="padding:10px 12px;margin-bottom:6px;border-radius:11px;background:var(--bg2);'+
+      'border:1px solid var(--border)">'+
+      '<div style="font-size:12.5px;font-weight:700;line-height:1.35">'+esc(a.descripcion)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
+        esc(_recNom(a.area)||a.area||'—')+' · '+est+'</div></div>';
+  }).join('');
+  return h;
+}
+
+/* Minusculas y sin tildes, para buscar sin pelear con el teclado. No se usa
+   `normalizar` del motor Parecido: vive dentro de su cierre y no es global. */
+function _catNorm(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+function _catPickListaHTML(){
+  var pk=S.catPick||{}, q=_catNorm(pk.q);
+  var lista;
+  if(pk.modo==='juntar') lista=(pk.ids||[]).map(_catPorId).filter(Boolean);
+  else {
+    var fuera=(pk.ids||[])[0];
+    lista=_catActivas().filter(function(p){ return p.id!==fuera; }).sort(_catOrdenNum);
+    if(q) lista=lista.filter(function(p){ return _catNorm(p.nombre).indexOf(q)>=0; });
+  }
+  var accion=pk.modo==='juntar'?'catJuntarEn':pk.modo==='bajar'?'catBajarEn':'catAsignarEn';
+  var h='';
+  if(pk.modo==='asignar'){
+    var a=Acciones.porId(pk.act);
+    h+='<button onclick="catAsignarEn(\'__nueva__\')" style="'+_catBS+';width:100%;margin-bottom:10px;'+
+      'min-height:52px;border:1.5px dashed var(--green);background:none;color:var(--green);text-align:left">'+
+      '+ Crear una partida nueva con este nombre</button>';
+    if(!a) h+='';
+  }
+  if(!lista.length) return h+'<div class="empty" style="padding:24px;color:var(--text3)">Nada que escoger.</div>';
+  h+=lista.slice(0,80).map(function(p){
+    var n=_catActsDe(p.id).length;
+    return '<button class="cat-pick" onclick="'+accion+'(\''+p.id+'\')" style="'+_catBS+';width:100%;margin-bottom:6px;'+
+      'text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
+      'padding:10px 12px;min-height:52px;border:1.5px solid var(--border);background:var(--bg2);color:var(--text)">'+
+      '<span style="font-size:13px;font-weight:700;line-height:1.3">'+esc(p.numero)+'  '+esc(p.nombre)+'</span>'+
+      '<span style="font-size:11px;color:var(--text3);font-family:var(--mono)">'+n+' actividad'+(n!==1?'es':'')+'</span>'+
+    '</button>';
+  }).join('');
+  if(lista.length>80) h+='<div style="font-size:11.5px;color:var(--text3);padding:10px 0">'+
+    'Se ven las primeras 80 de '+lista.length+'. Busca por nombre para afinar.</div>';
+  return h;
+}
+
+function _catPickHTML(){
+  var pk=S.catPick||{};
+  var tit, sub;
+  if(pk.modo==='juntar'){
+    tit='¿Cuál nombre se queda?';
+    sub='Las actividades de las otras '+((pk.ids||[]).length-1)+' pasan a la que escojas.';
+  } else if(pk.modo==='bajar'){
+    var b=_catPorId((pk.ids||[])[0]);
+    tit='¿Dentro de cuál?';
+    sub='«'+((b&&b.nombre)||'')+'» se desactiva y sus actividades pasan a la que escojas.';
+  } else {
+    var a=Acciones.porId(pk.act);
+    tit='¿A qué partida?';
+    sub=(a&&a.descripcion)||'';
+  }
+  return '<button onclick="catPickCerrar()" style="'+_catVolverBS+'">‹ Cancelar</button>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:15px;font-weight:800">'+esc(tit)+'</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:3px;line-height:1.4">'+esc(sub)+'</div>'+
+    '</div></div>'+
+    (pk.modo==='juntar'?'':
+      '<input type="text" placeholder="Buscar por nombre…" value="'+esc(pk.q)+'" '+
+      'oninput="_catPickBuscar(this.value)" style="width:100%;min-height:44px;padding:0 12px;'+
+      'border:1.5px solid var(--border2);border-radius:11px;background:var(--bg2);color:var(--text);'+
+      'font-size:13px;font-family:var(--font);margin-bottom:10px">')+
+    '<div id="cat-pick-lista">'+_catPickListaHTML()+'</div>';
+}
+
+function _catSueltasHTML(){
+  var sue=_catSueltas();
+  var h='<button onclick="catVolver()" style="'+_catVolverBS+'">‹ Capítulos</button>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:15px;font-weight:800">Sin partida</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
+        sue.length+' actividad'+(sue.length!==1?'es':'')+' abierta'+(sue.length!==1?'s':'')+' sin amarrar</div>'+
+    '</div></div>'+
+    /* Toda actividad creada desde cualquier parte del app nace sin partida y
+       cae aquí. NO se bloquea el alta pidiendo partida: en obra eso no se
+       contesta de pie. */
+    '<div style="font-size:11.5px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
+      'Todo lo que se crea en el app nace aquí, sin partida. Se le asigna una cuando haya tiempo.</div>';
+  if(!sue.length) return h+'<div class="empty" style="padding:30px;color:var(--text3)">Nada suelto. Todo amarrado ✓</div>';
+  h+=sue.slice(0,200).map(function(a){
+    return '<div class="cat-suelta" style="display:flex;gap:8px;align-items:stretch;margin-bottom:7px">'+
+      '<div style="flex:1;min-width:0;padding:10px 12px;border-radius:11px;background:var(--bg2);'+
+        'border:1px solid var(--border)">'+
+        '<div style="font-size:12.5px;font-weight:700;line-height:1.35">'+esc(a.descripcion)+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
+          esc(_recNom(a.area)||a.area||'—')+(a.personal_nombre?' · '+esc(_responsables(a.personal_nombre)[0]||''):'')+'</div>'+
+      '</div>'+
+      '<button onclick="catAsignarSuelta(\''+a.id+'\')" style="'+_catBS+';flex:0 0 96px;'+
+        'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent)">Asignar</button>'+
+    '</div>';
+  }).join('');
+  if(sue.length>200) h+='<div style="font-size:11.5px;color:var(--text3);padding:10px 0">'+
+    'Se ven las primeras 200 de '+sue.length+'.</div>';
+  return h;
 }
 
 // ── DRAWER & NAV HELPERS ──────────────────────────
