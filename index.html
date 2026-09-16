@@ -145,6 +145,9 @@ body{padding-left:var(--sl);padding-right:var(--sr)}
   background:var(--bg3);color:var(--text2);font-size:12.5px;font-weight:800;cursor:pointer;font-family:var(--font)}
 .ob-r button.on{border-color:var(--accent);background:var(--accent-fill);color:var(--accent-on)}
 .ob-r button.ok{flex:1.3;border-color:var(--green);background:var(--green-light);color:var(--green)}
+/* "Sigue igual" es la salida más común de una visita y la etiqueta más larga:
+   se le da más ancho y cuerpo propio para que no quede como un botón menor. */
+.ob-r button.igual{flex:1.45;border-color:var(--border2);background:var(--bg2);color:var(--text2)}
 .ob-r button.mic{flex:0 0 54px}
 .ob-vacio{text-align:center;padding:36px 16px;color:var(--text3);font-size:13.5px;line-height:1.6}
 .ob-cont{display:inline-block;background:var(--green-light);color:var(--green);border-radius:99px;
@@ -855,7 +858,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260914_88';
+const APP_VERSION='20260916_89';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -18248,6 +18251,9 @@ function _trCola(sinCruce){
       ? arr.filter(function(a){ return _trEsDe(a,c.q); })
       : arr.filter(function(a){ return (a.area||'').trim()===c.q; });
   }
+  /* Con el atajo de "sin mirar" manda el orden por tiempo quieta —el mismo de
+     Actividades—: ver arriba las más olvidadas es para lo que sirve. */
+  if(c.t==='atajo' && c.v==='congeladas') return _ordenCongeladas(arr);
   return _trOrdenar(arr);
 }
 /* personal_nombre trae varios nombres separados por coma, y puede venir
@@ -18310,6 +18316,29 @@ async function trFecha(id,f){
   }catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err',5000); return; }
   _trSale(id);
 }
+/* ── «SIGUE IGUAL» ────────────────────────────────────────────────────
+   La tercera salida de una visita, y la más común: miras la partida y no ha
+   cambiado nada. NO toca la actividad —ni estado, ni avance, ni fecha—; solo
+   deja constancia en obra_cambios de que alguien la miró.
+
+   Por qué hacía falta: el app sabía qué estaba vencido pero no qué ya habías
+   mirado, así que cada mañana salían las mismas 383 revueltas — las que
+   resolviste ayer y las que nadie ha visto en tres semanas, iguales en
+   pantalla. Sin este rastro no hay forma de separarlas.
+
+   El botón existía desde v76 (Acciones.revisar) pero solo dentro del modo
+   selección de la lista: se usó CERO veces en toda la obra. Aquí está donde
+   se trabaja. */
+async function trIgual(id){
+  if(!canEdit()) return;
+  try{ await Acciones.revisar(id); }
+  catch(e){ showToast('No se pudo registrar: '+(e&&e.message||''),'err',5000); return; }
+  // La misma función que usa la lista: el rastro local vive en un solo sitio.
+  _actMarcarRevisadaLocal(id);
+  showToast('Revisada — sigue igual ✓');
+  _trSale(id);
+}
+
 function trListo(id){
   if(!canEdit()) return;
   /* Cerrar SIEMPRE por marcarActCompletada. Con setAvance(100) cerraría
@@ -18379,7 +18408,7 @@ function _trHomeHTML(){
   '<div style="font-size:12.5px;color:var(--text3);line-height:1.5">Toca dónde estás y salen solo esas partidas, con los botones puestos.</div>';
 
   if(nHechas){
-    h+='<div style="margin-top:11px"><span class="ob-cont">'+nHechas+' marcada'+(nHechas!==1?'s':'')+' hoy</span>'+
+    h+='<div style="margin-top:11px"><span class="ob-cont">'+nHechas+' revisada'+(nHechas!==1?'s':'')+' hoy</span>'+
       '<button onclick="trVerHechas()" style="margin-left:8px;min-height:38px;padding:0 13px;border-radius:99px;'+
       'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);font-size:12px;font-weight:700;'+
       'cursor:pointer;font-family:var(--font)">'+(S._trVerHechas?'Ocultarlas':'Verlas')+'</button></div>';
@@ -18389,8 +18418,15 @@ function _trHomeHTML(){
      vencidas, así que casi siempre se empieza por ahí. */
   var venc=ab.filter(FILTRO_HUECO.retrasadas),
       curso=ab.filter(function(a){ return a.estado==='en-progreso'; }),
-      sinf=ab.filter(FILTRO_HUECO.sinfecha);
+      sinf=ab.filter(FILTRO_HUECO.sinfecha),
+      /* "Sin mirar" usa el MISMO criterio que las congeladas de Actividades
+         (FILTRO_HUECO.congeladas, 15 días sin un solo cambio). Dos copias del
+         criterio terminan contando distinto y el usuario deja de creerle. */
+      sinmirar=_congeladasListo()?ab.filter(FILTRO_HUECO.congeladas):[];
   h+='<div class="ob-h">Lo que aprieta</div><div class="ob-grid">'+
+    /* "Sin mirar" va primero: de las vencidas, la mayoría ya las revisaste —
+       lo que se pierde de vista es lo que nadie toca hace semanas. */
+    (sinmirar.length?_trPillHTML('Sin mirar',sinmirar,"trIr('atajo','congeladas')",true):'')+
     (venc.length?_trPillHTML('Vencidas',venc,"trIr('atajo','retrasadas')",true):'')+
     (curso.length?_trPillHTML('Empezadas',curso,"trIr('atajo','curso')"):'')+
     (sinf.length?_trPillHTML('Sin fecha',sinf,"trIr('atajo','sinfecha')"):'')+
@@ -18432,7 +18468,10 @@ function _trTituloCtx(){
   var c=S.trCtx;
   if(c.t==='apto')  return _recNom(c.v)||c.v;
   if(c.t==='quien') return c.v;
-  return c.v==='retrasadas'?'Vencidas':c.v==='curso'?'Empezadas':'Sin fecha';
+  return c.v==='retrasadas'?'Vencidas'
+       : c.v==='curso'?'Empezadas'
+       : c.v==='congeladas'?('Sin mirar hace '+CONGELADA_DIAS+'+ días')
+       : 'Sin fecha';
 }
 
 function _trTarjetaHTML(a){
@@ -18446,6 +18485,14 @@ function _trTarjetaHTML(a){
   else              meta+=' · '+fmtF(f);
   var pct=parseInt(a.porcentaje)||0;
   if(pct) meta+=' · '+pct+'%';
+  /* Cuánto lleva sin que nadie la toque. Es el dato de seguimiento: una
+     vencida que miraste ayer y una que nadie ha visto en tres semanas no son
+     lo mismo, y hasta ahora se veían igual. Solo desde 7 días: por debajo es
+     ruido. */
+  if(_congeladasListo()){
+    var dq=_diasQuieta(a);
+    if(dq>=7) meta+=' · <i>quieta '+dq+'d</i>';
+  }
 
   var id=_trQ(a.id), vie=_finDeSemana();
   var h='<div class="ob-card" id="ob-'+esc(a.id)+'">'+
@@ -18458,10 +18505,15 @@ function _trTarjetaHTML(a){
       }).join('')+
       '<button class="ok" onclick="trListo(\''+id+'\')">✓ Ya está</button>'+
     '</div>'+
+    /* Cuatro botones por fila y no cinco: a 390px el quinto deja las
+       etiquetas ilegibles al sol. Entra "Sigue igual" y sale "Hoy" —poner la
+       entrega en hoy sobre una partida que tienes delante es lo que menos se
+       hace de las tres fechas, y sigue estando en Actividades. */
     '<div class="ob-r">'+
+      '<button class="igual" onclick="trIgual(\''+id+'\')">Sigue igual</button>'+
       '<button onclick="trCorrer(\''+id+'\',7)">+1 sem</button>'+
-      (vie!==hoy?'<button onclick="trFecha(\''+id+'\',\''+vie+'\')">Viernes</button>':'')+
-      '<button onclick="trFecha(\''+id+'\',\''+hoy+'\')">Hoy</button>'+
+      (vie!==hoy?'<button onclick="trFecha(\''+id+'\',\''+vie+'\')">Viernes</button>'
+               :'<button onclick="trFecha(\''+id+'\',\''+hoy+'\')">Hoy</button>')+
       '<button class="mic" onclick="dictarSobre(\''+id+'\')" aria-label="Dictar">🎙️</button>'+
     '</div>';
   }
@@ -18522,7 +18574,7 @@ function _trColaHTML(){
 
   if(!cola.length){
     h+='<div class="ob-vacio">'+(Object.keys(_trHechas()).length
-      ? 'Nada más por aquí — ya marcaste todo lo de este sitio.'
+      ? 'Nada más por aquí — ya revisaste todo lo de este sitio.'
       : 'Aquí no queda nada abierto.')+'</div>';
   } else {
     h+=cola.map(_trTarjetaHTML).join('');
@@ -18532,6 +18584,17 @@ function _trColaHTML(){
 
 function renderTerreno(){
   var host=document.getElementById('c-terreno'); if(!host) return;
+  /* El historial reciente hace falta para "sin mirar" y para los días quieta.
+     Actividades lo pedía sola al pintarse; desde v88 la pantalla de entrada es
+     Obra, así que sin esto el atajo no aparecía nunca. Va aparte y sin
+     esperarlo: la pantalla se pinta ya, y cuando llega se repinta. */
+  if(S.tocadasRecientes===undefined && !S._tocadasCargando){
+    S._tocadasCargando=true;
+    loadTocadasRecientes().then(function(){
+      S._tocadasCargando=false;
+      if(S.currentTab==='terreno') renderTerreno();
+    });
+  }
   if(!(S.acts||[]).length){
     host.innerHTML='<div class="ob-vacio">Cargando la obra…</div>';
     return;

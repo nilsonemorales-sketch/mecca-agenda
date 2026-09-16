@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v88 — 14 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v89 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v88 (14 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v89 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -159,6 +159,31 @@ La diferencia con Actividades **no es la piel, son tres cosas**:
    toque opcional, y se calcula sobre la cola **sin** cruce (si no, al
    elegir uno los demás desaparecen y no hay forma de cambiar).
 
+**Las cuatro salidas de una visita** están en la tarjeta, en dos filas de
+cuatro: `25% · 50% · 75% · ✓ Ya está` y `Sigue igual · +1 sem · Viernes ·
+🎙️`. **Cuatro por fila y no cinco**: a 390px el quinto deja las etiquetas
+ilegibles al sol. Por eso en v89 entró «Sigue igual» y salió «Hoy» —poner la
+entrega en hoy sobre una partida que tienes delante es lo que menos se hace
+de las tres fechas, y sigue estando en Actividades.
+
+**«Sigue igual» (`trIgual` → `Acciones.revisar`) es la pieza del
+seguimiento.** NO toca la actividad —ni estado, ni avance, ni fecha, ni
+notas—: solo deja constancia en `obra_cambios` de que alguien la miró. Sin
+ese rastro el app sabe qué está vencido pero **no sabe qué ya miraste**, y
+cada mañana salen las mismas revueltas: las que resolviste ayer y las que
+nadie ha visto en tres semanas, iguales en pantalla. El botón existía desde
+v76 pero solo dentro del modo selección de la lista, y se usó **cero veces
+en toda la obra** — por eso se trajo a donde se trabaja.
+
+El atajo **«Sin mirar»** va primero en la portada, antes que «Vencidas»: de
+las vencidas la mayoría ya las revisaste; lo que se pierde de vista es lo
+que nadie toca hace semanas. Usa `FILTRO_HUECO.congeladas` —el MISMO
+criterio que las congeladas de Actividades, `CONGELADA_DIAS`=15— y ordena
+con `_ordenCongeladas`. La tarjeta dice **«quieta Nd»** desde 7 días
+(`_diasQuieta`). Todo eso necesita `loadTocadasRecientes()`, que Actividades
+pedía sola al pintarse: **`renderTerreno` tiene que pedirlo también**, o el
+atajo no aparece nunca ahora que Obra es la entrada.
+
 Escribe **todo** por `Acciones`, y cerrar por `marcarActCompletada` — el
 mismo camino del ✓ de la lista. `trTodas()` mueve la cola entera reusando
 `_correrPlan` / `_correrAplicar`: es lo que más se hace y hasta v86
@@ -180,6 +205,8 @@ mismos botones que cualquier otra.
 | **El panel de un apartamento, por contratista** | Tocar el apartamento en la torre, **en Hoy o en Actividades → Edificio** — `abrirAptoTorre()`, `_recPanelApto()` |
 | **Mover fechas en bloque** | Modo selección en la lista, **o** el panel del apartamento por contratista — `_correrPlan()`, `_correrAplicar()` |
 | **REGISTRAR rápido, de pie, en la obra** | **Obra** — `renderTerreno()`, `trPct()`, `trListo()`, `trFecha()`, `trCorrer()` |
+| **Dejar dicho que la miraste y sigue igual** | **Obra**, botón «Sigue igual» — `trIgual()` → `Acciones.revisar()`. No toca la partida |
+| **Lo que nadie ha mirado hace semanas** | **Obra**, atajo «Sin mirar» — `FILTRO_HUECO.congeladas`, `_ordenCongeladas()`, `_diasQuieta()` |
 | **Mover TODAS las fechas de un sitio o un contratista** | **Obra**, barra «Todas a…» — `trTodas()` |
 | **REGISTRAR con todo el detalle** | **Actividades**, al abrir la fila — `_actFilaRapidaHTML()`, `_actFilaAvanceHTML()` |
 
@@ -463,6 +490,9 @@ pertenece a ningún nivel.
 | **v88** — se cambió la pantalla de entrada a Obra y los datos llegaban (1.080 cargadas) pero la pantalla seguía diciendo «Cargando la obra…»: `loadAll` llamaba solo a `renderActs`, que pinta un contenedor oculto. | Cambiar la puerta de entrada toca **tres** sitios (estado, clase `active`, `goTab` del arranque) y **quien carga los datos tiene que repintar la pantalla que se ve**, no la que solía verse. |
 | **v88** — el aviso de «Tardando más de lo normal», con su botón de Reintentar, se pintaba en `#c-act`. Con Obra de entrada quedaba detrás de una vista oculta: el ingeniero veía «Cargando…» sin ninguna salida. | Todo aviso de error se pinta **donde el usuario está mirando**. Un botón de reintentar en un contenedor oculto es lo mismo que no tenerlo. |
 | **v88** — una prueba lado a lado dio `checkVisible: 0` y pareció que el ✓ de la fila había desaparecido. Era la prueba: medía `#c-act` sin activar la pestaña, y desde v88 nace oculta. | Cuando midas lo VISIBLE, abre la pestaña de verdad primero. Si no, un cambio de pantalla de entrada hace que toda la prueba mienta a la vez. |
+
+| **v89** — el botón «Sigue igual» llevaba desde v76 en el código y se había usado **cero veces** en 4.800 cambios: vivía dentro del modo selección de la lista, a cuatro toques. | Una función que nadie usa casi nunca está mal hecha — está mal **puesta**. Antes de construir algo nuevo, mira en `obra_cambios` si lo que ya existe se está usando: el dato está ahí. |
+| **v89** — una prueba pasaba el estado anterior a `page.evaluate` con un segundo argumento, pero el ayudante `G` era `async(f)=>p.evaluate(f)` y se lo comía: la comprobación reventaba en vez de comparar. | Un ayudante de pruebas que descarta argumentos en silencio hace fallar la comprobación más importante y parece un bug del app. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
