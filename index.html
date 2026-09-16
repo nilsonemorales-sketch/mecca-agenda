@@ -858,7 +858,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_90';
+const APP_VERSION='20260916_91';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1885,12 +1885,122 @@ async function sb(path,opts={}){
      base las rechazaba con "No API key found in request". El app entraba,
      cargaba el usuario, y de ahi no traia nada.
      '...opts' va PRIMERO y 'headers' al final: asi la llave nunca se pierde. */
-  const r=await fetch(SB+'/rest/v1/'+path,{
-    ...opts,
-    headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}
-  });
+  /* Se distinguen DOS fracasos, porque no se arreglan igual:
+     — la red no llegó (fetch revienta, no hay respuesta): se marca `sinRed`
+       para que la cola lo guarde y lo reintente cuando vuelva la señal.
+     — la base contestó y dijo que no (r.ok false): reintentarlo sería
+       repetirlo para siempre. Ese sube tal cual, con el motivo. */
+  let r;
+  try{
+    r=await fetch(SB+'/rest/v1/'+path,{
+      ...opts,
+      headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})}
+    });
+  }catch(e){
+    var _e=new Error('Sin conexión');
+    _e.sinRed=true; _e.causa=(e&&e.message)||'';
+    throw _e;
+  }
   if(!r.ok)throw new Error(await r.text());
   const t=await r.text();return t?JSON.parse(t):[];
+}
+
+// ══════════════════════════════════════════════════════════════
+// LA COLA — lo que no se pudo guardar no se pierde
+//
+// Hasta v90 una escritura que fallaba se REVERTÍA y se tiraba: quedaba un
+// aviso de 6 segundos y ya. En una torre de siete niveles, marcando veinte
+// partidas seguidas, las que caían desaparecían sin que nadie supiera
+// cuáles. Las lecturas sí reintentaban desde v85; las escrituras, no.
+//
+// Ahora lo que no sale se guarda EN EL TELÉFONO y se manda solo cuando
+// vuelve la señal. Lo que marcaste se queda en pantalla — revertirlo era
+// justo perder el trabajo sin decir cuál.
+//
+// Solo se encola lo que falló por RED. Un rechazo de la base no se encola:
+// no se arregla reintentando y quedaría dando vueltas para siempre.
+// ══════════════════════════════════════════════════════════════
+var COLA_KEY='mecca_cola_v1';
+function _colaLeer(){
+  try{ var v=JSON.parse(localStorage.getItem(COLA_KEY)||'[]'); return Array.isArray(v)?v:[]; }
+  catch(e){ return []; }
+}
+function _colaEscribir(c){
+  try{ localStorage.setItem(COLA_KEY, JSON.stringify(c)); }catch(e){}
+}
+function colaPendientes(){ return _colaLeer().length; }
+function _colaAñadir(item){
+  var c=_colaLeer();
+  c.push(item);
+  if(c.length>300) c=c.slice(-300);   // tope: el almacenamiento del teléfono no es infinito
+  _colaEscribir(c);
+  _colaPintar();
+}
+/* La barra de arriba dice cuántas faltan y se toca para mandarlas ya. Es un
+   cartel que SE QUEDA: un toast de 6 segundos no sirve para algo que hay que
+   resolver antes de irse de la obra. */
+function _colaPintar(){
+  var n=colaPendientes();
+  if(!n) return;
+  var b=document.getElementById('sync'), d=document.getElementById('sdot'), s=document.getElementById('smsg');
+  if(!b||!d||!s) return;
+  b.className='sync syncing'; d.className='sdot syncing';
+  s.textContent=n+(n===1?' cambio sin guardar':' cambios sin guardar')+' · toca para enviar';
+  b.style.cursor='pointer';
+  b.onclick=function(){ colaEnviar(); };
+  b.setAttribute('role','button');
+  b.setAttribute('title','Toca para enviar lo pendiente');
+}
+var _colaEnviando=false;
+async function colaEnviar(){
+  if(_colaEnviando) return;
+  var c=_colaLeer();
+  if(!c.length) return;
+  _colaEnviando=true;
+  var bien=0, rechazadas=0;
+  try{
+    while(c.length){
+      var it=c[0];
+      try{
+        await sb('obra_actividades?id=eq.'+it.id,{method:'PATCH',prefer:'return=minimal',
+                 body:JSON.stringify(it.patch)});
+        /* El registro va DESPUÉS y con la hora de cuando se marcó, no la de
+           ahora: el historial tiene que decir cuándo pasó en la obra. */
+        if(it.log){ try{ await sb('obra_cambios',{method:'POST',prefer:'return=minimal',body:JSON.stringify(it.log)}); }catch(e2){} }
+        bien++;
+        c.shift(); _colaEscribir(c);
+      }catch(e){
+        if(e && e.sinRed) break;              // sigue sin señal: se queda para luego
+        c.shift(); _colaEscribir(c); rechazadas++;   // la base dijo que no: no sirve insistir
+        console.warn('cola: rechazada', it.id, e&&e.message);
+      }
+    }
+  } finally {
+    _colaEnviando=false;
+    var quedan=colaPendientes();
+    if(quedan) _colaPintar();
+    else if(bien) setSS('ok','✓ '+bien+' guardada'+(bien!==1?'s':''));
+    if(rechazadas) showToast(rechazadas+' cambio'+(rechazadas!==1?'s':'')+' que la base rechazó. Revísalos.','err',7000);
+  }
+}
+/* Lo encolado se vuelve a pintar encima de lo que trae la base: si no, al
+   recargar verías el valor viejo mientras la cola guarda el nuevo. */
+function _colaAplicarLocal(){
+  var c=_colaLeer(); if(!c.length) return;
+  c.forEach(function(it){
+    var a=(S.acts||[]).find(function(x){ return x.id===it.id; });
+    if(a) Object.assign(a, it.patch);
+  });
+}
+function _colaArrancar(){
+  try{
+    window.addEventListener('online', function(){ colaEnviar(); });
+    document.addEventListener('visibilitychange', function(){
+      if(!document.hidden) colaEnviar();
+    });
+    // Cada 30 s, y solo si hay algo: no se pregunta por gusto.
+    setInterval(function(){ if(colaPendientes()) colaEnviar(); }, 30000);
+  }catch(e){}
 }
 
 // Safe wrapper for sbWithTimeout too
@@ -7363,6 +7473,27 @@ aplicarTema();
 document.addEventListener('DOMContentLoaded',aplicarTema);
 document.addEventListener('DOMContentLoaded',aplicarModulosOcultos);
 
+/* El registro se construye aparte para poder GUARDARLO en la cola con la hora
+   de cuando se marcó. Si se armara al enviarlo, el historial diría que el
+   avance se puso a las 6 de la tarde, cuando vuelve la señal, en vez de a las
+   9 de la mañana, que es cuando el ingeniero lo vio. */
+function _logRec(accion, entidad, entidadId, entidadNombre, detalle){
+  var usr=S.user; if(!usr) return null;
+  var now=new Date();
+  return {
+    id:uid(),
+    created_at:now.toISOString(),
+    fecha:now.toISOString().slice(0,10),
+    hora:now.toTimeString().slice(0,5),
+    usuario_id:usr.id||'',
+    usuario_nombre:usr.nombre||'',
+    accion:accion,
+    entidad:entidad,
+    entidad_id:String(entidadId||''),
+    entidad_nombre:String(entidadNombre||''),
+    detalle:String(detalle||'')
+  };
+}
 function logCambio(accion, entidad, entidadId, entidadNombre, detalle){
   var usr=S.user;if(!usr) return;
   var now=new Date();
@@ -7919,15 +8050,24 @@ var Acciones = (function(){
 
     var previo = actual ? Object.assign({},actual) : {};
     _sincronizar(id,p);                                   // optimista
+    var _det = detalle||_diffs(previo,p)||'Editado';
     try{
       await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(p)});
     }catch(e){
+      /* Sin señal: NO se revierte. Lo que marcó se queda en pantalla y en la
+         cola, y sale solo cuando vuelva la red. Revertirlo era perder el
+         trabajo sin decir siquiera cuál se perdió.
+         Si la base lo RECHAZÓ, sí se revierte: eso no lo arregla esperar. */
+      if(e && e.sinRed){
+        _colaAñadir({id:id, patch:p,
+                     log:_logRec(accion||'editado','actividad',id,(actual&&actual.descripcion)||'',_det)});
+        return {ok:true, id:id, encolado:true, cambios:p, actividad:_buscarLocal(id)};
+      }
       if(actual) _sincronizar(id,previo);                 // revierte
       throw e;
     }
     logCambio(accion||'editado','actividad',id,
-              (actual&&actual.descripcion)||'',
-              detalle||_diffs(previo,p)||'Editado');
+              (actual&&actual.descripcion)||'',_det);
     return {ok:true, id:id, cambios:p, actividad:_buscarLocal(id)};
   }
 
@@ -13960,6 +14100,11 @@ async function guardarUploaderFoto(actId, fotoUrl){
    quedaba atras, las dos pantallas cantaban numeros distintos de la misma
    obra y no habia forma de saber cual mentia. */
 function _derivarAbiertas(){
+  /* Lo que está en la cola se repinta encima de lo que acaba de traer la base.
+     Va AQUÍ porque es el único sitio por donde pasan todas las cargas: si no,
+     al recargar en obra verías el valor viejo mientras la cola guarda el
+     nuevo, y parecería que el app perdió lo que marcaste. */
+  try{ _colaAplicarLocal(); }catch(e){}
   S.abiertas=(S.acts||[]).filter(function(a){return a.estado!=='completado';});
   /* Es el mismo array, no una copia,
      para que no puedan separarse. */
@@ -19261,6 +19406,9 @@ setInterval(function(){
 /* Se entra por Obra. Va por goTab y no por la clase del HTML para que la barra
    de abajo marque el botón que toca: updateBNav solo lo hace desde aquí. */
 try{ goTab('terreno'); }catch(e){ console.warn('arranque:',e); }
+/* La cola se arranca y se vacía de entrada: si ayer se quedó algo sin señal,
+   sale hoy al abrir el app, sin que nadie tenga que acordarse. */
+try{ _colaArrancar(); _colaPintar(); setTimeout(colaEnviar, 2500); }catch(e){ console.warn('cola:',e); }
 loadAll();
 
 // ── ÓRDENES DE COMPRA ─────────────────────────────────

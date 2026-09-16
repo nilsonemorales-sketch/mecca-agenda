@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v90 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v91 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v90 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v91 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -376,6 +376,32 @@ La única excepción existente es `Acciones.revisar(id)`, que a propósito
 **no** escribe en `obra_actividades`: solo registra en `obra_cambios` que
 alguien miró la partida y sigue igual.
 
+### La cola — lo que no se pudo guardar no se pierde (v91)
+
+`sb()` distingue **dos** fracasos y lo marca en el error:
+
+- **`e.sinRed === true`** — `fetch` reventó, no hubo respuesta. `Acciones._patch`
+  lo mete en la cola (`localStorage`, clave `mecca_cola_v1`) y **NO revierte**
+  el cambio en pantalla: revertirlo era perder el trabajo sin decir cuál.
+- **la base contestó que no** (`r.ok` false) — se revierte y se lanza con el
+  motivo. **No se encola**: reintentarlo sería repetirlo para siempre.
+
+La cola sale sola al volver la señal (`online`), al volver al app
+(`visibilitychange`), cada 30 s si hay algo, y **al arrancar** — si ayer se
+quedó algo sin señal, sale hoy sin que nadie se acuerde. La barra de arriba
+dice «N cambios sin guardar · toca para enviar» y **se queda puesta**: un
+toast de 6 segundos no sirve para algo que hay que resolver antes de irse.
+
+Dos detalles que parecen pequeños y no lo son:
+
+- El registro de `obra_cambios` se construye con **`_logRec`** al marcar, y se
+  guarda en la cola junto al patch. Si se armara al enviarlo, el historial
+  diría que el avance se puso a las 6 de la tarde en vez de a las 9 de la
+  mañana, que es cuando el ingeniero lo vio.
+- **`_derivarAbiertas` repinta la cola encima de lo que trae la base**
+  (`_colaAplicarLocal`). Sin eso, al recargar en obra saldría el valor viejo
+  mientras la cola guarda el nuevo, y parecería que el app perdió lo marcado.
+
 ### Lo que todavía escribe por fuera — no lo imites, y si lo tocas, arréglalo
 
 **A v77 no queda ninguno.** Los seis que había se cerraron:
@@ -513,6 +539,8 @@ pertenece a ningún nivel.
 
 | **v90** — `isBlocked` hacía `S.acts.find(x=>x.id===id)` donde `id` venía siendo un OBJETO `{id,tipo,lag}`: comparar un texto con un objeto da siempre `false`. **121 partidas abiertas y trabadas nunca enseñaron el candado**, y el editor abría vacías las predecesoras de 369 filas. Todo el trabajo de armar cadenas no producía ninguna señal en el app. | Cuando una columna guarda JSON, comprueba **qué forma tiene de verdad en la base** antes de escribir el código que la lee. Aquí había dos formas y el código solo entendía la que casi no se usa. Un `===` entre tipos distintos falla callado: no hay error, solo una función que siempre dice que no. |
 | **v90** — la prueba del candado buscaba `/lock/i` en el HTML de la fila y casaba con `display:**block**`: daba verdadero para todas y no probaba nada. | Un selector flojo hace que la prueba diga que sí a todo. Busca el marcador exacto (el trazo del icono, un `title=`), no una palabra suelta que puede estar en un estilo. |
+
+| **v91** — una escritura que fallaba se revertía y se tiraba: quedaba un aviso de 6 segundos y ya. Las LECTURAS reintentaban desde v85; las escrituras, no. En una torre de siete niveles, marcando veinte partidas seguidas, las que caían desaparecían sin que nadie supiera cuáles. | Lo que el usuario ya hizo no se tira nunca. Si no se puede guardar ahora, se guarda en el teléfono y se manda después — y el aviso **se queda puesto** hasta que se resuelva. Y distingue «no hay red» (reintentable) de «la base dijo que no» (no lo es): encolar un rechazo es reintentarlo para siempre. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
