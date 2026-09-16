@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v101 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v102 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v101 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v102 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -316,7 +316,7 @@ de ÓRDENES y crea la partida por esa vía — **no vuelca el texto en el campo*
 Volcarlo exigiría tocar el motor de voz, que apunta a `#cmd-txt` en nueve
 sitios y en el iPhone va por el Worker. No se hizo a ciegas.
 
-### El Catálogo de partidas (v98, v100, v101) — un módulo de PRUEBA que se borra entero
+### El Catálogo de partidas (v98, v100, v101, v102) — un módulo de PRUEBA que se borra entero
 
 Pestaña **«Partidas»**, `style="display:none"` en el HTML y encendida con
 `isAdmin()` en el mismo bloque que Gerencia. Por dentro se llama `catalogo`:
@@ -333,9 +333,115 @@ pantalla de trabajo: es un experimento con fecha de caducidad.
 |---|---|---|---|
 | **1 · Capítulo** | La partida madre del **presupuesto** | `resumenCostos.js` de la app de costos | **46** códigos fijos, en `CAT_CAPITULOS` |
 | **2 · Subpartida** | La **línea del presupuesto** | el presupuesto original (`Presupuesto 2-10-2024.xlsx`, hoja «Res. Presupuesto») | **274**, en `CAT_SUBPARTIDAS` |
-| **3 · Partida** | Lo que **se hace** en cada apartamento | las descripciones de la **agenda** | ~391, una por descripción abierta distinta |
+| **3 · Partida** | Lo que **se hace** en cada apartamento | las descripciones de la **agenda** | ~1.027, una por descripción distinta |
 
-Debajo cuelgan las actividades abiertas.
+Debajo cuelgan **todas** las actividades.
+
+#### El catálogo mira TODAS las actividades, no solo las abiertas (v102)
+
+Hasta v101 solo entraba lo abierto, y eso hacía **imposible** el avance: hay
+**más trabajo cerrado que abierto** —1.404 actividades cerradas contra 1.060
+abiertas—, así que con el denominador puesto solo en lo que falta **la torre
+entera salía en 0%**. Un porcentaje que siempre dice cero no es un porcentaje.
+
+- **`_catTodas()`** es el filtro del catálogo. `_catAbiertas()` **se queda**,
+  porque sigue haciendo falta para decir cuántas faltan.
+- Entrar lo cerrado subió las partidas de 391 a **1.027** y los amarres de
+  1.060 a **2.464**.
+- «Sin clasificar» pasó de 34 partidas a **272** (411 actividades). Casi todas
+  son de Ayudante —limpieza de entrega, escombros, subida de materiales— y
+  **eso es correcto: no existe línea de presupuesto para limpiar**. **No
+  inventes reglas nuevas para vaciar ese bloque**; qué hacer con él lo decide
+  el dueño.
+
+#### El avance es CONTEO DE TAREAS, no medición de obra (v102)
+
+```
+pct(actividad)     = 100 si está cerrada, si no su porcentaje (0-100)
+avance(partida)    = media de pct de SUS actividades
+avance(subpartida) = media de pct de TODAS las actividades de sus partidas colgadas
+avance(capítulo)   = media de pct de TODAS las actividades del capítulo
+```
+
+**Se promedia por actividad, no promediando promedios**: una partida con 30
+actividades no puede pesar lo mismo que una con 1. Junto al número va siempre
+**`cerradas / total`** — un 74% sin saber si es de 8 o de 466 no dice nada.
+
+**La frase de honradez está en pantalla y no se quita** (`.cat-honradez`): un
+capítulo al 74% quiere decir que de sus tareas registradas tres de cada cuatro
+están cerradas, **no** que tres cuartas partes de la albañilería estén
+construidas. Sin medición ni dinero no se puede decir más con honradez, y si no
+está escrito **se lee mal**.
+
+**`_catAvance` devuelve `null` cuando no hay nada**, y la pantalla dice
+**«— sin partidas»**. **Cero y vacío no son lo mismo**, y confundirlos es lo que
+hace que nadie vuelva a creerle a un módulo.
+
+#### Se clasifica DESDE la subpartida, en bloque (v102)
+
+Hasta v101 se colgaba de una en una: abrir la ficha, buscar en un `<select>` de
+85 opciones, salir, volver a entrar. **Con 1.027 partidas eso no lo hace nadie**,
+y por eso el dueño decía que el módulo no era funcional.
+
+**«Buscarle sus partidas»** (`catBuscarPartidas`) abre la lista de las partidas
+del mismo capítulo que no cuelgan de nadie, **ordenadas por parecido de nombre**,
+con casilla cada una y **«Colgar las N marcadas»** abajo.
+
+- **NADA SE MARCA SOLO.** El dueño rechazó expresamente colgar en bloque y
+  corregir después. **La sugerencia es el ORDEN, no la casilla.**
+- **Las de parecido cero también se listan, al final.** Si solo se ve lo que la
+  máquina cree, no hay forma de corregir a la máquina.
+- **`catColgarVarias` manda UN solo `PATCH`** con `id=in.(...)` y **una sola**
+  recarga —veinte de una en una serían veinte viajes— pero deja **un `logCambio`
+  por partida**: lo que se quiere saber después es qué partida se colgó de qué
+  línea, no que hubo una tanda.
+
+**El parecido** (`_catParecido`): palabras comunes, sin relleno, sin las de
+menos de tres letras, y **una palabra vale doble si sale en menos de 20 partidas
+del capítulo** —«vertedero» dice mucho más que «instalación»—. Tramos a la
+vista y **en texto**, no solo color: alto >=0,50 · medio 0,20-0,49 · bajo <0,20.
+
+**`_catRaiz` recorta el plural, y hace falta.** La subpartida dice «Baños» y la
+partida dice «baño»; «pared» y «paredes» son la misma pared. Sin eso,
+«Completar la cerámica de revestimiento de las paredes» se quedaba abajo. Es el
+mismo tropiezo del `mueble de ba` que no cogía «muebles de baño».
+
+#### Se toca la actividad sin salir del módulo — y pasa por `Acciones` (v102)
+
+La ficha de una partida usa **`revCard(a)`**, la MISMA tarjeta de Revisión: Sin
+empezar / En proceso / Completada, los chips de 10·25·50·75·90, Nota, Foto. No
+se hizo una copia **a propósito**: dos tarjetas para lo mismo es el error que
+este proyecto ya cometió con Hoy y con En Obra, y sobre todo `revCard` escribe
+por **`Acciones`**, que es lo único que garantiza el sellado de horas, el
+registro en `obra_cambios` y que no quede una partida «pendiente» con 100%.
+
+**`_repintarDondeEstoy()` conoce el catálogo, y va PRIMERO por `currentTab`.**
+Es su propia pestaña: mirando solo `obraVista` caía en `renderActs()` y desde el
+catálogo **el botón parecía muerto aunque el dato sí se había guardado**, que es
+la peor forma de fallar. Lo usan `revEstado` y `handleFotoFile`.
+
+#### Una partida en varios niveles cuelga de UNA sola madre, y se avisa
+
+`padre_id` es **una** columna, pero el presupuesto **repite la misma línea por
+nivel** y hay partidas que viven en varios a la vez. Para esas **ninguna madre
+es del todo correcta**. No se inventó una tabla de muchos a muchos: se **dice**
+(`_catAvisoNivelHTML`) —«está en N2 · N4 · N6, colgada de la línea de SEGUNDO
+NIVEL»— para que el dueño lo vea y decida. Callarlo sería mentirle sobre dónde
+está el trabajo.
+
+#### El guardia de resiembra (v102)
+
+**Resembrar borra la curación.** `catSembrar` **PARA** si hay una sola partida
+con `padre_id`, deja el aviso en rojo en la portada y no escribe nada. Migrar es
+una decisión; arrasar no.
+
+#### El capítulo de una partida lo decide la MAYORÍA de sus actividades
+
+Con lo cerrado dentro apareció el caso: **«Resane del alambrado de la
+iluminación — cocina principal»** tiene 7 actividades, 5 de Jordy (Pintura) y 2
+de Felix y Jefrey (Albañilería). Mirando solo la primera, el capítulo dependía
+de en qué orden llegaran las filas de la base — o sea, de nada.
+`_catCapMayoria` lo hace determinista; en empate gana el primero.
 
 **Por qué hacía falta el nivel 2.** La agenda **arranca el 27 de mayo de 2026**
 y toda la estructura se construyó antes: «se vaciaron las zapatas, luego la
@@ -370,8 +476,10 @@ siembra; que el dueño decida si lo saca también.
 De una **subpartida del presupuesto**, su nivel es su `seccion`, que ya tiene.
 
 De una **partida de la agenda** se calcula al pintar, de las áreas de sus
-actividades — y **no siempre es uno solo**. Medido: de 391 partidas, **284
-viven en un nivel y 107 en varios, hasta seis**. «Instalación de cerradura —
+actividades — y **no siempre es uno solo**. Medido con lo cerrado dentro (v102):
+de 1.027 partidas, **797 viven en un nivel y 230 en varios, hasta seis**, sobre
+**18 niveles** distintos. *(Con solo lo abierto eran 284/107 sobre 15: si
+cambias lo que entra al catálogo, estas cifras se mueven — vuelve a medirlas.)* «Instalación de cerradura —
 puerta principal» está en los seis. **No le inventes un nivel único, y no
 añadas columna para esto.**
 
@@ -748,6 +856,10 @@ mismo:**
 - **El Catálogo de partidas no escribe en `obra_actividades`.** Cuenta los
   `PATCH` y `POST` interceptados y mira a qué tabla va cada uno: los de
   `obra_actividades` tienen que ser **cero**
+- **El catálogo incluye lo CERRADO.** Si la siembra da ~391 partidas en vez de
+  ~1.027, alguien volvió a filtrar por abiertas y el avance va a salir en cero
+- **El avance se promedia por ACTIVIDAD.** Compruébalo capítulo por capítulo
+  contra la base; si un capítulo sin nada cerrado sale al 60%, la fórmula está mal
 - **El catálogo no enseña cantidad, unidad ni dinero.** Recorre la lista de
   subpartidas y la ficha del 3.00: `RD$`, `M²`, `M³`, «Cantidad», «Precio
   unitario» y «Valor» tienen que dar **cero**

@@ -865,7 +865,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_101';
+const APP_VERSION='20260916_102';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -2178,7 +2178,9 @@ async function handleFotoFile(inp){
     });
   }
   syncArrays(act.fotos);
-  renderActs();
+  /* Era `renderActs()`: subir una foto desde Revision repintaba un contenedor
+     que no se ve, y desde el catalogo la foto no aparecia hasta navegar. */
+  _repintarDondeEstoy();
   setSS('syncing','Subiendo...');
   try{
     var driveUrl=await uploadFoto(file,actId);
@@ -2186,7 +2188,7 @@ async function handleFotoFile(inp){
     act.fotos=act.fotos.replace(tempEntry,entry);
     URL.revokeObjectURL(localUrl);
     syncArrays(act.fotos);
-    renderActs();
+    _repintarDondeEstoy();
     var _patchBody={fotos:act.fotos};
     if(act.foto_pendiente){
       act.foto_pendiente=false;
@@ -15606,16 +15608,51 @@ function _catHijasDe(subId){
 }
 function _catSinSub(cap){ return _catAgendaDe(cap).filter(function(p){ return !p.padre_id; }); }
 
-/* «Abierta» = el mismo criterio que usa el resto del app, más el porcentaje.
-   Si esto no coincide, los conteos del catálogo no cuadran con la lista. */
+/* EL CATÁLOGO MIRA TODAS LAS ACTIVIDADES, NO SOLO LAS ABIERTAS (v102).
+   Hasta v101 solo entraba lo abierto, y eso hacía imposible el avance: hay MÁS
+   trabajo cerrado que abierto —1.404 actividades cerradas contra 1.060
+   abiertas—, así que con el denominador puesto solo en lo que falta la torre
+   entera salía en 0%. Un porcentaje que siempre dice cero no es un porcentaje.
+   Decisión del dueño: entra también lo cerrado. */
+function _catTodas(){ return S.acts||[]; }
+
+/* `_catAbiertas` SE QUEDA: ya no es el filtro del catálogo, pero sigue
+   haciendo falta para decir cuántas faltan. */
 function _catAbiertas(){
   return (S.acts||[]).filter(function(a){
     return a.estado!=='completado' && (parseInt(a.porcentaje,10)||0)<100;
   });
 }
+/* Cerrada y avance de UNA actividad. Una al 100% que nadie marcó completada
+   cuenta igual: el trabajo está hecho aunque el estado se quedara atrás. */
+function _catCerrada(a){
+  return !!a && (a.estado==='completado' || (parseInt(a.porcentaje,10)||0)>=100);
+}
+function _catPct(a){
+  if(!a) return 0;
+  if(a.estado==='completado') return 100;
+  return Math.max(0, Math.min(100, parseInt(a.porcentaje,10)||0));
+}
+/* EL AVANCE SE PROMEDIA POR ACTIVIDAD, NO PROMEDIANDO PROMEDIOS: una partida
+   con 30 actividades no puede pesar lo mismo que una con 1.
+   Devuelve NULL cuando no hay nada — cero y vacío no son lo mismo, y
+   confundirlos es lo que hace que nadie vuelva a creerle a un módulo. */
+function _catAvance(acts){
+  if(!acts || !acts.length) return null;
+  var s=0, c=0;
+  acts.forEach(function(a){ s+=_catPct(a); if(_catCerrada(a)) c++; });
+  return {pct:Math.round(s/acts.length), cerradas:c, total:acts.length};
+}
+function _catAvanceHTML(av, chico){
+  if(!av) return '<span style="color:var(--text3)">— sin partidas</span>';
+  var col=av.pct>=100?'var(--green)':av.pct>=50?'var(--accent)':'var(--text2)';
+  return '<span style="color:'+col+';font-weight:800">'+av.pct+'%</span>'+
+    '<span style="color:var(--text3)'+(chico?';font-size:10px':'')+'"> · '+
+    av.cerradas+'/'+av.total+'</span>';
+}
 function _catActsDe(pid){
   var am=_catA();
-  return _catAbiertas().filter(function(a){ return am[a.id]===pid; })
+  return _catTodas().filter(function(a){ return am[a.id]===pid; })
     .sort(function(x,y){
       return _revOrdenArea(String(x.area||'').trim())-_revOrdenArea(String(y.area||'').trim()) ||
              String(x.area||'').localeCompare(String(y.area||''));
@@ -15627,7 +15664,16 @@ function _catActsDeCap(cap){
 }
 function _catSueltas(){
   var am=_catA();
-  return _catAbiertas().filter(function(a){ return !am[a.id]; });
+  return _catTodas().filter(function(a){ return !am[a.id]; });
+}
+function _catAvancePartida(pid){ return _catAvance(_catActsDe(pid)); }
+function _catAvanceSub(subId){
+  var acts=[]; _catHijasDe(subId).forEach(function(p){ acts=acts.concat(_catActsDe(p.id)); });
+  return _catAvance(acts);
+}
+function _catAvanceCap(cap){
+  var acts=[]; _catAgendaDe(cap).forEach(function(p){ acts=acts.concat(_catActsDe(p.id)); });
+  return _catAvance(acts);
 }
 /* El oficio sale del PRIMER responsable: `personal_nombre` puede traer varios
    separados por coma y el primero es de quien es el trabajo. */
@@ -15705,6 +15751,21 @@ async function cargarCatalogo(){
    NIVEL 3 — una partida por cada `descripcion` abierta distinta, TAL CUAL —
    sin agrupar, sin limpiar, sin adivinar. `padre_id` en nulo: de qué
    subpartida cuelga lo decide el dueño, no una regla. */
+/* El capítulo de una partida lo decide la MAYORÍA de sus actividades, no la
+   primera. Con lo cerrado dentro apareció el caso: «Resane del alambrado de la
+   iluminación — cocina principal» tiene 7 actividades, 5 de Jordy (Pintura) y
+   2 de Felix y Jefrey (Albañilería). Mirando solo la primera, el capítulo
+   dependía de en qué orden llegaran las filas de la base — o sea, de nada. */
+function _catCapMayoria(items, desc){
+  var c={}, mejor='', n=0;
+  (items||[]).forEach(function(a){
+    var k=_catCapDe(_catOficioDe(a), desc||a.descripcion||'');
+    c[k]=(c[k]||0)+1;
+    if(c[k]>n){ n=c[k]; mejor=k; }      // empate: gana el primero que apareció
+  });
+  return mejor||'0';
+}
+
 function _catPlanSiembra(){
   var subs=CAT_SUBPARTIDAS.map(function(r){
     /* `valor` va en nulo a proposito: era cantidad x precio, y desde v101 no
@@ -15718,7 +15779,7 @@ function _catPlanSiembra(){
             oficio:'', aplica:'general', codigo_presupuesto:r[3]||'',
             padre_id:null, activo:true};
   });
-  var ab=_catAbiertas(), grupos={}, orden=[];
+  var ab=_catTodas(), grupos={}, orden=[];
   ab.forEach(function(a){
     var k=String(a.descripcion||'(sin descripción)');
     if(!grupos[k]){ grupos[k]=[]; orden.push(k); }
@@ -15731,7 +15792,7 @@ function _catPlanSiembra(){
     // `aplica`: apartamento solo si TODAS caen en un «N# — Apto …»
     var soloAptos=items.every(function(a){ return REC_ORDEN.indexOf(String(a.area||'').trim())>=0; });
     var id='p'+uid();
-    partidas.push({id:id, tipo:'agenda', capitulo:_catCapDe(of, desc),
+    partidas.push({id:id, tipo:'agenda', capitulo:_catCapMayoria(items, desc),
                    numero:'', nombre:desc,
                    oficio:of, unidad:'', aplica:soloAptos?'apartamento':'general',
                    codigo_presupuesto:'', seccion:null, padre_id:null,
@@ -15743,6 +15804,19 @@ function _catPlanSiembra(){
 
 async function catSembrar(){
   if(!isAdmin()) return;
+  /* RESEMBRAR BORRA LA CURACIÓN. Mientras nadie haya colgado nada no cuesta
+     nada; en cuanto el dueño empieza a clasificar, sí. Si hay una sola partida
+     colgada esto PARA: migrar es una decisión, arrasar no. */
+  var colgadas=_catP().filter(function(p){ return !!p.padre_id; }).length;
+  if(colgadas){
+    S.catAviso='No se resiembra: hay '+colgadas+' partida'+(colgadas!==1?'s':'')+
+      ' ya colgada'+(colgadas!==1?'s':'')+' de su subpartida. Resembrar borraría '+
+      'ese trabajo. Descuélgalas primero, o pide que se migre.';
+    showToast('Hay '+colgadas+' partidas clasificadas: no se resiembra','err',7000);
+    renderCatalogo(); _catArriba();
+    return;
+  }
+  S.catAviso='';
   var plan=_catPlanSiembra();
   var hay=_catP().length;
   var total=plan.subpartidas.length+plan.partidas.length;
@@ -15844,6 +15918,58 @@ async function catColgar(pid, subId){
 }
 function catDescolgar(pid){ return catColgar(pid, ''); }
 
+/* UN solo PATCH y UNA sola recarga para toda la tanda. `catColgar` hace un
+   PATCH y un cargarCatalogo() POR PARTIDA: veinte marcadas serían veinte
+   viajes y veinte recargas, y en obra eso es medio minuto mirando la pantalla.
+   El rastro, en cambio, va por partida: un `logCambio` cada una, porque lo que
+   se quiere saber después es qué partida se colgó de qué línea, no que hubo
+   una tanda. */
+async function catColgarVarias(ids, subId){
+  ids=(ids||[]).filter(function(id){
+    var p=_catPorId(id); return p && !_catEsSub(p);
+  });
+  var sub=_catPorId(subId);
+  if(!ids.length || !sub) return;
+  _catGuardarUndo('colgar '+ids.length+' partidas', ids);
+  setSS('syncing','Colgando '+ids.length+'...');
+  try{
+    var previas=ids.map(function(id){ return _catPorId(id); });
+    await sb('obra_partidas?id=in.('+ids.map(encodeURIComponent).join(',')+')',
+             {method:'PATCH',prefer:'return=minimal',
+              body:JSON.stringify({padre_id:subId})});
+    previas.forEach(function(p){
+      logCambio('colgada','partida',p.id,p.nombre,
+                'colgada de «'+sub.nombre+'» ('+sub.numero+' · '+sub.seccion+')');
+    });
+    await cargarCatalogo();
+    S.catBuscar=null;
+    setSS('ok','✓'); showToast(ids.length+' colgadas ✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo colgar: '+((e&&e.message)||''),'err',6000); }
+  renderCatalogo(); _catArriba();
+}
+function catColgarMarcadas(){
+  var B=S.catBuscar; if(!B) return;
+  var ids=_catBuscarSel();
+  if(!ids.length){ showToast('No hay ninguna marcada','warn'); return; }
+  return catColgarVarias(ids, B.sub);
+}
+
+/* UNA partida cuelga de UNA subpartida —`padre_id` es una sola columna— pero
+   el presupuesto REPITE la misma línea por nivel y hay partidas que viven en
+   varios a la vez. Para esas ninguna madre es del todo correcta. No se inventa
+   aquí una tabla de muchos a muchos: se DICE, para que el dueño lo vea y
+   decida. Callarlo sería mentirle sobre dónde está el trabajo. */
+function _catAvisoNivelHTML(p, nivs){
+  if(!p || !p.padre_id || !nivs || nivs.length<2) return '';
+  var madre=_catPorId(p.padre_id);
+  if(!madre || !madre.seccion) return '';
+  return '<div class="cat-aviso-nivel" style="margin-top:6px;padding:8px 10px;border-radius:10px;'+
+    'background:var(--amber-light);border:1px solid var(--amber);color:var(--amber);'+
+    'font-size:11px;line-height:1.45;font-weight:700">Está en '+esc(nivs.join(' · '))+
+    ', colgada de la línea de '+esc(madre.seccion)+'. El presupuesto repite esta línea por '+
+    'nivel y aquí solo cabe una: revísalo.</div>';
+}
+
 // ══ LAS HERRAMIENTAS — SOLO sobre partidas de la agenda ═════
 /* Las subpartidas del presupuesto NO se juntan, ni se renombran, ni se
    mueven de capítulo: son el presupuesto, y si se editan deja de cuadrar con
@@ -15875,6 +16001,95 @@ function _catPickBuscar(v){
    `normalizar` del motor Parecido: vive dentro de su cierre y no es global. */
 function _catNorm(s){
   return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+}
+
+// ══ CLASIFICAR EN BLOQUE, DESDE LA LÍNEA DEL PRESUPUESTO ════
+/* Hasta v101 se colgaba de una en una: abrir la ficha, buscar en un select de
+   85 opciones, salir, volver a entrar. Con 1.027 partidas eso no lo hace
+   nadie, y por eso el dueño decía que el módulo no era funcional. Se invierte
+   el sentido: se trabaja DESDE la subpartida, con casillas. */
+var CAT_RELLENO={de:1,del:1,la:1,las:1,el:1,los:1,en:1,y:1,a:1,con:1,para:1,
+                 por:1,un:1,una:1,m:1,ml:1,ud:1,uds:1};
+/* El plural mata el parecido si no se recorta: la subpartida dice «Baños» y la
+   partida dice «baño»; «pared» y «paredes» son la misma pared. Sin esto,
+   «Completar la cerámica de revestimiento de las paredes» se quedaba abajo.
+   Es el mismo tropiezo del `mueble de ba` que no cogía «muebles de baño». */
+function _catRaiz(w){
+  if(w.length>5 && /es$/.test(w)) return w.slice(0,-2);
+  if(w.length>3 && /s$/.test(w))  return w.slice(0,-1);
+  return w;
+}
+function _catPalabras(txt){
+  var out=[], vistos={};
+  _catNorm(txt).split(/[^a-z0-9]+/).forEach(function(w){
+    if(!w || w.length<3 || CAT_RELLENO[w]) return;
+    var r=_catRaiz(w);
+    if(r.length<3 || vistos[r]) return;
+    vistos[r]=1; out.push(r);
+  });
+  return out;
+}
+/* En cuántas partidas del capítulo sale cada palabra. Una que sale en menos de
+   20 vale doble: «vertedero» dice mucho más que «instalación». */
+function _catFrecuencias(partidas){
+  var f={};
+  (partidas||[]).forEach(function(p){
+    _catPalabras(p.nombre).forEach(function(w){ f[w]=(f[w]||0)+1; });
+  });
+  return f;
+}
+function _catParecido(subPal, nombre, f){
+  if(!subPal.length) return 0;
+  var otras={}; _catPalabras(nombre).forEach(function(w){ otras[w]=1; });
+  var tot=0, com=0;
+  subPal.forEach(function(w){
+    var pe=((f[w]||0)<20)?2:1;
+    tot+=pe; if(otras[w]) com+=pe;
+  });
+  return tot ? com/tot : 0;
+}
+function _catTramo(v){ return v>=0.50?'alto' : v>=0.20?'medio' : v>0?'bajo' : 'sin parecido'; }
+
+function catBuscarPartidas(subId){
+  var sub=_catPorId(subId); if(!sub || !_catEsSub(sub)) return;
+  S.catBuscar={sub:subId, q:'', sel:{}};
+  renderCatalogo(); _catArriba();
+}
+function catBuscarCerrar(){ S.catBuscar=null; renderCatalogo(); _catArriba(); }
+function catBuscarToggle(id){
+  var B=S.catBuscar; if(!B) return;
+  B.sel[id]=!B.sel[id];
+  var el=document.getElementById('cat-buscar-lista');
+  if(el) el.innerHTML=_catBuscarListaHTML();
+  var pie=document.getElementById('cat-buscar-pie');
+  if(pie) pie.innerHTML=_catBuscarPieHTML();
+}
+function _catBuscarFiltro(v){
+  var B=S.catBuscar; if(!B) return;
+  B.q=v;
+  var el=document.getElementById('cat-buscar-lista');
+  if(el) el.innerHTML=_catBuscarListaHTML();   // NO repinta entero: el campo pierde el foco
+}
+function _catBuscarSel(){
+  var B=S.catBuscar||{sel:{}};
+  return Object.keys(B.sel||{}).filter(function(k){ return B.sel[k]; });
+}
+/* Las candidatas: las partidas de la agenda del MISMO capítulo que todavía no
+   cuelgan de nadie, ordenadas por parecido. NADA SE MARCA SOLO — el dueño
+   rechazó colgar en bloque y corregir después. La sugerencia es el ORDEN, no
+   la casilla. Y las de parecido cero también salen, al final: si solo se ve lo
+   que la máquina cree, no hay forma de corregir a la máquina. */
+function _catBuscarCandidatas(){
+  var B=S.catBuscar; if(!B) return [];
+  var sub=_catPorId(B.sub); if(!sub) return [];
+  var delCap=_catAgendaDe(sub.capitulo);
+  var f=_catFrecuencias(delCap);
+  var subPal=_catPalabras(sub.nombre);
+  var q=_catNorm(B.q||'');
+  return delCap.filter(function(p){ return !p.padre_id; })
+    .filter(function(p){ return !q || _catNorm(p.nombre).indexOf(q)>=0; })
+    .map(function(p){ return {p:p, v:_catParecido(subPal, p.nombre, f)}; })
+    .sort(function(x,y){ return y.v-x.v || String(x.p.nombre).localeCompare(String(y.p.nombre)); });
 }
 
 /* JUNTAR — las actividades de todas pasan a la que queda; las otras se
@@ -16037,11 +16252,12 @@ async function catAsignarEn(pid){
 }
 
 // ══ LAS PANTALLAS ═══════════════════════════════════════════
-function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catSel={}; renderCatalogo(); _catArriba(); }
-function catIrPartida(id){ S.catPartida=id; S.catPick=null; renderCatalogo(); _catArriba(); }
+function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; renderCatalogo(); _catArriba(); }
+function catIrPartida(id){ S.catPartida=id; S.catPick=null; S.catBuscar=null; renderCatalogo(); _catArriba(); }
 function catVerVacios(){ S.catVacios=!S.catVacios; renderCatalogo(); }
 function catVolver(){
-  if(S.catPick) S.catPick=null;
+  if(S.catBuscar) S.catBuscar=null;
+  else if(S.catPick) S.catPick=null;
   else if(S.catPartida) S.catPartida=null;
   else { S.catCap=null; S.catSueltas=false; S.catSel={}; }
   renderCatalogo(); _catArriba();
@@ -16074,7 +16290,8 @@ function renderCatalogo(){
     return;
   }
   try{
-    if(S.catPick)             el.innerHTML=_catPickHTML();
+    if(S.catBuscar)           el.innerHTML=_catBuscarHTML();
+    else if(S.catPick)        el.innerHTML=_catPickHTML();
     else if(S.catSueltas)     el.innerHTML=_catSueltasHTML();
     else if(S.catPartida)     el.innerHTML=_catFichaHTML();
     else if(S.catCap!==null && S.catCap!==undefined) el.innerHTML=_catPartidasHTML();
@@ -16094,23 +16311,35 @@ var _catVolverBS='background:none;border:0;color:var(--text2);font-size:13px;fon
                  'cursor:pointer;padding:8px 0;font-family:var(--font);min-height:44px';
 
 function _catCabecera(){
-  var ab=_catAbiertas().length, am=_catAbiertas().filter(function(a){ return _catA()[a.id]; }).length;
+  var td=_catTodas().length, am=_catTodas().filter(function(a){ return _catA()[a.id]; }).length;
   var ag=_catAgenda().length, colg=_catAgenda().filter(function(p){ return !!p.padre_id; }).length;
+  var ab=_catAbiertas().length;
   return '<div style="display:flex;align-items:baseline;gap:10px;margin:2px 0 3px;flex-wrap:wrap">'+
       '<div style="font-size:20px;font-weight:800;letter-spacing:-.3px">Catálogo de partidas</div>'+
       '<div style="font-size:11px;color:var(--amber);font-weight:800;font-family:var(--mono)">PRUEBA</div>'+
     '</div>'+
     /* Los dos números que contestan la pregunta de la prueba. */
-    '<div style="margin:10px 0 14px;padding:11px 13px;border-radius:12px;background:var(--bg2);'+
-      'border:1.5px solid '+(ab-am?'var(--amber)':'var(--green)')+'">'+
-      '<div style="font-size:13.5px;font-weight:800">'+am+' de '+ab+' actividades amarradas</div>'+
+    '<div style="margin:10px 0 10px;padding:11px 13px;border-radius:12px;background:var(--bg2);'+
+      'border:1.5px solid '+(td-am?'var(--amber)':'var(--green)')+'">'+
+      '<div style="font-size:13.5px;font-weight:800">'+am+' de '+td+' actividades amarradas</div>'+
       '<div style="font-size:11.5px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
-        (ab-am)+' siguen sueltas · '+colg+' de '+ag+' partidas colgadas del presupuesto</div>'+
-    '</div>';
+        (td-am)+' sueltas · '+ab+' abiertas · '+colg+' de '+ag+' partidas colgadas del presupuesto</div>'+
+    '</div>'+
+    /* SIN ESTO SE LEE MAL, y una vez que se lee mal no se recupera. Un capítulo
+       al 74% NO quiere decir que tres cuartas partes estén construidas. */
+    '<div class="cat-honradez" style="margin:0 0 14px;padding:9px 12px;border-radius:11px;'+
+      'background:var(--bg3);border:1px solid var(--border);font-size:11px;color:var(--text3);'+
+      'line-height:1.5">El porcentaje es <b>conteo de tareas</b>, no avance de obra: dice cuántas '+
+      'de las tareas registradas están cerradas, no cuánto se ha construido. Sin medición no se '+
+      'puede decir más con honradez.</div>';
 }
 
 function _catCapitulosHTML(){
   var h=_catCabecera();
+  if(S.catAviso)
+    h+='<div style="margin:0 0 12px;padding:12px 13px;border-radius:12px;'+
+      'background:var(--red-light);border:1.5px solid var(--red);color:var(--red);'+
+      'font-size:12.5px;font-weight:700;line-height:1.5">'+esc(S.catAviso)+'</div>';
   if(!_catActivas().length){
     var plan=_catPlanSiembra();
     h+='<div style="padding:16px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--border)">'+
@@ -16130,7 +16359,7 @@ function _catCapitulosHTML(){
   var llenos=[], vacios=[];
   CAT_CAPITULOS.forEach(function(c){
     var s=_catSubsDe(c.n).length, p=_catAgendaDe(c.n).length;
-    (s||p ? llenos : vacios).push({c:c, s:s, p:p, a:_catActsDeCap(c.n)});
+    (s||p ? llenos : vacios).push({c:c, s:s, p:p, a:_catActsDeCap(c.n), av:_catAvanceCap(c.n)});
   });
   var tarjeta=function(x){
     return '<button onclick="catIrCap(\''+x.c.n+'\')" style="'+_catBS+';min-height:78px;width:100%;'+
@@ -16138,8 +16367,10 @@ function _catCapitulosHTML(){
       'text-align:left;border:1.5px solid '+(x.c.n==='0'&&x.p?'var(--amber)':'var(--border2)')+';'+
       'background:var(--bg2);color:var(--text)">'+
       '<span style="font-size:12.5px;font-weight:800;line-height:1.25">'+esc(x.c.n)+' · '+esc(x.c.t)+'</span>'+
+      '<span class="cat-cap-av" style="font-size:11px;font-family:var(--mono);line-height:1.35">'+
+        _catAvanceHTML(x.av)+'</span>'+
       '<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
-        x.s+' subpartidas · '+x.p+' partidas<br>'+x.a+' actividades</span></button>';
+        x.s+' subpartidas · '+x.p+' partidas</span></button>';
   };
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'+
      llenos.map(tarjeta).join('')+'</div>';
@@ -16200,9 +16431,10 @@ function _catFilaAgendaHTML(p, sangria){
       'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
       'padding:9px 12px;border:1.5px solid var(--border);background:var(--bg2);color:var(--text)">'+
       '<span style="font-size:12.5px;font-weight:700;line-height:1.3">'+esc(p.nombre)+'</span>'+
-      '<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
-        (p.oficio?esc(p.oficio)+' · ':'')+n+' actividad'+(n!==1?'es':'')+
-        (niv?'<br>'+niv:'')+'</span>'+
+      '<span style="font-size:10.5px;font-family:var(--mono);line-height:1.35">'+
+        _catAvanceHTML(_catAvancePartida(p.id),true)+
+        '<span style="color:var(--text3)">'+(p.oficio?' · '+esc(p.oficio):'')+
+        (niv?'<br>'+niv:'')+'</span></span>'+
     '</button></div>';
 }
 
@@ -16232,17 +16464,25 @@ function _catPartidasHTML(){
         /* El id se enseña a propósito: es sección + capítulo + secuencia, y es
            lo que rastrea la línea hasta la hoja del Excel cuando algo no
            cuadra con lo contratado. */
+        '<span class="cat-sub-av" style="font-size:11px;font-family:var(--mono);line-height:1.35">'+
+          _catAvanceHTML(_catAvanceSub(s.id))+'</span>'+
         '<span class="cat-sub-meta" style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
           esc(s.id)+'<br>'+esc(s.seccion)+'</span>'+
       '</button>'+
+      '<button onclick="catBuscarPartidas(\''+s.id+'\')" style="'+_catBS+';width:100%;margin-top:5px;'+
+        'border:1.5px dashed var(--accent);background:none;color:var(--accent);font-size:12px">'+
+        'Buscarle sus partidas</button>'+
       hijas.map(function(p){ return _catFilaAgendaHTML(p,true); }).join('')+
     '</div>';
   });
 
   /* El trabajo del dueño está aquí: de este bloque salen las partidas hacia
      su línea del presupuesto. Va al final y con su número a la vista. */
-  h+='<div style="font-size:11px;font-weight:800;color:'+(sin.length?'var(--amber)':'var(--text3)')+';'+
-     'letter-spacing:.5px;text-transform:uppercase;margin:18px 0 8px">Sin subpartida ('+sin.length+')</div>';
+  var avSin=_catAvance(sin.reduce(function(ac,p){ return ac.concat(_catActsDe(p.id)); },[]));
+  h+='<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:18px 0 8px">'+
+     '<span style="font-size:11px;font-weight:800;color:'+(sin.length?'var(--amber)':'var(--text3)')+';'+
+     'letter-spacing:.5px;text-transform:uppercase">Sin subpartida ('+sin.length+')</span>'+
+     '<span class="cat-sin-av" style="font-size:11px;font-family:var(--mono)">'+_catAvanceHTML(avSin)+'</span></div>';
   if(!sin.length)
     h+='<div class="empty" style="padding:18px;color:var(--text3);font-size:12px">'+
        'Todas las partidas de este capítulo cuelgan de una subpartida ✓</div>';
@@ -16276,6 +16516,8 @@ function _catFichaSubHTML(p){
   var h='<button onclick="catVolver()" style="'+_catVolverBS+'">‹ '+esc(String(p.capitulo))+' · '+esc(_catCapNom(p.capitulo))+'</button>'+
     '<div class="obranow-header"><div>'+
       '<div style="font-size:15px;font-weight:800;line-height:1.3">'+esc(p.numero)+' · '+esc(p.nombre)+'</div>'+
+      '<div class="cat-ficha-av" style="font-size:12px;font-family:var(--mono);margin-top:5px">'+
+        _catAvanceHTML(_catAvanceSub(p.id))+'</div>'+
       '<div style="font-size:11px;color:var(--amber);margin-top:3px;font-weight:800;font-family:var(--mono)">'+
         'DEL PRESUPUESTO · NO SE EDITA</div>'+
     '</div></div>'+
@@ -16288,6 +16530,9 @@ function _catFichaSubHTML(p){
     '<div style="font-size:11.5px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
       'Es una línea del presupuesto: no se junta, no se renombra y no se mueve de capítulo. '+
       'Si se editara, dejaría de cuadrar con lo que se contrató y con lo que se paga.</div>'+
+    '<button onclick="catBuscarPartidas(\''+p.id+'\')" style="'+_catBS+';width:100%;min-height:52px;'+
+      'margin-bottom:8px;border:1.5px solid var(--accent);background:var(--accent-fill);'+
+      'color:var(--accent-on);font-size:14px">Buscarle sus partidas</button>'+
     '<button onclick="catDesactivarSub(\''+p.id+'\')" style="'+_catBS+';width:100%;margin-bottom:14px;'+
       'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Desactivar — no aplica en esta obra</button>'+
     '<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
@@ -16313,9 +16558,12 @@ function _catFichaAgendaHTML(p){
   var h='<button onclick="catVolver()" style="'+_catVolverBS+'">‹ '+esc(String(p.capitulo))+' · '+esc(_catCapNom(p.capitulo))+'</button>'+
     '<div class="obranow-header"><div>'+
       '<div style="font-size:15px;font-weight:800;line-height:1.3">'+esc(p.nombre)+'</div>'+
+      '<div class="cat-ficha-av" style="font-size:12px;font-family:var(--mono);margin-top:5px">'+
+        _catAvanceHTML(_catAvancePartida(p.id))+'</div>'+
       (nivs.length?'<div class="cat-nivs" style="font-size:11px;color:var(--text3);margin-top:4px;'+
         'font-family:var(--mono);line-height:1.4">'+
         (nivs.length===1?'Nivel: ':'En '+nivs.length+' niveles: ')+esc(nivs.join(' · '))+'</div>':'')+
+      _catAvisoNivelHTML(p, nivs)+
     '</div></div>'+
     /* De qué línea del presupuesto cuelga: es LA decisión de la curación, así
        que va arriba del todo y no escondida entre los campos. */
@@ -16361,14 +16609,19 @@ function _catFichaAgendaHTML(p){
     '<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
       'text-transform:uppercase;margin-bottom:8px">Sus '+acts.length+' actividades</div>';
   if(!acts.length) return h+'<div class="empty" style="padding:24px;color:var(--text3)">Sin actividades amarradas.</div>';
+  /* La tarjeta ES la de Revisión, no una copia. `revCard` trae Sin empezar /
+     En proceso / Terminada, los chips de 10·25·50·75·90, Nota, Foto, y las
+     notas y fotos puestas — y sobre todo ESCRIBE POR `Acciones`, que es lo
+     único que garantiza el sellado de horas, el registro en `obra_cambios` y
+     que no quede una partida «pendiente» con 100%. Hacer aquí una segunda
+     tarjeta sería tener dos formas de registrar lo mismo, que es el error que
+     este proyecto ya cometió con Hoy y con En Obra. */
   h+=acts.map(function(a){
-    var pct=parseInt(a.porcentaje,10)||0;
-    var est=a.estado==='en-progreso'?('en proceso · '+pct+'%'):a.estado==='pausada'?'interrumpida':'sin empezar';
-    return '<div class="cat-act" style="padding:10px 12px;margin-bottom:6px;border-radius:11px;background:var(--bg2);'+
-      'border:1px solid var(--border)">'+
-      '<div style="font-size:12.5px;font-weight:700;line-height:1.35">'+esc(a.descripcion)+'</div>'+
-      '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
-        esc(_recNom(a.area)||a.area||'—')+' · '+est+'</div></div>';
+    return '<div class="cat-act">'+
+      '<div style="font-size:10.5px;color:var(--text3);font-family:var(--mono);'+
+        'margin:0 0 3px 2px">'+esc(_recNom(a.area)||a.area||'—')+
+        (_catCerrada(a)?' · '+esc(PAL_COMPLETADA.toLowerCase()):'')+'</div>'+
+      revCard(a)+'</div>';
   }).join('');
   return h;
 }
@@ -16432,6 +16685,60 @@ function _catPickHTML(){
       'border:1.5px solid var(--border2);border-radius:11px;background:var(--bg2);color:var(--text);'+
       'font-size:13px;font-family:var(--font);margin-bottom:10px">')+
     '<div id="cat-pick-lista">'+_catPickListaHTML()+'</div>';
+}
+
+function _catBuscarPieHTML(){
+  var n=_catBuscarSel().length;
+  return '<button onclick="catColgarMarcadas()" style="'+_catBS+';width:100%;min-height:52px;'+
+    'border:1.5px solid '+(n?'var(--green)':'var(--border2)')+';'+
+    'background:'+(n?'var(--green-light)':'var(--bg2)')+';'+
+    'color:'+(n?'var(--green)':'var(--text3)')+';font-size:14px">'+
+    (n?'Colgar las '+n+' marcadas':'Marca las que van en esta línea')+'</button>';
+}
+function _catBuscarListaHTML(){
+  var cand=_catBuscarCandidatas(), B=S.catBuscar||{sel:{}};
+  if(!cand.length) return '<div class="empty" style="padding:26px;color:var(--text3);font-size:12px">'+
+    'No queda ninguna partida sin colgar en este capítulo.</div>';
+  var col={alto:'var(--green)', medio:'var(--accent)', bajo:'var(--text3)', 'sin parecido':'var(--text3)'};
+  return cand.map(function(x){
+    var p=x.p, on=!!B.sel[p.id], tr=_catTramo(x.v), niv=_catNivelesHTML(p.id);
+    var n=_catActsDe(p.id).length;
+    return '<div class="cat-cand" data-v="'+x.v.toFixed(2)+'" style="display:flex;gap:8px;'+
+      'align-items:stretch;margin-bottom:6px">'+
+      '<button onclick="catBuscarToggle(\''+p.id+'\')" aria-label="Marcar" style="'+_catBS+';flex:0 0 46px;'+
+        'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+        'background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
+        'color:'+(on?'var(--accent-on)':'var(--text3)')+';font-size:16px">'+(on?'✓':'')+'</button>'+
+      '<button onclick="catBuscarToggle(\''+p.id+'\')" style="'+_catBS+';flex:1;min-width:0;text-align:left;'+
+        'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
+        'padding:9px 12px;border:1.5px solid var(--border);background:var(--bg2);color:var(--text)">'+
+        '<span style="font-size:12.5px;font-weight:700;line-height:1.3">'+esc(p.nombre)+'</span>'+
+        '<span style="font-size:10.5px;font-family:var(--mono);line-height:1.35">'+
+          '<span class="cat-tramo" style="color:'+col[tr]+';font-weight:800">'+tr+'</span>'+
+          '<span style="color:var(--text3)"> · '+n+' actividad'+(n!==1?'es':'')+
+          (niv?' · '+niv:'')+'</span></span>'+
+      '</button></div>';
+  }).join('');
+}
+function _catBuscarHTML(){
+  var B=S.catBuscar, sub=_catPorId(B.sub);
+  if(!sub) return '<div class="empty" style="padding:30px">Esa subpartida ya no está.</div>';
+  return '<button onclick="catBuscarCerrar()" style="'+_catVolverBS+'">‹ Volver al capítulo</button>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:15px;font-weight:800;line-height:1.3">'+esc(sub.numero)+' · '+esc(sub.nombre)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
+        esc(sub.id)+' · '+esc(sub.seccion)+'</div>'+
+    '</div></div>'+
+    '<div style="font-size:11.5px;color:var(--text3);line-height:1.5;margin-bottom:10px">'+
+      'Las partidas de este capítulo que todavía no cuelgan de ninguna línea, ordenadas por '+
+      'parecido de nombre. <b>Nada viene marcado</b>: la sugerencia es el orden, no la casilla.</div>'+
+    '<input type="text" placeholder="Buscar por nombre…" value="'+esc(B.q)+'" '+
+      'oninput="_catBuscarFiltro(this.value)" style="width:100%;min-height:44px;padding:0 12px;'+
+      'border:1.5px solid var(--border2);border-radius:11px;background:var(--bg2);color:var(--text);'+
+      'font-size:13px;font-family:var(--font);margin-bottom:10px">'+
+    '<div id="cat-buscar-lista">'+_catBuscarListaHTML()+'</div>'+
+    '<div id="cat-buscar-pie" style="position:sticky;bottom:0;padding:10px 0 4px;'+
+      'background:var(--bg)">'+_catBuscarPieHTML()+'</div>';
 }
 
 function _catSueltasHTML(){
@@ -17050,7 +17357,7 @@ function revCard(a){
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">'+
       '<button onclick="revEstado(\''+sid+'\',\'nil\')"  style="'+bs+(a.estado==='pendiente'?';background:var(--bg4);border-color:var(--text3);color:var(--text)':'')+'">Sin empezar</button>'+
       '<button onclick="revEstado(\''+sid+'\',\'prog\')" style="'+bs+(prog?';background:var(--amber-light);border-color:var(--amber);color:var(--amber)':'')+'">En proceso</button>'+
-      '<button onclick="revEstado(\''+sid+'\',\'done\')" style="'+bs+'">Terminada</button>'+
+      '<button onclick="revEstado(\''+sid+'\',\'done\')" style="'+bs+'">'+PAL_COMPLETADA+'</button>'+
     '</div>'+
     '<div id="revp-'+sid+'" style="display:'+(prog?'grid':'none')+';grid-template-columns:repeat(5,1fr);gap:5px;margin-top:8px">'+
       [10,25,50,75,90].map(function(v){
@@ -17667,8 +17974,10 @@ async function revEstado(id, modo, pct){
     else                   await Acciones.editar(id,{estado:'pendiente',porcentaje:0},
                                                  'devuelta a pendiente en revisión');
     S.revHechas[id]=true;
-    showToast(modo==='done'?'Completada ✓':modo==='prog'?(pct+'% guardado ✓'):'Sin empezar ✓');
-    renderRevision();
+    showToast(modo==='done'?(PAL_COMPLETADA+' ✓'):modo==='prog'?(pct+'% guardado ✓'):'Sin empezar ✓');
+    /* Antes esto era `renderRevision()` a secas. Desde el catalogo repintaba la
+       pantalla equivocada y el boton parecia muerto. */
+    _repintarDondeEstoy();
   }catch(e){ showToast('Error al guardar: '+(e.message||''),'err'); }
 }
 
@@ -17776,10 +18085,14 @@ function _pctDictado(txt){
 
 /* Repinta la pantalla en la que estas, sin adivinar. Antes esto llamaba a
    renderRevision() a secas, asi que dictar desde la lista habria repintado
-   otra pantalla. */
+   otra pantalla.
+   El catalogo va PRIMERO y por `currentTab`, no por `obraVista`: es su propia
+   pestaña, asi que mirando solo `obraVista` caia en renderActs() y desde el
+   catalogo parecia que el boton no habia hecho nada —aunque el dato si se
+   habia guardado, que es la peor forma de fallar. */
 function _repintarDondeEstoy(){
   try{
-    
+    if(S.currentTab==='catalogo'){ renderCatalogo(); return; }
     if(S.obraVista==='revision'){ renderRevision(); return; }
     renderActs();
   }catch(e){}
