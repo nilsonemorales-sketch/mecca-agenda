@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v89 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v90 — 16 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v89 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v90 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -253,6 +253,23 @@ de fiar.
 El resto de la explicación: `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`, todo
 por `Acciones`. **Cerrar NO está ahí**: lo hace el ✓ verde de la fila, que
 está siempre a la vista y a un toque. Una sola forma de cerrar por tarjeta.
+
+### Las cadenas (`predecesoras`) — dos formatos en la misma columna
+
+En la base conviven **objetos** `[{"id":"x","tipo":"FS","lag":0}]` (369 filas)
+y **textos** `["x"]` (3 filas, todas completadas). Todo lo que las usa compara
+contra `a.id`, que es un texto, así que con los objetos la comparación daba
+siempre `false` **en silencio**: 121 partidas abiertas que esperan por otra
+sin terminar nunca enseñaron el candado 🔒, y el editor abría en blanco las
+predecesoras que ya tenían puestas.
+
+**Lee siempre por `getPreds(a)` o `_predIds(campo)`**, que normalizan con
+`_normPreds` a ids de texto. Nadie lee `tipo` ni `lag` en todo el archivo. No
+compares `a.predecesoras` a mano.
+
+Una predecesora **que ya no existe no bloquea** (hay 18 apuntando a partidas
+borradas): si bloqueara, la partida quedaría trabada para siempre sin nada
+que se pueda terminar para soltarla.
 
 ### El recorrido paso a paso NO existe. No lo vuelvas a construir.
 
@@ -493,6 +510,9 @@ pertenece a ningún nivel.
 
 | **v89** — el botón «Sigue igual» llevaba desde v76 en el código y se había usado **cero veces** en 4.800 cambios: vivía dentro del modo selección de la lista, a cuatro toques. | Una función que nadie usa casi nunca está mal hecha — está mal **puesta**. Antes de construir algo nuevo, mira en `obra_cambios` si lo que ya existe se está usando: el dato está ahí. |
 | **v89** — una prueba pasaba el estado anterior a `page.evaluate` con un segundo argumento, pero el ayudante `G` era `async(f)=>p.evaluate(f)` y se lo comía: la comprobación reventaba en vez de comparar. | Un ayudante de pruebas que descarta argumentos en silencio hace fallar la comprobación más importante y parece un bug del app. |
+
+| **v90** — `isBlocked` hacía `S.acts.find(x=>x.id===id)` donde `id` venía siendo un OBJETO `{id,tipo,lag}`: comparar un texto con un objeto da siempre `false`. **121 partidas abiertas y trabadas nunca enseñaron el candado**, y el editor abría vacías las predecesoras de 369 filas. Todo el trabajo de armar cadenas no producía ninguna señal en el app. | Cuando una columna guarda JSON, comprueba **qué forma tiene de verdad en la base** antes de escribir el código que la lee. Aquí había dos formas y el código solo entendía la que casi no se usa. Un `===` entre tipos distintos falla callado: no hay error, solo una función que siempre dice que no. |
+| **v90** — la prueba del candado buscaba `/lock/i` en el HTML de la fila y casaba con `display:**block**`: daba verdadero para todas y no probaba nada. | Un selector flojo hace que la prueba diga que sí a todo. Busca el marcador exacto (el trazo del icono, un `title=`), no una palabra suelta que puede estar en un estilo. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base

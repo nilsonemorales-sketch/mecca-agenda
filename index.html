@@ -858,7 +858,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_89';
+const APP_VERSION='20260916_90';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -4824,8 +4824,9 @@ function buildPredSection(currentId, currentPreds){
 function _predIds(f){
   if(!f || !f.value) return [];
   try{
-    var v=JSON.parse(f.value);
-    return Array.isArray(v) ? v.filter(Boolean) : [];
+    // Por el mismo motivo que getPreds: el campo puede traer objetos o textos.
+    var v=_normPreds(JSON.parse(f.value));
+    return v;
   }catch(e){
     /* Si el campo viene roto por lo que sea, se empieza de cero en vez de
        tumbar la pantalla entera. Perder las predecesoras se ve y se arregla;
@@ -4911,10 +4912,30 @@ function _syncPredUI(ids){
   if(cnt){cnt.textContent=ids.length;cnt.style.display=ids.length?'':'none';}
 }
 
-// legacy no-op (kept for safety)
+/* ── LAS PREDECESORAS VIVEN EN DOS FORMATOS ──────────────────────────
+   En la base hay 369 filas con objetos — [{"id":"x","tipo":"FS","lag":0}] —
+   y 3 con textos sueltos — ["x"]. Todo lo que las usa (el candado, las
+   pastillas del editor, el buscador) compara contra `a.id`, que es un TEXTO.
+   Con los objetos la comparación era  x.id === {objeto}  y daba SIEMPRE
+   false, en silencio.
+
+   Lo que costaba: **121 partidas abiertas que esperan por otra sin terminar
+   nunca enseñaron el candado 🔒**, y al abrir el editor las predecesoras que
+   ya tenían puestas salían en blanco — así que amarrar una cadena no se veía
+   por ninguna parte.
+
+   Se normaliza a ids de texto, que es lo único que alguien lee: nadie mira
+   'tipo' ni 'lag' en todo el archivo. */
+function _normPreds(v){
+  if(!Array.isArray(v)) return [];
+  return v.map(function(p){
+    if(typeof p==='string') return p;
+    return (p && typeof p==='object' && p.id) ? String(p.id) : '';
+  }).filter(Boolean);
+}
 function getPreds(a){
   if(!a||!a.predecesoras) return [];
-  try{ return JSON.parse(a.predecesoras)||[]; }catch(e){ return []; }
+  try{ return _normPreds(JSON.parse(a.predecesoras)); }catch(e){ return []; }
 }
 // Vencimiento: usa fecha_fin si existe, si no usa fecha
 function fechaVenc(a){ return (a.fecha_fin&&a.fecha_fin>'')?a.fecha_fin:(a.fecha||''); }
@@ -4933,9 +4954,13 @@ function isProximaRetraso(a){
 function isBlocked(a){
   var ids=getPreds(a);
   if(!ids.length) return false;
+  var acts=S.acts||[];          // sin esto reventaba antes de la primera carga
   return ids.some(function(id){
-    var p=S.acts.find(function(x){return x.id===id;});
-    return p&&p.estado!=='completado';
+    var p=acts.find(function(x){return x.id===id;});
+    /* Una predecesora que ya no existe (hay 18 apuntando a partidas
+       borradas) no bloquea: si bloqueara, la partida quedaría trabada para
+       siempre sin nada que se pueda terminar para soltarla. */
+    return !!p && p.estado!=='completado';
   });
 }
 // After completing an act, auto-unblock successors (re-render only — DB state stays)
