@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v106 — 17 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v107 — 18 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v106 (17 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v107 (18 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -407,6 +407,84 @@ Dos reglas que se corrigieron ahí, medidas contra la base:
 
 **«Organización y Fijación Tubos Patinillos»** (11 actividades, hoy en Puertas)
 **se queda donde está**: no es de puertas, pero de quién es lo dice el dueño.
+
+#### Editar de verdad desde el módulo (v107)
+
+Palabras del dueño: *«necesito poder editar actividades. Me siento muy limitado
+en el módulo de prueba, no tengo todas las funciones»*. La tarjeta sabía hacer
+seis cosas —Sin empezar, En proceso, un porcentaje, Completada, Nota y Foto— y
+todo lo demás (el nombre, el apartamento, el contratista, las fechas, la cadena,
+los pendientes) estaba en el app **sin una sola puerta desde Partidas**.
+
+**NO se hizo un formulario nuevo.** `revCard` ganó tres botones —**Editar ·
+Repetir en… · Borrar**— y Editar abre **el de siempre**: `editAct` →
+`showAddAct`, que reparte en los tres tipos (propio / contratista /
+administrativa) y guarda por `saveAct` → `Acciones`. Dos formularios para lo
+mismo serían dos verdades sobre cómo se registra el trabajo, que es el error que
+este proyecto ya cometió con Hoy y con En Obra.
+
+**`editAct` y `delAct` trabajan por ID y miran `S.catActs`.** Aquí estaba la
+trampa: `showAddAct` va por **índice de `S.acts`**, y `S.acts` se pide con
+`estado=neq.completado`. Partidas es la única pantalla que enseña trabajo
+cerrado, así que sobre las **1.406 cerradas** el botón no habría hecho
+absolutamente nada — sin error y sin mensaje. Es el mismo fallo que costó la
+v103 en otra función. Ahora los dos usan **`_findActAny`**, meten la actividad
+en `S.acts` antes de abrir el formulario, **avisan si no la encuentran** y
+repintan con **`_repintarDondeEstoy()`** — con `renderActs()` a secas, editar
+desde el catálogo repintaba la pantalla equivocada.
+
+**La tanda llama a `Acciones` una vez por actividad, pero repinta UNA sola vez.**
+Marcar varias y cambiar contratista, entrega, grupo o estado: cada actividad
+pasa por la capa —para que selle su hora y deje su rastro— y el repintado va al
+final. Repintar por fila sobre decenas de tarjetas es lo que hacía que cada toque
+fuera un tirón (v86). **Una que se caiga no tumba las demás y se dice CUÁL**, el
+mismo criterio del Repaso. Y la tanda entera **se deshace de golpe**
+(`catTandaDeshacer`, con el retrato de antes guardado en `S.catUndo`), igual que
+`cadDeshacerTanda` en la v104.
+
+Del estado solo se ofrecen **Completada** y **Sin empezar**: un porcentaje a
+medias en bloque no significa nada, porque no todas las partidas de una tanda van
+por el mismo sitio. Y cerrar va por **`Acciones.completar`**, el mismo camino que
+el botón de la tarjeta.
+
+**Duplicar copia el TRABAJO, no el AVANCE.** «Repetir en…» ofrece solo los
+apartamentos que **todavía no la tienen** —comparando por descripción, el criterio
+exacto del Repaso—, **los enseña antes de crearlos**, y reusa
+`Acciones.crear(datos,{ubicaciones:[...]})`, que ya sabe crear una por área. Se
+copian descripción, contratista, tipo y la ventana de fechas; **no** se copian
+porcentaje, estado, notas, fotos ni horas: nacen en cero.
+
+**Lo que nace aquí queda dentro del grupo.** Una actividad recién creada no tiene
+partida y caería en la bandeja de sueltas, fuera de donde el dueño está parado.
+`_catAmarrar` le busca la partida por descripción exacta y, si no existe, la crea
+con el capítulo y el grupo de donde nació. **Si la partida ya existía en otro
+grupo NO se le cambia el grupo**: el dueño la movió ahí y un alta no es motivo
+para mover trabajo ya clasificado. Si el amarre falla, **se dice** — la actividad
+sí se creó y buscarla en el grupo y no encontrarla es peor que el error.
+
+**El rastro del borrado va ANTES del borrado** y lleva **estado, avance,
+responsable y ubicación**. Hasta la v106 el `logCambio` de `Acciones.eliminar` iba
+DESPUÉS del DELETE y decía solo «Actividad eliminada»: si la red se caía en medio
+no quedaba nada escrito, y aunque cuajara, el historial no guardaba en qué estado
+ni de quién era lo que se fue. Una actividad borrada no se puede volver a mirar: o
+el rastro lo dice todo, o se perdió. Si el borrado no cuaja se escribe una segunda
+línea diciéndolo; la primera **no se retira**, porque «se intentó borrar esto» es
+verdad.
+
+**Los paneles de borrar, repetir y la tanda viven fuera de `#c-catalogo`**
+(`_catPanelHost`, el mismo patrón que la salud de cadenas de la v104): `revCard`
+se pinta desde Partidas **y** desde Revisión, y la pregunta tiene que salir en las
+dos sin que cada pantalla sepa pintarla. Llevan `var(--st)` arriba y `var(--sb)`
+abajo — sin eso la × nace debajo del notch del iPhone (v78).
+
+**Las casillas van FUERA de `revCard`** (`_catCasillaHTML`), no dentro: `revCard`
+se pinta también en Revisión, donde el modo marcar no existe. Meterlas dentro
+habría sido una tarjeta con dos comportamientos según quién la pinta.
+
+**`Acciones.crear` empuja también a `S.catActs`** y avisa con `_catTrasCrear`. Sin
+lo primero, lo recién creado no aparecía en Partidas hasta recargar, porque el
+catálogo tiene su propia carga. Las dos líneas están en la capa de escritura
+porque es el único sitio que sabe con certeza que la actividad existe en la base.
 
 ### El Repaso por partida repetida (v94) — por qué existe
 
@@ -1124,6 +1202,12 @@ mismo:**
   que tocan personal (Tipo de personal, Contratista, Personal x la casa):
   **1.059 y 347 vencidas** hoy. Y ninguno vuelve a enseñar un bloque
   «Contratistas» con todos dentro — son **17 grupos**, uno por contratista
+- **Editar una actividad CERRADA desde Partidas abre el formulario.** Es la
+  comprobación que importa: hasta la v106 no hacía nada y no decía nada. Y
+  `editAct('no-existe')` **avisa**
+- **Toda escritura a `obra_actividades` lleva su `POST obra_cambios` al lado.**
+  Esa es la firma de `Acciones`: uno suelto quiere decir que alguien escribió
+  por fuera
 - **El capítulo de Partidas está GUARDADO.** Si tocas `_catCapDe`, mide cuántas
   partidas cambiarían ANTES de escribir, y dilo. Un cambio de regla sin `UPDATE`
   no mueve nada; un `UPDATE` sin medir pisa la curación del dueño
@@ -1238,6 +1322,8 @@ pertenece a ningún nivel.
 | **v104** — la agrupación de entrada de la lista («Tipo de personal») metía a los 17 contratistas en un solo bloque, «Contratistas · 958 actividades». El dueño lo vio en obra y lo dijo en siete palabras: «aquí quiero q se separe por contratista». La agrupación «Contratista», que ya hacía eso, llevaba versiones ahí sin que nadie la tocara. | Una cabecera que agrupa el 90% de la lista bajo una sola palabra no agrupa nada. Y que la función exista en otra pastilla no vale: si el usuario entra por otra puerta, hay que arreglar **la puerta por la que entra**. |
 | **v106** — se corrigió `_catCapDe` (carpintería, gavetas, el capítulo AC) y en pantalla no cambió NADA: el capítulo de cada partida está **guardado** en `obra_partidas` desde la siembra, y la regla solo se consulta al sembrar. Hizo falta un `UPDATE` de una vez, midiendo antes que tocaba 27 partidas y ninguna más. | Cuando una regla se ejecuta UNA vez y su resultado se guarda, arreglar la regla no arregla los datos. Antes de dar por bueno un cambio de criterio, pregúntate si lo que ve el usuario sale de la regla o de una columna — y si es de la columna, mide el diff **antes** de escribirlo. |
 | **v106** — el prompt traía la tabla de subpartidas con sus conteos, pero no las palabras que los producen. Reconstruirlas a ciegas dio 12.00 exacto y el resto a ±3, con dos grupos bastante fuera. | La tabla de un prompt es el **destino**, no el camino. Si te dan números sin la regla que los genera, reconstruye lo que puedas, **di en qué te separas** y deja la corrección a mano puesta — no te inventes palabras hasta que el número cuadre, porque entonces el grupo deja de querer decir algo. |
+| **v107** — el botón de editar iba a ponerse tal cual sobre las tarjetas del catálogo. `showAddAct` va por **índice de `S.acts`**, que no trae las cerradas: sobre las 1.406 cerradas —que son justo las que Partidas enseña y ninguna otra pantalla— no habría hecho nada, sin error y sin mensaje. | Antes de poner un botón nuevo sobre una pantalla, mira **de qué array lee** la función que va a llamar. En este app hay dos cargas de actividades y solo una trae lo cerrado; el `if(ai>=0)` sin `else` convierte esa diferencia en un botón muerto. Tercera vez que la misma grieta corta en sitio distinto (v102, v103, v107). |
+| **v107** — una sonda de la prueba buscaba las casillas por `textContent==='Marcar'` y daba **cero**: el botón lleva el símbolo ☐ pegado al texto, así que el contenido real era «☐Marcar». Parecía que las casillas no se pintaban. | Un botón con icono no tiene el texto que crees. Busca por el `onclick` —que es exacto y es lo que de verdad hace— y no por lo que se lee. Y de paso, esa sonda encontró un botón de 34 px que llevaba una versión colado: **medir lo visible paga, aunque el fallo no sea el que buscabas**. |
 | **v105** — la prueba esperaba con `window.S && S.acts.length`, y `S` se declara con `let`: **no está en `window`**. La guarda daba siempre falso y la prueba se quedó 60 s dando por hecho que el app no había cargado. Antes de eso, buscaba el agrupador entre los `<button>` y el visible es un `<select>` —las pastillas con esas etiquetas viven en el panel de Filtros, plegado. | Un `let` de nivel superior es un global, pero **no una propiedad de `window`**: preguntar por `window.X` miente sin error. Y antes de dar por rota una pantalla, comprueba que estás tocando el control que el usuario ve — es otra vez el v58. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se

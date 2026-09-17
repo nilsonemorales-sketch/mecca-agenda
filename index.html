@@ -865,7 +865,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260917_106';
+const APP_VERSION='20260918_107';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1806,6 +1806,11 @@ let S={
      hizo falta una versión entera para arreglar. El dueño entra DIRECTO a
      Partidas. */
   catGrupo:null, catUbic:null, catMover:null, catGrupoNuevo:null, catCurar:false,
+  /* v107 — el estado de editar, borrar, repetir y la tanda. Nace aquí por lo
+     mismo que `revHechas` en la v103: el dueño entra DIRECTO a Partidas y una
+     variable que no existe revienta la pantalla entera sin decir por qué. */
+  catBorrar:null, catRepetir:null, catTandaPick:null, catUndo:null,
+  catSelModo:false, catSel2:{}, _catAltaCtx:null,
   catQ:'', catQVivo:'', catQChips:{}, catQTope:50, catCerradasOpen:false,
   catCierres:{}, catCierresErr:'', catGruposCustom:{},
   /* El app abre en Obra desde v87: se usa de pie en la obra, y Obra pregunta
@@ -8802,6 +8807,15 @@ var Acciones = (function(){
         creadas.forEach(function(a){ _quitarLocal(a.id); });
         throw e;
       }
+      /* El catálogo tiene su propia carga (`S.catActs`, la única que trae lo
+         cerrado) y `crear` solo empujaba a `S.acts`: lo recién creado no
+         aparecía en Partidas hasta recargar. Y el aviso deja que el módulo la
+         amarre a su partida — si no, nace suelta y no en el grupo donde el
+         dueño está parado. Las dos líneas están aquí, en la capa de escritura,
+         porque es el único sitio que sabe con certeza que la actividad existe
+         en la base. */
+      if(Array.isArray(S.catActs)) creadas.forEach(function(a){ S.catActs.push(a); });
+      if(typeof _catTrasCrear==='function'){ try{ _catTrasCrear(creadas); }catch(e2){} }
       return {ok:true, creadas:creadas};
     },
 
@@ -8871,17 +8885,32 @@ var Acciones = (function(){
                     detalle||(fecha?('planificada para '+fecha):'quitada del plan'));
     },
 
+    /* EL RASTRO SE ESCRIBE ANTES DE BORRAR (v107), regla del dueño y sin
+       excepción. Hasta la v106 el `logCambio` iba DESPUÉS del DELETE y decía
+       solo «Actividad eliminada»: si la red se caía en medio no quedaba nada
+       escrito, y aunque cuajara, el historial no guardaba en qué estado ni de
+       quién era lo que se fue. Una actividad borrada no se puede volver a
+       mirar: o el rastro lo dice todo, o se perdió.
+       Si el borrado NO cuaja se escribe una segunda línea diciéndolo — la
+       primera no se retira, porque decir «se intentó borrar esto» es verdad y
+       esconderlo no. */
     async eliminar(id){
       var a=_buscarLocal(id);
       var copia=a?Object.assign({},a):null;
+      var _det='Eliminada — estado: '+((copia&&copia.estado)||'?')+
+               ' · avance: '+(copia?_pct(copia.porcentaje):0)+'%'+
+               ' · responsable: '+((copia&&copia.personal_nombre)||'sin asignar')+
+               ' · ubicación: '+((copia&&copia.area)||'sin ubicación');
+      logCambio('eliminado','actividad',id,(copia&&copia.descripcion)||'',_det);
       _quitarLocal(id);
       try{
         await sb('obra_actividades?id=eq.'+id,{method:'DELETE',prefer:'return=minimal'});
       }catch(e){
         if(copia)(S.acts=S.acts||[]).push(copia);
+        logCambio('editado','actividad',id,(copia&&copia.descripcion)||'',
+                  'NO se pudo eliminar ('+((e&&e.message)||'sin motivo')+') — la actividad sigue ahí');
         throw e;
       }
-      logCambio('eliminado','actividad',id,(copia&&copia.descripcion)||'','Actividad eliminada');
       return {ok:true, id:id, eliminada:copia};
     },
 
@@ -10426,14 +10455,30 @@ function showAddAct(ai, ctx){
   openModal();
 }
 
-// editAct accepts an activity ID string; fallback to S.actsActivas if not in S.acts
+/* editAct recibe el ID de la actividad. `showAddAct` trabaja por ÍNDICE de
+   `S.acts`, así que lo primero es encontrarla ahí.
+
+   Y AHÍ ESTABA LA TRAMPA (v107): `S.acts` se pide con `estado=neq.completado`,
+   o sea que NO trae ninguna de las 1.406 cerradas. Hasta la v106 esto miraba
+   solo `S.acts` y `S.actsActivas`; desde Partidas —la única pantalla que enseña
+   trabajo cerrado— el botón de editar no habría hecho absolutamente nada, sin
+   error y sin mensaje. Es el mismo fallo que costó la v103 en otra función.
+   `_findActAny` mira también en `S.catActs`, y si la encuentra fuera se mete en
+   `S.acts` antes de abrir el formulario — que es lo que ya se hacía con
+   `S.actsActivas`.
+
+   Y SI NO LA ENCUENTRA, LO DICE. Un botón que no hace nada y no explica por qué
+   es la peor forma de fallar: el usuario lo vuelve a tocar y se queda pensando
+   que el app está roto. */
 function editAct(id){
   var ai=S.acts.findIndex(function(x){return x.id===id;});
   if(ai<0){
-    var _a=(S.actsActivas||[]).find(function(x){return x.id===id;});
+    var _a=_findActAny(id);
     if(_a){ S.acts.unshift(_a); ai=0; }
   }
-  if(ai>=0) showAddAct(ai);
+  if(ai>=0){ showAddAct(ai); return true; }
+  showToast('No encuentro esa actividad. Recarga la pantalla y vuelve a intentarlo.','err',6000);
+  return false;
 }
 
 // ── FORM PERSONAL X LA CASA ──────────────────────────────
@@ -11243,20 +11288,26 @@ async function saveAct(ai){
   }
 }
 
-async function delAct(ai){
-  if(!isAdmin()){alert('Solo el administrador puede eliminar actividades.');return;}
-  if(!confirm('¿Eliminar esta actividad?'))return;
-  // Use stored edit ID to avoid stale index bug (auto-refresh replaces S.acts every 90s)
-  var editId=(document.getElementById('a-edit-id')||{value:''}).value.trim();
-  var realIdx=editId?S.acts.findIndex(function(x){return x.id===editId;}):ai;
-  if(realIdx<0)realIdx=ai;
-  const a=S.acts[realIdx];
-  if(!a){closeModal();return;}
+/* Trabaja por ID, no por índice (v107). El índice de `S.acts` se queda viejo
+   —la recarga automática reemplaza el array cada 90 s— y además `S.acts` no
+   trae las cerradas, así que desde Partidas el índice no existía siquiera.
+   `_findActAny` mira también en `S.catActs`. Y repinta con
+   `_repintarDondeEstoy()`: con `renderActs()` a secas, borrar desde el catálogo
+   repintaba la pantalla equivocada y el botón parecía muerto. */
+async function delAct(ai, idExpl){
+  if(!isAdmin()){ showToast('Solo el administrador puede eliminar actividades.','warn',4000); return; }
+  var editId=String(idExpl||'').trim() ||
+             (document.getElementById('a-edit-id')||{value:''}).value.trim();
+  var a=editId ? _findActAny(editId)
+               : (typeof ai==='number' ? (S.acts||[])[ai] : null);
+  if(!a){ closeModal(); showToast('No encuentro esa actividad.','err',5000); return; }
+  if(!confirm('¿Eliminar «'+String(a.descripcion||'').slice(0,60)+'»?')) return;
   closeModal();
   try{
-    var _p=Acciones.eliminar(a.id);renderActs();
-    await _p;
-  }catch(e){ renderActs(); showToast('No se pudo eliminar: '+(e.message||''),'err',4000); }
+    await Acciones.eliminar(a.id);
+    showToast('Eliminada ✓');
+  }catch(e){ showToast('No se pudo eliminar: '+((e&&e.message)||''),'err',6000); }
+  _repintarDondeEstoy();
 }
 
 // ── RENDER REPORTES ───────────────────────────────────
@@ -17170,12 +17221,364 @@ function _catOrdenFaltantes(acts, area){
 }
 
 function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; S.catGrupo=null; S.catUbic=null; S.catCurar=false; renderCatalogo(); _catArriba(); }
+/* ══ v107 · EDITAR DE VERDAD DESDE EL MÓDULO ═════════════════════════════
+   Palabras del dueño: «necesito poder editar actividades. Me siento muy
+   limitado en el módulo de prueba, no tengo todas las funciones, y no puedo
+   terminar de ajustarlo con las opciones de edición que tengo».
+
+   Nada de esto es un formulario nuevo. Editar abre el de siempre (`editAct` →
+   `showAddAct`), crear abre el de siempre con el contexto puesto, y TODO
+   escribe por `Acciones`. En este proyecto ya hubo diez puertas de registro y
+   costó cerrarlas: una función más no vale una segunda verdad sobre cómo se
+   guarda el trabajo.
+
+   Las pantallas van en un panel a pantalla completa —el mismo patrón que la
+   salud de cadenas de la v104— porque `revCard` se pinta desde Partidas Y desde
+   Revisión, y la pregunta tiene que salir en las dos sin que cada pantalla
+   tenga que saber pintarla. Lleva `var(--st)` arriba y `var(--sb)` abajo: sin
+   eso la × nace debajo del notch del iPhone y no se puede cerrar (v78). */
+var _catPBS='min-height:46px;border-radius:11px;cursor:pointer;font-family:var(--font);'+
+            'font-size:13px;font-weight:700;padding:0 14px;border:1.5px solid var(--border2);'+
+            'background:var(--bg2);color:var(--text)';
+function _catPanelHost(){
+  var el=document.getElementById('cat-panel');
+  if(!el){
+    el=document.createElement('div');
+    el.id='cat-panel';
+    el.style.cssText='position:fixed;inset:0;z-index:71;background:var(--bg);overflow-y:auto;'+
+      'padding:calc(var(--st,0px) + 14px) 14px calc(var(--sb,0px) + 20px);display:none';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function _catPanel(){
+  var el=_catPanelHost();
+  var abierto=!!(S.catBorrar || S.catRepetir || S.catTandaPick);
+  el.style.display=abierto?'block':'none';
+  if(!abierto){ el.innerHTML=''; return; }
+  try{
+    el.innerHTML = S.catBorrar ? _catBorrarHTML()
+                 : S.catRepetir ? _catRepetirHTML()
+                 : _catTandaPickHTML();
+  }catch(e){
+    console.warn('_catPanel:',e);
+    el.innerHTML='<div class="empty" style="padding:36px 16px;color:var(--text3)">'+
+      'No se pudo pintar esta pantalla.<br><button onclick="catPanelCerrar()" style="'+_catPBS+
+      ';margin-top:14px;border-color:var(--accent);background:var(--accent-fill);color:var(--accent-on)">Cerrar</button></div>';
+  }
+}
+function catPanelCerrar(){ S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null; _catPanel(); }
+function _catPanelCab(titulo, sub){
+  return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">'+
+    '<div><div style="font-size:17px;font-weight:800;line-height:1.3">'+esc(titulo)+'</div>'+
+    (sub?'<div style="font-size:12px;color:var(--text3);margin-top:4px;line-height:1.45">'+sub+'</div>':'')+
+    '</div><button onclick="catPanelCerrar()" style="'+_catPBS+';min-width:46px;padding:0;font-size:20px">×</button></div>';
+}
+/* El pulgar vive abajo: la salida de verdad va al final, ancha, además de la ×. */
+function _catPanelPie(){
+  return '<button onclick="catPanelCerrar()" style="'+_catPBS+';width:100%;margin-top:14px;'+
+    'min-height:50px;color:var(--text2)">Cancelar</button><div style="height:40px"></div>';
+}
+
+/* ── EL AMARRE DE LO QUE NACE AQUÍ ──
+   Una actividad recién creada no tiene partida y caería en la bandeja de
+   sueltas, o sea fuera del grupo donde el dueño está parado. Se le busca la
+   partida por descripción exacta —el mismo criterio del catálogo— y si no
+   existe se crea, con el capítulo y el grupo de donde nació.
+   CERO escrituras a `obra_actividades`: el amarre es una tabla aparte, que es
+   lo que permite borrar el módulo sin dejar rastro. */
+async function _catAmarrar(actId, desc, cap, grupo){
+  try{
+    var p=_catAgenda().find(function(x){ return String(x.nombre)===String(desc); });
+    if(!p){
+      p={id:uid(), tipo:'agenda', capitulo:String(cap||'0'), numero:'', nombre:String(desc||''),
+         oficio:'', unidad:'', aplica:'', codigo_presupuesto:'', activo:true, padre_id:null,
+         precio_unitario:0, valor:null, seccion:'', grupo:grupo||null};
+      await sb('obra_partidas',{method:'POST',prefer:'return=minimal',body:JSON.stringify(p)});
+      (S.catPartidas=S.catPartidas||[]).push(p);
+    }else if(grupo && _catGrupoDe(p)!==grupo){
+      /* La partida ya existía en otro grupo: NO se le cambia el grupo por la
+         espalda. El dueño la movió ahí (o la regla la puso ahí) y una alta no
+         es motivo para mover trabajo que ya estaba clasificado. */
+    }
+    await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+             body:JSON.stringify({id:uid(), actividad_id:actId, partida_id:p.id})});
+    (S.catAmarres=S.catAmarres||{})[actId]=p.id;
+    S._catMapa=null; S._catPrec=null;
+    return p;
+  }catch(e){
+    /* No se traga: si el amarre falla, la actividad SÍ se creó y hay que
+       decirlo, o el dueño la busca en el grupo y no está. */
+    showToast('Se creó, pero no quedó dentro del grupo: '+((e&&e.message)||''),'warn',7000);
+    return null;
+  }
+}
+
+/* ── b) CREAR AQUÍ MISMO, CON EL CONTEXTO PUESTO ── */
+function _catContratistaDe(acts){
+  var c={}, mejor='', n=0;
+  (acts||[]).forEach(function(a){
+    var q=String(a.personal_nombre||'').trim(); if(!q) return;
+    c[q]=(c[q]||0)+1; if(c[q]>n){ n=c[q]; mejor=q; }
+  });
+  /* «Si hay uno claro»: con menos de la mitad no se adivina. Poner un
+     contratista que no es cuesta más que el toque que ahorra (v94). */
+  return (n*2 > (acts||[]).length) ? mejor : '';
+}
+function catNueva(){
+  var cap=String(S.catCap||''), g=S.catGrupo, area=S.catUbic||'';
+  var acts=(g?_catActsDeGrupo(cap,g):[]).filter(function(a){
+    return !area || String(a.area||'').trim()===area;
+  });
+  var quien=_catContratistaDe(acts);
+  S._catAltaCtx={cap:cap, grupo:g||'', area:area};
+  var ctx={area:area};
+  if(quien) showAddActContratista(undefined, quien, ctx);
+  else showAddAct(undefined, ctx);
+}
+
+/* El aviso que manda `Acciones.crear`. Solo hace algo si el alta salió DE
+   AQUÍ (`S._catAltaCtx`); una actividad creada desde Actividades sigue naciendo
+   suelta, en la bandeja, como siempre. */
+function _catTrasCrear(creadas){
+  var C=S._catAltaCtx; if(!C || !creadas || !creadas.length) return;
+  S._catAltaCtx=null;
+  (async function(){
+    for(var i=0;i<creadas.length;i++)
+      await _catAmarrar(creadas[i].id, creadas[i].descripcion, C.cap, C.grupo);
+    _repintarDondeEstoy();
+  })();
+}
+
+/* ── c) BORRAR, con el rastro antes ── */
+function catBorrarAbrir(id){
+  if(!isAdmin()){ showToast('Solo el administrador puede eliminar actividades.','warn',4000); return; }
+  var a=_findActAny(id);
+  if(!a){ showToast('No encuentro esa actividad.','err',5000); return; }
+  S.catBorrar={id:id}; S.catRepetir=null; S.catTandaPick=null; _catPanel();
+}
+function _catBorrarHTML(){
+  var a=_findActAny(S.catBorrar.id)||{};
+  return _catPanelCab('¿Borrar esta actividad?',
+      'No se puede deshacer. Antes de borrarla queda escrito en el historial qué era, '+
+      'en qué estado iba y de quién era.')+
+    '<div style="background:var(--bg2);border:1.5px solid var(--red);border-radius:12px;padding:13px">'+
+      '<div style="font-size:14px;font-weight:700;line-height:1.35">'+esc(a.descripcion||'')+'</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:7px;font-family:var(--mono);line-height:1.6">'+
+        esc(a.area||'sin ubicación')+'<br>'+
+        esc(a.personal_nombre||'sin asignar')+'<br>'+
+        esc(a.estado||'')+' · '+(parseInt(a.porcentaje,10)||0)+'%'+
+      '</div></div>'+
+    '<button onclick="catBorrarHacer()" style="'+_catPBS+';width:100%;margin-top:14px;min-height:52px;'+
+      'border-color:var(--red);background:var(--red-light);color:var(--red)">Sí, borrarla</button>'+
+    _catPanelPie();
+}
+async function catBorrarHacer(){
+  var id=S.catBorrar&&S.catBorrar.id; if(!id) return;
+  S.catBorrar=null; _catPanel();
+  try{ await Acciones.eliminar(id); showToast('Eliminada ✓'); }
+  catch(e){ showToast('No se pudo eliminar: '+((e&&e.message)||''),'err',7000); }
+  _repintarDondeEstoy();
+}
+
+/* ── e) REPETIR EN OTROS APARTAMENTOS ──
+   Lo que más tecleo ahorra en una torre repetitiva. Ofrece SOLO los que
+   todavía no la tienen —comparando por descripción, el mismo criterio exacto
+   del Repaso— y ENSEÑA cuáles se van a crear antes de crearlas. */
+function catRepetirAbrir(id){
+  var a=_findActAny(id);
+  if(!a){ showToast('No encuentro esa actividad.','err',5000); return; }
+  var desc=String(a.descripcion||'');
+  var tiene={};
+  _catTodas().forEach(function(x){
+    if(String(x.descripcion||'')===desc) tiene[String(x.area||'').trim()]=1;
+  });
+  var faltan=REC_ORDEN.filter(function(u){ return !tiene[u]; });
+  S.catRepetir={id:id, faltan:faltan, marcadas:faltan.slice(), yaEstan:REC_ORDEN.length-faltan.length};
+  S.catBorrar=null; S.catTandaPick=null; _catPanel();
+}
+function catRepetirToggle(u){
+  var R=S.catRepetir; if(!R) return;
+  var i=R.marcadas.indexOf(u);
+  if(i>=0) R.marcadas.splice(i,1); else R.marcadas.push(u);
+  _catPanel();
+}
+function _catRepetirHTML(){
+  var R=S.catRepetir, a=_findActAny(R.id)||{};
+  var h=_catPanelCab('Repetir en otros apartamentos',
+      'Ya está en <b>'+R.yaEstan+'</b> de los '+REC_ORDEN.length+'. Se copia el trabajo '+
+      '—descripción, contratista y la ventana de fechas—, <b>no el avance</b>: nacen en cero, '+
+      'sin notas ni fotos.')+
+    '<div style="background:var(--bg2);border:1.5px solid var(--border2);border-radius:12px;padding:12px;'+
+      'font-size:13.5px;font-weight:700;line-height:1.35;margin-bottom:12px">'+esc(a.descripcion||'')+'</div>';
+  if(!R.faltan.length)
+    return h+'<div class="empty" style="padding:26px 16px;color:var(--green);font-weight:700">'+
+      'Ya está en los once. No hay dónde repetirla.</div>'+_catPanelPie();
+  R.faltan.forEach(function(u){
+    var on=R.marcadas.indexOf(u)>=0;
+    h+='<button onclick="catRepetirToggle('+_catQ(u)+')" style="'+_catPBS+';width:100%;margin-bottom:6px;'+
+      'text-align:left;display:flex;align-items:center;gap:10px;'+
+      'border-color:'+(on?'var(--accent)':'var(--border2)')+';background:'+(on?'var(--accent-soft)':'var(--bg2)')+'">'+
+      '<span style="font-size:15px;width:18px">'+(on?'☑':'☐')+'</span>'+esc(u)+'</button>';
+  });
+  h+='<button onclick="catRepetirHacer()" style="'+_catPBS+';width:100%;margin-top:10px;min-height:52px;'+
+    'border-color:var(--green);background:var(--green-light);color:var(--green)">'+
+    'Crear las '+R.marcadas.length+'</button>';
+  return h+_catPanelPie();
+}
+async function catRepetirHacer(){
+  var R=S.catRepetir; if(!R) return;
+  var a=_findActAny(R.id);
+  if(!a || !R.marcadas.length){ showToast('No hay ninguna marcada','warn',3000); return; }
+  var areas=R.marcadas.slice(), pid=_catA()[a.id], p=pid?_catPorId(pid):null;
+  S.catRepetir=null; _catPanel();
+  /* Una sola llamada: `Acciones.crear` ya sabe crear una por ubicación, que es
+     lo que usa el formulario cuando se marcan varias. No se abre otro camino
+     de alta. `confirmarDuplicado` va en true porque repetir A PROPÓSITO la
+     misma partida en otro apartamento es justo lo que se pidió. */
+  try{
+    var r=await Acciones.crear({
+      descripcion:a.descripcion, tipo_personal:a.tipo_personal||'propio',
+      personal_nombre:a.personal_nombre||'', personal_id:a.personal_id||'',
+      fecha_inicio:a.fecha_inicio||'', fecha_fin:a.fecha_fin||'',
+      prioridad:a.prioridad||'normal', area:areas[0]
+    },{ubicaciones:areas, confirmarDuplicado:true});
+    var creadas=(r&&r.creadas)||[];
+    for(var i=0;i<creadas.length;i++)
+      await _catAmarrar(creadas[i].id, a.descripcion, (p&&p.capitulo)||S.catCap||'0', p?_catGrupoDe(p):'');
+    showToast('Creadas '+(creadas.length||areas.length)+' ✓');
+  }catch(e){ showToast('No se pudo repetir: '+((e&&e.message)||''),'err',7000); }
+  _repintarDondeEstoy();
+}
+
+/* ── d) CAMBIAR VARIAS DE UNA VEZ ──
+   Una operación POR actividad a través de `Acciones` —para que cada una selle
+   su hora y deje su rastro— pero UN SOLO repintado al final. Repintar por fila
+   sobre decenas de tarjetas es lo que hacía que cada toque fuera un tirón
+   (v86). */
+function catSelModo(){ S.catSelModo=!S.catSelModo; S.catSel2={}; renderCatalogo(); }
+function catSelToggle(id){
+  S.catSel2=S.catSel2||{};
+  if(S.catSel2[id]) delete S.catSel2[id]; else S.catSel2[id]=1;
+  renderCatalogo();
+}
+function _catSel2Ids(){ return Object.keys(S.catSel2||{}); }
+function catTandaAbrir(campo){
+  if(!_catSel2Ids().length){ showToast('No hay ninguna marcada','warn',3000); return; }
+  S.catTandaPick={campo:campo, valor:''}; S.catBorrar=null; S.catRepetir=null; _catPanel();
+}
+function catTandaValor(v){ if(S.catTandaPick){ S.catTandaPick.valor=v; _catPanel(); } }
+function _catTandaPickHTML(){
+  var T=S.catTandaPick, n=_catSel2Ids().length;
+  var tit={contratista:'¿Qué contratista?', fecha:'¿Para qué fecha?',
+           grupo:'¿A qué grupo?', estado:'¿Qué estado?'}[T.campo];
+  var h=_catPanelCab(tit, 'Se aplica a las <b>'+n+'</b> marcadas, una por una.');
+  var opt=function(v,txt){
+    var on=(T.valor===v);
+    return '<button onclick="catTandaValor('+_catQ(v)+')" style="'+_catPBS+';width:100%;margin-bottom:6px;'+
+      'text-align:left;border-color:'+(on?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(on?'var(--accent-soft)':'var(--bg2)')+'">'+esc(txt)+'</button>';
+  };
+  if(T.campo==='contratista'){
+    var nombres=[...new Set(_catTodas().map(function(a){ return String(a.personal_nombre||'').trim(); })
+      .filter(Boolean))].sort();
+    nombres.forEach(function(q){ h+=opt(q,q); });
+  }else if(T.campo==='grupo'){
+    _catGruposDe(String(S.catCap||'')).forEach(function(g){ h+=opt(g,g); });
+  }else if(T.campo==='estado'){
+    /* Solo dos. Un porcentaje a medias en bloque no significa nada: no todas
+       las partidas de una tanda van por el mismo sitio. */
+    h+=opt('done',PAL_COMPLETADA)+opt('nil','Sin empezar');
+  }else{
+    var hoy=today();
+    h+=opt(_isoAddDias(hoy,7),'En una semana')+
+       opt(_isoAddDias(hoy,14),'En dos semanas')+
+       opt(_finDeSemana(),'Este viernes')+
+       '<input type="date" value="'+esc(T.valor||'')+'" onchange="catTandaValor(this.value)" '+
+       'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+       'border-radius:11px;padding:0 12px;font-size:15px;font-family:var(--font);'+
+       'background:var(--bg2);color:var(--text);margin-top:4px">';
+  }
+  h+='<button onclick="catTandaAplicar()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:52px;'+
+    'border-color:var(--green);background:var(--green-light);color:var(--green)'+
+    (T.valor?'':';opacity:.45')+'">Aplicar a las '+n+'</button>';
+  return h+_catPanelPie();
+}
+async function catTandaAplicar(){
+  var T=S.catTandaPick; if(!T || !T.valor) { showToast('Escoge un valor','warn',3000); return; }
+  var ids=_catSel2Ids(); if(!ids.length) return;
+  /* EL RETRATO DE ANTES, para poder deshacer la tanda entera de golpe — la
+     misma idea que `cadDeshacerTanda` en la v104. Se guarda antes de escribir
+     nada: después ya no se sabe de dónde venían. */
+  S.catUndo={campo:T.campo, previas:ids.map(function(id){
+    var a=_findActAny(id)||{};
+    return {id:id, nombre:a.descripcion||'', personal_nombre:a.personal_nombre||'',
+            tipo_personal:a.tipo_personal||'', fecha_fin:a.fecha_fin||'',
+            estado:a.estado||'', porcentaje:String(a.porcentaje||'0'),
+            grupo:(function(){ var q=_catA()[id]; var p=q?_catPorId(q):null; return p?(p.grupo||null):null; })()};
+  })};
+  var campo=T.campo, valor=T.valor;
+  S.catTandaPick=null; _catPanel();
+  var ok=0, fallos=[];
+  for(var i=0;i<ids.length;i++){
+    var id=ids[i];
+    try{
+      /* El tercer argumento de `asignar` es el DETALLE de la bitácora, no el
+         tipo: se dice de dónde vino el cambio, como pide `editar(id,c,detalle)`. */
+      if(campo==='contratista')   await Acciones.asignar(id, valor, 'responsable → '+valor+' (tanda en Partidas)');
+      else if(campo==='fecha')    await Acciones.editar(id, {fecha_fin:valor}, 'entrega → '+valor+' (tanda en Partidas)');
+      /* Cerrar va por `Acciones.completar`, el MISMO camino que el botón
+         Completada de la tarjeta (`revEstado`). Dos formas de cerrar es el
+         error que este proyecto ya cometió tres veces. */
+      else if(campo==='estado')   await (valor==='done' ? Acciones.completar(id)
+                                    : Acciones.editar(id,{estado:'pendiente',porcentaje:0},'devuelta a pendiente (tanda en Partidas)'));
+      else if(campo==='grupo'){
+        var q=_catA()[id], p=q?_catPorId(q):null;
+        if(!p) throw new Error('esa actividad no tiene partida');
+        await catMoverGrupo(p.id, valor);
+      }
+      ok++;
+    }catch(e){
+      /* UNA QUE SE CAIGA NO TUMBA LAS DEMÁS, y se dice CUÁL. El mismo criterio
+         del Repaso: si una falla, esa se marca y las otras sí se guardan. */
+      var a=_findActAny(id)||{};
+      fallos.push(String(a.descripcion||id).slice(0,40)+' ('+((e&&e.message)||'')+')');
+    }
+  }
+  S.catSelModo=false; S.catSel2={};
+  if(fallos.length) showToast('Se cambiaron '+ok+'. NO se pudo con '+fallos.length+': '+fallos.join(' · '),'err',9000);
+  else showToast(ok+' cambiada'+(ok!==1?'s':'')+' ✓');
+  _repintarDondeEstoy();
+}
+async function catTandaDeshacer(){
+  var U=S.catUndo; if(!U || !U.previas.length) return;
+  var previas=U.previas, campo=U.campo;
+  S.catUndo=null;
+  var fallos=0;
+  for(var i=0;i<previas.length;i++){
+    var p=previas[i];
+    try{
+      if(campo==='contratista')  await Acciones.asignar(p.id, p.personal_nombre, 'responsable → '+(p.personal_nombre||'—')+' (deshecha la tanda)');
+      else if(campo==='fecha')   await Acciones.editar(p.id, {fecha_fin:p.fecha_fin}, 'deshecha la tanda de Partidas');
+      else if(campo==='estado')  await Acciones.editar(p.id, {estado:p.estado, porcentaje:p.porcentaje}, 'deshecha la tanda de Partidas');
+      else if(campo==='grupo'){
+        var q=_catA()[p.id], pp=q?_catPorId(q):null;
+        if(pp) await catMoverGrupo(pp.id, p.grupo||'');
+      }
+    }catch(e){ fallos++; }
+  }
+  showToast(fallos?('Se devolvieron todas menos '+fallos):'Tanda deshecha ✓', fallos?'err':'ok', fallos?7000:3000);
+  _repintarDondeEstoy();
+}
+
 function catCurarAbrir(){ S.catCurar=true; renderCatalogo(); _catArriba(); }
 function catIrGrupo(g){ S.catCurar=false; S.catGrupo=g||null; S.catUbic=null; S.catPartida=null; renderCatalogo(); _catArriba(); }
 function catIrUbic(u){ S.catUbic=u||null; S.catPartida=null; renderCatalogo(); _catArriba(); }
 function catIrPartida(id){ S.catPartida=id; S.catPick=null; S.catBuscar=null; renderCatalogo(); _catArriba(); }
 function catVerVacios(){ S.catVacios=!S.catVacios; renderCatalogo(); }
 function catVolver(){
+  if(S.catBorrar||S.catRepetir||S.catTandaPick){ catPanelCerrar(); return; }
+  if(S.catSelModo){ S.catSelModo=false; S.catSel2={}; renderCatalogo(); return; }
   if(S.catQVivo) { S.catQ=''; S.catQVivo=''; S._catQFoco=false; }
   else if(S.catGrupoNuevo) S.catGrupoNuevo=null;
   else if(S.catMover) S.catMover=null;
@@ -17235,6 +17638,9 @@ function renderCatalogo(){
     else                      el.innerHTML=_catCapitulosHTML();
     /* El foco se pierde al repintar y la caja de buscar es la única que se
        teclea seguido: se devuelve al final del texto. */
+    /* El panel de borrar/repetir/tanda vive fuera de #c-catalogo: se repinta
+       aquí para que no se quede enseñando datos viejos tras una escritura. */
+    try{ _catPanel(); }catch(e1){}
     var _q=document.getElementById('cat-q');
     if(_q && S.catQ && document.activeElement!==_q && S._catQFoco){
       _q.focus(); try{ _q.setSelectionRange(_q.value.length,_q.value.length); }catch(e0){}
@@ -17470,6 +17876,7 @@ function _catUnidadHTML(){
     h+='<div style="margin-bottom:10px;padding:10px 12px;border-radius:11px;background:var(--amber-light);'+
       'border:1.5px solid var(--amber);color:var(--amber);font-size:11.5px;line-height:1.45">'+
       'No se pudo leer el historial, así que no hay orden demostrado: las que faltan salen sin ordenar.</div>';
+  h+=_catAccionesHTML(todas);
 
   h+='<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
      'text-transform:uppercase;margin:4px 0 8px">Lo que falta ('+(o.con.length+o.sin.length)+')</div>';
@@ -17482,14 +17889,14 @@ function _catUnidadHTML(){
            5» no valen lo mismo y el dueño tiene que distinguirlo de un vistazo. */
         '<span style="font-size:10.5px;font-family:var(--mono);color:'+(x.n>=3?'var(--accent)':'var(--text3)')+'">'+
           'visto en '+x.n+'</span></div>'+
-       revCard(x.a)+_catMoverPieHTML(x.a);
+       _catCasillaHTML(x.a)+revCard(x.a)+_catMoverPieHTML(x.a);
   });
   if(o.sin.length){
     h+='<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
        'text-transform:uppercase;margin:16px 0 4px">Sin precedente ('+o.sin.length+')</div>'+
        '<div style="font-size:11.5px;color:var(--text3);line-height:1.45;margin-bottom:8px">'+
        'Nadie lo ha hecho todavía en otra unidad, así que no se le inventa posición.</div>';
-    o.sin.forEach(function(a){ h+=revCard(a)+_catMoverPieHTML(a); });
+    o.sin.forEach(function(a){ h+=_catCasillaHTML(a)+revCard(a)+_catMoverPieHTML(a); });
   }
   if(cerradas.length){
     h+='<button onclick="S.catCerradasOpen=!S.catCerradasOpen;renderCatalogo()" style="'+_catBS+';width:100%;'+
@@ -17497,10 +17904,67 @@ function _catUnidadHTML(){
       (S.catCerradasOpen?'Esconder':'Ver')+' lo ya hecho ('+cerradas.length+')</button>';
     if(S.catCerradasOpen){
       h+='<div style="height:8px"></div>';
-      cerradas.forEach(function(a){ h+=revCard(a); });
+      cerradas.forEach(function(a){ h+=_catCasillaHTML(a)+revCard(a); });
     }
   }
   return h+'<div style="height:110px"></div>';
+}
+
+/* La barra de la unidad: crear aquí mismo, marcar varias, y deshacer la última
+   tanda. «+ Actividad» va PRIMERO porque es lo que se hace de pie en la obra. */
+function _catAccionesHTML(todas){
+  var n=_catSel2Ids().length;
+  var h='<div style="display:flex;gap:6px;margin-bottom:10px">'+
+    '<button onclick="catNueva()" style="'+_catBS+';flex:1;min-height:46px;'+
+      'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)">+ Actividad</button>'+
+    '<button onclick="catSelModo()" style="'+_catBS+';flex:1;min-height:46px;'+
+      'border:1.5px solid '+(S.catSelModo?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(S.catSelModo?'var(--accent-fill)':'var(--bg2)')+';'+
+      'color:'+(S.catSelModo?'var(--accent-on)':'var(--text2)')+'">'+
+      (S.catSelModo?'Salir de marcar':'Marcar varias')+'</button>'+
+  '</div>';
+  if(S.catUndo && S.catUndo.previas && S.catUndo.previas.length)
+    h+='<button onclick="catTandaDeshacer()" style="'+_catBS+';width:100%;margin-bottom:10px;min-height:44px;'+
+      'border:1.5px dashed var(--amber);background:none;color:var(--amber)">'+
+      'Deshacer la última tanda ('+S.catUndo.previas.length+')</button>';
+  if(S.catSelModo){
+    var bs=_catBS+';flex:1;min-height:44px;font-size:11.5px;border:1.5px solid var(--border2);'+
+           'background:var(--bg2);color:var(--text2)'+(n?'':';opacity:.45');
+    h+='<div style="position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0;margin-bottom:6px;'+
+        'border-bottom:1.5px solid var(--border)">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px">'+
+        '<span style="font-size:12.5px;font-weight:800">'+n+' marcada'+(n!==1?'s':'')+'</span>'+
+        '<button onclick="catSelTodas('+_catQ((todas||[]).map(function(a){return a.id;}).join('|'))+')" '+
+          'style="background:none;border:0;color:var(--accent);font-size:12px;font-weight:700;'+
+          'cursor:pointer;min-height:40px;padding:0 4px">'+
+          (n?'Ninguna':'Todas ('+(todas||[]).length+')')+'</button>'+
+      '</div>'+
+      '<div style="display:flex;gap:5px">'+
+        '<button onclick="catTandaAbrir(\'contratista\')" style="'+bs+'">Contratista</button>'+
+        '<button onclick="catTandaAbrir(\'fecha\')" style="'+bs+'">Entrega</button>'+
+        '<button onclick="catTandaAbrir(\'grupo\')" style="'+bs+'">Grupo</button>'+
+        '<button onclick="catTandaAbrir(\'estado\')" style="'+bs+'">Estado</button>'+
+      '</div></div>';
+  }
+  return h;
+}
+function catSelTodas(ids){
+  var l=String(ids||'').split('|').filter(Boolean);
+  if(_catSel2Ids().length){ S.catSel2={}; }
+  else { S.catSel2={}; l.forEach(function(id){ S.catSel2[id]=1; }); }
+  renderCatalogo();
+}
+/* La casilla va FUERA de `revCard`, no dentro: `revCard` se pinta también en
+   Revisión, donde el modo marcar no existe. Meterla dentro habría sido una
+   tarjeta con dos comportamientos según quién la pinta. */
+function _catCasillaHTML(a){
+  if(!S.catSelModo) return '';
+  var on=!!(S.catSel2||{})[a.id];
+  return '<button onclick="catSelToggle('+_catQ(a.id)+')" style="'+_catBS+';width:100%;margin-bottom:-4px;'+
+    'min-height:44px;text-align:left;display:flex;align-items:center;gap:9px;'+
+    'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+    'background:'+(on?'var(--accent-soft)':'var(--bg3)')+';color:var(--text2);font-size:11.5px">'+
+    '<span style="font-size:15px">'+(on?'☑':'☐')+'</span>'+(on?'Marcada':'Marcar')+'</button>';
 }
 
 /* El pie de «mover de grupo» solo sale en los capítulos que se subdividen. */
@@ -17510,7 +17974,9 @@ function _catMoverPieHTML(a){
   if(!CAT_SUBGRUPOS[cap] && !_catGruposCustom(cap).length) return '';
   return '<div style="margin:-6px 0 12px 2px">'+
     '<button onclick="catMoverAbrir('+_catQ(pid)+')" style="background:none;border:0;'+
-    'color:var(--text3);font-size:11px;font-weight:700;cursor:pointer;padding:6px 2px;min-height:34px;'+
+    /* 44 px, como todo lo que se toca: se usa con el dedo. Estaba en 34 desde
+       la v106 y se coló. */
+    'color:var(--text3);font-size:11px;font-weight:700;cursor:pointer;padding:6px 2px;min-height:44px;'+
     'text-decoration:underline">No es de este grupo</button></div>';
 }
 function _catMoverHTML(){
@@ -18542,6 +19008,20 @@ function revCard(a){
     '<div style="display:flex;gap:6px;margin-top:8px">'+
       (vozActiva()?'<button onclick="revNota(\''+sid+'\')" style="flex:1;'+bs+';font-size:11.5px">Nota</button>':'')+
       '<button onclick="abrirFotoUpload(\''+sid+'\')" style="flex:1;'+bs+';font-size:11.5px">Foto</button>'+
+    '</div>'+
+    /* EDITAR · REPETIR · BORRAR (v107). El dueño: «me siento muy limitado en el
+       módulo de prueba, no tengo todas las funciones». La tarjeta sabía hacer
+       seis cosas —estado, porcentaje, nota y foto— y todo lo demás (el nombre,
+       el apartamento, el contratista, las fechas, la cadena, los pendientes)
+       estaba en el app sin una sola puerta desde aquí.
+       NO se hizo un formulario nuevo: `editAct` abre el MISMO de siempre, el
+       que reparte en los tres tipos y guarda por `saveAct` → `Acciones`. Dos
+       formularios para lo mismo serían dos verdades sobre cómo se registra.
+       Salen en las dos pantallas que usan `revCard`, Revisión y Partidas. */
+    '<div style="display:flex;gap:6px;margin-top:6px">'+
+      '<button onclick="editAct(\''+sid+'\')" style="flex:1;'+bs+';font-size:11.5px">Editar</button>'+
+      '<button onclick="catRepetirAbrir(\''+sid+'\')" style="flex:1;'+bs+';font-size:11.5px">Repetir en…</button>'+
+      (isAdmin()?'<button onclick="catBorrarAbrir(\''+sid+'\')" style="flex:1;'+bs+';font-size:11.5px;color:var(--red);border-color:var(--red-light)">Borrar</button>':'')+
     '</div>'+
     (a.notas?'<div style="margin-top:8px;font-size:12px;color:var(--text2);background:var(--bg3);padding:8px 10px;border-radius:9px;border-left:3px solid var(--accent);white-space:pre-wrap">'+esc(a.notas)+'</div>':'')+
     (fotos.length?'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px">'+
