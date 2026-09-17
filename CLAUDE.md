@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v104 — 17 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v105 — 17 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v104 (17 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v105 (17 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -259,6 +259,32 @@ de fiar.
 El resto de la explicación: `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`, todo
 por `Acciones`. **Cerrar NO está ahí**: lo hace el ✓ verde de la fila, que
 está siempre a la vista y a un toque. Una sola forma de cerrar por tarjeta.
+
+**Los grupos de la lista se separan POR CONTRATISTA, no en un montón (v105).**
+`getActGroupsFromActs` agrupa según `S.actFiltro`, y de sus ocho modos hay tres
+que tocan personal. Hasta v104 dos de ellos —«Tipo de personal», que es **el de
+entrada**, y «Personal x la casa»— metían a **todos** los contratistas en un
+solo bloque «Contratistas». Con 958 de las 1.059 abiertas en ese bloque, era
+casi la lista entera bajo una cabecera que no dice de quién es nada: había que
+leer la columna de responsable renglón a renglón. Ahora sale uno por
+contratista —hoy **17 grupos**— con el prefijo «Contratista · » porque encima
+van los del personal propio con el nombre pelado.
+
+El criterio de quién es cada contratista vive en **`_contNombres(acts)` y
+`_contActs(acts,c)`**, y **nada más que ahí**. Lo usan los tres modos: tres
+copias del mismo criterio terminan contando distinto.
+
+**El agrupador que se toca es el `<select>`, no las pastillas.** Las pastillas
+(`grupoPills`) tienen las mismas etiquetas pero viven dentro del panel de
+Filtros, que viene **plegado**. Es la trampa del v58: una prueba que las
+clickee está tocando lo que el usuario no puede tocar.
+
+**Los grupos tienen que sumar el total de la cabecera.** Las que no tienen
+`tipo_personal` —hoy 9 abiertas— no son `propio`, ni `contratista`, ni
+`ingeniero`: **desaparecían de la pantalla agrupada** en los tres modos, y en
+«Contratista» faltaban además las 9 de ingeniero. Ahora hay bloque **«Sin tipo
+de personal»** y los tres modos suman 1.059 y 347 vencidas. Si un modo suma
+menos que la cabecera, alguien volvió a dejar un `tipo_personal` fuera.
 
 ### El Repaso por partida repetida (v94) — por qué existe
 
@@ -972,6 +998,10 @@ mismo:**
   Sin cambios · +1 sem · Viernes), la barra «Todas a…» y el contador de
   revisadas. *(Aquí decía «Paso a paso» con sus ocho botones: esa pantalla se
   retiró en v81 y no se podía comprobar.)*
+- **Los grupos de la lista suman el total de la cabecera** en los tres modos
+  que tocan personal (Tipo de personal, Contratista, Personal x la casa):
+  **1.059 y 347 vencidas** hoy. Y ninguno vuelve a enseñar un bloque
+  «Contratistas» con todos dentro — son **17 grupos**, uno por contratista
 - **La sub-nav de Actividades** (Actividades · Kanban · Revisión) se ve
   **siempre**. Esconderla en la vista de entrada deja Kanban y Revisión sin
   ninguna puerta — pasó en v77 y es el mismo error de v58
@@ -1077,6 +1107,9 @@ pertenece a ningún nivel.
 
 | **v97** — la tecla `C` abría la caja de órdenes y **tapaba el atajo de Compras** que anuncia la barra lateral (`H O A E R C`): el segundo `else if(k==='c')` de la cadena era **inalcanzable**. Con la voz escondida, `C` vuelve a ser Compras. | Dos ramas con la misma condición en un `if/else if`: la segunda no se ejecuta nunca y nadie lo nota, porque la primera hace *algo*. Cuando añadas un atajo, comprueba que la letra no esté ya cogida más arriba. |
 | **v97** — la tabla del prompt listaba siete sitios de voz. El barrido encontró **tres más**, y eran los que más se ven: el 🎙️ de la tarjeta de Obra, el de la fila de Actividades y el botón «Nota» de Revisión. Total real: **21 micrófonos visibles**. | Para esconder algo transversal no basta con la lista que te den: **cuenta lo VISIBLE antes y después**. 21 → 0 es una comprobación; «quité los siete que decía la tabla» no lo es. |
+
+| **v104** — la agrupación de entrada de la lista («Tipo de personal») metía a los 17 contratistas en un solo bloque, «Contratistas · 958 actividades». El dueño lo vio en obra y lo dijo en siete palabras: «aquí quiero q se separe por contratista». La agrupación «Contratista», que ya hacía eso, llevaba versiones ahí sin que nadie la tocara. | Una cabecera que agrupa el 90% de la lista bajo una sola palabra no agrupa nada. Y que la función exista en otra pastilla no vale: si el usuario entra por otra puerta, hay que arreglar **la puerta por la que entra**. |
+| **v105** — la prueba esperaba con `window.S && S.acts.length`, y `S` se declara con `let`: **no está en `window`**. La guarda daba siempre falso y la prueba se quedó 60 s dando por hecho que el app no había cargado. Antes de eso, buscaba el agrupador entre los `<button>` y el visible es un `<select>` —las pastillas con esas etiquetas viven en el panel de Filtros, plegado. | Un `let` de nivel superior es un global, pero **no una propiedad de `window`**: preguntar por `window.X` miente sin error. Y antes de dar por rota una pantalla, comprueba que estás tocando el control que el usuario ve — es otra vez el v58. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base

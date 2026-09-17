@@ -865,7 +865,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260917_104';
+const APP_VERSION='20260917_105';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -7341,6 +7341,22 @@ function _dm(d){
 function _isoDe(d){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
+/* El criterio de «quien es este contratista» vive AQUI y nada mas que aqui.
+   Lo usan las tres agrupaciones que separan por contratista (Tipo de personal,
+   Contratista y Personal x la casa): tres copias del mismo criterio terminan
+   contando distinto, y entonces el usuario no sabe a cual creerle.
+   Se mantiene el criterio que ya usaba la agrupacion «Contratista» desde
+   siempre —`tipo_personal==='contratista'`, agrupando por `personal_nombre`—
+   a proposito: cambiarlo aqui movería los numeros de una pantalla que ya esta
+   comprobada. Lo que queda fuera por no tener tipo se recoge aparte, en «Sin
+   tipo de personal», en vez de desaparecer. */
+function _contNombres(acts){
+  return [...new Set(acts.filter(a=>a.tipo_personal==='contratista')
+    .map(a=>a.personal_nombre||'Sin asignar'))].sort();
+}
+function _contActs(acts,c){
+  return acts.filter(a=>a.tipo_personal==='contratista'&&(a.personal_nombre||'Sin asignar')===c);
+}
 function getActGroupsFromActs(acts){
   const f=S.actFiltro||'tipo';
   if(f==='semana'){
@@ -7365,11 +7381,31 @@ function getActGroupsFromActs(acts){
     return orden.map(function(k){return mapa[k];});
   }
   if(f==='tipo'){
-    return[
-      {titulo:'Personal x la casa',items:acts.filter(a=>a.tipo_personal==='propio')},
-      {titulo:'Contratistas',items:acts.filter(a=>a.tipo_personal==='contratista')},
-      {titulo:'Tareas administrativas',items:acts.filter(a=>a.tipo_personal==='ingeniero')},
-    ].filter(g=>g.items.length);
+    /* UNO POR CONTRATISTA, no un monton. Esta es la agrupacion de entrada y
+       aqui caian TODOS los contratistas en un solo bloque —«Contratistas · 75
+       actividades · 19 retrasadas»—: de las abiertas, 958 de 1.059 son de
+       contratista, asi que ese bloque era casi la lista entera y no se veia de
+       quien es cada cosa ni quien debe que sin leer la columna de responsable
+       renglon a renglon. El personal propio (83) y lo administrativo (9) si
+       caben de un vistazo y se quedan juntos.
+       Mismo criterio que la agrupacion «Contratista», a proposito: si dos
+       pantallas agrupan distinto, cuentan distinto y el usuario deja de
+       creerle al app. */
+    var _gt=[];
+    var _prop=acts.filter(a=>a.tipo_personal==='propio');
+    if(_prop.length) _gt.push({titulo:'Personal x la casa',items:_prop});
+    _contNombres(acts).forEach(function(c){
+      _gt.push({titulo:'Contratista · '+c,items:_contActs(acts,c)});
+    });
+    var _ing=acts.filter(a=>a.tipo_personal==='ingeniero');
+    if(_ing.length) _gt.push({titulo:'Tareas administrativas',items:_ing});
+    var _sin=acts.filter(a=>!a.tipo_personal);
+    /* Sin este bloque las que no tienen tipo de personal DESAPARECIAN de la
+       pantalla agrupada: no son 'propio', ni 'contratista', ni 'ingeniero', y
+       ningun filtro las recogia. Hoy son 9 abiertas. Una fila que se esfuma sin
+       decirlo miente peor que un error. */
+    if(_sin.length) _gt.push({titulo:'Sin tipo de personal',items:_sin});
+    return _gt.filter(g=>g.items.length);
   }
   if(f==='nivel'){
     const nivelPrefixes2=['N7','N6','N5','N4','N3','N2','N1'];
@@ -7396,19 +7432,32 @@ function getActGroupsFromActs(acts){
     return resps.map(r=>({titulo:''+r,items:acts.filter(a=>{var ns=_ingenieros(a.ingeniero_nombre);return ns.length?ns.indexOf(r)>=0:r==='Sin responsable';})})).filter(g=>g.items.length);
   }
   if(f==='contratista'){
-    const conts=[...new Set(acts.filter(a=>a.tipo_personal==='contratista').map(a=>a.personal_nombre||'Sin asignar'))].sort();
-    const grouped=conts.map(c=>({titulo:''+c,items:acts.filter(a=>a.tipo_personal==='contratista'&&(a.personal_nombre||'Sin asignar')===c)}));
+    const grouped=_contNombres(acts).map(c=>({titulo:''+c,items:_contActs(acts,c)}));
     const propios=acts.filter(a=>a.tipo_personal==='propio');
     if(propios.length) grouped.unshift({titulo:'Personal x la casa',items:propios});
+    /* Lo administrativo y lo que no tiene tipo tambien se enseñan: aqui
+       desaparecian 18 filas —9 de ingeniero y 9 sin tipo— y la suma de los
+       grupos no daba el total de la cabecera. Un numero que no cuadra con el
+       de al lado hace que el usuario deje de creerle a los dos. */
+    const ing2=acts.filter(a=>a.tipo_personal==='ingeniero');
+    if(ing2.length) grouped.push({titulo:'Tareas administrativas',items:ing2});
+    const sin2=acts.filter(a=>!a.tipo_personal);
+    if(sin2.length) grouped.push({titulo:'Sin tipo de personal',items:sin2});
     return grouped.filter(g=>g.items.length);
   }
   if(f==='personal'){
     const workers=[...new Set(acts.filter(a=>a.tipo_personal==='propio').map(a=>a.personal_nombre||'Sin asignar'))].sort();
     const grouped=workers.map(w=>({titulo:''+w,items:acts.filter(a=>a.tipo_personal==='propio'&&(a.personal_nombre||'Sin asignar')===w)}));
-    const conts=acts.filter(a=>a.tipo_personal==='contratista');
+    /* Uno por contratista tambien aqui. El prefijo se queda porque ARRIBA
+       estan los grupos del personal propio, que van con el nombre pelado: sin
+       el, «Secre» y «Coge» parecerian lo mismo. */
+    _contNombres(acts).forEach(function(c){
+      grouped.push({titulo:'Contratista · '+c,items:_contActs(acts,c)});
+    });
     const ings=acts.filter(a=>a.tipo_personal==='ingeniero');
-    if(conts.length) grouped.push({titulo:'Contratistas',items:conts});
     if(ings.length) grouped.push({titulo:'Tareas admin',items:ings});
+    const sinT=acts.filter(a=>!a.tipo_personal);
+    if(sinT.length) grouped.push({titulo:'Sin tipo de personal',items:sinT});
     return grouped.filter(g=>g.items.length);
   }
   if(f==='critico'){
