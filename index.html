@@ -865,7 +865,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260916_102';
+const APP_VERSION='20260917_103';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1791,6 +1791,15 @@ const ESTADOS_ASIST=['presente','tarde','medio día','ausente','justificado'];
 let S={
   user:null, fecha:today(),
   personal:[], asist:[], acts:[], pens:[], semanas:[], plan:[], planActs:[],
+  /* `revHechas` NACE AQUÍ, no dentro de renderRevision. Vivía en esa pantalla
+     (`if(!S.revHechas) S.revHechas={}`) y `revCard` la leía sin guardia — así
+     que desde el catálogo, en una sesión que no pasara antes por Revisar, la
+     variable no existía y la ficha reventaba con un TypeError que se comía el
+     catch: «No se pudo pintar esta pantalla», sin un botón que tocar. Y en
+     `revEstado` era peor: reventaba DESPUÉS de escribir en la base, así que
+     salía «Error al guardar» sobre algo que sí se había guardado.
+     El estado de la sesión vive en el estado. */
+  revHechas:{},
   /* El app abre en Obra desde v87: se usa de pie en la obra, y Obra pregunta
      dónde estás en vez de soltar 1.080 renglones. Actividades queda a un toque
      en la barra de abajo. */
@@ -2161,9 +2170,12 @@ async function handleFotoFile(inp){
   var actId=inp.dataset.actId;
   if(!actId||!inp.files||!inp.files[0]) return;
   var file=inp.files[0];
-  var act=(S.acts||[]).find(function(a){return a.id===actId;})||
-           (S.actsActivas||[]).find(function(a){return a.id===actId;});
-  if(!act) return;
+  /* `_findActAny` y no `S.acts`: el botón Foto vive ahora dentro del catálogo,
+     donde la actividad puede estar CERRADA — y `S.acts` no las trae. Era el
+     mismo mudo de `revEstado`: se tocaba Foto y no pasaba nada, sin decir por
+     qué. */
+  var act=_findActAny(actId);
+  if(!act){ showToast('No encuentro esa actividad — recarga la pantalla','err',5000); return; }
   var userName=S.user?S.user.nombre:'';
   // Optimistic UI: show local preview immediately
   var localUrl=URL.createObjectURL(file);
@@ -2205,7 +2217,10 @@ async function handleFotoFile(inp){
     act.fotos=prevFotos;
     URL.revokeObjectURL(localUrl);
     syncArrays(prevFotos);
-    renderActs();
+    /* La v102 arregló los dos caminos buenos y dejó este, el de echar atrás:
+       desde el catálogo se revertía el dato pero se repintaba otra pantalla,
+       así que la foto SE VEÍA PUESTA cuando ya no estaba. */
+    _repintarDondeEstoy();
     if(e.message==='DRIVE_NOT_CONFIGURED'){
       driveConfigModal();
     } else {
@@ -3176,7 +3191,10 @@ function _pendGet(a){
   return Array.isArray(v)?v:[];
 }
 function _pendAbiertos(a){ return _pendGet(a).filter(function(p){return !p.resuelto;}); }
-function _findActAny(id){ return (S.acts||[]).find(function(x){return x.id===id;})||(S.abiertas||[]).find(function(x){return x.id===id;})||(S.aptoActs||[]).find(function(x){return x.id===id;}); }
+/* `S.catActs` va aquí porque el catálogo es la única pantalla que enseña
+   actividades CERRADAS, y sin esto `revEstado` no encontraba una cerrada y se
+   salía EN SILENCIO: el botón parecía muerto y no decía por qué. */
+function _findActAny(id){ return (S.acts||[]).find(function(x){return x.id===id;})||(S.abiertas||[]).find(function(x){return x.id===id;})||(S.aptoActs||[]).find(function(x){return x.id===id;})||(S.catActs||[]).find(function(x){return x.id===id;}); }
 function _refreshVistasPend(){ try{}catch(e){} try{renderActs();}catch(e){} try{loadAbiertas();}catch(e){} }
 function pendBadge(a){
   var n=_pendAbiertos(a).length;
@@ -8022,7 +8040,10 @@ var UMBRAL_DUPLICADO = 0.90;
 var Acciones = (function(){
 
   var ESTADOS = ['pendiente','en-progreso','pausada','completado'];
-  var COLECCIONES = ['acts','actsActivas','abiertas','planActs','aptoActs','lpsActs','estancadas','histActs','tareas'];
+  /* `catActs` está aquí para que lo que se escriba desde el catálogo se vea en
+     el catálogo: sin ella el porcentaje de la partida no se movía hasta
+     recargar la pantalla entera. */
+  var COLECCIONES = ['acts','actsActivas','abiertas','planActs','aptoActs','lpsActs','estancadas','histActs','tareas','catActs'];
 
   /* — helpers internos --- */
 
@@ -15614,7 +15635,17 @@ function _catSinSub(cap){ return _catAgendaDe(cap).filter(function(p){ return !p
    abiertas—, así que con el denominador puesto solo en lo que falta la torre
    entera salía en 0%. Un porcentaje que siempre dice cero no es un porcentaje.
    Decisión del dueño: entra también lo cerrado. */
-function _catTodas(){ return S.acts||[]; }
+/* `S.acts` NUNCA trae las completadas: se pide con `estado=neq.completado` en
+   el arranque, en la recarga y en `loadActsAll` —que solo trae todo si
+   `S.actMostrarTodas`, una bandera de OTRA pantalla que además se apaga sola—.
+   O sea que en v102 «todas» eran 1.060 de 2.464, y el avance volvía a contar
+   solo lo que falta: justo el cero que la v102 venía a quitar.
+   El catálogo se paga su propia carga (`S.catActs`, sin filtro de estado) y
+   solo al entrar en él. La consulta de `S.acts` NO se toca: traer las 2.464 en
+   todas las pantallas es un coste que nadie pidió y en el teléfono se nota. */
+function _catTodas(){
+  return Array.isArray(S.catActs) ? S.catActs : (S.acts||[]);
+}
 
 /* `_catAbiertas` SE QUEDA: ya no es el filtro del catálogo, pero sigue
    haciendo falta para decir cuántas faltan. */
@@ -15642,6 +15673,23 @@ function _catAvance(acts){
   var s=0, c=0;
   acts.forEach(function(a){ s+=_catPct(a); if(_catCerrada(a)) c++; });
   return {pct:Math.round(s/acts.length), cerradas:c, total:acts.length};
+}
+/* UNA BARRA, Y NADA MÁS. Lo que pidió el dueño: «no hay barras ni nada
+   visual, solo números sueltos; no se capta de un golpe qué va adelantado y
+   qué atrasado». No es un rediseño — eso ya se propuso dos veces y lo rechazó
+   las dos.
+   SIN ACTIVIDADES NO HAY BARRA, igual que no hay porcentaje: una barra en cero
+   y una barra vacía se ven igual y no son lo mismo.
+   Y EL COLOR NO ES LA ÚNICA SEÑAL: el número y el cerradas/total siguen
+   escritos al lado. La barra acompaña, no sustituye. */
+function _catBarraHTML(av){
+  if(!av) return '';
+  var col=av.pct>=100?'var(--green)':av.pct>=50?'var(--accent)':'var(--text2)';
+  return '<div class="cat-barra" role="img" aria-label="'+av.pct+'% de las tareas cerradas" '+
+    'style="height:7px;border-radius:99px;background:var(--bg4,var(--bg3));overflow:hidden;'+
+    'margin:5px 0 1px;width:100%">'+
+    '<div style="height:100%;width:'+Math.max(0,Math.min(100,av.pct))+'%;background:'+col+';'+
+    'border-radius:99px"></div></div>';
 }
 function _catAvanceHTML(av, chico){
   if(!av) return '<span style="color:var(--text3)">— sin partidas</span>';
@@ -15726,6 +15774,10 @@ function _catMoneda(v){
 
 async function cargarCatalogo(){
   try{
+    /* Las actividades del catálogo, TODAS, sin filtro de estado. Va primero:
+       si esto falla, el módulo no debe pintar números a medias. */
+    var acts=await sbTodo('obra_actividades?order=id.asc');
+    S.catActs=acts||[];
     var ps=await sbTodo('obra_partidas?order=capitulo.asc,numero.asc');
     var as=await sbTodo('obra_partida_actividad?select=actividad_id,partida_id');
     S.catPartidas=ps||[];
@@ -15756,13 +15808,26 @@ async function cargarCatalogo(){
    iluminación — cocina principal» tiene 7 actividades, 5 de Jordy (Pintura) y
    2 de Felix y Jefrey (Albañilería). Mirando solo la primera, el capítulo
    dependía de en qué orden llegaran las filas de la base — o sea, de nada. */
+function _catCapIdx(n){
+  for(var i=0;i<CAT_CAPITULOS.length;i++) if(String(CAT_CAPITULOS[i].n)===String(n)) return i;
+  return 999;
+}
 function _catCapMayoria(items, desc){
-  var c={}, mejor='', n=0;
+  var c={};
   (items||[]).forEach(function(a){
     var k=_catCapDe(_catOficioDe(a), desc||a.descripcion||'');
     c[k]=(c[k]||0)+1;
-    if(c[k]>n){ n=c[k]; mejor=k; }      // empate: gana el primero que apareció
   });
+  /* EL EMPATE LO ROMPE EL ORDEN DEL CAPÍTULO, no el orden en que Supabase
+     devuelva las filas. Había 2 descripciones con empate exacto 1-1 («Bajar
+     escombros», «Subida de sheetrock»): hoy caen en el mismo sitio por los dos
+     caminos y no hacía daño, pero el capítulo lo estaba decidiendo la llegada
+     — que es justo el desorden que la mayoría venía a quitar.
+     «Sin clasificar» va el último de CAT_CAPITULOS, así que un empate contra
+     un capítulo de verdad lo gana el capítulo de verdad. */
+  var mejor='', n=-1;
+  Object.keys(c).sort(function(x,y){ return _catCapIdx(x)-_catCapIdx(y); })
+    .forEach(function(k){ if(c[k]>n){ n=c[k]; mejor=k; } });
   return mejor||'0';
 }
 
@@ -16369,6 +16434,7 @@ function _catCapitulosHTML(){
       '<span style="font-size:12.5px;font-weight:800;line-height:1.25">'+esc(x.c.n)+' · '+esc(x.c.t)+'</span>'+
       '<span class="cat-cap-av" style="font-size:11px;font-family:var(--mono);line-height:1.35">'+
         _catAvanceHTML(x.av)+'</span>'+
+      _catBarraHTML(x.av)+
       '<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
         x.s+' subpartidas · '+x.p+' partidas</span></button>';
   };
@@ -16466,6 +16532,7 @@ function _catPartidasHTML(){
            cuadra con lo contratado. */
         '<span class="cat-sub-av" style="font-size:11px;font-family:var(--mono);line-height:1.35">'+
           _catAvanceHTML(_catAvanceSub(s.id))+'</span>'+
+        _catBarraHTML(_catAvanceSub(s.id))+
         '<span class="cat-sub-meta" style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
           esc(s.id)+'<br>'+esc(s.seccion)+'</span>'+
       '</button>'+
@@ -16560,6 +16627,7 @@ function _catFichaAgendaHTML(p){
       '<div style="font-size:15px;font-weight:800;line-height:1.3">'+esc(p.nombre)+'</div>'+
       '<div class="cat-ficha-av" style="font-size:12px;font-family:var(--mono);margin-top:5px">'+
         _catAvanceHTML(_catAvancePartida(p.id))+'</div>'+
+      _catBarraHTML(_catAvancePartida(p.id))+
       (nivs.length?'<div class="cat-nivs" style="font-size:11px;color:var(--text3);margin-top:4px;'+
         'font-family:var(--mono);line-height:1.4">'+
         (nivs.length===1?'Nivel: ':'En '+nivs.length+' niveles: ')+esc(nivs.join(' · '))+'</div>':'')+
@@ -17341,6 +17409,9 @@ function revVolver(){ S.revContratista=null; S.revAreaAbierta=''; _revSoltarPart
 
 function revCard(a){
   var id=a.id, sid=String(id).replace(/'/g,"\\'");
+  /* `revCard` se pinta desde DOS pantallas —Revisión y el catálogo— así que no
+     puede dar por hecho nada que nazca en una de las dos. */
+  if(!S.revHechas) S.revHechas={};
   var hecha=!!S.revHechas[id];
   var prog=a.estado==='en-progreso';
   var pct=parseInt(a.porcentaje)||0;
@@ -17957,7 +18028,13 @@ async function revAltaCrear(){
 
 async function revEstado(id, modo, pct){
   if(!canEdit()) return;
-  var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
+  if(!S.revHechas) S.revHechas={};
+  /* `_findActAny`, no `S.acts`: desde el catálogo la actividad puede estar
+     CERRADA, y `S.acts` no las trae. Antes esto hacía `return` a secas y el
+     botón se quedaba mudo — el peor fallo posible, porque parece que no pasó
+     nada y se vuelve a tocar. */
+  var a=_findActAny(id);
+  if(!a){ showToast('No encuentro esa actividad — recarga la pantalla','err',5000); return; }
   if(modo==='prog' && pct===undefined){
     var box=document.getElementById('revp-'+id);
     if(box) box.style.display='grid';

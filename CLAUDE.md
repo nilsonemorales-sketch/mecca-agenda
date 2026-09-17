@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v102 — 16 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v103 — 17 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v102 (16 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v103 (17 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -316,7 +316,7 @@ de ÓRDENES y crea la partida por esa vía — **no vuelca el texto en el campo*
 Volcarlo exigiría tocar el motor de voz, que apunta a `#cmd-txt` en nueve
 sitios y en el iPhone va por el Worker. No se hizo a ciegas.
 
-### El Catálogo de partidas (v98, v100, v101, v102) — un módulo de PRUEBA que se borra entero
+### El Catálogo de partidas (v98, v100, v101, v102, v103) — un módulo de PRUEBA que se borra entero
 
 Pestaña **«Partidas»**, `style="display:none"` en el HTML y encendida con
 `isAdmin()` en el mismo bloque que Gerencia. Por dentro se llama `catalogo`:
@@ -337,15 +337,38 @@ pantalla de trabajo: es un experimento con fecha de caducidad.
 
 Debajo cuelgan **todas** las actividades.
 
+#### `S.acts` NUNCA trae las completadas — y por eso el catálogo carga lo suyo
+
+**Grábate esto antes de escribir nada que cuente actividades.** `S.acts` se pide
+con `estado=neq.completado` en **los tres sitios** que la cargan: el arranque, la
+recarga y `loadActsAll` —y este último solo trae todo si `S.actMostrarTodas`
+está en `true`, que es **una bandera de la pantalla de Actividades** y además se
+apaga sola—.
+
+La v102 escribió `_catTodas(){ return S.acts; }` dando por hecho que ahí estaban
+todas. **No estaban**: eran 1.060 de 2.464, y el avance volvía a contar solo lo
+que falta, que es exactamente el cero que la v102 venía a quitar.
+
+Desde v103 el catálogo **se paga su propia carga**: `cargarCatalogo()` trae
+`S.catActs` con `sbTodo` y **sin filtro de estado**, y `_catTodas()` devuelve eso.
+**NO toques la consulta de `S.acts`**: traer las 2.464 en todas las pantallas es
+un coste que nadie pidió y en el teléfono se nota.
+
+Tres cosas cuelgan de eso y las tres hacen falta:
+
+- **`_findActAny` mira también en `S.catActs`.** El catálogo es la única pantalla
+  que enseña actividades cerradas; sin esto `revEstado` no encontraba una cerrada
+  y **se salía en silencio** — el botón parecía muerto y no decía por qué. Lo
+  mismo le pasaba a `handleFotoFile`, que buscaba solo en `S.acts`.
+- **`'catActs'` está en `COLECCIONES` de `Acciones`**, o el porcentaje de la
+  partida no se movía hasta recargar.
+- `_catAbiertas()` **se queda**: sigue haciendo falta para decir cuántas faltan.
+
 #### El catálogo mira TODAS las actividades, no solo las abiertas (v102)
 
-Hasta v101 solo entraba lo abierto, y eso hacía **imposible** el avance: hay
-**más trabajo cerrado que abierto** —1.404 actividades cerradas contra 1.060
+Hay **más trabajo cerrado que abierto** —1.404 actividades cerradas contra 1.060
 abiertas—, así que con el denominador puesto solo en lo que falta **la torre
 entera salía en 0%**. Un porcentaje que siempre dice cero no es un porcentaje.
-
-- **`_catTodas()`** es el filtro del catálogo. `_catAbiertas()` **se queda**,
-  porque sigue haciendo falta para decir cuántas faltan.
 - Entrar lo cerrado subió las partidas de 391 a **1.027** y los amarres de
   1.060 a **2.464**.
 - «Sin clasificar» pasó de 34 partidas a **272** (411 actividades). Casi todas
@@ -406,6 +429,30 @@ partida dice «baño»; «pared» y «paredes» son la misma pared. Sin eso,
 «Completar la cerámica de revestimiento de las paredes» se quedaba abajo. Es el
 mismo tropiezo del `mueble de ba` que no cogía «muebles de baño».
 
+#### `revCard` y `revEstado` se usan desde DOS pantallas (v103)
+
+**No pueden depender de nada que nazca dentro de `renderRevision`.** `S.revHechas`
+se creaba ahí (`if(!S.revHechas) S.revHechas={}`) y `revCard` la leía sin guardia:
+en una sesión donde el dueño iba **directo a Partidas**, la variable no existía,
+`revCard` reventaba con un `TypeError`, lo cazaba el `catch` de `renderCatalogo` y
+salía **«No se pudo pintar esta pantalla»**, sin un botón que tocar. En
+`revEstado` era peor: reventaba **después** de escribir en la base, así que decía
+«Error al guardar» sobre algo que sí se había guardado.
+
+**`revHechas` nace ahora en el estado inicial**, con guardia además en las dos
+funciones. Auditado el resto de lo que nace en `renderRevision`: `_revSesion`,
+`_revPtdErr` y `_revPtdPct` se leen siempre con `||{}`, y `revContratista`,
+`revPartida`, `revAlta`, `revAreaAbierta`, `revSueltasOpen` y `revAgrupar` se
+comprueban con `if(!…)`, así que `undefined` no las rompe — **pero los dos
+`_revPtd*` están a salvo por casualidad, no por diseño**. Si algún día el
+catálogo llega a `revPartidaAbierta`, míralos.
+
+**Y esto era imposible de ver con la prueba de la v102**, porque el arnés ponía
+`S.revHechas={}` y `S.actMostrarTodas=true` a mano: las dos muletas que tapaban
+los dos fallos. **Si una prueba prepara el estado que el app debería crear solo,
+no está probando el arranque real.** Arranca la sesión de prueba donde arranca el
+usuario.
+
 #### Se toca la actividad sin salir del módulo — y pasa por `Acciones` (v102)
 
 La ficha de una partida usa **`revCard(a)`**, la MISMA tarjeta de Revisión: Sin
@@ -435,13 +482,31 @@ está el trabajo.
 con `padre_id`, deja el aviso en rojo en la portada y no escribe nada. Migrar es
 una decisión; arrasar no.
 
+#### La barra de progreso (v103)
+
+Palabras del dueño: *«falta ver el progreso — no hay barras ni nada visual, solo
+números sueltos; no se capta de un golpe qué va adelantado y qué atrasado»*.
+`_catBarraHTML` pinta **una barra de 7px**, a lo ancho de la fila, en tres sitios:
+la tarjeta del capítulo, la de la subpartida y la ficha de la partida.
+
+- **Sin actividades no hay barra**, igual que no hay porcentaje. Una barra en
+  cero y una barra vacía se ven igual y **no son lo mismo**.
+- **El color no es la única señal**: el número y el `cerradas/total` siguen
+  escritos al lado. La barra acompaña, no sustituye.
+- Es una barra y **nada más**. El rediseño se propuso dos veces y lo rechazó las
+  dos.
+
 #### El capítulo de una partida lo decide la MAYORÍA de sus actividades
 
 Con lo cerrado dentro apareció el caso: **«Resane del alambrado de la
 iluminación — cocina principal»** tiene 7 actividades, 5 de Jordy (Pintura) y 2
 de Felix y Jefrey (Albañilería). Mirando solo la primera, el capítulo dependía
 de en qué orden llegaran las filas de la base — o sea, de nada.
-`_catCapMayoria` lo hace determinista; en empate gana el primero.
+`_catCapMayoria` lo hace determinista. **Y el empate lo rompe el ORDEN DEL
+CAPÍTULO** (`_catCapIdx`), no el orden en que Supabase devuelva las filas: hay 2
+descripciones con empate exacto 1-1, y dejarlo a la llegada era volver al desorden
+que la mayoría venía a quitar. «Sin clasificar» va el último de `CAT_CAPITULOS`,
+así que un empate contra un capítulo de verdad lo gana el capítulo de verdad.
 
 **Por qué hacía falta el nivel 2.** La agenda **arranca el 27 de mayo de 2026**
 y toda la estructura se construyó antes: «se vaciaron las zapatas, luego la
@@ -856,8 +921,12 @@ mismo:**
 - **El Catálogo de partidas no escribe en `obra_actividades`.** Cuenta los
   `PATCH` y `POST` interceptados y mira a qué tabla va cada uno: los de
   `obra_actividades` tienen que ser **cero**
-- **El catálogo incluye lo CERRADO.** Si la siembra da ~391 partidas en vez de
-  ~1.027, alguien volvió a filtrar por abiertas y el avance va a salir en cero
+- **El catálogo incluye lo CERRADO, y lo carga ÉL.** Si la siembra da ~391
+  partidas en vez de ~1.027, alguien volvió a leer de `S.acts` —que nunca trae
+  las completadas— y el avance va a salir en cero
+- **La prueba del catálogo arranca DIRECTO en Partidas**, sin pasar por Revisión
+  y sin preparar `S.revHechas` ni `S.actMostrarTodas` a mano. Así es como entra el
+  dueño, y así fue como se escaparon los dos fallos de bloqueo de la v102
 - **El avance se promedia por ACTIVIDAD.** Compruébalo capítulo por capítulo
   contra la base; si un capítulo sin nada cerrado sale al 60%, la fórmula está mal
 - **El catálogo no enseña cantidad, unidad ni dinero.** Recorre la lista de
