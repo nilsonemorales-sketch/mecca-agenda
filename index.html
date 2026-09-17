@@ -865,7 +865,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260917_105';
+const APP_VERSION='20260917_106';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1800,6 +1800,14 @@ let S={
      salía «Error al guardar» sobre algo que sí se había guardado.
      El estado de la sesión vive en el estado. */
   revHechas:{},
+  /* El estado del catálogo NACE AQUÍ, por la misma razón (v106). Las funciones
+     lo leen todas con guardia, sí — pero eso las deja «a salvo por casualidad,
+     no por diseño», que es exactamente lo que se escribió en la v103 y lo que
+     hizo falta una versión entera para arreglar. El dueño entra DIRECTO a
+     Partidas. */
+  catGrupo:null, catUbic:null, catMover:null, catGrupoNuevo:null, catCurar:false,
+  catQ:'', catQVivo:'', catQChips:{}, catQTope:50, catCerradasOpen:false,
+  catCierres:{}, catCierresErr:'', catGruposCustom:{},
   /* El app abre en Obra desde v87: se usa de pie en la obra, y Obra pregunta
      dónde estás en vez de soltar 1.080 renglones. Actividades queda a un toque
      en la barra de abajo. */
@@ -15681,15 +15689,15 @@ var CAT_CAPITULOS=[
   {n:'1.00',  t:'Reconocimiento del Solar'},
   {n:'2.00',  t:'Movimiento de Tierra'},
   {n:'3.00',  t:'Hormigón Armado'},
-  {n:'4.00',  t:'Instalación Sanitaria'},
+  {n:'4.00',  t:'Plomería'},
   {n:'5.00',  t:'Instalación Eléctrica'},
   {n:'6.00',  t:'Terminación Superficie Cisterna'},
-  {n:'7.00',  t:'Muros No Estructurales (Bloques y/o Foam)'},
-  {n:'8.00',  t:'Terminación Superficie Interior'},
+  {n:'7.00',  t:'Muros de bloque y foam'},
+  {n:'8.00',  t:'Terminación interior'},
   {n:'9.00',  t:'Revestimientos'},
   {n:'10.00', t:'Pisos'},
-  {n:'11.00', t:'Portaje'},
-  {n:'12.00', t:'Cocina, Pantry y Muebles de Baño'},
+  {n:'11.00', t:'Puertas'},
+  {n:'12.00', t:'Cocina y muebles'},
   {n:'13.00', t:'Escalera'},
   {n:'14.00', t:'Herrería y Barandas'},
   {n:'15.00', t:'Ventanas'},
@@ -15724,6 +15732,15 @@ var CAT_CAPITULOS=[
   {n:'CI.16', t:'Derecho de Interconexión EDENORTE'},
   {n:'CI.17', t:'Derecho de Interconexión CORAASAN'},
   {n:'IMP.1', t:'Imprevisto'},
+  /* AC NO EXISTE EN EL PRESUPUESTO. El trabajo de aires acondicionados si
+     existe, y estaba repartido en cuatro capitulos porque cada paso es de un
+     oficio distinto: el de posicion es del tecnico de aires, el drenaje del
+     plomero, la alimentacion del electricista y el registro del de sheetrock.
+     Visto asi, nadie podia contestar «como va el aire del gimnasio».
+     Decision del dueno: capitulo propio. Va AL FINAL, antes de «Sin
+     clasificar», para que el desempate por indice de `_catCapMayoria` siga
+     dando lo mismo que antes en todo lo demas. */
+  {n:'AC',    t:'Aires acondicionados'},
   {n:'0',     t:'Sin clasificar'}
 ];
 function _catCapNom(n){
@@ -16049,8 +16066,21 @@ function _catCapDe(oficio, desc){
   var o=String(oficio||'').trim(), d=String(desc||'');
   var tiene=function(re){ return re.test(d); };
 
+  /* AIRES ACONDICIONADOS DEL LOBBY Y DEL GIMNASIO — va PRIMERO, antes que el
+     oficio, porque justamente el problema es que cada paso del mismo trabajo
+     es de un oficio distinto. Son 6 actividades medidas contra la base; las
+     correcciones de registro de la habitacion secundaria y de la sala del
+     penthouse NO entran: esas son de la unidad, no del area comun. */
+  if(tiene(/aire acondicionado|aires acondicionados|a\/c/i) && tiene(/lobby|gimnasio|gym/i))
+    return 'AC';
+
+  /* LAS GAVETAS Y LOS GABINETES DE COCINA CAIAN EN PUERTAS. La regla solo
+     miraba gabinete|mueble de ba|closet|isla|pantry, asi que «Instalacion de
+     gavetas — cocina caliente» y «Instalacion Gabitenes Cocina Principal» se
+     iban al 11.00. Medido contra la base: 36 actividades mal puestas.
+     `gabeta` y `gabiten` estan a proposito — asi estan escritas en la obra. */
   if(o==='Ebanista')
-    return tiene(/gabinete|mueble[s]? de ba|cl[oó]set|isla|pantry/i) ? '12.00' : '11.00';
+    return tiene(/gabinete|mueble[s]? de ba|cl[oó]set|isla|pantry|gaveta|gabeta|gabiten|cocina/i) ? '12.00' : '11.00';
   if(o==='Pisero')  return tiene(/revestimiento/i) ? '9.00' : '10.00';
   if(o==='Pulidor') return '10.00';
   if(o==='Topes y revestimientos en cuarzo') return '9.00';
@@ -16064,7 +16094,10 @@ function _catCapDe(oficio, desc){
   if(o==='Pintor Fachada') return '19.00';
   if(o==='Ventanero') return '15.00';
   if(o==='Herrero')   return '14.00';
-  if(o==='Carpintería') return '11.00';
+  /* LA CARPINTERIA DE OBRA ES ENCOFRADO, NO PORTAJE. Mandaba a Puertas
+     «Encofrado Ligero Losa», «Encofrado vuelos» y «Traer madera y puntales».
+     Son 5 actividades, medidas contra la base. */
+  if(o==='Carpintería') return '3.00';
   if(o==='Mdo andamios') return '21.00';
   if(o==='Aires acondicionados') return '32.00';
   if(o==='Varillero' || o==='Encofrados' ||
@@ -16193,14 +16226,9 @@ function _catAvanceHTML(av, chico){
     '<span style="color:var(--text3)'+(chico?';font-size:10px':'')+'"> · '+
     av.cerradas+'/'+av.total+'</span>';
 }
-function _catActsDe(pid){
-  var am=_catA();
-  return _catTodas().filter(function(a){ return am[a.id]===pid; })
-    .sort(function(x,y){
-      return _revOrdenArea(String(x.area||'').trim())-_revOrdenArea(String(y.area||'').trim()) ||
-             String(x.area||'').localeCompare(String(y.area||''));
-    });
-}
+/* Va por el índice desde v106 (`_catMapa`): recorrer las 2.466 por cada
+   partida eran medio millón de comparaciones para pintar un capítulo. */
+function _catActsDe(pid){ return _catMapa()[pid]||[]; }
 function _catActsDeCap(cap){
   var n=0; _catAgendaDe(cap).forEach(function(p){ n+=_catActsDe(p.id).length; });
   return n;
@@ -16277,7 +16305,27 @@ async function cargarCatalogo(){
     var as=await sbTodo('obra_partida_actividad?select=actividad_id,partida_id');
     S.catPartidas=ps||[];
     var m={}; (as||[]).forEach(function(r){ m[r.actividad_id]=r.partida_id; });
-    S.catAmarres=m; S.catError='';
+    S.catAmarres=m;
+    /* LAS FECHAS DE CIERRE, para el orden que la obra ya demostró (v106).
+       No hay columna «fecha_completado» en obra_actividades: el único sitio
+       donde consta CUÁNDO se cerró algo es el historial. Se pide filtrado y
+       con dos columnas —hoy son ~1.500 filas—, no el historial entero.
+       Si esto falla NO se cae el módulo: se queda sin orden demostrado y la
+       pantalla lo dice, que es mejor que no abrir. */
+    try{
+      var cs=await sbTodo('obra_cambios?entidad=eq.actividad&accion=in.(completado,completar)'+
+                          '&select=entidad_id,fecha&order=fecha.asc');
+      var cm={};
+      (cs||[]).forEach(function(r){ if(r.entidad_id&&r.fecha&&!cm[r.entidad_id]) cm[r.entidad_id]=String(r.fecha).slice(0,10); });
+      S.catCierres=cm; S.catCierresErr='';
+    }catch(e2){ S.catCierres={}; S.catCierresErr=(e2&&e2.message)||'no se pudo leer el historial'; }
+    /* Los grupos que el dueño abrió a mano. Una clave, un JSON. */
+    try{
+      var cf=await sb('obra_config?key=eq.cat_grupos&limit=1');
+      S.catGruposCustom=(cf&&cf[0]&&cf[0].value)?JSON.parse(cf[0].value):{};
+    }catch(e3){ S.catGruposCustom={}; }
+    S.catError='';
+    S._catMapa=null; S._catPrec=null;
     return true;
   }catch(e){
     /* No se deja en null: renderCatalogo volvería a pedirlo en cada repintado
@@ -16477,6 +16525,85 @@ async function catColgar(pid, subId){
   renderCatalogo();
 }
 function catDescolgar(pid){ return catColgar(pid, ''); }
+
+/* ── v106 · CORREGIR EL GRUPO A MANO ──
+   El grupo lo arma una regla de palabras y una palabra mal puesta manda
+   trabajo al sitio equivocado. Lo corregido se guarda sobre la PARTIDA
+   (`obra_partidas.grupo`) y MANDA sobre la regla: no se pierde al recalcular.
+   Cero escrituras en `obra_actividades` — la regla del módulo desde la v98. */
+async function catMoverGrupo(pid, g){
+  var p=_catPorId(pid); if(!p || _catEsSub(p)) return;
+  var antes=_catGrupoDe(p);
+  if(antes===g){ S.catMover=null; renderCatalogo(); return; }
+  _catGuardarUndo('mover de grupo',[pid]);
+  try{
+    await sb('obra_partidas?id=eq.'+encodeURIComponent(pid),{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify({grupo:g||null})});
+    p.grupo=g||null;
+    logCambio('movida','partida',pid,p.nombre,'de «'+antes+'» a «'+(g||_catSubDe(p.capitulo,p.nombre))+'»');
+    showToast('Movida a «'+(g||_catSubDe(p.capitulo,p.nombre))+'» ✓');
+  }catch(e){ showToast('No se pudo mover: '+((e&&e.message)||''),'err',6000); }
+  S.catMover=null;
+  renderCatalogo();
+}
+function catMoverAbrir(pid){ S.catMover=pid; renderCatalogo(); _catArriba(); }
+function catMoverCerrar(){ S.catMover=null; renderCatalogo(); }
+
+/* CREAR UN GRUPO — pantalla propia, CERO `prompt()`. Lo pidió el dueño para
+   los talleres pendientes. Se guarda en `obra_config`, una clave y un JSON,
+   para que el módulo se siga borrando entero con las dos tablas. */
+function catGrupoNuevoAbrir(){ S.catGrupoNuevo={nombre:''}; renderCatalogo(); _catArriba(); }
+function catGrupoNuevoCerrar(){ S.catGrupoNuevo=null; renderCatalogo(); }
+function _catGrupoNuevoLeer(){
+  var i=document.getElementById('cat-gn-txt');
+  if(i && S.catGrupoNuevo) S.catGrupoNuevo.nombre=i.value;
+}
+async function catGrupoNuevoCrear(){
+  _catGrupoNuevoLeer();
+  var cap=String(S.catCap||''), nom=String((S.catGrupoNuevo&&S.catGrupoNuevo.nombre)||'').trim();
+  if(!cap || !nom){ showToast('Ponle nombre al grupo','warn',3000); return; }
+  if(_catGruposDe(cap).indexOf(nom)>=0){ showToast('Ese grupo ya existe','warn',3000); return; }
+  var m=JSON.parse(JSON.stringify(S.catGruposCustom||{}));
+  (m[cap]=m[cap]||[]).push(nom);
+  try{
+    await sb('obra_config',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+             body:JSON.stringify({key:'cat_grupos', value:JSON.stringify(m)})});
+    S.catGruposCustom=m;
+    logCambio('creado','partida','cat_grupos',nom,'grupo nuevo en el capítulo '+cap);
+    showToast('Grupo «'+nom+'» creado ✓');
+    S.catGrupoNuevo=null; S.catGrupo=nom;
+  }catch(e){ showToast('No se pudo crear: '+((e&&e.message)||''),'err',6000); }
+  renderCatalogo(); _catArriba();
+}
+
+/* ── v106 · BUSCAR, que es como se registra rápido ──
+   Queja textual del dueño: «todavía se dificulta registrar». Busca sobre las
+   2.466 —abiertas y CERRADAS— por descripción, área o contratista, sin
+   acentos ni mayúsculas. Se espera a que deje de teclear: filtrar 2.466 en
+   cada tecla tumba un teléfono. */
+function catBuscaTeclea(v){
+  S.catQ=v; S._catQFoco=true; S.catQTope=50;
+  clearTimeout(S._catQT);
+  S._catQT=setTimeout(function(){ S.catQVivo=String(S.catQ||''); renderCatalogo(); }, 260);
+}
+function catBuscaLimpiar(){ S.catQ=''; S.catQVivo=''; S.catQTope=50; S._catQFoco=false; renderCatalogo(); }
+function catBuscaChip(k){ S.catQChips=S.catQChips||{}; S.catQChips[k]=!S.catQChips[k]; renderCatalogo(); }
+function catBuscaMas(){ S.catQTope=(S.catQTope||50)+50; renderCatalogo(); }
+function _catBuscaResultados(){
+  var q=_catNorm(String(S.catQVivo||'').trim());
+  if(q.length<2) return null;
+  var pal=q.split(/\s+/).filter(Boolean);
+  var ch=S.catQChips||{};
+  var res=_catTodas().filter(function(a){
+    if(ch.abiertas && _catCerrada(a)) return false;
+    if(ch.vencidas && !isRetrasada(a)) return false;
+    if(ch.nivel && S.catUbic && String(a.area||'').trim()!==S.catUbic) return false;
+    var t=_catNorm((a.descripcion||'')+' '+(a.area||'')+' '+(a.personal_nombre||''));
+    for(var i=0;i<pal.length;i++) if(t.indexOf(pal[i])<0) return false;
+    return true;
+  });
+  return res;
+}
 
 /* UN solo PATCH y UNA sola recarga para toda la tanda. `catColgar` hace un
    PATCH y un cargarCatalogo() POR PARTIDA: veinte marcadas serían veinte
@@ -16812,13 +16939,252 @@ async function catAsignarEn(pid){
 }
 
 // ══ LAS PANTALLAS ═══════════════════════════════════════════
-function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; renderCatalogo(); _catArriba(); }
+/* ══ v106 · LA PLANIFICACIÓN POR PARTIDAS MADRE ══════════════════════════
+   Palabras del dueño: «hay términos que son de presupuesto y tú los copiaste
+   y los pegaste igual. Y aquí estamos haciendo una planificación: una que
+   contenga lo ya realizado y lo que falta por hacer, agrupándolo en partidas
+   madres, para poder evidenciar los porcentajes de avance».
+
+   UNA LÍNEA DE PRESUPUESTO NO ES UNA UNIDAD DE TRABAJO. «Zapata ZR-1, 6.12
+   M³» sirve para medir y para pagar; nadie sale a la obra a hacer «Zapata
+   ZR-1». Las 274 del presupuesto SE QUEDAN en la base —son el amarre con lo
+   contratado y con lo que se paga, y por eso siguen sin poder editarse— pero
+   dejan de ser el esqueleto de la pantalla. El esqueleto es:
+
+       CAPÍTULO  →  GRUPO DE TRABAJO  →  UBICACIÓN  →  ACTIVIDADES
+
+   y NINGUNO de los cuatro niveles necesita que el dueño clasifique nada a
+   mano: el capítulo sale de `_catCapDe`, el grupo de las palabras del nombre,
+   la ubicación del campo `area`. La curación deja de ser el peaje de entrada
+   y pasa a ser lo que afina.                                              */
+
+/* EL GRUPO LO ARMA UNA REGLA DE PALABRAS, Y GANA LA PRIMERA QUE COINCIDE.
+   Por eso el orden de cada lista es parte de la regla y no se reordena sin
+   volver a medir: «Masilla y pulido de la viga cubierta en sheetrock» cae en
+   Sheetrock porque Sheetrock va antes, y eso es lo que se quiere.
+   Los nombres de los grupos los escogió el dueño. Las PALABRAS no: esas
+   salieron de leer la base, y por eso hay que poder corregirlas a mano —
+   ver `catMoverGrupo`. Una palabra mal puesta manda trabajo al grupo
+   equivocado, y el dueño lo va a ver antes que nadie.
+   Los capítulos que no están aquí NO se subdividen: son chicos y partirlos
+   sería ruido. Van de capítulo directo a ubicación. */
+var CAT_SUBGRUPOS={
+  '8.00':[
+    ['Sheetrock y plafones',              /sheetrock|plaf[oó]n|drywall|den\s?glass|densglass|esquinero/i],
+    ['Masillado y pulido',                /masill|pulid|pulir/i],
+    ['Estuco',                            /estuco/i],
+    ['Pañete y fraguaché',                /pa[ñn]ete|fragua/i],
+    ['Resanes y mochetas',                /resan|mochet/i],
+    ['Blocks y muros',                    /block|foam|muro/i],
+    ['Columnas falsas, vigas y registros',/columna|viga|registro|patinillo|retorno|pacho|techo/i],
+    ['Otros',                             null]
+  ],
+  '4.00':[
+    ['Gas',                  /\bgas\b|g\.l\.p|glp/i],
+    ['Pruebas de agua',      /prueba/i],
+    ['Aires y ventilación',  /aire|ventilaci|extractor|a\/c/i],
+    ['Desagües y rejillas',  /desag[uü]e|rejilla|drenaje|bajante|pluvial|trampa|sif[oó]n/i],
+    ['Aparatos y grifería',  /inodoro|lavamanos|ducha|grifer|llave|fregadero|aparato|calentador|bid[eé]|mezcladora|accesorio|vertedero|lavadero|niple/i],
+    ['Tuberías y registros', /tuber|registro|pasante|patinillo|mu[ñn]eco|bomba|bombeo|acometida/i],
+    ['Otros',                null]
+  ],
+  '10.00':[
+    ['Zócalos',                 /z[oó]calo/i],
+    ['Derretido',               /derret/i],
+    ['Nichos',                  /nicho/i],
+    ['Rejillas',                /rejilla/i],
+    ['Revisión y correcciones', /revisi|revisar|correcci|corregir|reemplaz|\brot[oa]s?\b|cambio de/i],
+    ['Pisos y porcelanato',     /piso|porcelanato|cer[aá]mica|m[aá]rmol/i],
+    ['Otros',                   null]
+  ],
+  '11.00':[
+    ['Cerraduras y topes',  /cerradura|tope|bisagra|pomo|manija/i],
+    ['Jambas y marcos',     /jamba|marco/i],
+    ['Lijado y pintado',    /lijad|lijar|pintad|pintura|masilla|barniz/i],
+    ['Closets y despensa',  /cl[oó]set|despensa/i],
+    ['Ajustes y calzos',    /ajust|calz|nivel|presentar|desmontar/i],
+    ['Puertas',             /puerta/i],
+    ['Otros',               null]
+  ],
+  '5.00':[
+    ['Extractores y luminarias',  /extractor|luminaria|l[aá]mpara|plafon|abanico|ventilaci/i],
+    ['Alimentación y acometidas', /alimentaci|acometida|breaker|braker|caja el|panel/i],
+    ['Alambrado y tuberías',      /alambrad|cablead|tuber|empalme/i],
+    /* «Luces», NO «Luces y abanicos»: la palabra «abanico» sale en UNA sola
+       actividad de toda la obra. Nombrar un grupo de 69 por una mención es
+       mentir sobre lo que hay dentro. Lo corrigió el dueño. */
+    ['Luces',                     /\bluz\b|luces|bombillo|iluminaci/i],
+    ['Tomacorrientes y tableros', /tomacorriente|\btoma\b|tablero|interruptor|apagador|cajita|nevera/i],
+    ['Aires y registros',         /aire|a\/c|registro/i],
+    ['Pruebas y revisiones',      /prueba|revisi|revisar|validaci|verificar/i],
+    ['Salidas y correcciones',    /salida|correcci|corregir|solucionar/i],
+    ['Otros',                     null]
+  ],
+  '12.00':[
+    ['Muebles de baño',    /mueble[s]? de ba/i],
+    ['Gavetas',            /gaveta|gabeta/i],
+    ['Pintado y retoques', /pintad|pintura|retoque|masilla|lijad/i],
+    ['Closets',            /cl[oó]set/i],
+    ['Gabinetes',          /gabinete|gabiten|isla|pantry|\btope/i],
+    ['Otros',              null]
+  ]
+};
+function _catSubDe(cap, desc){
+  var t=CAT_SUBGRUPOS[String(cap)];
+  if(!t) return '';
+  var d=String(desc||'');
+  for(var i=0;i<t.length;i++){ if(!t[i][1] || t[i][1].test(d)) return t[i][0]; }
+  return 'Otros';
+}
+/* LO MOVIDO A MANO MANDA SOBRE LA REGLA y no se pierde al recalcular: vive en
+   `obra_partidas.grupo`, sobre la PARTIDA —no sobre cada actividad—, que es
+   donde el dueño lo decidió. Si la columna viene vacía, contesta la regla. */
+function _catGrupoDe(p){
+  if(!p) return '';
+  var g=String(p.grupo||'').trim();
+  return g || _catSubDe(p.capitulo, p.nombre);
+}
+/* Los grupos que el dueño crea a mano (pidió expresamente poder abrir uno
+   para los TALLERES PENDIENTES). Viven en `obra_config`, una clave y un JSON:
+   asi el modulo se sigue borrando entero sin dejar rastro. */
+function _catGruposCustom(cap){
+  var m=S.catGruposCustom||{};
+  return (m[String(cap)]||[]).slice();
+}
+/* Los grupos de un capitulo, en el orden de la regla, con los de mano al
+   final. Los VACIOS solo salen si el dueño los creó: un grupo que la regla
+   define pero que hoy no tiene nada no aporta, y uno recién creado tiene que
+   verse para poder mover cosas dentro. */
+function _catGruposDe(cap){
+  var base=(CAT_SUBGRUPOS[String(cap)]||[]).map(function(x){ return x[0]; });
+  var vistos={}, orden=[];
+  base.forEach(function(g){ vistos[g]=1; orden.push(g); });
+  _catGruposCustom(cap).forEach(function(g){ if(!vistos[g]){ vistos[g]=1; orden.push(g); } });
+  /* Un grupo puesto a mano puede no estar en ninguna de las dos listas (por
+     ejemplo si se renombró la regla después): se enseña igual, nunca se
+     esconde trabajo. */
+  _catAgendaDe(cap).forEach(function(p){
+    var g=_catGrupoDe(p); if(g && !vistos[g]){ vistos[g]=1; orden.push(g); }
+  });
+  return orden;
+}
+function _catPartidasDeGrupo(cap, g){
+  return _catAgendaDe(cap).filter(function(p){ return _catGrupoDe(p)===g; });
+}
+function _catActsDeGrupo(cap, g){
+  var acts=[];
+  _catPartidasDeGrupo(cap,g).forEach(function(p){ acts=acts.concat(_catActsDe(p.id)); });
+  return acts;
+}
+
+/* EL ÍNDICE partida→actividades. Sin él cada tarjeta recorría las 2.466
+   actividades enteras: pintar un capítulo con 200 partidas eran medio millón
+   de comparaciones y en el teléfono se sentía. El sello se cae solo cuando
+   cambia el número de actividades o de amarres; `Acciones._sincronizar`
+   parchea los objetos EN SITIO (Object.assign), así que un avance nuevo se ve
+   sin reconstruir nada. */
+function _catMapa(){
+  var todas=_catTodas(), am=_catA();
+  var sello=todas.length+'|'+Object.keys(am).length;
+  if(!S._catMapa || S._catMapaSello!==sello){
+    var m={};
+    todas.forEach(function(a){ var p=am[a.id]; if(!p) return; (m[p]=m[p]||[]).push(a); });
+    Object.keys(m).forEach(function(k){
+      m[k].sort(function(x,y){
+        return _revOrdenArea(String(x.area||'').trim())-_revOrdenArea(String(y.area||'').trim()) ||
+               String(x.area||'').localeCompare(String(y.area||''));
+      });
+    });
+    S._catMapa=m; S._catMapaSello=sello;
+  }
+  return S._catMapa;
+}
+
+/* ── LAS UBICACIONES, EN ORDEN DEL EDIFICIO ──
+   `_revOrdenArea` ya pone los once apartamentos primero y luego las áreas de
+   nivel; aquí se invierte para que el edificio se lea de ABAJO hacia arriba
+   como se construye, que es como el dueño lo mira. */
+function _catUbicsDe(acts){
+  var m={};
+  acts.forEach(function(a){ var k=String(a.area||'').trim()||'Sin ubicación'; (m[k]=m[k]||[]).push(a); });
+  return Object.keys(m).sort(function(x,y){
+    return _revOrdenArea(x)-_revOrdenArea(y) || x.localeCompare(y,'es');
+  }).map(function(k){ return {area:k, acts:m[k], av:_catAvance(m[k])}; });
+}
+function _catUbicCorto(area){
+  var m=String(area||'').match(/Apto\s+(\S+)/);
+  if(m) return m[1];
+  if(/Penthouse/i.test(area)) return 'PH';
+  return String(area||'').replace(/^N\d+\s+—\s+/,'');
+}
+
+/* ── EL ORDEN QUE LA OBRA YA DEMOSTRÓ ──
+   Los apartamentos de abajo van muy por delante, así que YA DEMOSTRARON en
+   qué orden se hacen las cosas. Lo que falta en una unidad se ordena por la
+   MEDIANA de la fecha en que esa misma descripción se cerró en las OTRAS
+   unidades. No es un Gantt inventado: es su propia obra devuelta.
+
+   NINGUNA FECHA FUTURA. Esto es un ORDEN, no un calendario: poner fechas
+   exigiría duraciones, y el presupuesto se quedó sin cantidades por decisión
+   del dueño en la v101.
+
+   La comparación es por TEXTO EXACTO, y ahí está el argumento para curar:
+   «Instalacion Pisos Porcelanato» no se reconoce con «Instalación Pisos
+   Porcelanato». Cuando el dueño junte esas dos, el precedente sube. */
+function _catPrecedentes(){
+  var todas=_catTodas(), ci=S.catCierres||{};
+  var sello=todas.length+'|'+Object.keys(ci).length;
+  if(!S._catPrec || S._catPrecSello!==sello){
+    var m={};
+    todas.forEach(function(a){
+      if(!_catCerrada(a)) return;
+      var f=ci[a.id]; if(!f) return;      // sin fecha no hay precedente: no se inventa
+      var d=String(a.descripcion||'');
+      (m[d]=m[d]||[]).push({area:String(a.area||'').trim(), f:f});
+    });
+    S._catPrec=m; S._catPrecSello=sello;
+  }
+  return S._catPrec;
+}
+function _catMediana(fs){
+  var v=fs.slice().sort();
+  return v[Math.floor((v.length-1)/2)];
+}
+/* Devuelve {con:[…], sin:[…]}. `con` son las que tienen gemela cerrada en
+   otra unidad, ordenadas; `sin` son las que NADIE ha hecho todavía, y esas
+   van en su propio bloque SIN posición inventada. Medido: ese bloque va a ser
+   grande, y está bien. */
+function _catOrdenFaltantes(acts, area){
+  var pre=_catPrecedentes(), con=[], sin=[];
+  acts.forEach(function(a){
+    if(_catCerrada(a)) return;
+    var l=(pre[String(a.descripcion||'')]||[]).filter(function(x){ return x.area!==area; });
+    if(!l.length){ sin.push(a); return; }
+    con.push({a:a, n:l.length, med:_catMediana(l.map(function(x){ return x.f; }))});
+  });
+  con.sort(function(x,y){
+    return String(x.med).localeCompare(String(y.med)) || (y.n-x.n) ||
+           String(x.a.descripcion||'').localeCompare(String(y.a.descripcion||''));
+  });
+  return {con:con, sin:sin};
+}
+
+function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; S.catGrupo=null; S.catUbic=null; S.catCurar=false; renderCatalogo(); _catArriba(); }
+function catCurarAbrir(){ S.catCurar=true; renderCatalogo(); _catArriba(); }
+function catIrGrupo(g){ S.catCurar=false; S.catGrupo=g||null; S.catUbic=null; S.catPartida=null; renderCatalogo(); _catArriba(); }
+function catIrUbic(u){ S.catUbic=u||null; S.catPartida=null; renderCatalogo(); _catArriba(); }
 function catIrPartida(id){ S.catPartida=id; S.catPick=null; S.catBuscar=null; renderCatalogo(); _catArriba(); }
 function catVerVacios(){ S.catVacios=!S.catVacios; renderCatalogo(); }
 function catVolver(){
-  if(S.catBuscar) S.catBuscar=null;
+  if(S.catQVivo) { S.catQ=''; S.catQVivo=''; S._catQFoco=false; }
+  else if(S.catGrupoNuevo) S.catGrupoNuevo=null;
+  else if(S.catMover) S.catMover=null;
+  else if(S.catBuscar) S.catBuscar=null;
   else if(S.catPick) S.catPick=null;
   else if(S.catPartida) S.catPartida=null;
+  else if(S.catCurar) S.catCurar=false;
+  else if(S.catUbic) S.catUbic=null;
+  else if(S.catGrupo) S.catGrupo=null;
   else { S.catCap=null; S.catSueltas=false; S.catSel={}; }
   renderCatalogo(); _catArriba();
 }
@@ -16850,12 +17216,29 @@ function renderCatalogo(){
     return;
   }
   try{
-    if(S.catBuscar)           el.innerHTML=_catBuscarHTML();
+    /* La búsqueda manda sobre todo lo demás: está arriba y siempre visible, y
+       lo que se escribe ahí es lo que se quiere ver ahora. */
+    var _res=_catBuscaResultados();
+    if(_res)                  el.innerHTML=_catBuscaHTML(_res);
+    else if(S.catGrupoNuevo)  el.innerHTML=_catGrupoNuevoHTML();
+    else if(S.catMover)       el.innerHTML=_catMoverHTML();
+    else if(S.catBuscar)      el.innerHTML=_catBuscarHTML();
     else if(S.catPick)        el.innerHTML=_catPickHTML();
     else if(S.catSueltas)     el.innerHTML=_catSueltasHTML();
     else if(S.catPartida)     el.innerHTML=_catFichaHTML();
-    else if(S.catCap!==null && S.catCap!==undefined) el.innerHTML=_catPartidasHTML();
+    else if(S.catCap!==null && S.catCap!==undefined){
+      if(S.catCurar)          el.innerHTML=_catPartidasHTML();
+      else if(S.catUbic)      el.innerHTML=_catUnidadHTML();
+      else if(S.catGrupo)     el.innerHTML=_catUbicHTML();
+      else                    el.innerHTML=_catGruposHTML();
+    }
     else                      el.innerHTML=_catCapitulosHTML();
+    /* El foco se pierde al repintar y la caja de buscar es la única que se
+       teclea seguido: se devuelve al final del texto. */
+    var _q=document.getElementById('cat-q');
+    if(_q && S.catQ && document.activeElement!==_q && S._catQFoco){
+      _q.focus(); try{ _q.setSelectionRange(_q.value.length,_q.value.length); }catch(e0){}
+    }
   }catch(e){
     console.warn('renderCatalogo:',e);
     el.innerHTML='<div class="empty" style="padding:36px 16px;color:var(--text3)">'+
@@ -16895,7 +17278,7 @@ function _catCabecera(){
 }
 
 function _catCapitulosHTML(){
-  var h=_catCabecera();
+  var h=_catBuscaBarraHTML()+_catCabecera();
   if(S.catAviso)
     h+='<div style="margin:0 0 12px;padding:12px 13px;border-radius:12px;'+
       'background:var(--red-light);border:1.5px solid var(--red);color:var(--red);'+
@@ -16950,6 +17333,231 @@ function _catCapitulosHTML(){
   h+='<button onclick="catSembrar()" style="'+_catBS+';width:100%;margin-top:8px;border:1.5px solid var(--border2);'+
     'background:var(--bg2);color:var(--text3);font-weight:700">Volver a sembrar (borra lo curado)</button>';
   return h;
+}
+
+/* ══ v106 · LAS PANTALLAS DE LA PLANIFICACIÓN ════════════════════════════ */
+
+/* La caja de buscar va ARRIBA Y SIEMPRE VISIBLE, en los cuatro niveles: la
+   queja del dueño fue «todavía se dificulta registrar», y registrar empieza
+   por encontrar. */
+function _catBuscaBarraHTML(){
+  var q=String(S.catQ||'');
+  var ch=S.catQChips||{};
+  var chip=function(k,t){
+    var on=!!ch[k];
+    return '<button onclick="catBuscaChip(\''+k+'\')" style="'+_catBS+';min-height:40px;font-size:11.5px;'+
+      'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
+      'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+t+'</button>';
+  };
+  return '<div style="display:flex;align-items:center;gap:9px;background:var(--bg2);'+
+      'border:1.5px solid var(--border2);border-radius:var(--r2);padding:10px 13px;margin-bottom:8px">'+
+      '<input id="cat-q" type="search" value="'+esc(q)+'" oninput="catBuscaTeclea(this.value)" '+
+        'placeholder="Buscar en las '+_catTodas().length+' actividades" '+
+        'style="flex:1;border:none;outline:none;font-size:14px;font-family:var(--font);'+
+        'background:transparent;color:var(--text);min-height:24px">'+
+      (q?'<button onclick="catBuscaLimpiar()" style="background:none;border:none;color:var(--text3);'+
+         'font-size:20px;cursor:pointer;padding:0 4px;line-height:1;min-height:40px">×</button>':'')+
+    '</div>'+
+    (q?'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+        chip('abiertas','Solo abiertas')+chip('vencidas','Vencidas')+
+        (S.catUbic?chip('nivel','Este nivel'):'')+'</div>':'');
+}
+
+function _catBuscaHTML(res){
+  var tope=S.catQTope||50;
+  var h=_catBuscaBarraHTML();
+  h+='<div style="font-size:12.5px;font-weight:800;margin:2px 0 10px">'+
+     res.length+' encontrada'+(res.length!==1?'s':'')+
+     (res.length>tope?' <span style="color:var(--text3);font-weight:600">· se enseñan '+tope+'</span>':'')+'</div>';
+  if(!res.length)
+    h+='<div class="empty" style="padding:26px 16px;color:var(--text3)">Nada con esas palabras. '+
+       'Prueba con una sola, o quita los filtros.</div>';
+  res.slice(0,tope).forEach(function(a){
+    h+='<div style="font-size:10.5px;color:var(--text3);font-family:var(--mono);margin:0 0 2px 2px">'+
+       esc(String(a.area||'sin ubicación'))+(a.personal_nombre?' · '+esc(_responsables(a.personal_nombre)[0]||''):'')+'</div>'+
+       revCard(a);
+  });
+  if(res.length>tope)
+    h+='<button onclick="catBuscaMas()" style="'+_catBS+';width:100%;margin-top:4px;min-height:48px;'+
+       'border:1.5px dashed var(--border2);background:none;color:var(--text2)">Ver 50 más</button>';
+  return h+'<div style="height:100px"></div>';
+}
+
+/* NIVEL 2 — los grupos de trabajo del capítulo. */
+function _catGruposHTML(){
+  var cap=String(S.catCap), nom=_catCapNom(cap);
+  var h=_catBuscaBarraHTML()+
+    '<button onclick="catIrCap(null)" style="'+_catVolverBS+'">‹ Capítulos</button>'+
+    '<div style="font-size:17px;font-weight:800;margin:4px 0 2px;line-height:1.25">'+esc(cap)+' · '+esc(nom)+'</div>';
+  var avCap=_catAvanceCap(cap);
+  h+='<div style="font-size:12px;font-family:var(--mono);margin-bottom:4px">'+_catAvanceHTML(avCap)+'</div>'+
+     _catBarraHTML(avCap)+'<div style="height:10px"></div>';
+  var gs=_catGruposDe(cap);
+  /* Un capítulo sin tabla de grupos NO se subdivide: es chico y partirlo sería
+     ruido. Va directo a las ubicaciones. */
+  if(!CAT_SUBGRUPOS[cap] && !_catGruposCustom(cap).length){
+    var acts=[]; _catAgendaDe(cap).forEach(function(p){ acts=acts.concat(_catActsDe(p.id)); });
+    return h+_catUbicListaHTML(acts, null);
+  }
+  var filas=gs.map(function(g){ return {g:g, acts:_catActsDeGrupo(cap,g)}; })
+              .filter(function(x){ return x.acts.length || _catGruposCustom(cap).indexOf(x.g)>=0; });
+  if(!filas.length)
+    h+='<div class="empty" style="padding:24px 16px;color:var(--text3)">Este capítulo no tiene partidas todavía.</div>';
+  filas.forEach(function(x){
+    var av=_catAvance(x.acts);
+    h+='<button onclick="catIrGrupo('+_catQ(x.g)+')" style="'+_catBS+';width:100%;min-height:66px;'+
+      'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;'+
+      'text-align:left;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text);'+
+      'margin-bottom:6px;padding:10px 12px">'+
+      '<span style="font-size:13px;font-weight:800;line-height:1.3">'+esc(x.g)+'</span>'+
+      '<span style="font-size:11px;font-family:var(--mono)">'+_catAvanceHTML(av)+'</span>'+
+      _catBarraHTML(av)+'</button>';
+  });
+  h+='<button onclick="catGrupoNuevoAbrir()" style="'+_catBS+';width:100%;margin-top:8px;min-height:48px;'+
+     'border:1.5px dashed var(--border2);background:none;color:var(--text3);font-weight:700">'+
+     '+ Crear un grupo en este capítulo</button>';
+  /* LAS 274 DEL PRESUPUESTO SIGUEN AHÍ. Dejaron de ser el esqueleto de la
+     pantalla, no de existir: son el amarre con lo contratado y con lo que se
+     paga, y de aquí se cuelgan las partidas. Va abajo y plegado porque es
+     trabajo de escritorio, no de obra. */
+  h+='<button onclick="catCurarAbrir()" style="'+_catBS+';width:100%;margin-top:6px;min-height:46px;'+
+     'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);font-weight:700">'+
+     'Las líneas del presupuesto ('+_catSubsDe(cap).length+') y las partidas sueltas</button>';
+  return h+'<div style="height:100px"></div>';
+}
+
+/* NIVEL 3 — las ubicaciones, en orden del edificio. */
+function _catUbicListaHTML(acts, g){
+  var us=_catUbicsDe(acts);
+  if(!us.length) return '<div class="empty" style="padding:24px 16px;color:var(--text3)">Sin actividades.</div>';
+  var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px">';
+  us.forEach(function(u){
+    h+='<button onclick="catIrUbic('+_catQ(u.area)+')" style="'+_catBS+';min-height:70px;width:100%;'+
+      'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;'+
+      'text-align:left;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text);padding:9px 11px">'+
+      '<span style="font-size:12.5px;font-weight:800;line-height:1.25">'+esc(_catUbicCorto(u.area))+'</span>'+
+      '<span style="font-size:11px;font-family:var(--mono)">'+_catAvanceHTML(u.av)+'</span>'+
+      _catBarraHTML(u.av)+'</button>';
+  });
+  return h+'</div><div style="height:100px"></div>';
+}
+function _catUbicHTML(){
+  var cap=String(S.catCap), g=S.catGrupo;
+  var acts=_catActsDeGrupo(cap,g), av=_catAvance(acts);
+  var h=_catBuscaBarraHTML()+
+    '<button onclick="catIrGrupo(null)" style="'+_catVolverBS+'">‹ '+esc(cap)+' · '+esc(_catCapNom(cap))+'</button>'+
+    '<div style="font-size:17px;font-weight:800;margin:4px 0 2px;line-height:1.25">'+esc(g)+'</div>'+
+    '<div style="font-size:12px;font-family:var(--mono);margin-bottom:4px">'+_catAvanceHTML(av)+'</div>'+
+    _catBarraHTML(av)+'<div style="height:12px"></div>';
+  return h+_catUbicListaHTML(acts, g);
+}
+
+/* NIVEL 4 — lo que falta en esa ubicación, EN EL ORDEN QUE LA OBRA DEMOSTRÓ. */
+function _catUnidadHTML(){
+  var cap=String(S.catCap), g=S.catGrupo, area=S.catUbic;
+  var todas=(g?_catActsDeGrupo(cap,g):(function(){ var r=[]; _catAgendaDe(cap).forEach(function(p){ r=r.concat(_catActsDe(p.id)); }); return r; })())
+            .filter(function(a){ return (String(a.area||'').trim()||'Sin ubicación')===area; });
+  var av=_catAvance(todas);
+  var o=_catOrdenFaltantes(todas, area);
+  var cerradas=todas.filter(_catCerrada);
+  var h=_catBuscaBarraHTML()+
+    '<button onclick="catIrUbic(null)" style="'+_catVolverBS+'">‹ '+esc(g||_catCapNom(cap))+'</button>'+
+    '<div style="font-size:17px;font-weight:800;margin:4px 0 2px;line-height:1.25">'+
+      esc((g?g+' · ':'')+_catUbicCorto(area))+'</div>'+
+    '<div style="font-size:12px;font-family:var(--mono);margin-bottom:4px">'+_catAvanceHTML(av)+'</div>'+
+    _catBarraHTML(av)+'<div style="height:12px"></div>';
+  if(S.catCierresErr)
+    h+='<div style="margin-bottom:10px;padding:10px 12px;border-radius:11px;background:var(--amber-light);'+
+      'border:1.5px solid var(--amber);color:var(--amber);font-size:11.5px;line-height:1.45">'+
+      'No se pudo leer el historial, así que no hay orden demostrado: las que faltan salen sin ordenar.</div>';
+
+  h+='<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
+     'text-transform:uppercase;margin:4px 0 8px">Lo que falta ('+(o.con.length+o.sin.length)+')</div>';
+  if(!o.con.length && !o.sin.length)
+    h+='<div class="empty" style="padding:22px 16px;color:var(--green);font-weight:700">Aquí no falta nada.</div>';
+  o.con.forEach(function(x,i){
+    h+='<div style="display:flex;align-items:baseline;gap:8px;margin:0 0 2px 2px">'+
+        '<span style="font-size:11px;font-family:var(--mono);color:var(--text3);min-width:20px">'+(i+1)+'</span>'+
+        /* CADA LÍNEA DICE EN CUÁNTAS UNIDADES SE BASA: «visto en 1» y «visto en
+           5» no valen lo mismo y el dueño tiene que distinguirlo de un vistazo. */
+        '<span style="font-size:10.5px;font-family:var(--mono);color:'+(x.n>=3?'var(--accent)':'var(--text3)')+'">'+
+          'visto en '+x.n+'</span></div>'+
+       revCard(x.a)+_catMoverPieHTML(x.a);
+  });
+  if(o.sin.length){
+    h+='<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
+       'text-transform:uppercase;margin:16px 0 4px">Sin precedente ('+o.sin.length+')</div>'+
+       '<div style="font-size:11.5px;color:var(--text3);line-height:1.45;margin-bottom:8px">'+
+       'Nadie lo ha hecho todavía en otra unidad, así que no se le inventa posición.</div>';
+    o.sin.forEach(function(a){ h+=revCard(a)+_catMoverPieHTML(a); });
+  }
+  if(cerradas.length){
+    h+='<button onclick="S.catCerradasOpen=!S.catCerradasOpen;renderCatalogo()" style="'+_catBS+';width:100%;'+
+      'margin-top:14px;min-height:46px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">'+
+      (S.catCerradasOpen?'Esconder':'Ver')+' lo ya hecho ('+cerradas.length+')</button>';
+    if(S.catCerradasOpen){
+      h+='<div style="height:8px"></div>';
+      cerradas.forEach(function(a){ h+=revCard(a); });
+    }
+  }
+  return h+'<div style="height:110px"></div>';
+}
+
+/* El pie de «mover de grupo» solo sale en los capítulos que se subdividen. */
+function _catMoverPieHTML(a){
+  var pid=_catA()[a.id]; if(!pid) return '';
+  var cap=String(S.catCap||'');
+  if(!CAT_SUBGRUPOS[cap] && !_catGruposCustom(cap).length) return '';
+  return '<div style="margin:-6px 0 12px 2px">'+
+    '<button onclick="catMoverAbrir('+_catQ(pid)+')" style="background:none;border:0;'+
+    'color:var(--text3);font-size:11px;font-weight:700;cursor:pointer;padding:6px 2px;min-height:34px;'+
+    'text-decoration:underline">No es de este grupo</button></div>';
+}
+function _catMoverHTML(){
+  var p=_catPorId(S.catMover);
+  if(!p) return '<div class="empty" style="padding:30px">Esa partida ya no está.</div>';
+  var cap=String(p.capitulo||S.catCap||''), actual=_catGrupoDe(p);
+  var h='<button onclick="catMoverCerrar()" style="'+_catVolverBS+'">‹ Volver</button>'+
+    '<div style="font-size:17px;font-weight:800;margin:4px 0 6px;line-height:1.3">¿De qué grupo es?</div>'+
+    '<div style="font-size:13px;color:var(--text2);line-height:1.4;margin-bottom:4px">'+esc(p.nombre)+'</div>'+
+    '<div style="font-size:11.5px;color:var(--text3);margin-bottom:14px">'+
+      'Ahora está en «'+esc(actual)+'». Mueve <b>'+_catActsDe(p.id).length+' actividad'+
+      (_catActsDe(p.id).length!==1?'es':'')+'</b>, en todas las ubicaciones.</div>';
+  _catGruposDe(cap).forEach(function(g){
+    var on=(g===actual);
+    h+='<button onclick="catMoverGrupo('+_catQ(p.id)+','+_catQ(g)+')" style="'+_catBS+';width:100%;'+
+      'min-height:50px;margin-bottom:6px;text-align:left;justify-content:flex-start;'+
+      'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';background:'+(on?'var(--accent-soft)':'var(--bg2)')+';'+
+      'color:var(--text)">'+esc(g)+(on?' <span style="color:var(--accent)">· ahora</span>':'')+'</button>';
+  });
+  /* Volver a la regla: si el dueño se equivocó al mover, tiene que poder
+     deshacerlo sin adivinar cuál era el grupo que decía la regla. */
+  if(String(p.grupo||'').trim())
+    h+='<button onclick="catMoverGrupo('+_catQ(p.id)+',\'\')" style="'+_catBS+';width:100%;margin-top:8px;'+
+      'min-height:46px;border:1.5px dashed var(--border2);background:none;color:var(--text3)">'+
+      'Devolverla a lo que dice la regla («'+esc(_catSubDe(cap,p.nombre))+'»)</button>';
+  return h+'<div style="height:100px"></div>';
+}
+function _catGrupoNuevoHTML(){
+  var cap=String(S.catCap||'');
+  return '<button onclick="catGrupoNuevoCerrar()" style="'+_catVolverBS+'">‹ Volver</button>'+
+    '<div style="font-size:17px;font-weight:800;margin:4px 0 6px">Grupo nuevo</div>'+
+    '<div style="font-size:12.5px;color:var(--text3);line-height:1.45;margin-bottom:14px">'+
+      'En «'+esc(cap)+' · '+esc(_catCapNom(cap))+'». El grupo nace vacío: las partidas se le '+
+      'traen una a una con «No es de este grupo».</div>'+
+    '<input id="cat-gn-txt" type="text" value="'+esc((S.catGrupoNuevo&&S.catGrupoNuevo.nombre)||'')+'" '+
+      'placeholder="Talleres pendientes" style="width:100%;box-sizing:border-box;min-height:48px;'+
+      'border:1.5px solid var(--border2);border-radius:12px;padding:0 13px;font-size:15px;'+
+      'font-family:var(--font);background:var(--bg2);color:var(--text)">'+
+    '<button onclick="catGrupoNuevoCrear()" style="'+_catBS+';width:100%;margin-top:12px;min-height:50px;'+
+      'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)">Crear el grupo</button>'+
+    '<div style="height:100px"></div>';
+}
+/* Un literal JS dentro de un atributo HTML con comillas dobles: si no se
+   escapa, el navegador corta el valor en la primera comilla. Ya pasó con el
+   buscador de predecesoras. */
+function _catQ(s){
+  return "'"+String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')+"'";
 }
 
 function _catHerramientasHTML(){

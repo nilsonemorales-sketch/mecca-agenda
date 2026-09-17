@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v105 — 17 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v106 — 17 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v105 (17 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v106 (17 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -285,6 +285,128 @@ clickee está tocando lo que el usuario no puede tocar.
 «Contratista» faltaban además las 9 de ingeniero. Ahora hay bloque **«Sin tipo
 de personal»** y los tres modos suman 1.059 y 347 vencidas. Si un modo suma
 menos que la cabecera, alguien volvió a dejar un `tipo_personal` fuera.
+
+### La planificación por partidas madre (v106) — el esqueleto de Partidas
+
+**Una línea de presupuesto NO es una unidad de trabajo.** Palabras del dueño:
+*«hay términos que son de presupuesto y tú los copiaste y los pegaste igual. Y
+aquí estamos haciendo una planificación: una que contenga lo ya realizado y lo
+que falta por hacer, agrupándolo en partidas madres».* «Zapata ZR-1, 6.12 M³»
+sirve para medir y para pagar; nadie sale a la obra a hacer «Zapata ZR-1».
+
+**Las 274 del presupuesto SE QUEDAN en la base** —son el amarre con lo
+contratado y con lo que se paga, y siguen sin poder editarse— pero **dejaron de
+ser el esqueleto de la pantalla**. Se entra a ellas desde abajo del capítulo,
+con «Las líneas del presupuesto (N)» (`catCurarAbrir`, `S.catCurar`): es trabajo
+de escritorio, no de obra. El esqueleto es:
+
+```
+CAPÍTULO  →  GRUPO DE TRABAJO  →  UBICACIÓN  →  ACTIVIDADES
+```
+
+y **ninguno de los cuatro niveles necesita que el dueño clasifique nada a
+mano**: el capítulo sale de `_catCapDe`, el grupo de las palabras del nombre
+(`_catSubDe`), la ubicación del campo `area`. La curación dejó de ser el peaje
+de entrada.
+
+**El grupo lo arma `CAT_SUBGRUPOS` y GANA LA PRIMERA REGLA QUE COINCIDE**, así
+que el orden de cada lista es parte de la regla: no lo reordenes sin volver a
+medir. Solo se subdividen seis capítulos (8.00, 4.00, 10.00, 11.00, 5.00,
+12.00); los demás van de capítulo directo a ubicación porque son chicos y
+partirlos sería ruido.
+
+**Los nombres de los grupos los escogió el dueño; las PALABRAS no** —salieron de
+leer la base—, y por eso **el grupo se corrige a mano y lo corregido MANDA**:
+`obra_partidas.grupo` (columna nueva de la v106), sobre la PARTIDA, no sobre
+cada actividad. `catMoverGrupo` lo escribe y `_catGrupoDe` lo prefiere sobre la
+regla. Se puede devolver a la regla vaciándola. Y se pueden **crear grupos**
+(`catGrupoNuevoCrear`, el dueño lo pidió para los *talleres pendientes*): viven
+en `obra_config`, clave `cat_grupos`, un JSON — así el módulo se sigue borrando
+entero con las dos tablas.
+
+**«Luces», NO «Luces y abanicos»:** la palabra «abanico» sale en **una sola
+actividad de toda la obra**. Nombrar un grupo de 69 por una mención es mentir
+sobre lo que hay dentro. Lo corrigió el dueño.
+
+#### El orden que la obra ya demostró — y por qué no hay fechas
+
+Los apartamentos de abajo van muy por delante, así que **ya demostraron en qué
+orden se hacen las cosas**. Lo que falta en una unidad sale ordenado por la
+**mediana de la fecha en que esa misma descripción se cerró en las OTRAS
+unidades** (`_catPrecedentes`, `_catOrdenFaltantes`). No es un Gantt inventado:
+es su propia obra devuelta.
+
+- **Cada línea dice en cuántas unidades se basa** («visto en 3»). «Visto en 1» y
+  «visto en 5» no valen lo mismo y el dueño tiene que distinguirlo de un vistazo.
+- **Lo que no tiene precedente va en su propio bloque al final**, SIN posición
+  inventada. Ese bloque va a ser grande, y está bien.
+- **NINGUNA FECHA FUTURA CALCULADA.** Es un orden, no un calendario: poner
+  fechas exigiría duraciones, y el presupuesto se quedó sin cantidades por
+  decisión del dueño en la v101.
+- La comparación es por **texto exacto**, y ahí está el argumento para curar:
+  «Instalacion Pisos Porcelanato» no se reconoce con «Instalación Pisos
+  Porcelanato». Cuando el dueño junte esas dos con Juntar, el precedente sube.
+
+**Las fechas de cierre salen de `obra_cambios`**, porque `obra_actividades` **no
+tiene columna de cuándo se cerró algo**. `cargarCatalogo` las pide filtradas
+(`accion in (completado,completar)`, dos columnas, ~1.500 filas) y las guarda en
+`S.catCierres`. Cubren **1.273 de las 1.405 cerradas**: a las otras 132 nadie
+les registró el cierre, así que no hacen de precedente — y eso es correcto, no
+se inventa una fecha. Si esa consulta falla, el módulo **abre igual** y la
+pantalla dice que no hay orden demostrado.
+
+#### Buscar, que es como se registra rápido
+
+Queja textual: **«todavía se dificulta registrar»**. La caja va **arriba y
+siempre visible en los cuatro niveles**, sobre las **2.466** —abiertas y
+cerradas—, por descripción, área o contratista, sin acentos ni mayúsculas.
+Espera 260 ms a que deje de teclear, corta en 50 con «Ver 50 más», y dice
+cuántas encontró. Medido: **3 ms** filtrar las 2.466, **8 ms** pintar las 50.
+
+#### `_catMapa` — el índice partida→actividades
+
+`_catActsDe` recorría las 2.466 enteras por cada partida: pintar un capítulo con
+200 partidas eran medio millón de comparaciones. El sello se cae solo cuando
+cambia el número de actividades o de amarres; `Acciones._sincronizar` parchea los
+objetos **en sitio** (`Object.assign`), así que un avance nuevo se ve sin
+reconstruir nada.
+
+#### `AC` — un capítulo que NO existe en el presupuesto
+
+El trabajo de aires acondicionados existe pero estaba repartido en cuatro
+capítulos, porque cada paso es de un oficio distinto: la posición es del técnico
+de aires, el drenaje del plomero, la alimentación del electricista y el registro
+del de sheetrock. Nadie podía contestar «cómo va el aire del gimnasio».
+Decisión del dueño: **capítulo propio**, `AC`, con las **6** del lobby y el
+gimnasio. Va **al final de `CAT_CAPITULOS`, antes de `'0'`**, para que el
+desempate por índice de `_catCapMayoria` siga dando lo mismo en todo lo demás.
+Las correcciones de registro de la habitación secundaria y de la sala del
+penthouse **no entran**: esas son de la unidad, no del área común.
+
+#### EL CAPÍTULO ESTÁ GUARDADO — cambiar la regla no mueve nada por sí solo
+
+`obra_partidas.capitulo` se escribió al sembrar. **Corregir `_catCapDe` en el
+código no reclasifica ni una partida.** En la v106 hizo falta un `UPDATE` de una
+sola vez sobre las partidas de la **agenda** (no es una resiembra: es la regla
+arreglada). Medido antes de ejecutarlo: **cambian 27 partidas y ninguna otra**,
+así que no se pisó ninguna curación del dueño. Si vuelves a tocar `_catCapDe`,
+**mide el diff antes y dilo**; y al mover de capítulo se suelta `padre_id`,
+porque la subpartida que tenía es de otro capítulo.
+
+Dos reglas que se corrigieron ahí, medidas contra la base:
+
+- **`Carpintería` iba a Puertas y es Hormigón** (`'3.00'`): la carpintería de
+  obra es encofrado, no portaje. 5 actividades.
+- **Las gavetas y los gabinetes de cocina caían en Puertas.** La regla del
+  Ebanista solo miraba `gabinete|mueble de ba|closet|isla|pantry`. Ahora lleva
+  `gaveta|gabeta|gabiten|cocina` — así está escrito en la obra. **36 actividades.**
+  *Avisado:* `cocina` es ancho y arrastra dos que son de puerta («desmontar la
+  puerta de paso… que da acceso a la cocina caliente», «retoque de pintura —
+  puerta de la cocina caliente»). El dueño decide si se afinan; para eso está
+  «No es de este grupo».
+
+**«Organización y Fijación Tubos Patinillos»** (11 actividades, hoy en Puertas)
+**se queda donde está**: no es de puertas, pero de quién es lo dice el dueño.
 
 ### El Repaso por partida repetida (v94) — por qué existe
 
@@ -1002,6 +1124,11 @@ mismo:**
   que tocan personal (Tipo de personal, Contratista, Personal x la casa):
   **1.059 y 347 vencidas** hoy. Y ninguno vuelve a enseñar un bloque
   «Contratistas» con todos dentro — son **17 grupos**, uno por contratista
+- **El capítulo de Partidas está GUARDADO.** Si tocas `_catCapDe`, mide cuántas
+  partidas cambiarían ANTES de escribir, y dilo. Un cambio de regla sin `UPDATE`
+  no mueve nada; un `UPDATE` sin medir pisa la curación del dueño
+- **El orden demostrado no calcula fechas.** Si aparece una fecha futura en
+  Partidas, alguien convirtió un orden en un calendario
 - **La sub-nav de Actividades** (Actividades · Kanban · Revisión) se ve
   **siempre**. Esconderla en la vista de entrada deja Kanban y Revisión sin
   ninguna puerta — pasó en v77 y es el mismo error de v58
@@ -1109,6 +1236,8 @@ pertenece a ningún nivel.
 | **v97** — la tabla del prompt listaba siete sitios de voz. El barrido encontró **tres más**, y eran los que más se ven: el 🎙️ de la tarjeta de Obra, el de la fila de Actividades y el botón «Nota» de Revisión. Total real: **21 micrófonos visibles**. | Para esconder algo transversal no basta con la lista que te den: **cuenta lo VISIBLE antes y después**. 21 → 0 es una comprobación; «quité los siete que decía la tabla» no lo es. |
 
 | **v104** — la agrupación de entrada de la lista («Tipo de personal») metía a los 17 contratistas en un solo bloque, «Contratistas · 958 actividades». El dueño lo vio en obra y lo dijo en siete palabras: «aquí quiero q se separe por contratista». La agrupación «Contratista», que ya hacía eso, llevaba versiones ahí sin que nadie la tocara. | Una cabecera que agrupa el 90% de la lista bajo una sola palabra no agrupa nada. Y que la función exista en otra pastilla no vale: si el usuario entra por otra puerta, hay que arreglar **la puerta por la que entra**. |
+| **v106** — se corrigió `_catCapDe` (carpintería, gavetas, el capítulo AC) y en pantalla no cambió NADA: el capítulo de cada partida está **guardado** en `obra_partidas` desde la siembra, y la regla solo se consulta al sembrar. Hizo falta un `UPDATE` de una vez, midiendo antes que tocaba 27 partidas y ninguna más. | Cuando una regla se ejecuta UNA vez y su resultado se guarda, arreglar la regla no arregla los datos. Antes de dar por bueno un cambio de criterio, pregúntate si lo que ve el usuario sale de la regla o de una columna — y si es de la columna, mide el diff **antes** de escribirlo. |
+| **v106** — el prompt traía la tabla de subpartidas con sus conteos, pero no las palabras que los producen. Reconstruirlas a ciegas dio 12.00 exacto y el resto a ±3, con dos grupos bastante fuera. | La tabla de un prompt es el **destino**, no el camino. Si te dan números sin la regla que los genera, reconstruye lo que puedas, **di en qué te separas** y deja la corrección a mano puesta — no te inventes palabras hasta que el número cuadre, porque entonces el grupo deja de querer decir algo. |
 | **v105** — la prueba esperaba con `window.S && S.acts.length`, y `S` se declara con `let`: **no está en `window`**. La guarda daba siempre falso y la prueba se quedó 60 s dando por hecho que el app no había cargado. Antes de eso, buscaba el agrupador entre los `<button>` y el visible es un `<select>` —las pastillas con esas etiquetas viven en el panel de Filtros, plegado. | Un `let` de nivel superior es un global, pero **no una propiedad de `window`**: preguntar por `window.X` miente sin error. Y antes de dar por rota una pantalla, comprueba que estás tocando el control que el usuario ve — es otra vez el v58. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
@@ -1168,7 +1297,7 @@ orden de magnitud.
 | `obra_ordenes_compra` | Órdenes a proveedores. | ~72 |
 | `obra_config` | Configuración compartida, clave/valor. | — |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
-| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101.** Se borran las dos y el app queda como en v97. | 274 + ~391 al sembrar |
+| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
 
 ### Cosas de los datos que hay que saber
 
