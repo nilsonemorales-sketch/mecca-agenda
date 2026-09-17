@@ -865,7 +865,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260917_103';
+const APP_VERSION='20260917_104';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -5700,10 +5700,41 @@ function _actSelCorrerPlan(modo, dias){ return _correrPlan(_actSelIds(), modo, d
 
    Se OFRECE, no se hace solo: si el resto se corre o se aprieta para
    recuperar es una decisión de quien manda la obra, no del app. */
+/* EL ARRASTRE VA EN DÍAS DE TRABAJO, NO DE CALENDARIO (v104). Si el pañete
+   se atrasa 3 días de trabajo, lo de atrás se mueve 3 días de trabajo: saltando
+   domingos y feriados. Moverlo en días de calendario mete trabajo en domingo y
+   el dueño tendría que corregirlo a mano, que es justo lo que venimos a quitar.
+   `esDiaLaboral` ya existe desde hace mucho: lunes a sábado, menos FERIADOS.
+
+   OJO: esto es SOLO para el arrastre de la cadena. Los botones de mano
+   —«+1 semana», «+2 semanas», «Entrega el viernes»— siguen en días de
+   calendario, porque «+1 semana» quiere decir una semana. Por eso `_correrPlan`
+   lleva un interruptor y no dos aritméticas: dos criterios terminan dando
+   números distintos. */
+function _sumarDiasLab(fecha, n){
+  if(!fecha || !n) return fecha;
+  var f=fecha, paso=n>0?1:-1, quedan=Math.abs(n), guarda=0;
+  while(quedan>0 && guarda++<3650){
+    f=_isoAddDias(f,paso);
+    if(esDiaLaboral(f)) quedan--;
+  }
+  return f;
+}
+function _diasLabEntre(desde, hasta){
+  if(!desde || !hasta || hasta<=desde) return 0;
+  var n=0, f=desde, guarda=0;
+  while(f<hasta && guarda++<3650){ f=_isoAddDias(f,1); if(esDiaLaboral(f)) n++; }
+  return n;
+}
 /* Cuántos días se corrió la entrega. Solo cuenta hacia ADELANTE: si la fecha
    se adelanta, la cadena no se adelanta sola —que la predecesora termine
    antes no significa que el contratista de atrás pueda entrar antes—, y si no
    había fecha de entrega no hay corrimiento que arrastrar. */
+function _diasCorridosLab(a, nuevaFin){
+  var antes=String((a&&a.fecha_fin)||'').trim();
+  if(!antes || !nuevaFin || nuevaFin<=antes) return 0;
+  return _diasLabEntre(antes, nuevaFin);
+}
 function _diasCorridos(a, nuevaFin){
   var antes=String((a&&a.fecha_fin)||'').trim();
   if(!antes || !nuevaFin) return 0;
@@ -5730,33 +5761,36 @@ function _cadenaAbajo(id){
   }
   return orden;
 }
+/* v104: el salto va en DÍAS DE TRABAJO y la lista SE VE antes de moverse.
+   Hasta v103 esto era un `confirm()` que decía «7 partidas esperan por esta» y
+   ya: ni cuáles, ni a qué fechas, ni forma de dejar una fuera. */
 async function _ofrecerCorrerCadena(id, dias, detalle){
   if(!canEdit() || !(dias>0)) return 0;
   var hijos=_cadenaAbajo(id);
   if(!hijos.length) return 0;
-  var r=_correrPlan(hijos.map(function(x){ return x.id; }), 'correr', dias);
+  var r=_correrPlan(hijos.map(function(x){ return x.id; }), 'correr', dias, true);
   if(!r.plan.length) return 0;
-  var n=r.plan.length;
-  if(!confirm(n+' partida'+(n!==1?'s':'')+' espera'+(n!==1?'n':'')+' por esta.\n\n'+
-      '¿Correrla'+(n!==1?'s':'')+' también '+dias+' día'+(dias!==1?'s':'')+'?'+
-      (r.saltadas?'\n\n('+r.saltadas+' se quedan como están: sin fecha o ya iguales.)':''))) return 0;
-  await _correrAplicar(r.plan, detalle||('corrida '+dias+' días con la cadena'));
-  return n;
+  var origen=(_findActAny(id)||{}).descripcion||'esta partida';
+  return await _cadPreguntar(origen, dias, r.plan);
 }
 
-function _correrPlan(ids, modo, dias){
+/* `laboral` lo pone SOLO el arrastre de la cadena. Sin él se mueve en días de
+   calendario, que es lo que han hecho siempre el modo selección y el panel del
+   apartamento: no se les cambia el significado a sus botones por la espalda. */
+function _correrPlan(ids, modo, dias, laboral){
   var hoy=today(), plan=[], saltadas=0;
+  var mas=function(f,d){ return laboral ? _sumarDiasLab(f,d) : _isoAddDias(f,d); };
   (ids||[]).forEach(function(id){
-    var a=Acciones.porId(id);
+    var a=Acciones.porId(id) || _findActAny(id);
     if(!a || a.estado==='completado') return;   // una completada no se reprograma
     var ini=(a.fecha_inicio||'').trim(), fin=(a.fecha_fin||'').trim();
     var nIni, nFin;
     if(modo==='arrancar'){
-      nIni=hoy; nFin=_isoAddDias(hoy,dias);
+      nIni=hoy; nFin=mas(hoy,dias);
     } else {
       if(!ini && !fin){ saltadas++; return; }    // sin fechas no hay nada que correr
-      nIni = ini ? _isoAddDias(ini,dias) : '';
-      nFin = fin ? _isoAddDias(fin,dias) : '';
+      nIni = ini ? mas(ini,dias) : '';
+      nFin = fin ? mas(fin,dias) : '';
     }
     /* El fin NUNCA antes del inicio. Ya paso heredando fechas de las hermanas:
        inicio hoy, fin en agosto, y la base la rechazo. */
@@ -5764,8 +5798,21 @@ function _correrPlan(ids, modo, dias){
     var patch={};
     if(nIni!==ini) patch.fecha_inicio=nIni;
     if(nFin!==fin) patch.fecha_fin=nFin;
+    /* `fecha_plan` es EL DÍA QUE SE LE ASIGNÓ A ALGUIEN, no la entrega — las
+       escribe `Acciones.planificar` y no son lo mismo. Se mueve solo si caía
+       DENTRO de la ventana vieja, con el mismo salto. Si caía fuera, alguien la
+       puso a mano por algo: no se toca y se avisa en la pantalla. */
+    var avisoPlan='';
+    if(laboral){
+      var pl=String(a.fecha_plan||'').trim();
+      if(pl){
+        var dentro=(!ini || pl>=ini) && (!fin || pl<=fin);
+        if(dentro) patch.fecha_plan=mas(pl,dias);
+        else avisoPlan=pl;
+      }
+    }
     if(!Object.keys(patch).length){ saltadas++; return; }   // ya estaba asi
-    plan.push({id:id, patch:patch});
+    plan.push({id:id, patch:patch, de:(fin||ini||''), a:(nFin||nIni||''), avisoPlan:avisoPlan});
   });
   return {plan:plan, saltadas:saltadas};
 }
@@ -5808,6 +5855,399 @@ async function _correrAplicar(plan, detalle){
   else if(bien===0){ setSS('err','Error'); showToast('No se pudo mover ninguna. Fallaron '+mal+'.','err',6000); }
   else { setSS('ok','✓'); showToast('Se movieron '+bien+'. Fallaron '+mal+'.','err',6000); }
   return {bien:bien, mal:mal};
+}
+
+// ══════════════════════════════════════════════════════════════
+// LAS CADENAS: SALUD Y ARRASTRE                              (v104)
+//
+// De dónde sale esto: de 1.818 acciones del dueño en 30 días, 1.096 son
+// ediciones —el 60%— y dicen cosas como «Cadena de Dimedes 13-sep: se pinta
+// primero…», «Amarrada detrás de la pintura de Jordy…», «refechada 15 al 19».
+// No está registrando obra: está re-secuenciando y re-fechando a mano.
+//
+// La cadena ya arrastraba desde v93 (`_ofrecerCorrerCadena`). Lo que faltaba:
+// que el salto fuera en DÍAS DE TRABAJO, que se VEA la lista antes de mover en
+// vez de un confirm con un número, que `fecha_plan` se mueva con su ventana, y
+// poder DESHACER la tanda.
+//
+// Y antes de nada, la limpieza: las cadenas están sucias, y un arrastre sobre
+// datos sucios propone disparates el primer día. Eso ya pasó con el catálogo.
+// ══════════════════════════════════════════════════════════════
+
+/* ── LA SALUD DE LAS CADENAS ──────────────────────────────────
+   Tres cosas distintas, y ninguna se arregla sola. Medido contra la base:
+   18 rotas, 38 apuntando a la nada, 164 que se contradicen. */
+function _cadCrudo(a){ return a && a.predecesoras!=null ? String(a.predecesoras) : ''; }
+/* ROTA = tiene algo guardado pero no es una lista. Son restos de un fallo viejo
+   ya arreglado en el código —quedan `"["` y `"[{"`— pero los datos malos siguen
+   ahí, y `getPreds` se traga el error de parseo y devuelve []: esas actividades
+   DICEN tener cadena y no tienen, sin avisar a nadie. */
+function _cadRota(a){
+  var t=_cadCrudo(a).trim();
+  if(!t || t==='null' || t==='[]') return false;
+  if(Array.isArray(a.predecesoras)) return false;
+  try{ return !Array.isArray(JSON.parse(t)); }catch(e){ return true; }
+}
+function _cadSalud(){
+  var acts=_catTodas().length ? _catTodas() : (S.acts||[]);
+  var porId={}; acts.forEach(function(a){ porId[a.id]=a; });
+  var rotas=[], huerfanas=[], solapes=[];
+  acts.forEach(function(a){
+    if(_cadRota(a)){ rotas.push(a); return; }
+    var ok=_cadSolapesOk(a);
+    getPreds(a).forEach(function(pid){
+      var p=porId[pid];
+      if(!p){ huerfanas.push({a:a, pid:pid}); return; }
+      var ini=String(a.fecha_inicio||'').trim(), fin=String(p.fecha_fin||'').trim();
+      if(ini && fin && ini<fin && ok.indexOf(pid)<0) solapes.push({a:a, p:p});
+    });
+  });
+  return {rotas:rotas, huerfanas:huerfanas, solapes:solapes,
+          total:rotas.length+huerfanas.length+solapes.length};
+}
+/* La marca de «así está bien, se solapan». Es la ÚNICA columna nueva de esta
+   versión y va justificada: el solape puede ser un error de fechas o puede ser
+   que de verdad se trabaje a la vez, y eso solo lo sabe quien manda la obra.
+   Sin un sitio donde guardar la respuesta, el app le vuelve a preguntar lo
+   mismo cada vez que abre — y a la tercera deja de mirar la pantalla.
+   Va POR ENLACE y no por actividad: una partida puede tener dos predecesoras,
+   una bien y otra mal. Guarda los ids aceptados, no un sí/no. */
+function _cadSolapesOk(a){
+  try{
+    var v=a && a.solapes_ok;
+    if(!v) return [];
+    var l=(typeof v==='string')?JSON.parse(v):v;
+    return Array.isArray(l)?l.map(String):[];
+  }catch(e){ return []; }
+}
+
+// ── Las tres reparaciones. Ni una escritura sin que el dueño toque un botón ──
+async function cadVaciar(id){
+  var a=_findActAny(id); if(!a) return;
+  if(!confirm('«'+String(a.descripcion||'').slice(0,60)+'»\n\nSu cadena está rota: lo que tiene guardado no es una lista '+
+    'y no hay nada que rescatar.\n\nSe deja vacía. ¿Seguro?')) return;
+  try{
+    await Acciones.editar(id, {predecesoras:null}, 'cadena rota vaciada desde la revisión de cadenas');
+    showToast('Cadena vaciada ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',6000); }
+  _cadPintar();
+}
+async function cadQuitarEnlace(id, pid){
+  var a=_findActAny(id); if(!a) return;
+  var quedan=getPreds(a).filter(function(x){ return x!==pid; });
+  try{
+    /* SE GUARDA COMO TEXTO. `predecesoras` es una columna `text`, no `jsonb`:
+       por eso `getPreds` hace `JSON.parse` al leer. Mandar un array de verdad
+       la dejaría escrita de otra forma y el siguiente que la lea no la
+       entiende. Lo mismo hace el editor de la ficha. */
+    await Acciones.editar(id, {predecesoras: quedan.length?JSON.stringify(quedan):null},
+      'enlace huérfano quitado ('+pid+') desde la revisión de cadenas');
+    showToast(quedan.length?('Enlace quitado ✓ — le quedan '+quedan.length):'Enlace quitado ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',6000); }
+  _cadPintar();
+}
+async function cadAceptarSolape(id, pid){
+  var a=_findActAny(id); if(!a) return;
+  var ok=_cadSolapesOk(a);
+  if(ok.indexOf(pid)<0) ok.push(pid);
+  try{
+    await Acciones.editar(id, {solapes_ok: JSON.stringify(ok)},
+      'solape aceptado a propósito con '+pid);
+    showToast('Anotado: se solapan a propósito ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',6000); }
+  _cadPintar();
+}
+/* «Buscarle otra»: el enlace huérfano se cambia por una actividad que sí
+   existe. No se adivina cuál — se busca por nombre y se escoge. */
+function cadBuscarOtra(id, pid){ S.cadPick={id:id, pid:pid, q:''}; _cadPintar(); }
+function _cadPickBuscar(v){
+  if(!S.cadPick) return;
+  S.cadPick.q=v;
+  var el=document.getElementById('cad-pick-lista');
+  if(el) el.innerHTML=_cadPickListaHTML();   // no repinta entero: el campo pierde el foco
+}
+async function cadCambiarEnlace(nuevoId){
+  var P=S.cadPick; if(!P) return;
+  var a=_findActAny(P.id); if(!a) return;
+  var l=getPreds(a).filter(function(x){ return x!==P.pid; });
+  if(l.indexOf(nuevoId)<0) l.push(nuevoId);
+  S.cadPick=null;
+  try{
+    await Acciones.editar(P.id, {predecesoras:JSON.stringify(l)},
+      'enlace huérfano cambiado por '+nuevoId+' desde la revisión de cadenas');
+    showToast('Enlace cambiado ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',6000); }
+  _cadPintar();
+}
+
+// ══ EL ARRASTRE: se ve antes de moverse ═════════════════════
+/* Devuelve una promesa que se resuelve cuando el dueño decide. Sustituye al
+   `confirm()` de v93, que solo decía «7 partidas esperan por esta» sin enseñar
+   NI CUÁLES NI A QUÉ FECHAS — y sin poder dejar una fuera. */
+function _cadPreguntar(origen, dias, plan){
+  return new Promise(function(resolve){
+    var ok=_cadSolapesOkIdx();
+    S.cadDrag={
+      origen:origen, dias:dias, resolve:resolve,
+      filas:plan.map(function(p){
+        var a=_findActAny(p.id)||{};
+        return {id:p.id, patch:p.patch, de:p.de, a:p.a, avisoPlan:p.avisoPlan,
+                nombre:String(a.descripcion||''), area:String(a.area||''),
+                solapa:!!ok[p.id], marcada:true};
+      })
+    };
+    _cadPintar();
+  });
+}
+function _cadSolapesOkIdx(){
+  var idx={};
+  _cadSalud().solapes.forEach(function(s){ idx[s.a.id]=1; });
+  return idx;
+}
+function cadDragToggle(id){
+  var D=S.cadDrag; if(!D) return;
+  D.filas.forEach(function(f){ if(f.id===id) f.marcada=!f.marcada; });
+  _cadPintar();
+}
+function cadDragTodas(v){
+  var D=S.cadDrag; if(!D) return;
+  D.filas.forEach(function(f){ f.marcada=!!v; });
+  _cadPintar();
+}
+function cadDragCancelar(){
+  var D=S.cadDrag; S.cadDrag=null; _cadPintar();
+  if(D && D.resolve) D.resolve(0);
+}
+async function cadDragAplicar(){
+  var D=S.cadDrag; if(!D) return;
+  var marcadas=D.filas.filter(function(f){ return f.marcada; });
+  if(!marcadas.length){ showToast('No hay ninguna marcada','warn'); return; }
+  /* El retrato de ANTES, para poder deshacer la tanda entera de golpe. Se
+     guarda antes de escribir nada: después ya no se sabe de dónde venían. */
+  S.cadUndo={
+    origen:D.origen, dias:D.dias,
+    previas:marcadas.map(function(f){
+      var a=_findActAny(f.id)||{};
+      return {id:f.id, nombre:f.nombre,
+              fecha_inicio:a.fecha_inicio||'', fecha_fin:a.fecha_fin||'',
+              fecha_plan:a.fecha_plan||''};
+    })
+  };
+  S.cadDrag=null; _cadPintar();
+  var detalle='movida '+D.dias+' día'+(D.dias!==1?'s':'')+' de trabajo por el arrastre de «'+
+              String(D.origen||'').slice(0,50)+'»';
+  await _correrAplicar(marcadas.map(function(f){ return {id:f.id, patch:f.patch}; }), detalle);
+  if(D.resolve) D.resolve(marcadas.length);
+  _repintarDondeEstoy();
+}
+async function cadDeshacerTanda(){
+  var U=S.cadUndo; if(!U || !U.previas.length) return;
+  if(!confirm('Se devuelven las fechas de '+U.previas.length+' partida'+(U.previas.length!==1?'s':'')+
+    ' al estado de antes del arrastre.\n\n¿Seguro?')) return;
+  var plan=U.previas.map(function(p){
+    var patch={fecha_inicio:p.fecha_inicio, fecha_fin:p.fecha_fin};
+    if(p.fecha_plan) patch.fecha_plan=p.fecha_plan;
+    return {id:p.id, patch:patch};
+  });
+  S.cadUndo=null;
+  await _correrAplicar(plan, 'deshecho el arrastre de «'+String(U.origen||'').slice(0,50)+'»');
+  _cadPintar(); _repintarDondeEstoy();
+}
+
+// ══ LA PANTALLA ═════════════════════════════════════════════
+/* Un panel a pantalla completa, por encima de donde estés: el arrastre se
+   dispara desde Actividades y desde Obra, y la pregunta tiene que salir en las
+   dos sin que cada pantalla tenga que saber pintarla.
+   Lleva `var(--st)` arriba y `var(--sb)` abajo: en el iPhone, sin eso la × nace
+   debajo del notch y no se puede cerrar (pasó en v78). */
+function cadAbrirSalud(){ S.cadPanel=true; S.cadPick=null; _cadPintar(); }
+/* La pastilla de la portada de Obra. Si no hay nada que revisar NO SALE: una
+   puerta que siempre dice cero deja de mirarse. */
+function _cadPuertaHTML(){
+  var c;
+  try{ c=_cadSalud(); }catch(e){ return ''; }
+  if(!c.total) return '';
+  return '<button class="ob-pill cad-puerta" onclick="cadAbrirSalud()" '+
+    'style="min-height:44px">Cadenas por revisar <b>'+c.total+'</b></button>';
+}
+function cadCerrar(){ S.cadPanel=false; S.cadPick=null; _cadPintar(); }
+var _cadBS='min-height:44px;border-radius:11px;cursor:pointer;font-family:var(--font);'+
+           'font-size:12.5px;font-weight:800;padding:0 12px';
+
+function _cadHost(){
+  var el=document.getElementById('cad-panel');
+  if(!el){
+    el=document.createElement('div');
+    el.id='cad-panel';
+    el.style.cssText='position:fixed;inset:0;z-index:70;background:var(--bg);overflow-y:auto;'+
+      'padding:calc(var(--st,0px) + 14px) 14px calc(var(--sb,0px) + 20px);display:none';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function _cadPintar(){
+  var el=_cadHost();
+  var abierto=!!(S.cadDrag || S.cadPanel);
+  el.style.display=abierto?'block':'none';
+  if(!abierto){ el.innerHTML=''; return; }
+  try{
+    el.innerHTML = S.cadDrag ? _cadDragHTML() : (S.cadPick ? _cadPickHTML() : _cadSaludHTML());
+  }catch(e){
+    console.warn('_cadPintar:',e);
+    el.innerHTML='<div class="empty" style="padding:36px 16px;color:var(--text3)">'+
+      'No se pudo pintar esta pantalla.<br><button onclick="cadCerrar()" style="'+_cadBS+';margin-top:14px;'+
+      'border:1.5px solid var(--accent);background:var(--accent-fill);color:var(--accent-on)">Cerrar</button></div>';
+  }
+}
+
+function _cadDragHTML(){
+  var D=S.cadDrag;
+  var n=D.filas.filter(function(f){ return f.marcada; }).length;
+  var h='<div class="obranow-header"><div>'+
+      '<div style="font-size:15px;font-weight:800;line-height:1.35">«'+esc(D.origen)+'» se movió '+
+        D.dias+' día'+(D.dias!==1?'s':'')+' de trabajo</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:4px;line-height:1.45">'+
+        'Detrás vienen '+D.filas.length+' abierta'+(D.filas.length!==1?'s':'')+
+        '. Se moverían así — <b>nada se mueve hasta que toques el botón</b>.</div>'+
+    '</div></div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:10px">'+
+      '<button onclick="cadDragTodas(true)" style="'+_cadBS+';flex:1;border:1.5px solid var(--border2);'+
+        'background:var(--bg2);color:var(--text2);font-size:12px">Marcar todas</button>'+
+      '<button onclick="cadDragTodas(false)" style="'+_cadBS+';flex:1;border:1.5px solid var(--border2);'+
+        'background:var(--bg2);color:var(--text2);font-size:12px">Desmarcar todas</button>'+
+    '</div>';
+  h+=D.filas.map(function(f){
+    return '<div class="cad-fila" style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px">'+
+      '<button onclick="cadDragToggle(\''+f.id+'\')" aria-label="Marcar" style="'+_cadBS+';flex:0 0 46px;'+
+        'border:1.5px solid '+(f.marcada?'var(--accent)':'var(--border2)')+';'+
+        'background:'+(f.marcada?'var(--accent-fill)':'var(--bg2)')+';'+
+        'color:'+(f.marcada?'var(--accent-on)':'var(--text3)')+';font-size:16px">'+(f.marcada?'✓':'')+'</button>'+
+      '<div style="flex:1;min-width:0;padding:9px 12px;border-radius:11px;background:var(--bg2);'+
+        'border:1.5px solid var(--border)">'+
+        '<div style="font-size:12.5px;font-weight:700;line-height:1.3">'+esc(f.nombre)+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)">'+
+          esc(_recNom(f.area)||f.area||'—')+' · '+esc(fmtF(f.de))+' → '+esc(fmtF(f.a))+'</div>'+
+        (f.avisoPlan?'<div class="cad-aviso-plan" style="font-size:11px;color:var(--amber);margin-top:4px;'+
+          'font-weight:700;line-height:1.4">⚠ su día asignado ('+esc(fmtF(f.avisoPlan))+
+          ') queda fuera de la ventana: no se toca</div>':'')+
+        (f.solapa?'<div class="cad-aviso-solape" style="font-size:11px;color:var(--amber);margin-top:4px;'+
+          'font-weight:700;line-height:1.4">⚠ sus fechas ya se contradicen con la de delante</div>':'')+
+      '</div></div>';
+  }).join('');
+  h+='<div style="position:sticky;bottom:0;background:var(--bg);padding:10px 0 4px;display:flex;gap:8px">'+
+      '<button onclick="cadDragAplicar()" style="'+_cadBS+';flex:2;min-height:52px;'+
+        'border:1.5px solid '+(n?'var(--green)':'var(--border2)')+';'+
+        'background:'+(n?'var(--green-light)':'var(--bg2)')+';'+
+        'color:'+(n?'var(--green)':'var(--text3)')+';font-size:14px">'+
+        (n?'Mover las '+n+' marcadas':'Marca alguna')+'</button>'+
+      '<button onclick="cadDragCancelar()" style="'+_cadBS+';flex:1;min-height:52px;'+
+        'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">Dejarlas</button>'+
+    '</div>';
+  return h;
+}
+
+function _cadSaludHTML(){
+  var S2=_cadSalud();
+  var h='<button onclick="cadCerrar()" style="background:none;border:0;color:var(--text2);font-size:13px;'+
+      'font-weight:600;cursor:pointer;padding:8px 0;font-family:var(--font);min-height:44px">‹ Cerrar</button>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:15px;font-weight:800">Las cadenas</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:3px;line-height:1.45">'+
+        'Antes de que la cadena mueva fechas sola, hay que limpiarla. '+
+        '<b>Nada de esto se arregla solo</b>: cada cosa lleva su botón.</div>'+
+    '</div></div>';
+  if(S.cadUndo)
+    h+='<button onclick="cadDeshacerTanda()" style="'+_cadBS+';width:100%;margin-bottom:12px;min-height:52px;'+
+      'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
+      'Deshacer el arrastre de «'+esc(String(S.cadUndo.origen).slice(0,34))+'» ('+S.cadUndo.previas.length+')</button>';
+
+  var tit=function(t,n,col){
+    return '<div style="font-size:11px;font-weight:800;color:'+(n?col:'var(--text3)')+';letter-spacing:.5px;'+
+      'text-transform:uppercase;margin:16px 0 8px">'+t+' ('+n+')</div>';
+  };
+  var caja='padding:10px 12px;margin-bottom:7px;border-radius:11px;background:var(--bg2);border:1px solid var(--border)';
+
+  h+=tit('Cadena rota', S2.rotas.length, 'var(--red)');
+  h+=S2.rotas.length ? S2.rotas.slice(0,50).map(function(a){
+    return '<div class="cad-rota" style="'+caja+'">'+
+      '<div style="font-size:12.5px;font-weight:700;line-height:1.3">'+esc(a.descripcion)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin:3px 0 7px;font-family:var(--mono)">'+
+        esc(_recNom(a.area)||a.area||'—')+' · guardado: <b>'+esc(_cadCrudo(a).slice(0,24))+'</b></div>'+
+      '<button onclick="cadVaciar(\''+a.id+'\')" style="'+_cadBS+';width:100%;border:1.5px solid var(--red);'+
+        'background:var(--red-light);color:var(--red)">Vaciar la cadena</button></div>';
+  }).join('') : '<div class="empty" style="padding:14px;color:var(--text3);font-size:12px">Ninguna ✓</div>';
+
+  h+=tit('Apunta a la nada', S2.huerfanas.length, 'var(--amber)');
+  h+=S2.huerfanas.length ? S2.huerfanas.slice(0,50).map(function(x){
+    return '<div class="cad-huerfana" style="'+caja+'">'+
+      '<div style="font-size:12.5px;font-weight:700;line-height:1.3">'+esc(x.a.descripcion)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin:3px 0 7px;font-family:var(--mono)">'+
+        'espera por una actividad borrada · '+esc(x.pid)+'</div>'+
+      '<div style="display:flex;gap:6px">'+
+        '<button onclick="cadQuitarEnlace(\''+x.a.id+'\',\''+x.pid+'\')" style="'+_cadBS+';flex:1;'+
+          'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">Quitar ese enlace</button>'+
+        '<button onclick="cadBuscarOtra(\''+x.a.id+'\',\''+x.pid+'\')" style="'+_cadBS+';flex:1;'+
+          'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent)">Buscarle otra</button>'+
+      '</div></div>';
+  }).join('') : '<div class="empty" style="padding:14px;color:var(--text3);font-size:12px">Ninguna ✓</div>';
+
+  h+=tit('Las fechas se contradicen', S2.solapes.length, 'var(--amber)');
+  h+='<div style="font-size:11.5px;color:var(--text3);line-height:1.5;margin-bottom:8px">'+
+     'La de atrás empieza antes de que acabe la de delante. <b>Puede ser un error de fechas o '+
+     'puede ser que de verdad se solapen en obra</b>, así que aquí no hay arreglo automático.</div>';
+  h+=S2.solapes.length ? S2.solapes.slice(0,50).map(function(x){
+    return '<div class="cad-solape" style="'+caja+'">'+
+      '<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:2px">DELANTE</div>'+
+      '<div style="font-size:12px;font-weight:700;line-height:1.3">'+esc(x.p.descripcion)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:6px">'+
+        'acaba '+esc(fmtF(x.p.fecha_fin))+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:2px">DETRÁS</div>'+
+      '<div style="font-size:12px;font-weight:700;line-height:1.3">'+esc(x.a.descripcion)+'</div>'+
+      '<div style="font-size:11px;color:var(--amber);font-family:var(--mono);margin-bottom:7px;font-weight:700">'+
+        'empieza '+esc(fmtF(x.a.fecha_inicio))+'</div>'+
+      '<button onclick="cadAceptarSolape(\''+x.a.id+'\',\''+x.p.id+'\')" style="'+_cadBS+';width:100%;'+
+        'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">'+
+        'Así está bien, se solapan</button></div>';
+  }).join('') : '<div class="empty" style="padding:14px;color:var(--text3);font-size:12px">Ninguna ✓</div>';
+
+  if(S2.rotas.length>50 || S2.huerfanas.length>50 || S2.solapes.length>50)
+    h+='<div style="font-size:11.5px;color:var(--text3);padding:12px 0">De cada bloque se ven las primeras 50.</div>';
+  return h;
+}
+
+function _cadPickListaHTML(){
+  var P=S.cadPick||{}, q=_catNorm(P.q||'');
+  var lista=(_catTodas().length?_catTodas():(S.acts||[]))
+    .filter(function(a){ return a.id!==P.id && a.estado!=='completado'; })
+    .filter(function(a){ return !q || _catNorm(a.descripcion).indexOf(q)>=0; })
+    .sort(function(x,y){ return String(x.descripcion).localeCompare(String(y.descripcion)); });
+  if(!lista.length) return '<div class="empty" style="padding:24px;color:var(--text3)">Nada que escoger.</div>';
+  return lista.slice(0,60).map(function(a){
+    return '<button class="cad-pick" onclick="cadCambiarEnlace(\''+a.id+'\')" style="'+_cadBS+';width:100%;'+
+      'margin-bottom:6px;text-align:left;display:flex;flex-direction:column;align-items:flex-start;'+
+      'justify-content:center;gap:3px;padding:10px 12px;min-height:52px;border:1.5px solid var(--border);'+
+      'background:var(--bg2);color:var(--text)">'+
+      '<span style="font-size:12.5px;font-weight:700;line-height:1.3">'+esc(a.descripcion)+'</span>'+
+      '<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono)">'+
+        esc(_recNom(a.area)||a.area||'—')+(a.fecha_fin?' · acaba '+esc(fmtF(a.fecha_fin)):'')+'</span>'+
+    '</button>';
+  }).join('')+(lista.length>60?'<div style="font-size:11.5px;color:var(--text3);padding:10px 0">'+
+    'Se ven las primeras 60 de '+lista.length+'. Busca por nombre para afinar.</div>':'');
+}
+function _cadPickHTML(){
+  var P=S.cadPick, a=_findActAny(P.id)||{};
+  return '<button onclick="cadAbrirSalud()" style="background:none;border:0;color:var(--text2);font-size:13px;'+
+      'font-weight:600;cursor:pointer;padding:8px 0;font-family:var(--font);min-height:44px">‹ Cancelar</button>'+
+    '<div class="obranow-header"><div>'+
+      '<div style="font-size:15px;font-weight:800">¿Detrás de cuál va?</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:3px;line-height:1.4">'+
+        esc(String(a.descripcion||'').slice(0,80))+'</div>'+
+    '</div></div>'+
+    '<input type="text" placeholder="Buscar por nombre…" value="'+esc(P.q)+'" '+
+      'oninput="_cadPickBuscar(this.value)" style="width:100%;min-height:44px;padding:0 12px;'+
+      'border:1.5px solid var(--border2);border-radius:11px;background:var(--bg2);color:var(--text);'+
+      'font-size:13px;font-family:var(--font);margin-bottom:10px">'+
+    '<div id="cad-pick-lista">'+_cadPickListaHTML()+'</div>';
 }
 
 function _actSelCorrerHTML(){
@@ -7234,12 +7674,18 @@ function _actFilaRapidaHTML(a){
    inventa ninguna. */
 async function actFilaCorrer(id,dias){
   if(!canEdit()) return;
+  /* La entrega de ANTES, para medir el arrastre en días de trabajo. El botón
+     mueve ESTA partida en días de calendario —«+1 semana» es una semana— pero
+     lo que viene detrás se corre en días de trabajo. */
+  var _a0=Acciones.porId(id)||_findActAny(id);
+  var _finAntes=String((_a0&&_a0.fecha_fin)||'').trim();
   var r=_correrPlan([id],'correr',dias);
   if(!r.plan.length){ showToast('Esa partida no tiene fecha que correr','warn'); return; }
   try{
     await Acciones.editar(id, r.plan[0].patch, 'corrida '+dias+' días desde la lista');
     showToast('Movida '+dias+' días ✓');
-    await _ofrecerCorrerCadena(id, dias, 'corrida '+dias+' días (arrastrada por su cadena)');
+    await _ofrecerCorrerCadena(id, _diasLabEntre(_finAntes, r.plan[0].patch.fecha_fin||_finAntes),
+                               'arrastrada por su cadena');
   }catch(e){ showToast('No se pudo mover: '+(e&&e.message||''),'err'); }
   if(!_repintarFila(id)) renderActs();
 }
@@ -7288,11 +7734,11 @@ async function actFilaFecha(id,f){
   var cambios={fecha_fin:f};
   // El fin nunca antes del inicio — la misma regla que en el recorrido.
   if((a.fecha_inicio||'') && a.fecha_inicio>f) cambios.fecha_inicio=f;
-  var _corrio=_diasCorridos(a,f);
+  var _corrio=_diasCorridosLab(a,f);    // el arrastre, en días de TRABAJO
   try{
     await Acciones.editar(id,cambios,'entrega → '+f+' (desde la lista)');
     showToast('Entrega: '+f+' ✓');
-    await _ofrecerCorrerCadena(id,_corrio,'corrida '+_corrio+' días (arrastrada por su cadena)');
+    await _ofrecerCorrerCadena(id,_corrio,'arrastrada por su cadena');
   }catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err'); }
   if(!_repintarFila(id)) renderActs();
 }
@@ -20841,12 +21287,18 @@ async function trPct(id,v){
 }
 async function trCorrer(id,dias){
   if(!canEdit()) return;
+  /* La entrega de ANTES, para medir el arrastre en días de trabajo. El botón
+     mueve ESTA partida en días de calendario —«+1 semana» es una semana— pero
+     lo que viene detrás se corre en días de trabajo. */
+  var _a0=Acciones.porId(id)||_findActAny(id);
+  var _finAntes=String((_a0&&_a0.fecha_fin)||'').trim();
   var r=_correrPlan([id],'correr',dias);
   if(!r.plan.length){ showToast('Esa partida no tiene fecha que correr','warn'); return; }
   try{
     await Acciones.editar(id, r.plan[0].patch, 'corrida '+dias+' días (en Obra)');
     showToast('Movida '+dias+' días ✓');
-    await _ofrecerCorrerCadena(id, dias, 'corrida '+dias+' días (arrastrada por su cadena)');
+    await _ofrecerCorrerCadena(id, _diasLabEntre(_finAntes, r.plan[0].patch.fecha_fin||_finAntes),
+                               'arrastrada por su cadena');
   }catch(e){ showToast('No se pudo mover: '+(e&&e.message||''),'err',5000); return; }
   _trSale(id);
 }
@@ -20856,11 +21308,11 @@ async function trFecha(id,f){
   var cambios={fecha_fin:f};
   // El fin nunca antes del inicio — la misma regla de _correrPlan.
   if((a.fecha_inicio||'') && a.fecha_inicio>f) cambios.fecha_inicio=f;
-  var _corrio=_diasCorridos(a,f);
+  var _corrio=_diasCorridosLab(a,f);    // el arrastre, en días de TRABAJO
   try{
     await Acciones.editar(id, cambios, 'entrega → '+f+' (en Obra)');
     showToast('Entrega: '+fmtF(f)+' ✓');
-    await _ofrecerCorrerCadena(id,_corrio,'corrida '+_corrio+' días (arrastrada por su cadena)');
+    await _ofrecerCorrerCadena(id,_corrio,'arrastrada por su cadena');
   }catch(e){ showToast('No se pudo guardar: '+(e&&e.message||''),'err',5000); return; }
   _trSale(id);
 }
@@ -20975,6 +21427,9 @@ function _trHomeHTML(){
     /* "Sin mirar" va primero: de las vencidas, la mayoría ya las revisaste —
        lo que se pierde de vista es lo que nadie toca hace semanas. */
     (sinmirar.length?_trPillHTML('Sin mirar',sinmirar,"trIr('atajo','congeladas')",true):'')+
+    /* La revisión de cadenas vive DENTRO de Obra, no en un módulo nuevo: es
+       trabajo de obra, y el sitio donde el dueño mira qué le falta es este. */
+    _cadPuertaHTML()+
     (venc.length?_trPillHTML('Vencidas',venc,"trIr('atajo','retrasadas')",true):'')+
     (curso.length?_trPillHTML('Empezadas',curso,"trIr('atajo','curso')"):'')+
     (sinf.length?_trPillHTML('Sin fecha',sinf,"trIr('atajo','sinfecha')"):'')+

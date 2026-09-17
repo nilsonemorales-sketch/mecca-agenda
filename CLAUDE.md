@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v103 — 17 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v104 — 17 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v103 (17 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v104 (17 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -670,6 +670,33 @@ siendo `actividad_id`: **una actividad, una partida.**
 **Toda actividad creada en el app nace sin partida** y cae en la bandeja de
 sueltas. No se bloquea el alta pidiendo partida: en obra eso no se contesta.
 
+### La salud de las cadenas (v104) — límpialas antes de que muevan nada
+
+Un arrastre sobre datos sucios propone disparates el primer día, y entonces el
+dueño no vuelve a confiar en él. Medido sobre las 2.464 actividades: **375 con
+algo en `predecesoras`, 431 enlaces**, y de ahí
+
+| | |
+|---|---|
+| **Rota** — el campo no es una lista (`"["`, `"[{"`) | **18** |
+| **Apunta a la nada** — la de delante fue borrada | **38** |
+| **Se contradicen** — la de atrás empieza antes de que acabe la de delante | **164** |
+
+La pantalla vive **dentro de Obra** (`cadAbrirSalud`, pastilla en la portada que
+**no sale si no hay nada**), y **nada se arregla solo**: un botón por cosa.
+Vaciar la rota, quitar el enlace huérfano o buscarle otra, y en los solapes
+**no hay arreglo automático** —puede ser un error de fechas o puede ser que de
+verdad se trabaje a la vez— así que solo se puede anotar «así está bien».
+
+**`solapes_ok` es la única columna nueva de v104**, y guarda **los ids de las
+predecesoras aceptadas**, no un sí/no: una partida puede tener dos
+predecesoras, una bien y otra mal. Sin un sitio donde guardar la respuesta, el
+app le vuelve a preguntar lo mismo cada vez que abre.
+
+**`predecesoras` se guarda como TEXTO.** La columna es `text`, no `jsonb`, y
+por eso `getPreds` hace `JSON.parse` al leer. Si escribes un array de verdad,
+el siguiente que lo lea no lo entiende. Lo mismo hace el editor de la ficha.
+
 ### Las cadenas (`predecesoras`) — dos formatos en la misma columna
 
 En la base conviven **objetos** `[{"id":"x","tipo":"FS","lag":0}]` (369 filas)
@@ -680,8 +707,10 @@ sin terminar nunca enseñaron el candado 🔒, y el editor abría en blanco las
 predecesoras que ya tenían puestas.
 
 **Lee siempre por `getPreds(a)` o `_predIds(campo)`**, que normalizan con
-`_normPreds` a ids de texto. Nadie lee `tipo` ni `lag` en todo el archivo. No
-compares `a.predecesoras` a mano.
+`_normPreds` a ids de texto. **`"tipo"` y `"lag"` están GUARDADOS en la base
+pero nadie los lee**: `_normPreds` los tira. Trátalos como lo que son hoy —
+«esto va detrás de esto»—; meter FS/SS/FF y retardos es construir sobre algo
+que nadie usa. No compares `a.predecesoras` a mano.
 
 Una predecesora **que ya no existe no bloquea** (hay 18 apuntando a partidas
 borradas): si bloqueara, la partida quedaría trabada para siempre sin nada
@@ -729,11 +758,41 @@ registro de tiempo y «Verificar trabajo» están tras un pliegue
 leerla. Igual en el Plan del día: organizar, filtrar y buscar van tras un
 solo botón (`S.planFiltrosOpen`).
 
-**Correr la cadena (v93).** Al mover una entrega hacia adelante, el app
+**Correr la cadena (v93, v104).** Al mover una entrega hacia adelante, el app
 ofrece correr también lo que espera por ella: `_cadenaAbajo(id)` baja por
 TODA la cadena (no solo el eslabón siguiente) con un `vistos` que corta los
 ciclos, y `_ofrecerCorrerCadena(id, dias, detalle)` pregunta y aplica.
 Lo usan `actFilaCorrer`, `trCorrer`, `actFilaFecha` y `trFecha`.
+
+**EL ARRASTRE VA EN DÍAS DE TRABAJO (v104).** `_sumarDiasLab` y `_diasLabEntre`
+usan `esDiaLaboral` —lunes a sábado, menos `FERIADOS`—. Si el pañete se atrasa
+3 días de trabajo, lo de atrás se mueve 3 días de trabajo: saltando domingos y
+feriados. En días de calendario, el app metía trabajo en domingo y el dueño
+tenía que corregirlo a mano, que es justo lo que se venía a quitar.
+
+**Pero los botones de mano siguen en días de calendario.** «+1 semana» quiere
+decir una semana. Por eso `_correrPlan(ids, modo, dias, laboral)` lleva un
+**interruptor** y no hay dos aritméticas: el modo selección y el panel del
+apartamento no llaman con `laboral`, el arrastre sí. Dos criterios terminan
+dando números distintos.
+
+**Qué mueve el arrastre**: `fecha_inicio` y `fecha_fin`, el mismo salto, para
+que **la duración no cambie**. `fecha_plan` se mueve **solo si caía dentro de
+la ventana vieja** —es el día asignado a alguien, lo que escribe
+`Acciones.planificar`, y **no es lo mismo que la entrega**—; si caía fuera, no
+se toca y **se avisa en la pantalla**. `fecha` no se toca nunca.
+
+**Nada se mueve sin que el dueño lo vea antes** (`_cadPreguntar`,
+`_cadDragHTML`). Hasta v103 esto era un `confirm()` que decía «7 partidas
+esperan por esta» y ya: ni cuáles, ni a qué fechas, ni forma de dejar una
+fuera. Ahora es una lista con casillas —**marcadas por defecto**, porque el
+arrastre es lo que él ya hace a mano—, con el aviso de `fecha_plan` fuera de
+ventana y el de fechas que ya se contradicen. Y la tanda entera **se deshace de
+golpe** (`cadDeshacerTanda`, botón en la pantalla de cadenas).
+
+**Lo cerrado no se mueve, nunca.** `_sucesoresAbiertos` ya lo filtraba desde
+v93; de los 431 enlaces medidos, **241 tienen la de delante ya cerrada**. Mover
+la fecha de algo terminado sería reescribir la historia.
 
 Tres reglas de esto:
 - **Se ofrece, no se hace solo.** Si el resto se corre o se aprieta para
@@ -932,6 +991,12 @@ mismo:**
 - **El catálogo no enseña cantidad, unidad ni dinero.** Recorre la lista de
   subpartidas y la ficha del 3.00: `RD$`, `M²`, `M³`, «Cantidad», «Precio
   unitario» y «Valor» tienen que dar **cero**
+- **El arrastre de la cadena va en días de TRABAJO.** Mueve una que caiga en
+  sábado y comprueba que lo de atrás salta el domingo; y prueba contra un
+  feriado de `FERIADOS`. Si aparece trabajo en domingo, alguien volvió a
+  `_isoAddDias`
+- **La duración no cambia con el arrastre.** Una de 8 días de trabajo sigue
+  siendo de 8 después de moverse
 - **El catálogo se comprueba contra INVARIANTES, no contra cifras.** La obra se
   mueve mientras programas —un día se cerraron 13 partidas en una tarde y el
   reparto dejó de cuadrar contra una tabla congelada—. Lo que tiene que dar
