@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v115 — 18 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v116 — 18 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -216,6 +216,7 @@ mismos botones que cualquier otra.
 | **REGISTRAR con todo el detalle** | **Actividades**, al abrir la fila — `_actFilaRapidaHTML()`, `_actFilaAvanceHTML()` |
 | **Agrupar la obra en capítulos, subpartidas y partidas (PRUEBA)** | **Partidas** — `renderCatalogo()`, solo admin. Ver «El Catálogo de partidas» en §3.5 |
 | **Renombrar o juntar una ubicación, o ponérsela a las que no tienen** | **Partidas → Ubicaciones** — `catUbicsAbrir()`, `_catUbicMover()`. Toca el `area` de todas sus actividades, avisando a cuántas |
+| **Crear una ubicación que no existe todavía** | **Partidas → Ubicaciones → «+ Nueva ubicación»** — `catUbicNuevaAbrir()` (v116). Vive en `obra_ubicaciones` y nace vacía |
 | **Poner un avance a mano en lo construido antes de mayo-2026** | **Partidas** — `catManualAbrir()`, en el capítulo, en la línea del presupuesto y en la ubicación. Nunca se mezcla con el contado ni sube de nivel |
 | **Armar el plan: jerarquías, entregables y notas** | **Partidas → vista Árbol** — `_catArbolHTML()`, `nodosSembrar()`, `nodoNuevoAbrir()`, `nodoMoverAbrir()`. Es el OTRO eje; no toca el catálogo |
 | **Ver y trabajar el cronograma** | **Partidas → Cronograma** — tabla de filas que se abren con sus botones (v115). Columnas: quién, costo, fechas, fin real, estado |
@@ -773,6 +774,54 @@ Por lo mismo, **«descartada del plan» NO es una columna de `obra_actividades`*
 vive en `obra_plan_fuera`. Se llegó a escribir la columna y se retiró en el acto
 — ese módulo nació con la regla de CERO escrituras a `obra_actividades`, y es lo
 único que permite borrarlo sin dejar rastro.
+
+#### LAS UBICACIONES YA SE PUEDEN CREAR (v116)
+
+Palabras del dueño, con el 3.00 delante: *«Esto es lo que tengo y no puedo crear
+ubicación.»* Tenía razón, y era **un círculo cerrado**: `ubicacionSelect` es una
+lista escrita a mano más las áreas que ya aparecen en `S.acts`, la pantalla de
+Ubicaciones de la v110 renombra/junta/asigna pero no crea, y `_catCrearHTML` solo
+ofrece casillas de `_catUbicsTodas()`, que salía de las actividades. **Una
+ubicación solo podía nacer dentro de una actividad, y no había dónde
+escribirla.** Un sitio nuevo —un local, un cuarto de máquinas— no tenía entrada.
+
+**No hizo falta tabla nueva:** viven en `obra_ubicaciones`, la de la v110.
+`_catUbicsTodas()` devuelve ahora **la unión** de las que usan las actividades y
+las filas activas de esa tabla. Una recién creada sale **con 0 actividades**, y
+eso es correcto: es un sitio donde todavía no se ha registrado nada.
+
+- **Crear NO toca ninguna actividad.** Comprobado: 0 escrituras a
+  `obra_actividades`.
+- **No se duplica**: se compara con `_catNorm` —sin tildes ni mayúsculas—, así
+  que «prueba claude» encuentra «Prueba Claude» y **se niega diciendo cuál**.
+- **Va al final**, nunca entre los apartamentos: el orden es `_revOrdenArea`, el
+  del edificio, y a un sitio nuevo no se le adivina el nivel.
+- Tres puertas: «+ Nueva ubicación» en Ubicaciones, «+ Otra ubicación» dentro de
+  «Crear actividad» —que la crea y **la deja marcada**— y el `<select>` de
+  siempre, en un grupo «Creadas a mano».
+
+**Cambio declarado fuera del módulo:** `ubicacionSelect` lee `S.catUbicRows`, y
+`loadAll` pide `obra_ubicaciones` al arrancar —cuatro filas, **fuera del
+`Promise.all`** para que si esa tabla no contesta el arranque no se caiga—.
+Sin eso, una ubicación creada no aparecía en el formulario de Actividades hasta
+pasar por Partidas.
+
+#### EL SELECTOR DE VISTAS VA PEGADO ARRIBA (v116)
+
+Se pintaba una sola vez al principio de la pantalla. Con 25 partidas debajo se
+iba fuera de la vista, y **el dueño pasó días sin poder llegar al Cronograma,
+creyendo que no existía**. Ahora es `position:sticky` con fondo propio: medido,
+tras desplazar 900px estaría en **-678** y se queda en **106** — sigue visible.
+Una línea de 44px que no se mueve, y desde cualquier sitio del módulo se ve
+dónde estás y a dónde puedes ir.
+
+#### El atajo de la fila NO reescribe nada (v116)
+
+«Traer actividades» y «Crear actividad» existen desde la v112. El problema era
+**llegar**. En la fila cerrada del cronograma hay ahora **`+`** y **`✎`** que
+llaman a `nodoTraerAbrir` y a `catCrearAbrir` — las de siempre, no una copia. Y
+el nombre de la tarea lleva un **chevron** que dice que se toca: sin esa señal la
+fila parecía una línea de tabla muerta.
 
 #### CUATRO VERSIONES RECHAZADAS, Y LO QUE LAS ARREGLÓ (v115)
 
@@ -1923,6 +1972,11 @@ mismo:**
 - **Borrar una actividad no deja amarres huérfanos.** Cuenta
   `obra_partida_actividad` y `obra_nodo_actividad` antes y después
 - **Juntar partidas en la dirección prohibida se niega y dice por qué**
+- **Se puede crear una ubicación**, no se duplica comparando sin tildes ni
+  mayúsculas, va al final y **no toca ninguna actividad**. Y sale en el
+  `<select>` de Actividades sin haber entrado a Partidas
+- **El selector de vistas se queda pegado arriba** al bajar por una lista larga.
+  Si se pierde de vista, el Cronograma vuelve a ser invisible
 - **Las cinco vistas siguen, y son CINCO**: Lista, Edificio, Matriz, Cronograma
   y Tiempo. Si aparece una sexta, alguien volvió a añadir en vez de sustituir —
   y el dueño ya dijo que con cinco estaba confuso
@@ -2052,6 +2106,8 @@ pertenece a ningún nivel.
 | **v110** — la lista de ubicaciones daba **30** en la prueba y **29** contra la base. No era el app: el arnés de la v106 trae una actividad en «N1 — Lobby», que en la obra no es una ubicación. Media hora buscando un fallo que estaba en el fixture. | Cuando un conteo se separa **en uno** del medido contra la base, mira primero de dónde salen las filas de la prueba. Un fixture que no reproduce la distribución real convierte cualquier número en una opinión — y al arreglarlo, arréglalo para que dé **exactamente** el de la base, no «parecido». |
 | **v110** — las tarjetas en rejilla usaban `repeat(auto-fill,minmax(160px,1fr))`. A 390px daban dos y a 1024px **cuatro**: en el iPad seguía siendo una rejilla, que es justo lo que el dueño pidió quitar. | «Dos columnas en pantalla ancha» es una `@media query`, no un `auto-fill`. `auto-fill` mete las que quepan, y en una pantalla grande eso nunca son dos. Y la prueba tiene que **contar cuántas caben por fila a cada ancho**, no mirar el CSS. |
 | **v111→v115** — cuatro versiones seguidas del módulo y el dueño seguía sin acoplarse: «no me convence cómo se ve», «me siento confuso», «no me acoplo». Cada versión añadió funciones buenas —el plan, el cronograma, las vistas, ordenar— y ninguna preguntó **cómo quería trabajar**. Lo desbloqueó una pregunta con opciones: quería el pliegue que ya usa en Actividades, no una pantalla más. | **Es la cuarta vez que pasa lo mismo** (En Obra, el recorrido, Hoy, y ahora Partidas). El aviso está escrito desde la v82 y aun así se construyeron cuatro versiones antes de preguntar. Cuando el usuario diga «no me acoplo», **para y pregunta con opciones concretas**; añadir la quinta versión es repetir el error. Y fíjate si lo que pide **ya existe en otra pantalla del app**: casi siempre sí. |
+| **v116** — el dueño pasó días sin poder llegar al Cronograma: el selector de vistas se pintaba arriba del todo y con 25 filas debajo se iba fuera de la pantalla. No era un fallo de la vista, era que **no se podía llegar a ella**. | Una pantalla a la que no se llega no existe, aunque funcione. Cuando el usuario diga que algo «falta», comprueba primero si está y **no se ve**: es más barato de arreglar y es lo que pasa casi siempre. Un selector de navegación va pegado (`sticky`), no al principio del documento. |
+| **v116** — `catCrearAbrir` no hacía nada si se llamaba desde la pantalla de Ubicaciones: `S.catUbics` se comprueba antes en `renderCatalogo`, así que se ponía `S.catCrear` y se seguía pintando lo de antes. **Tercera vez con la misma forma** (v111 con `catFuera`, v113/v114 con los paneles). | En una función que despacha por una cadena de `else if`, **abrir una pantalla es también cerrar las que se comprueban antes**. Si esto vuelve a pasar, la cadena tiene que dejar de ser una cadena: una sola variable «qué estoy mirando» en vez de doce banderas. |
 | **v114** — `catPNuevaAbrir` asignaba su estado y **después** llamaba a `catPanelOtrosCerrar()`, que lo ponía a null: el panel nacía vacío. **Es el mismo fallo de la v113**, que ya se había «arreglado» reordenando las líneas en las dos funciones de entonces. Reordenar depende de que el siguiente se acuerde, y el siguiente fui yo. | Cuando un fallo vuelve, **el arreglo anterior era una disciplina, no un diseño**. `catPanelOtrosCerrar(salvo)` recibe ahora la clave que se está abriendo y no la toca: da igual el orden en que se llame. Si un error se puede repetir siguiendo las reglas, cambia las reglas. |
 | **v113** — el botón «Volver a sembrar» de la v112 reconstruía el árbol desde el CATÁLOGO. Con el cronograma del dueño ya en la base, pulsarlo lo habría **destruido sin forma de rehacerlo**: los datos del Project no están en el código. Estaba frenado por casualidad, porque un nodo llevaba una nota. | Un botón que puede destruir algo que el app **no sabe reconstruir** no se protege con una condición: se quita. Y cuando una función deja de tener sentido, se borra entera — dejarla «por si acaso» es dejar el gatillo puesto. |
 | **v113** — `nodoPlanAbrir` asignaba `S.nodoPlan` y **después** llamaba a `catPanelOtrosCerrar()`, que lo pone a null: el panel de fechas y costo nacía vacío y el campo no existía. Lo mismo en `nodoManualAbrir`. | Una función de «cerrar todo lo demás» que enumera estados acaba incluyendo el que estás abriendo. Ciérrala **antes** de asignar, nunca después. Lo cazó la prueba al escribir en un campo que era `null`, no la lectura. |
@@ -2124,7 +2180,7 @@ orden de magnitud.
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
 | `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**; **con `orden` desde v114** (el orden que el dueño pone a mano en «Por partida»). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
 | `obra_nodos`, `obra_nodo_actividad`, `obra_plan_fuera` | **EL PLAN (v111→v113)** — el segundo eje. Desde la v113 son **las 189 tareas del MS Project del dueño**, sembradas desde SQL: `costo_plan`, `dias_plan`, `pred_plan`, `inicio_plan`, `fin_plan`, `pct_plan`, `costo_real_plan` y `avance_manual`. **No hay siembra desde el app.** El árbol del dueño: `tipo` (`rama`/`entregable`), `clase` (apartamento/taller/hito), `orden`, `notas` para lo que no es actividad. El amarre es una tabla aparte porque **una actividad puede estar en varios nodos a propósito**. `obra_plan_fuera` son los descartes: **no borra nada**, saca del plan. Se borran las tres y el catálogo queda exactamente igual. | 190 + 2.445 |
-| `obra_ubicaciones` | **Del módulo «Partidas» (v110).** Existe SOLO para guardarle el porcentaje a mano a una ubicación: el nombre sigue viviendo en `obra_actividades.area` y esta tabla no manda sobre nada. Hay fila únicamente para las que llevan algo escrito a mano. | 0 al nacer |
+| `obra_ubicaciones` | **Del módulo «Partidas» (v110, v116).** Guarda el porcentaje a mano de una ubicación **y, desde la v116, las ubicaciones que el dueño crea**: `_catUbicsTodas()` devuelve la unión de las que usan las actividades y las filas activas de aquí. El nombre sigue viviendo en `obra_actividades.area`. | 0 al nacer |
 
 ### Cosas de los datos que hay que saber
 

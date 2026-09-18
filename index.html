@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260918_115';
+const APP_VERSION='20260918_116';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1755,6 +1755,28 @@ function ubicacionSelect(id, val){
       }
     });
   }
+  /* v116 · LAS CREADAS A MANO, en su propio grupo. Son las de
+     `obra_ubicaciones`, que hasta ahora no salían en ningún sitio fuera de
+     Partidas: una ubicación nueva no servía de nada si el formulario de crear
+     actividad no la ofrecía.
+     OJO: `S.catUbicRows` lo carga `cargarCatalogo`, que corre al entrar a
+     Partidas. Por eso `loadAll` la pide también al arrancar — son cuatro filas,
+     y sin eso la ubicación nueva no aparece aquí hasta pasar por el módulo. */
+  var creadas=[];
+  if(typeof S!=='undefined' && Array.isArray(S.catUbicRows)){
+    S.catUbicRows.forEach(function(r){
+      if(r.activo===false) return;
+      var n=String(r.nombre||r.id||'').trim(); if(!n) return;
+      var yaEsta=(existing.indexOf(n)>=0);
+      AREAS.forEach(function(g){ if(g[1].includes(n)) yaEsta=true; });
+      if(!yaEsta && creadas.indexOf(n)<0) creadas.push(n);
+    });
+  }
+  if(creadas.length){
+    opts+='<optgroup label="Creadas a mano">';
+    creadas.forEach(function(a){opts+='<option value="'+esc(a)+'"'+(val===a?' selected':'')+'>'+esc(a)+'</option>';});
+    opts+='</optgroup>';
+  }
   if(existing.length){
     opts+='<optgroup label="Usadas anteriormente">';
     existing.forEach(function(a){opts+='<option value="'+a+'"'+(val===a?' selected':'')+'>'+a+'</option>';});
@@ -2446,6 +2468,13 @@ async function loadAll(){
       sbTodo('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc'),
     ]);
     clearTimeout(retryTimer);
+    /* v116 · Las ubicaciones creadas a mano, para que `ubicacionSelect` las
+       ofrezca sin haber entrado a Partidas. Son cuatro filas y va APARTE del
+       `Promise.all`: si esta tabla no contesta, el arranque no se cae — el
+       formulario se queda sin ese grupo de opciones, nada más. */
+    sb('obra_ubicaciones?select=id,nombre,activo&order=id.asc')
+      .then(function(u){ if(Array.isArray(u) && !Array.isArray(S.catUbicRows)) S.catUbicRows=u; })
+      .catch(function(){});
     S.personal=personal; S.asist=asist; S.acts=acts; S.estancadas=undefined; S.abiertas=undefined;
     revisarConsistencia();
     // Cache for instant reload
@@ -17630,7 +17659,7 @@ function _catPanel(){
   var abierto=!!(S.catBorrar || S.catRepetir || S.catTandaPick || S.catMadreEdit || S.catMadreNueva ||
                  S.catSgEdit || S.catUbicRen || S.catUbicJuntar || S.catManual ||
                  S.nodoEdit || S.nodoNuevo || S.nodoMover || S.nodoPlan || S.nodoManual ||
-                 S.catPNueva || S.nodoCorrer);
+                 S.catPNueva || S.nodoCorrer || S.catUbicNueva);
   el.style.display=abierto?'block':'none';
   if(!abierto){ el.innerHTML=''; return; }
   try{
@@ -17649,6 +17678,7 @@ function _catPanel(){
                  : S.nodoManual ? _nodoManualHTML()
                  : S.catPNueva ? _catPNuevaHTML()
                  : S.nodoCorrer ? _nodoCorrerHTML()
+                 : S.catUbicNueva ? _catUbicNuevaHTML()
                  : _catTandaPickHTML();
   }catch(e){
     console.warn('_catPanel:',e);
@@ -17661,7 +17691,8 @@ function catPanelCerrar(){ S.catBorrar=null; S.catRepetir=null; S.catTandaPick=n
   S.catMadreEdit=null; S.catMadreNueva=null; S.catSgEdit=null;
   S.catUbicRen=null; S.catUbicJuntar=null; S.catManual=null;
   S.nodoEdit=null; S.nodoNuevo=null; S.nodoMover=null;
-  S.nodoPlan=null; S.nodoManual=null; S.catPNueva=null; S.nodoCorrer=null; _catPanel(); }
+  S.nodoPlan=null; S.nodoManual=null; S.catPNueva=null; S.nodoCorrer=null;
+  S.catUbicNueva=null; _catPanel(); }
 function _catPanelCab(titulo, sub){
   return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">'+
     '<div><div style="font-size:17px;font-weight:800;line-height:1.3">'+esc(titulo)+'</div>'+
@@ -18361,11 +18392,24 @@ function _catUbicActs(area){
     return (String(a.area||'').trim()||PAL_SIN_UBIC)===k;
   });
 }
+/* LA UNIÓN: las ubicaciones que usan las actividades MÁS las que el dueño creó
+   a mano (v116). Hasta aquí una ubicación solo podía nacer dentro de una
+   actividad —y el `<select>` de crear actividad no tenía dónde escribir una
+   nueva—, así que era un círculo cerrado: para usar un sitio nuevo hacía falta
+   una actividad que ya lo llevara escrito. Sus palabras, con el 3.00 delante:
+   «Esto es lo que tengo y no puedo crear ubicación.»
+   Una recién creada sale con 0 actividades, y eso es correcto: es un sitio de
+   la obra donde todavía no se ha registrado nada. */
 function _catUbicsTodas(){
   var m={};
   _catTodas().forEach(function(a){
     var k=String(a.area||'').trim()||PAL_SIN_UBIC;
     (m[k]=m[k]||[]).push(a);
+  });
+  (S.catUbicRows||[]).forEach(function(r){
+    if(r.activo===false) return;
+    var k=String(r.nombre||r.id||'').trim();
+    if(k && !m[k]) m[k]=[];
   });
   /* ALFABÉTICO NO SIRVE —«Escalera», «Fachada» y «General» caerían antes que
      «N2 — Apto 2A»—: es el orden del edificio, el mismo `_revOrdenArea` que
@@ -18393,6 +18437,10 @@ function _catUbicsPantallaHTML(){
     h+='<button onclick="catTandaDeshacer()" style="'+_catBS+';width:100%;margin-bottom:10px;min-height:46px;'+
       'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
       'Deshacer lo último ('+S.catUndo.previas.length+' actividad'+(S.catUndo.previas.length!==1?'es':'')+')</button>';
+  if(isAdmin())
+    h+='<button onclick="catUbicNuevaAbrir()" style="'+_catBS+';width:100%;margin-bottom:10px;min-height:50px;'+
+      'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)">'+
+      '+ Nueva ubicación</button>';
   if(sin)
     h+='<button onclick="catSinUbicAbrir()" style="'+_catBS+';width:100%;margin-bottom:12px;min-height:50px;'+
       'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
@@ -18424,6 +18472,75 @@ function _catUbicsPantallaHTML(){
     '</div>';
   });
   return h+'<div style="height:110px"></div>';
+}
+
+/* ── CREAR UNA UBICACIÓN (v116) ──
+   Vive en `obra_ubicaciones`, la tabla que ya existía desde la v110 para el
+   porcentaje a mano: no hace falta ninguna tabla nueva. NACE VACÍA y se queda
+   vacía hasta que alguien le cuelgue trabajo — crearla NO toca ni una
+   actividad. */
+function catUbicNuevaAbrir(){
+  if(!isAdmin()){ showToast('Solo el administrador','warn',4000); return; }
+  catPanelOtrosCerrar('catUbicNueva');
+  S.catUbicNueva={nombre:'', volverA:''};
+  _catPanel();
+}
+function _catUbicNuevaHTML(){
+  var N=S.catUbicNueva;
+  return _catPanelCab('Nueva ubicación',
+      'Un sitio de la obra donde todavía no hay nada registrado — un local, un '+
+      'cuarto de máquinas, una caseta. <b>Nace vacía</b> y no toca ninguna actividad.')+
+    '<input id="cat-un-nom" type="text" value="'+esc(N.nombre)+'" placeholder="Cuarto de máquinas" '+
+      'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+      'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--font);'+
+      'background:var(--bg2);color:var(--text)">'+
+    '<div style="font-size:11.5px;color:var(--text3);line-height:1.55;margin-top:10px">'+
+      'Va al final de la lista, no entre los apartamentos: el orden de las ubicaciones '+
+      'es el del edificio y a un sitio nuevo no se le adivina el nivel.</div>'+
+    '<button onclick="catUbicNuevaCrear()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:52px;'+
+      'border-color:var(--green);background:var(--green-light);color:var(--green)">Crear la ubicación</button>'+
+    _catPanelPie();
+}
+/* ¿Ya existe? Se compara SIN TILDES NI MAYÚSCULAS con `_catNorm`, que es como
+   se compara todo lo demás en el módulo: «Terraza» y «terraza» son el mismo
+   sitio, y crear las dos sería fabricar el trabajo de limpieza que la pantalla
+   de Ubicaciones viene a quitar. */
+function _catUbicYaExiste(nom){
+  var q=_catNorm(String(nom||'').trim());
+  if(!q) return null;
+  var us=_catUbicsTodas();
+  for(var i=0;i<us.length;i++) if(_catNorm(us[i].area)===q) return us[i].area;
+  return null;
+}
+async function catUbicNuevaCrear(){
+  var N=S.catUbicNueva; if(!N) return;
+  var i=document.getElementById('cat-un-nom');
+  var nom=String((i&&i.value)||N.nombre||'').trim();
+  if(!nom){ showToast('Ponle nombre a la ubicación','warn',3000); return; }
+  var ya=_catUbicYaExiste(nom);
+  if(ya){ showToast('Ya existe «'+ya+'».','err',6000); return; }
+  var volverA=N.volverA;
+  S.catUbicNueva=null; _catPanel();
+  setSS('syncing','Creando…');
+  try{
+    var fila={id:nom, nombre:nom, avance_manual:null, avance_manual_por:null,
+              avance_manual_fecha:null, activo:true};
+    await sb('obra_ubicaciones',{method:'POST',prefer:'return=minimal',body:JSON.stringify(fila)});
+    (S.catUbicRows=S.catUbicRows||[]).push(fila);
+    logCambio('creado','partida','ubic_'+nom,nom,'ubicación creada (nace sin actividades)');
+    setSS('ok','✓'); showToast('«'+nom+'» creada ✓');
+    /* Si se creó desde «Crear actividad», vuelve ahí con la nueva YA MARCADA:
+       el dueño la está creando porque la necesita ahora mismo. */
+    if(volverA==='crear' && S.catCrear) S.catCrear.sel[nom]=1;
+  }catch(e){ setSS('err','Error'); showToast('No se pudo crear: '+((e&&e.message)||''),'err',8000); }
+  renderCatalogo();
+}
+/* Desde «Crear actividad»: se crea y se queda marcada, sin salir de ahí. */
+function catUbicNuevaDesdeCrear(){
+  if(!isAdmin()){ showToast('Solo el administrador','warn',4000); return; }
+  catPanelOtrosCerrar('catUbicNueva');
+  S.catUbicNueva={nombre:'', volverA:'crear'};
+  _catPanel();
 }
 
 /* ── RENOMBRAR ── */
@@ -19857,7 +19974,7 @@ function nodoMoverAbrir(id){
    siguiente se acuerde; esto no. */
 var CAT_PANELES=['catBorrar','catRepetir','catTandaPick','catMadreEdit','catMadreNueva',
                  'catSgEdit','catUbicRen','catUbicJuntar','catManual','nodoEdit',
-                 'nodoNuevo','nodoMover','nodoPlan','nodoManual','catPNueva','nodoCorrer'];
+                 'nodoNuevo','nodoMover','nodoPlan','nodoManual','catPNueva','nodoCorrer','catUbicNueva'];
 function catPanelOtrosCerrar(salvo){
   CAT_PANELES.forEach(function(k){ if(k!==salvo) S[k]=null; });
 }
@@ -20253,8 +20370,16 @@ function catVistaSet(v){
   S.nodoTraer=null; S.catCrear=null; S.catFuera=null; S.nodoUbicar=null;
   renderCatalogo(); _catArriba();
 }
+/* PEGADO ARRIBA (v116). Se pintaba una sola vez al principio de la pantalla, y
+   con 25 partidas debajo se iba fuera de la vista: el dueño pasó DÍAS sin
+   poder llegar al Cronograma y creyendo que no existía. Una línea de 44px que
+   no se mueve resuelve el problema de raíz — siempre se ve dónde está y a
+   dónde puede ir.
+   `var(--bg)` de fondo y un poco de aire abajo: sin fondo, las filas se leen
+   por debajo al desplazarse. */
 function _catVistaSelHTML(){
-  return '<div style="display:flex;gap:5px;margin-bottom:10px">'+
+  return '<div style="position:sticky;top:0;z-index:30;background:var(--bg);'+
+    'padding:6px 0 7px;margin:-6px 0 4px;display:flex;gap:5px">'+
     CAT_VISTAS.map(function(v){
       var on=(catVista()===v[0]);
       return '<button onclick="catVistaSet('+_catQ(v[0])+')" style="'+_catBS+';flex:1;min-height:44px;'+
@@ -20555,7 +20680,11 @@ function _catCronoFilaHTML(x, i, total){
           '<span style="color:var(--text3);font-size:10px;flex-shrink:0">'+
             (hijos?(abierta?'▾':'▸'):'·')+'</span>'+
           '<span style="font-size:11.5px;font-weight:'+(hijos?'800':'600')+';line-height:1.2;'+
-            'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(n.nombre)+'</span>'+
+            'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+esc(n.nombre)+'</span>'+
+          /* QUE SE NOTE QUE SE TOCA. Sin esta señal la fila parece una línea de
+             tabla muerta y el dueño no sabía que ahí dentro estaba todo. */
+          '<span style="color:var(--text3);font-size:11px;flex-shrink:0;'+
+            (abierta?'transform:rotate(90deg);':'')+'">›</span>'+
         '</span>'+
         '<span style="display:flex;align-items:center;gap:5px;margin-top:2px">'+
           '<span style="font-family:var(--mono);font-size:11px;font-weight:800;color:'+col+'">'+
@@ -20566,6 +20695,19 @@ function _catCronoFilaHTML(x, i, total){
           (vacia?'<span style="font-size:9px;color:var(--text3)">vacía</span>':'')+
         '</span>'+
       '</button>'+
+      /* EL ATAJO (v116). «Traer actividades» y «Crear actividad» existen desde
+         la v112, pero había que abrir la fila para verlos. Un toque en vez de
+         dos, y en la fila cerrada — que es donde el dueño está mirando.
+         NO reescribe nada: llama a `nodoTraerAbrir` y a `catCrearAbrir`. */
+      (isAdmin()
+        ? '<span style="display:flex;gap:2px;flex-shrink:0;padding:0 4px">'+
+          '<button onclick="nodoTraerAbrir('+_catQ(n.id)+')" title="Traer actividades" '+
+            'style="min-width:34px;min-height:44px;border:0;background:none;cursor:pointer;'+
+            'color:var(--accent);font-size:16px;font-weight:800;padding:0">+</button>'+
+          '<button onclick="catCrearAbrir('+_catQ(n.id)+')" title="Crear actividad aquí" '+
+            'style="min-width:34px;min-height:44px;border:0;background:none;cursor:pointer;'+
+            'color:var(--green);font-size:14px;padding:0">✎</button></span>'
+        : '')+
       cel(q.nombre?esc(q.nombre)+(q.otros?' +'+q.otros:''):'—',110,';color:var(--text2)')+
       cel(_nodoCosto(n.costo_plan,false)||'—',92)+
       cel(_nodoFecha(n.inicio_plan)||'—',78)+
@@ -20595,6 +20737,9 @@ function _catCronoFilaHTML(x, i, total){
         '<button onclick="nodoTraerAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
           'min-height:44px;font-size:11px;border:1.5px solid var(--accent);background:var(--accent-fill);'+
           'color:var(--accent-on)">Traer actividades</button>'+
+        '<button onclick="catCrearAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
+          'min-height:44px;font-size:11px;border:1.5px solid var(--green);background:var(--green-light);'+
+          'color:var(--green)">Crear actividad</button>'+
         '<button onclick="nodoIr('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
           'min-height:44px;font-size:11px;border:1.5px solid var(--border2);background:var(--bg2);'+
           'color:var(--text3)">Abrirla sola</button>'+
@@ -20843,7 +20988,13 @@ function catCrearAbrir(nodoId){
   var pre={};
   if(S.catUbic) pre[S.catUbic]=1;
   S.catCrear={nodo:nodoId||null, sel:pre};
-  S.nodoTraer=null; renderCatalogo(); _catArriba();
+  /* Se sueltan las pantallas que `renderCatalogo` comprueba ANTES que ésta: si
+     no, llamando desde Ubicaciones se ponía `S.catCrear` y se seguía pintando
+     la lista de ubicaciones — el botón no hacía nada visible. Es el mismo
+     fallo que tuvo el selector de vistas con `S.catFuera` en la v111. */
+  S.nodoTraer=null; S.catUbics=false; S.catSinUbic=false; S.catFuera=null;
+  S.nodoUbicar=null; S.catMadres=false; S.catRepes=null; S.catExactas=false;
+  renderCatalogo(); _catArriba();
 }
 function catCrearCerrar(){ S.catCrear=null; renderCatalogo(); _catArriba(); }
 function catCrearToggle(u){
@@ -20886,6 +21037,10 @@ function _catCrearHTML(){
   h+='<button onclick="catCrearSeguir()" style="'+_catBS+';width:100%;margin-bottom:12px;min-height:52px;'+
     'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)'+
     (sel.length?'':';opacity:.45')+'">Crear'+(sel.length?' en las '+sel.length:'')+' — seguir al formulario</button>';
+  if(isAdmin())
+    h+='<button onclick="catUbicNuevaDesdeCrear()" style="'+_catBS+';width:100%;margin-bottom:8px;'+
+      'min-height:46px;font-size:11.5px;border:1.5px dashed var(--green);background:none;'+
+      'color:var(--green)">+ Otra ubicación — se crea y queda marcada</button>';
   _catUbicsTodas().forEach(function(u){
     var on=!!C.sel[u.area];
     h+='<button onclick="catCrearToggle('+_catQ(u.area)+')" style="'+_catBS+';width:100%;margin-bottom:5px;'+
