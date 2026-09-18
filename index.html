@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260918_112';
+const APP_VERSION='20260918_113';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -8983,6 +8983,36 @@ var Acciones = (function(){
       logCambio('eliminado','actividad',id,(copia&&copia.descripcion)||'',_det);
       _quitarLocal(id);
       try{
+        /* LOS AMARRES SE VAN CON ELLA, Y ANTES (v113). Hasta aquí esto borraba
+           de `obra_actividades` y dejaba las filas de `obra_partida_actividad` y
+           `obra_nodo_actividad` apuntando al vacío: cuando el dueño borró 21
+           repetidas quedaron 21 y 21 huérfanas, y el plan contaba 2.466
+           actividades donde había 2.445.
+           Van PRIMERO a propósito: si se cayera la red a la mitad, quedaría una
+           actividad sin amarres —que se ve y se arregla— y no un amarre sin
+           actividad, que no lo ve nadie. Y no rompen el borrado: si fallan, se
+           dice y se sigue, porque lo que el usuario pidió es borrar la
+           actividad. */
+        try{
+          await sb('obra_nodo_actividad?actividad_id=eq.'+encodeURIComponent(id),
+                   {method:'DELETE',prefer:'return=minimal'});
+          await sb('obra_partida_actividad?actividad_id=eq.'+encodeURIComponent(id),
+                   {method:'DELETE',prefer:'return=minimal'});
+          if(S.nodoPorA&&S.nodoPorA[id]){
+            (S.nodoPorA[id]||[]).forEach(function(nid){
+              if(S.nodoPorN&&S.nodoPorN[nid])
+                S.nodoPorN[nid]=S.nodoPorN[nid].filter(function(x){ return x!==id; });
+            });
+            delete S.nodoPorA[id];
+          }
+          if(S.nodoAmarres) S.nodoAmarres=S.nodoAmarres.filter(function(r){ return r.actividad_id!==id; });
+          if(S.catAmarres) delete S.catAmarres[id];
+          S._catMapa=null;
+        }catch(eAm){
+          logCambio('editado','actividad',id,(copia&&copia.descripcion)||'',
+            'la actividad se borró pero sus amarres no ('+((eAm&&eAm.message)||'sin motivo')+')');
+          showToast('Se borró, pero quedaron sus amarres sin limpiar. Avísalo.','warn',8000);
+        }
         await sb('obra_actividades?id=eq.'+id,{method:'DELETE',prefer:'return=minimal'});
       }catch(e){
         if(copia)(S.acts=S.acts||[]).push(copia);
@@ -17146,7 +17176,26 @@ function catJuntar(){
 async function catJuntarEn(quedaId){
   var ids=(S.catPick&&S.catPick.ids)||[];
   var queda=_catPorId(quedaId); if(!queda || _catEsSub(queda)) return;
+  /* UNA PARTIDA DESACTIVADA NO PUEDE SER DESTINO (v113). Se comprobó con
+     «Bajada Escombros» y «Bajada de escombros»: se juntaron en las dos
+     direcciones, se desactivaron LAS DOS, y 4 actividades vivas quedaron
+     colgando de una partida apagada — invisibles en el módulo, porque
+     `_catAgendaDe` filtra por `activo`. Aquí se corta: si el destino ya está
+     desactivado, no hay a dónde llevar nada. */
+  if(queda.activo===false){
+    showToast('«'+queda.nombre+'» está desactivada: no puede quedarse con las actividades. '+
+              'Escoge otra.','err',8000);
+    return;
+  }
   var otras=ids.map(_catPorId).filter(function(p){ return p && !_catEsSub(p) && p.id!==queda.id; });
+  /* Y EL DESTINO NO PUEDE ESTAR ENTRE LAS QUE SE APAGAN. La línea de arriba ya
+     lo saca por id, pero se comprueba otra vez porque el precio de que se
+     cuele es perder trabajo de vista, y eso ya pasó. */
+  otras=otras.filter(function(p){ return p.id!==queda.id && p.activo!==false; });
+  if(!otras.length){
+    showToast('No queda ninguna partida que juntar en «'+queda.nombre+'».','warn',6000);
+    return;
+  }
   var mover=[]; otras.forEach(function(p){
     _catActsDe(p.id).forEach(function(a){ mover.push({actividad_id:a.id, partida_id:queda.id}); });
   });
@@ -17540,7 +17589,7 @@ function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPa
      al entrar a un capítulo se seguiría pintando el nodo del anterior — el
      mismo fallo de `revAbrir` en la v94. El modo por partida SÍ se recuerda:
      es una preferencia de cómo trabajar, no un contexto. */
-  S.nodoSel=null; S.nodoTraer=null; S.catCrear=null; S.catFuera=null;
+  S.nodoSel=null; S.nodoTraer=null; S.catCrear=null; S.catFuera=null; S.nodoUbicar=null;
   renderCatalogo(); _catArriba(); }
 /* ══ v107 · EDITAR DE VERDAD DESDE EL MÓDULO ═════════════════════════════
    Palabras del dueño: «necesito poder editar actividades. Me siento muy
@@ -17576,7 +17625,7 @@ function _catPanel(){
   var el=_catPanelHost();
   var abierto=!!(S.catBorrar || S.catRepetir || S.catTandaPick || S.catMadreEdit || S.catMadreNueva ||
                  S.catSgEdit || S.catUbicRen || S.catUbicJuntar || S.catManual ||
-                 S.nodoEdit || S.nodoNuevo || S.nodoMover);
+                 S.nodoEdit || S.nodoNuevo || S.nodoMover || S.nodoPlan || S.nodoManual);
   el.style.display=abierto?'block':'none';
   if(!abierto){ el.innerHTML=''; return; }
   try{
@@ -17591,6 +17640,8 @@ function _catPanel(){
                  : S.nodoEdit ? _nodoEditHTML()
                  : S.nodoNuevo ? _nodoNuevoHTML()
                  : S.nodoMover ? _nodoMoverHTML()
+                 : S.nodoPlan ? _nodoPlanEditHTML()
+                 : S.nodoManual ? _nodoManualHTML()
                  : _catTandaPickHTML();
   }catch(e){
     console.warn('_catPanel:',e);
@@ -17602,7 +17653,8 @@ function _catPanel(){
 function catPanelCerrar(){ S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null;
   S.catMadreEdit=null; S.catMadreNueva=null; S.catSgEdit=null;
   S.catUbicRen=null; S.catUbicJuntar=null; S.catManual=null;
-  S.nodoEdit=null; S.nodoNuevo=null; S.nodoMover=null; _catPanel(); }
+  S.nodoEdit=null; S.nodoNuevo=null; S.nodoMover=null;
+  S.nodoPlan=null; S.nodoManual=null; _catPanel(); }
 function _catPanelCab(titulo, sub){
   return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">'+
     '<div><div style="font-size:17px;font-weight:800;line-height:1.3">'+esc(titulo)+'</div>'+
@@ -18799,202 +18851,183 @@ function _nodoNuevoOrden(pid){
    mano el día que lo necesite.
 
    TODOS NACEN `rama`. Ningún entregable se inventa: los marca él. */
-/* ══ v112 · LA JERARQUÍA SALE DEL CRONOGRAMA DEL DUEÑO ═══════════════════
-   Pasó su MS Project —«PLANIFICACION MECCA», 285 tareas, 159 días— y dijo:
-   «toma esto de guía para las jerarquías». Su cronograma ordena así:
+/* ══ v113 · EL PLAN ES EL CRONOGRAMA DEL DUEÑO ═══════════════════════════
+   Pasó su MS Project completo —«PLANIFICACION MECCA 2-12-24», 189 tareas,
+   $94.905.422,35, 463 días, del 14-oct-2024 al 22-jul-2026— y dijo: «usar este
+   que está más completo, que lo pueda editar y visualizar y trabajar de manera
+   eficiente e interactiva».
 
-     proyecto → NIVEL del edificio → CAPÍTULO → ELEMENTO → OPERACIÓN
+   EL ÁRBOL VIVE SOLO EN LA BASE. NO HAY SIEMBRA, y no puede haberla: los datos
+   del Project no están en el código. La v112 tenía un botón «Volver a sembrar»
+   que reconstruía el árbol desde el CATÁLOGO — si alguien lo pulsaba,
+   destruía el cronograma sin forma de rehacerlo desde el app. Estaba frenado
+   de casualidad porque un nodo llevaba una nota y `_nodoCurado()` lo contaba
+   como trabajo del dueño; eso no es una protección, es un accidente.
+   **`nodosSembrar` y `_nodoPlanSiembra` se quitaron enteros.** Si algún día hay
+   que volver a cargarlo, se carga del archivo.
 
-   y EL NIVEL VA ARRIBA DEL CAPÍTULO. La v111 lo había puesto al revés
-   (capítulo → grupo), que es como se clasifica para pagar, no como se
-   construye.
-
-   NO HAY QUE INVENTAR NADA: el nivel de «elemento» ya estaba en la base. Las
-   274 subpartidas del presupuesto SON los elementos —comprobado contra el
-   BAJO NIVEL DE PISO: Replanteo, Zapata ZR-1…ZR-6, Platea de fundación, Muro
-   Cisterna, Platea Cisterna, Viga/Losa/Tapa Cisterna, Rampa— y su campo
-   `seccion` ES el nivel.
-
-   EL PROBLEMA HONESTO, Y POR QUÉ HAY DOS RAMAS: el presupuesto costeó UN
-   NIVEL TIPO y lo multiplicó, así que tiene 4 niveles («SEGUNDO NIVEL», no 2A
-   ni 2B). La obra registrada vive en los sitios reales — 29 ubicaciones sobre
-   18 niveles. Forzar lo segundo dentro de lo primero sería mentir sobre
-   dónde está el trabajo, así que cuelgan de ramas distintas Y SE DICE EN
-   PANTALLA: una es lo costeado, la otra lo registrado. */
-var NODO_RAIZ='PLANIFICACIÓN MECCA';
-var NODO_ACABADOS='ACABADOS Y TERMINACIÓN';
+   Cómo está armado: `id` = `'cr_'+Id de Project`, `ref` = ese mismo Id en
+   texto —lo que permite traducir las predecesoras a nombres—, `origen` =
+   `'cronograma'`, y `orden` respeta el orden impreso, que va por fecha de
+   comienzo. */
+var NODO_ORIGEN_TXT='El plan viene del cronograma del dueño — '+
+  '189 tareas · $94,9 MM · 14-oct-2024 → 22-jul-2026. '+
+  'Vive en la base: no se siembra desde el app.';
 /* Las operaciones que el cronograma repite bajo cada elemento, con SU nombre.
-   NO SE SIEMBRAN: 274 elementos × 6 serían 1.644 nodos vacíos que nadie pidió.
-   Son plantilla — un botón dentro del elemento— y el dueño quita los que no
-   apliquen. */
+   Se quedan como plantilla desde la v112: un botón dentro de la tarea, no una
+   siembra. */
 var CAT_OPERACIONES=['Subida de Materiales','Nivelación y Compactación','Envarillado',
                      'Encofrado','Vaciado','Desencofrado'];
 
-/* De qué capítulo y de qué grupo es una actividad, MIRANDO LA ACTIVIDAD y no
-   la partida activa. Hace falta porque hoy hay 4 actividades vivas colgadas de
-   una partida DESACTIVADA (las dejó `catJuntarEn` al juntar dos partidas): con
-   `_catAgendaDe`, que filtra por activo, esas cuatro no salen en ningún
-   capítulo y la siembra las perdería. Ninguna se queda fuera. */
-function _nodoCapGrupoDe(a){
-  var pid=_catA()[a.id];
-  var p=pid?_catPorId(pid):null;
-  if(!p || _catEsSub(p)) return {cap:'0', grupo:''};
-  return {cap:String(p.capitulo||'0'), grupo:_catGrupoDe(p)||''};
+/* ── LOS NÚMEROS DEL CRONOGRAMA, QUE YA ESTÁN EN LA BASE ── */
+function _nodoNum(v){
+  if(v===null||v===undefined||v==='') return null;
+  var n=parseFloat(v); return isNaN(n)?null:n;
 }
-/* El retrato de lo que se va a sembrar, calculado ANTES de escribir nada: la
-   pantalla dice cuántos nodos van a salir y de dónde. */
-function _nodoPlanSiembra(){
-  /* ── RAMA 1: lo COSTEADO, del presupuesto de 2024 ── */
-  var porSec={};
-  _catSubs().forEach(function(sp){
-    var sec=String(sp.seccion||'').trim()||'Sin nivel';
-    var S1=porSec[sec]||(porSec[sec]={nivel:sec, caps:{}, n:0});
-    var cap=String(sp.capitulo||'0');
-    (S1.caps[cap]=S1.caps[cap]||[]).push(sp);
-    S1.n++;
-  });
-  var niveles=Object.keys(porSec).sort(function(x,y){
-    return _catSeccOrden(x)-_catSeccOrden(y) || x.localeCompare(y,'es');
-  }).map(function(k){ return porSec[k]; });
-  /* ── RAMA 2: lo REGISTRADO, la agenda, en los sitios reales ── */
-  var porNiv={};
-  _catTodas().forEach(function(a){
-    var area=String(a.area||'').trim()||PAL_SIN_UBIC;
-    var niv=_catNivel(area);
-    var cg=_nodoCapGrupoDe(a);
-    var N=porNiv[niv]||(porNiv[niv]={nivel:niv, ubics:{}, n:0});
-    /* Si el área NO lleva guión —Parqueo, Terraza, General— el nivel Y la
-       ubicación son la misma cosa: se usa una sola, no dos iguales anidadas. */
-    var uk=(area===niv)?'':area;
-    var U=N.ubics[uk]||(N.ubics[uk]={area:area, propio:(uk===''), caps:{}, n:0});
-    var C=U.caps[cg.cap]||(U.caps[cg.cap]={cap:cg.cap, grupos:{}, sueltas:[], n:0});
-    if(cg.grupo) (C.grupos[cg.grupo]=C.grupos[cg.grupo]||[]).push(a);
-    else C.sueltas.push(a);
-    C.n++; U.n++; N.n++;
-  });
-  var acab=Object.keys(porNiv).sort(function(x,y){
-    return _catNivelOrden(x)-_catNivelOrden(y) || x.localeCompare(y,'es');
-  }).map(function(k){ return porNiv[k]; });
-  /* La cuenta de nodos, para poder decirla antes de crearlos. */
-  var nPres=niveles.length, nElem=0;
-  niveles.forEach(function(N){ nPres+=Object.keys(N.caps).length;
-    Object.keys(N.caps).forEach(function(c){ nElem+=N.caps[c].length; }); });
-  nPres+=nElem;
-  var nAcab=1;
-  acab.forEach(function(N){
-    nAcab++;
-    Object.keys(N.ubics).forEach(function(uk){
-      var U=N.ubics[uk];
-      if(!U.propio) nAcab++;
-      Object.keys(U.caps).forEach(function(ck){
-        nAcab++; nAcab+=Object.keys(U.caps[ck].grupos).length;
-      });
-    });
-  });
-  return {niveles:niveles, acabados:acab,
-          nodos:1+nPres+nAcab, elementos:nElem,
-          actividades:_catTodas().length};
+/* Pesos dominicanos con separador de miles. En la FILA van sin centavos —a
+   390px cada carácter cuenta— y en la ficha con ellos: ahí sí hay sitio y ahí
+   es donde se cuadra contra el presupuesto. */
+function _nodoCosto(v, conCentavos){
+  var n=_nodoNum(v); if(n===null) return '';
+  try{
+    return '$'+n.toLocaleString('es-DO',{minimumFractionDigits:conCentavos?2:0,
+                                         maximumFractionDigits:conCentavos?2:0});
+  }catch(e){ return '$'+Math.round(n); }
 }
-/* El guardia de la regla 1: NO se resiembra sobre trabajo del dueño. Un
-   entregable marcado o una nota escrita son decisiones suyas que la siembra
-   borraría, así que se para y se dice CUÁL. */
+var NODO_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function _nodoFecha(iso){
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||''));
+  if(!m) return '';
+  return String(parseInt(m[3],10))+'-'+NODO_MESES[parseInt(m[2],10)-1]+'-'+m[1].slice(2);
+}
+
+/* ── EL AVANCE MANDA DEL TERRENO ──
+   Decisión del dueño, textual: el % sale «de las actividades o los avances que
+   yo llene». NUNCA del archivo.
+
+   1. Con actividades → el % CONTADO, con `_catAvance`, la misma cuenta del
+      catálogo. No se inventa otra.
+   2. Sin actividades → el % A MANO, con su etiqueta, quién y cuándo (v110).
+   3. Sin ninguno → «—». El del Project NO se pone de sustituto: es de
+      diciembre de 2024 y la obra lleva casi dos años andando desde entonces.
+
+   El `pct_plan` se enseña siempre al lado, en gris y etiquetado «plan». Ahí
+   está el valor del módulo: medido hoy, HORMIGON ARMADO va al 15% en el
+   archivo y al 85% en la obra; PORTAJE al 0% y al 42%. */
+function _nodoManual(n){
+  if(!n) return null;
+  var v=n.avance_manual;
+  if(v===null||v===undefined||v==='') return null;
+  var p=parseInt(v,10); if(isNaN(p)) return null;
+  return {pct:Math.max(0,Math.min(100,p)), por:String(n.avance_manual_por||''),
+          fecha:String(n.avance_manual_fecha||'')};
+}
+/* Devuelve {pct, fuente:'contado'|'mano'|null, av, man}. UN SOLO SITIO decide
+   de dónde sale el avance de un nodo: si cada pantalla lo resolviera, la fila y
+   la ficha acabarían diciendo números distintos. */
+function _nodoReal(id){
+  var n=_nodoPorId(id);
+  var av=_nodoAvance(id);
+  if(av) return {pct:av.pct, fuente:'contado', av:av, man:null};
+  var m=_nodoManual(n);
+  if(m) return {pct:m.pct, fuente:'mano', av:null, man:m};
+  return {pct:null, fuente:null, av:null, man:null};
+}
+function _nodoPlanPctHTML(n){
+  var p=(n&&n.pct_plan!==null&&n.pct_plan!==undefined)?parseInt(n.pct_plan,10):null;
+  if(p===null||isNaN(p)) return '';
+  return '<span title="El % que trae el archivo de Project, de diciembre de 2024" '+
+    'style="color:var(--text3);font-family:var(--mono);font-size:10px">plan '+p+'%</span>';
+}
+
+/* ── EL ATRASO: la pregunta que el dueño no puede contestar hoy ── */
+function _nodoEstado(n){
+  if(!n || !n.fin_plan) return '';
+  var hoy=(typeof today==='function'?today():'');
+  var r=_nodoReal(n.id);
+  if(String(n.fin_plan)<hoy && (r.pct===null || r.pct<100)) return 'vencida';
+  if(n.inicio_plan && String(n.inicio_plan)<=hoy && String(n.fin_plan)>=hoy) return 'encurso';
+  if(n.inicio_plan && String(n.inicio_plan)>hoy) return 'porvenir';
+  return '';
+}
+/* Los días se cuentan con `esDiaLaboral` —lunes a sábado menos feriados—, el
+   mismo criterio del arrastre de la v104. En días de calendario el número
+   saldría más grande y no querría decir nada para quien paga jornales. */
+function _nodoDiasAtraso(n){
+  if(!n || !n.fin_plan) return 0;
+  try{ return _diasLabEntre(String(n.fin_plan), (typeof today==='function'?today():'')); }
+  catch(e){ return 0; }
+}
+var NODO_EST_TXT={vencida:'vencida', encurso:'en curso', porvenir:'aún no toca'};
+function _nodoEstadoHTML(n){
+  var e=_nodoEstado(n); if(!e) return '';
+  if(e==='vencida'){
+    var d=_nodoDiasAtraso(n);
+    return '<span style="color:var(--red);font-weight:800;font-family:var(--mono);font-size:10.5px">'+
+      '▲ '+(d>0?d+' días vencida':'vencida')+'</span>';
+  }
+  if(e==='encurso')
+    return '<span style="color:var(--accent);font-weight:700;font-family:var(--mono);font-size:10.5px">'+
+      'en curso</span>';
+  return '<span style="color:var(--text3);font-family:var(--mono);font-size:10.5px">· aún no toca</span>';
+}
+/* Las HOJAS son las que llevan fecha y no tienen hijas: son las que se pueden
+   estar atrasando. Una madre está atrasada porque lo están sus hijas, y
+   contarla otra vez sería contar dos veces lo mismo. */
+function _nodoHojas(){
+  return _nodos().filter(function(n){
+    return n.fin_plan && !_nodoHijos(n.id).length;
+  });
+}
+function _nodoConteoTiempo(){
+  var c={vencida:0, encurso:0, porvenir:0, total:0};
+  _nodoHojas().forEach(function(n){
+    var e=_nodoEstado(n); c.total++;
+    if(c[e]!==undefined) c[e]++;
+  });
+  return c;
+}
+/* EL CRONOGRAMA SE ACABÓ, Y ESO NO ES UN FALLO DE LA PANTALLA. Terminaba el
+   22-jul-2026 y hoy es septiembre: de las 155 hojas con fecha, 144 pasaron su
+   fin sin llegar al 100% y no queda ninguna en curso ni por venir. La vista
+   sale entera en rojo porque la obra se pasó del plan, no porque el cálculo
+   esté mal. Decirlo arriba es lo que evita que el dueño crea que el módulo se
+   rompió. */
+function _nodoAvisoPlanHTML(){
+  var fin=_nodoFinPlan();
+  var hoy=(typeof today==='function'?today():'');
+  if(!fin || fin>=hoy) return '';
+  return '<div style="margin:0 0 10px;padding:11px 13px;border-radius:12px;'+
+    'background:var(--red-light);border:1.5px solid var(--red);color:var(--red);'+
+    'font-size:11.5px;line-height:1.55">'+
+    '<b>El cronograma terminaba el '+_nodoFecha(fin)+'.</b> Las fechas que ves son las de '+
+    'ese plan; hay que volver a fecharlo. Por eso casi todo sale vencido: no es un error '+
+    'de la pantalla, es que el plan se quedó corto.</div>';
+}
+function _nodoFinPlan(){
+  var f='';
+  _nodos().forEach(function(n){ if(n.fin_plan && String(n.fin_plan)>f) f=String(n.fin_plan); });
+  return f;
+}
+
+/* EL AVISO DE ARRIBA. El de la v112 hablaba de «lo costeado» y «ACABADOS Y
+   TERMINACIÓN», y esa rama YA NO EXISTE: decía una mentira. */
+var NODO_AVISO_RAMAS='<b>El plan es el cronograma del dueño.</b> '+
+  'Las 189 tareas vienen de su archivo de Project con sus costos, fechas y predecesoras. '+
+  '<b>El % que ves no es el del archivo</b>: sale de las actividades registradas en obra, '+
+  'o del que se ponga a mano. El del archivo se ve al lado, en gris, como referencia — '+
+  'es de diciembre de 2024.';
+function _nodoAvisoRamasHTML(){
+  return '<div style="margin:0 0 12px;padding:11px 13px;border-radius:12px;'+
+    'background:var(--amber-light);border:1.5px solid var(--amber);color:var(--amber);'+
+    'font-size:11.5px;line-height:1.55">'+NODO_AVISO_RAMAS+'</div>';
+}
+/* Se conserva porque `nodoEditAbrir` y la ficha lo consultan para no dejar
+   resembrar; ya no gobierna ningún botón de siembra, que no existe. */
 function _nodoCurado(){
   return _nodos().filter(function(n){
     return n.tipo==='entregable' || String(n.notas||'').trim();
   });
-}
-async function nodosSembrar(){
-  if(!isAdmin()){ showToast('Solo el administrador','warn',4000); return; }
-  var curados=_nodoCurado();
-  if(curados.length){
-    showToast('No se resiembra: hay '+curados.length+' nodo'+(curados.length!==1?'s':'')+
-      ' con trabajo tuyo («'+curados.slice(0,3).map(function(n){ return n.nombre; }).join('», «')+
-      '»). Sembrar encima lo borraría.','err',10000);
-    return;
-  }
-  var plan=_nodoPlanSiembra();
-  if(!plan.nodos){ showToast('No hay nada que sembrar todavía','warn',4000); return; }
-  var viejos=_nodos().length;
-  if(!confirm('El árbol toma la jerarquía de tu cronograma: nivel → capítulo → elemento.\n\n'+
-      'Se crean '+plan.nodos+' nodos ('+plan.elementos+' elementos del presupuesto) y se cuelgan '+
-      plan.actividades+' actividades.\n'+
-      (viejos?('Se quitan los '+viejos+' nodos de antes. No tienen entregables ni notas.\n'):'')+
-      '\nNo se toca el catálogo: ni las partidas, ni sus amarres, ni los capítulos.\n\n¿Seguro?')) return;
-  setSS('syncing','Sembrando el plan…');
-  var filas=[], amarres=[], o=0;
-  var nodo=function(padre, nombre, origen, ref, orden){
-    var id='nd_'+uid()+'_'+(o++);
-    filas.push({id:id, padre_id:padre, nombre:nombre, tipo:'rama', clase:null,
-                orden:orden, activo:true, notas:null, origen:origen, ref:ref||null});
-    return id;
-  };
-  var raiz=nodo(null, NODO_RAIZ, 'raiz', null, 0);
-  /* ── lo COSTEADO ── */
-  plan.niveles.forEach(function(N, i){
-    var nn=nodo(raiz, N.nivel, 'nivel', null, i*100);
-    Object.keys(N.caps).sort(function(x,y){
-      return String(x).localeCompare(String(y),'es',{numeric:true});
-    }).forEach(function(cap, j){
-      var nc=nodo(nn, cap+' · '+_catCapNom(cap), 'capitulo', cap, j*10);
-      N.caps[cap].slice().sort(function(a,b){
-        return String(a.numero).localeCompare(String(b.numero),'es',{numeric:true});
-      }).forEach(function(sp, k){
-        /* EL ELEMENTO ES LA SUBPARTIDA, con su nombre y su código del Excel.
-           `ref` guarda su id: así el avance a mano del elemento ES el de su
-           línea del presupuesto (v110), sin inventar otro sitio donde
-           guardarlo. */
-        nodo(nc, sp.nombre, 'elemento', sp.id, k*10);
-      });
-    });
-  });
-  /* ── lo REGISTRADO ── */
-  var na=nodo(raiz, NODO_ACABADOS, 'acabados', null, plan.niveles.length*100+100);
-  plan.acabados.forEach(function(N, i){
-    var nn=nodo(na, N.nivel, 'nivel-real', null, i*100);
-    Object.keys(N.ubics).forEach(function(uk, j){
-      var U=N.ubics[uk];
-      var nu=U.propio ? nn : nodo(nn, U.area, 'ubicacion', U.area, j*10);
-      Object.keys(U.caps).sort(function(x,y){
-        return String(x).localeCompare(String(y),'es',{numeric:true});
-      }).forEach(function(cap, k){
-        var C=U.caps[cap];
-        var nc=nodo(nu, cap+' · '+_catCapNom(cap), 'capitulo-real', cap, k*10);
-        Object.keys(C.grupos).forEach(function(g, m){
-          var ng=nodo(nc, g, 'grupo', g, m*10);
-          C.grupos[g].forEach(function(a){ amarres.push({id:uid(), nodo_id:ng, actividad_id:a.id}); });
-        });
-        /* Las que no caen en ningún grupo se cuelgan del capítulo: así NINGUNA
-           queda suelta. */
-        C.sueltas.forEach(function(a){ amarres.push({id:uid(), nodo_id:nc, actividad_id:a.id}); });
-      });
-    });
-  });
-  try{
-    /* Se borra lo viejo PRIMERO y en su orden: los amarres antes que los nodos,
-       porque un amarre sin nodo no lo lee nadie y un nodo sin amarres sí se ve.
-       Si esto se cayera a la mitad, el plan queda corto pero no incoherente. */
-    if(viejos){
-      await sb('obra_nodo_actividad?id=not.is.null',{method:'DELETE',prefer:'return=minimal'});
-      await sb('obra_nodos?id=not.is.null',{method:'DELETE',prefer:'return=minimal'});
-    }
-    for(var i=0;i<filas.length;i+=100)
-      await sb('obra_nodos',{method:'POST',prefer:'return=minimal',
-               body:JSON.stringify(filas.slice(i,i+100))});
-    for(var j=0;j<amarres.length;j+=300)
-      await sb('obra_nodo_actividad',{method:'POST',prefer:'return=minimal',
-               body:JSON.stringify(amarres.slice(j,j+300))});
-    logCambio('creado','plan','siembra','El plan',
-      'árbol sembrado con la jerarquía del cronograma: '+filas.length+' nodos ('+
-      plan.elementos+' elementos), '+amarres.length+' actividades colgadas');
-    await cargarCatalogo();
-    S.nodoAbiertos={}; S.nodoAbiertos[raiz]=1;
-    setSS('ok','✓');
-    showToast(filas.length+' nodos y '+amarres.length+' actividades ✓');
-  }catch(e){
-    setSS('err','Error');
-    showToast('No se pudo sembrar: '+((e&&e.message)||''),'err',9000);
-  }
-  renderCatalogo();
 }
 
 /* ── LAS OPERACIONES, COMO PLANTILLA ──
@@ -19021,25 +19054,642 @@ async function nodoOperaciones(id){
   }catch(e){ setSS('err','Error'); showToast('No se pudo: '+((e&&e.message)||''),'err',8000); }
   renderCatalogo();
 }
-/* De qué rama cuelga un nodo: lo COSTEADO o lo REGISTRADO. Se usa para
-   avisarlo en pantalla, que es la regla 6. */
-function _nodoRama(id){
-  var r=_nodoRuta(id);
-  for(var i=0;i<r.length;i++){
-    if(r[i].origen==='acabados') return 'acabados';
-    if(r[i].origen==='nivel')    return 'presupuesto';
-  }
-  return '';
+/* ── EL CONTADOR DE TIEMPO, Y EL FILTRO POR ESTADO ──
+   Los tres números arriba y se puede tocar cada uno para quedarse solo con
+   ésos. Es la pregunta que el dueño no puede contestar hoy desde ningún sitio:
+   qué debía estar listo y no lo está. */
+function nodoFiltroTiempo(e){
+  S.nodoFiltroT=(S.nodoFiltroT===e?'':e);
+  renderCatalogo(); _catArriba();
 }
-var NODO_AVISO_RAMAS='<b>Dos formas de cortar la misma obra.</b> '+
-  '«'+NODO_RAIZ+'» es <b>lo costeado</b>: el presupuesto de 2024, que costeó un nivel tipo '+
-  'y lo multiplicó — por eso dice «SEGUNDO NIVEL» y no 2A ni 2B, y por eso sus elementos '+
-  'no tienen actividades. «'+NODO_ACABADOS+'» es <b>lo registrado</b>: la agenda, en los '+
-  'sitios reales de la obra. Los números de una rama y de la otra no se suman.';
-function _nodoAvisoRamasHTML(){
-  return '<div style="margin:0 0 12px;padding:11px 13px;border-radius:12px;'+
-    'background:var(--amber-light);border:1.5px solid var(--amber);color:var(--amber);'+
-    'font-size:11.5px;line-height:1.55">'+NODO_AVISO_RAMAS+'</div>';
+function _nodoBarraTiempoHTML(){
+  var c=_nodoConteoTiempo();
+  if(!c.total) return '';
+  var f=S.nodoFiltroT||'';
+  var chip=function(k,txt,col){
+    var on=(f===k), n=c[k];
+    return '<button onclick="nodoFiltroTiempo('+_catQ(k)+')" style="'+_catBS+';flex:1;min-width:92px;'+
+      'min-height:46px;font-size:11.5px;border:1.5px solid '+(on?col:'var(--border2)')+';'+
+      'background:'+(on?col.replace(')','-light)').replace('var(--red-light)','var(--red-light)'):'var(--bg2)')+';'+
+      'color:'+(on?col:'var(--text2)')+'">'+
+      '<span style="font-family:var(--mono);font-weight:800">'+n+'</span> '+txt+'</button>';
+  };
+  return '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+    chip('vencida','vencidas','var(--red)')+
+    chip('encurso','en curso','var(--accent)')+
+    chip('porvenir','por venir','var(--text3)')+
+    '</div>'+
+    (f?'<div style="font-size:11px;color:var(--text3);margin:-4px 0 10px">Solo las <b>'+
+       esc(NODO_EST_TXT[f]||f)+'</b> — tócalo otra vez para ver todo.</div>':'');
+}
+/* Con el filtro puesto, un nodo se enseña si ÉL o alguna de sus hijas está en
+   ese estado: si solo se mirara al nodo, las madres desaparecerían y con ellas
+   el camino para llegar a las hijas. */
+function _nodoPasaFiltroT(n){
+  var f=S.nodoFiltroT||''; if(!f) return true;
+  if(_nodoEstado(n)===f) return true;
+  return _nodoDesc(n.id).some(function(h){ return _nodoEstado(h)===f; });
+}
+
+/* ── LA FICHA DEL CRONOGRAMA: costos, fechas, duración y predecesoras ── */
+/* Las predecesoras vienen como las escribe Project: '11CC+10 días;21'. Se
+   traducen a NOMBRES porque `ref` de cada nodo es ese mismo Id — un número
+   suelto no le dice nada a nadie en la obra. El tipo de vínculo y el retardo
+   se dejan tal cual: son de Project y aquí nadie los usa todavía. */
+function _nodoPreds(n){
+  var t=String((n&&n.pred_plan)||'').trim();
+  if(!t) return [];
+  return t.split(';').map(function(x){ return String(x).trim(); }).filter(Boolean).map(function(x){
+    var m=/^(\d+)(.*)$/.exec(x);
+    if(!m) return {txt:x, nodo:null, extra:''};
+    var q=_nodos().find(function(y){ return String(y.ref)===m[1]; });
+    return {txt:x, nodo:q||null, extra:String(m[2]||'').trim()};
+  });
+}
+function _nodoPredsHTML(n){
+  var ps=_nodoPreds(n);
+  if(!ps.length) return '';
+  return '<div style="margin:8px 0 0;font-size:11.5px;color:var(--text2);line-height:1.6">'+
+    '<span class="cat-fila-que">Va detrás de</span>'+
+    ps.map(function(x){
+      return '<div style="padding:2px 0">'+
+        (x.nodo
+          ? '<button onclick="nodoIr('+_catQ(x.nodo.id)+')" style="background:none;border:0;padding:0;'+
+            'color:var(--accent);font-size:11.5px;font-weight:700;cursor:pointer;text-align:left;'+
+            'font-family:var(--font);min-height:24px">'+esc(x.nodo.nombre)+'</button>'
+          : '<span style="color:var(--text3)">tarea '+esc(x.txt)+' (no está en el plan)</span>')+
+        (x.extra?'<span style="color:var(--text3);font-family:var(--mono);font-size:10.5px"> · '+
+          esc(x.extra)+'</span>':'')+'</div>';
+    }).join('')+'</div>';
+}
+/* Lo que sale de las hijas: fechas de la más temprana a la más tardía y costo
+   por suma. Sirve para avisar de un descuadre, NO para arreglarlo solo. */
+function _nodoDeHijas(id){
+  var hs=_nodoHijos(id);
+  if(!hs.length) return null;
+  var ini='', fin='', costo=0, hay=false;
+  hs.forEach(function(h){
+    var c=_nodoNum(h.costo_plan); if(c!==null){ costo+=c; hay=true; }
+    if(h.inicio_plan && (!ini || String(h.inicio_plan)<ini)) ini=String(h.inicio_plan);
+    if(h.fin_plan    && (!fin || String(h.fin_plan)>fin))    fin=String(h.fin_plan);
+  });
+  return {inicio:ini, fin:fin, costo:hay?costo:null, hijas:hs.length};
+}
+/* EL DESCUADRE SE ENSEÑA, NO SE ARREGLA SOLO. Si el dueño escribió un costo
+   distinto de la suma de sus hijas, manda lo suyo y queda marcado: es plata, y
+   quién decide es él. */
+function _nodoDescuadreHTML(n){
+  var d=_nodoDeHijas(n.id);
+  if(!d || d.costo===null) return '';
+  var mio=_nodoNum(n.costo_plan);
+  if(mio===null || Math.abs(mio-d.costo)<0.5) return '';
+  return '<div style="margin:8px 0 0;padding:10px 12px;border-radius:11px;background:var(--amber-light);'+
+    'border:1.5px solid var(--amber);color:var(--amber);font-size:11.5px;line-height:1.55">'+
+    'Esta tarea suma <b>'+_nodoCosto(d.costo,true)+'</b> en sus '+d.hijas+' hijas y aquí dice '+
+    '<b>'+_nodoCosto(mio,true)+'</b>. Se queda lo que escribiste, y queda marcado.</div>';
+}
+function _nodoPlanFichaHTML(n){
+  var h='', dato=function(lab,val){
+    if(!val) return '';
+    return '<div style="flex:1;min-width:110px;margin-bottom:8px">'+_catLab(lab)+
+      '<div style="font-size:13px;font-weight:700;font-family:var(--mono)">'+val+'</div></div>';
+  };
+  var cosas=dato('Costo del plan', _nodoCosto(n.costo_plan,true))+
+            dato('Duración', (_nodoNum(n.dias_plan)!==null?_nodoNum(n.dias_plan)+' días':''))+
+            dato('Comienzo', _nodoFecha(n.inicio_plan))+
+            dato('Fin', _nodoFecha(n.fin_plan))+
+            dato('% del archivo', (n.pct_plan!==null&&n.pct_plan!==undefined)?n.pct_plan+'%':'')+
+            dato('Costo real del archivo', _nodoCosto(n.costo_real_plan,true));
+  if(cosas)
+    h+='<div style="display:flex;gap:10px;flex-wrap:wrap;padding:12px;border-radius:12px;'+
+      'background:var(--bg2);border:1.5px solid var(--border);margin:10px 0 0">'+cosas+'</div>';
+  h+=_nodoDescuadreHTML(n)+_nodoPredsHTML(n);
+  return h;
+}
+
+/* ── EDITAR EL CRONOGRAMA ──
+   «Que lo pueda editar.» Fechas, duración, costo y predecesoras, sobre la
+   ficha que ya existe. TODO CAMBIO VA A `obra_cambios` con el valor viejo y el
+   nuevo: es plata y son fechas de entrega. */
+function nodoPlanAbrir(id){
+  if(!isAdmin()){ showToast('Solo el administrador','warn',4000); return; }
+  var n=_nodoPorId(id); if(!n) return;
+  /* Se cierra lo de antes PRIMERO: `catPanelOtrosCerrar` pone `S.nodoPlan` a
+     null, así que llamarlo después de asignarlo lo borraba y el panel salía
+     vacío. Lo cazó la prueba, no la lectura. */
+  S.nodoEdit=null; S.nodoNuevo=null; S.nodoMover=null; catPanelOtrosCerrar();
+  S.nodoPlan={id:id, costo:(n.costo_plan===null||n.costo_plan===undefined)?'':String(n.costo_plan),
+              dias:(n.dias_plan===null||n.dias_plan===undefined)?'':String(n.dias_plan),
+              inicio:String(n.inicio_plan||''), fin:String(n.fin_plan||''),
+              pred:String(n.pred_plan||'')};
+  _catPanel();
+}
+function _nodoPlanEditHTML(){
+  var E=S.nodoPlan, n=_nodoPorId(E.id)||{};
+  var d=_nodoDeHijas(E.id);
+  var campo=function(k,lab,tipo,ph){
+    return _catLab(lab)+'<input id="cat-np-'+k+'" type="'+tipo+'" value="'+esc(E[k])+'" '+
+      (ph?'placeholder="'+esc(ph)+'" ':'')+
+      'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+      'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--'+(tipo==='text'?'font':'mono')+');'+
+      'background:var(--bg2);color:var(--text);margin-bottom:10px">';
+  };
+  var h=_catPanelCab('Fechas y costo — '+n.nombre,
+    'Lo que trae el cronograma. Lo que cambies queda en el historial con el valor viejo y el nuevo.');
+  h+=campo('costo','Costo del plan (RD$)','number','0')+
+     campo('dias','Duración en días','number','0')+
+     campo('inicio','Comienzo','date','')+
+     campo('fin','Fin','date','')+
+     _catLab('Predecesoras — como en Project')+
+     '<input id="cat-np-pred" type="text" value="'+esc(E.pred)+'" placeholder="11CC+10 días;21" '+
+       'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+       'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--mono);'+
+       'background:var(--bg2);color:var(--text)">';
+  if(d && d.costo!==null)
+    h+='<div style="margin-top:10px;font-size:11.5px;color:var(--text3);line-height:1.55">'+
+      'Sus '+d.hijas+' hijas suman <b>'+_nodoCosto(d.costo,true)+'</b>'+
+      (d.inicio?' y van del '+_nodoFecha(d.inicio)+' al '+_nodoFecha(d.fin):'')+
+      '. Si escribes otra cosa, manda lo tuyo y se avisa del descuadre.</div>';
+  h+='<button onclick="nodoPlanGuardar()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:52px;'+
+    'border-color:var(--green);background:var(--green-light);color:var(--green)">Guardar</button>';
+  if(d)
+    h+='<button onclick="nodoPlanDeHijas()" style="'+_catPBS+';width:100%;margin-top:6px;min-height:48px;'+
+      'color:var(--text2)">Calcularlo de sus hijas</button>';
+  return h+_catPanelPie();
+}
+function nodoPlanDeHijas(){
+  var E=S.nodoPlan; if(!E) return;
+  var d=_nodoDeHijas(E.id); if(!d) return;
+  if(d.costo!==null) E.costo=String(d.costo);
+  if(d.inicio) E.inicio=d.inicio;
+  if(d.fin) E.fin=d.fin;
+  if(d.inicio&&d.fin){
+    try{ E.dias=String(_diasLabEntre(d.inicio,d.fin)+1); }catch(e){}
+  }
+  _catPanel();
+}
+async function nodoPlanGuardar(){
+  var E=S.nodoPlan; if(!E) return;
+  var n=_nodoPorId(E.id); if(!n) return;
+  var leer=function(k){ var i=document.getElementById('cat-np-'+k); return i?String(i.value||'').trim():E[k]; };
+  var costo=leer('costo'), dias=leer('dias'), ini=leer('inicio'), fin=leer('fin'), pred=leer('pred');
+  if(ini && fin && fin<ini){ showToast('El fin no puede ir antes del comienzo','warn',5000); return; }
+  var cambios={costo_plan:(costo===''?null:parseFloat(costo)),
+               dias_plan:(dias===''?null:parseFloat(dias)),
+               inicio_plan:(ini===''?null:ini), fin_plan:(fin===''?null:fin),
+               pred_plan:(pred===''?null:pred)};
+  /* EL RASTRO LLEVA VIEJO Y NUEVO, campo por campo. Sin eso, dentro de un mes
+     nadie puede decir si esa fecha la movió alguien o vino así del archivo. */
+  var etq={costo_plan:'costo', dias_plan:'duración', inicio_plan:'comienzo',
+           fin_plan:'fin', pred_plan:'predecesoras'};
+  var dif=[];
+  Object.keys(cambios).forEach(function(k){
+    var a=(n[k]===null||n[k]===undefined)?'—':String(n[k]);
+    var b=(cambios[k]===null)?'—':String(cambios[k]);
+    if(a!==b) dif.push(etq[k]+': '+(k==='costo_plan'?_nodoCosto(n[k],false)||'—':a)+' → '+
+                       (k==='costo_plan'?_nodoCosto(cambios[k],false)||'—':b));
+  });
+  if(!dif.length){ showToast('No cambiaste nada','warn',3000); S.nodoPlan=null; _catPanel(); return; }
+  var antes=_nodoNum(n.costo_plan), d=_nodoDeHijas(E.id);
+  S.nodoPlan=null; _catPanel();
+  setSS('syncing','Guardando…');
+  try{
+    await sb('obra_nodos?id=eq.'+encodeURIComponent(E.id),{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify(cambios)});
+    Object.assign(n, cambios);
+    logCambio('editado','plan',E.id,n.nombre,dif.join('; '));
+    setSS('ok','✓');
+    /* El descuadre se AVISA aquí mismo, no se arregla: el dueño acaba de
+       escribirlo a propósito. */
+    var nuevo=_nodoNum(cambios.costo_plan);
+    if(d && d.costo!==null && nuevo!==null && Math.abs(nuevo-d.costo)>=0.5)
+      showToast('Guardado. Ojo: sus hijas suman '+_nodoCosto(d.costo,false)+
+                ' y escribiste '+_nodoCosto(nuevo,false)+'. Se queda lo tuyo.','warn',9000);
+    else showToast('Guardado ✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo guardar: '+((e&&e.message)||''),'err',8000); }
+  renderCatalogo();
+}
+/* El % a mano de un NODO. Vive en `obra_nodos.avance_manual`, que ya está, y
+   se enseña con las reglas de la v110: nunca se mezcla con el contado, se ve
+   etiquetado y no sube de nivel. */
+function nodoManualAbrir(id){
+  if(!isAdmin()){ showToast('El avance a mano solo lo pone el administrador','warn',5000); return; }
+  var n=_nodoPorId(id); if(!n) return;
+  var m=_nodoManual(n);
+  S.nodoEdit=null; S.nodoNuevo=null; S.nodoMover=null; catPanelOtrosCerrar();
+  S.nodoManual={id:id, nombre:n.nombre, valor:(m?String(m.pct):'')};
+  _catPanel();
+}
+function nodoManualValor(v){ if(S.nodoManual){ S.nodoManual.valor=String(v); _catPanel(); } }
+function _nodoManualHTML(){
+  var M=S.nodoManual, n=_nodoPorId(M.id)||{};
+  var av=_nodoAvance(M.id), m=_nodoManual(n);
+  var h=_catPanelCab('Avance a mano — '+M.nombre,
+    'Para lo que no tiene actividades registradas. <b>No se mezcla con el contado</b> y no '+
+    'sube a la tarea madre. Se guarda con tu nombre y la fecha.');
+  h+='<div style="padding:11px 13px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--border);'+
+     'margin-bottom:12px;font-size:12px;line-height:1.6;font-family:var(--mono)">'+
+     'Contado aquí: '+_catAvanceHTML(av)+
+     (m?'<br>'+_catManualHTML(m):'')+
+     ((n.pct_plan!==null&&n.pct_plan!==undefined)?'<br><span style="color:var(--text3)">del archivo: '+
+       n.pct_plan+'%</span>':'')+'</div>';
+  var chip=function(v){
+    var on=(String(M.valor)===String(v));
+    return '<button onclick="nodoManualValor('+v+')" style="'+_catPBS+';flex:1;min-width:64px;'+
+      'border-color:'+(on?'var(--amber)':'var(--border2)')+';'+
+      'background:'+(on?'var(--amber-light)':'var(--bg2)')+';'+
+      'color:'+(on?'var(--amber)':'var(--text2)')+'">'+v+'%</button>';
+  };
+  h+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+     chip(25)+chip(50)+chip(75)+chip(100)+'</div>'+
+     '<input id="cat-nm-v" type="number" min="0" max="100" value="'+esc(M.valor)+'" '+
+       'placeholder="0 a 100" style="width:100%;box-sizing:border-box;min-height:48px;'+
+       'border:1.5px solid var(--border2);border-radius:12px;padding:0 13px;font-size:16px;'+
+       'font-family:var(--mono);background:var(--bg2);color:var(--text)">'+
+     '<button onclick="nodoManualGuardar()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:52px;'+
+       'border-color:var(--amber);background:var(--amber-light);color:var(--amber)">'+
+       'Guardar el avance a mano</button>';
+  if(m)
+    h+='<button onclick="nodoManualQuitar()" style="'+_catPBS+';width:100%;margin-top:6px;min-height:48px;'+
+      'color:var(--text3)">Quitarlo</button>';
+  return h+_catPanelPie();
+}
+async function _nodoManualEscribir(val){
+  var M=S.nodoManual; if(!M) return;
+  if(!isAdmin()){ showToast('Solo el administrador','warn',5000); return; }
+  var n=_nodoPorId(M.id); if(!n) return;
+  var antes=_nodoManual(n);
+  var body=(val===null)
+    ? {avance_manual:null, avance_manual_por:null, avance_manual_fecha:null}
+    : {avance_manual:val, avance_manual_por:(S.user&&S.user.nombre)||'',
+       avance_manual_fecha:new Date().toISOString()};
+  S.nodoManual=null; _catPanel();
+  try{
+    await sb('obra_nodos?id=eq.'+encodeURIComponent(n.id),{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify(body)});
+    Object.assign(n, body);
+    logCambio('editado','plan',n.id,n.nombre,
+      'avance a mano: '+(antes?antes.pct+'%':'—')+' → '+(val===null?'—':val+'%'));
+    showToast(val===null?'Quitado ✓':'Avance a mano: '+val+'% ✓');
+  }catch(e){ showToast('No se pudo guardar: '+((e&&e.message)||''),'err',7000); }
+  renderCatalogo();
+}
+function nodoManualGuardar(){
+  var M=S.nodoManual; if(!M) return;
+  var i=document.getElementById('cat-nm-v');
+  var raw=String((i&&i.value)||M.valor||'').trim();
+  if(raw===''){ showToast('Escribe un número del 0 al 100','warn',4000); return; }
+  var v=parseInt(raw,10);
+  if(isNaN(v)||v<0||v>100){ showToast('Tiene que ser un número del 0 al 100','warn',4000); return; }
+  return _nodoManualEscribir(v);
+}
+function nodoManualQuitar(){ return _nodoManualEscribir(null); }
+
+/* El lado derecho de la fila: el avance DEL TERRENO, nunca el del archivo. */
+function _nodoDerHTML(n){
+  var r=_nodoReal(n.id);
+  if(r.fuente==='contado'){
+    var av=r.av;
+    return '<span class="cat-fila-pct" style="color:'+
+      (av.pct>=100?'var(--green)':av.pct>=50?'var(--accent)':'var(--text2)')+'">'+av.pct+'%</span>'+
+      _catBarraFilaHTML(av)+'<span class="cat-fila-nm">'+av.cerradas+'/'+av.total+'</span>';
+  }
+  if(r.fuente==='mano')
+    return '<span class="cat-fila-pct" style="color:var(--amber)">'+r.man.pct+'%</span>'+
+      _catBarraFilaHTML({pct:r.man.pct,cerradas:0,total:0})+
+      '<span class="cat-fila-nm" style="color:var(--amber)">a mano</span>';
+  /* NI SIQUIERA AQUÍ se pone el % del Project de sustituto: es de diciembre de
+     2024 y diría que algo va al 0% cuando en la obra va por la mitad. */
+  return '<span class="cat-fila-pct" style="color:var(--text3)">—</span>'+
+    '<span style="display:inline-block;width:56px;flex-shrink:0"></span>'+
+    '<span class="cat-fila-nm">sin avance</span>';
+}
+function _nodoPieHTML(n){
+  var p=[];
+  var c=_nodoCosto(n.costo_plan,false); if(c) p.push(c);
+  var d=_nodoNum(n.dias_plan); if(d!==null) p.push(d+' días');
+  if(n.inicio_plan||n.fin_plan)
+    p.push(_nodoFecha(n.inicio_plan)+' → '+_nodoFecha(n.fin_plan));
+  var pp=_nodoPlanPctHTML(n); if(pp) p.push(pp);
+  var e=_nodoEstadoHTML(n); if(e) p.push(e);
+  return p.join(' · ');
+}
+
+/* ══ v113 · LA LÍNEA DE TIEMPO ═══════════════════════════════════════════
+   «Visualizar y trabajar de manera eficiente e interactiva.» Una tarea con
+   `inicio_plan` y `fin_plan` es una barra: eso es un Gantt, y es la vista que
+   faltaba.
+
+   LA BARRA SE LLENA CON EL % REAL, no con el del plan. Una barra a medio
+   llenar que se quedó a la izquierda de la raya de hoy es una tarea atrasada,
+   y eso se ve de un golpe — que es justo lo que no se puede ver en ningún
+   otro sitio del app.
+
+   NO SE DIBUJAN LAS FLECHAS DE LAS PREDECESORAS: en un teléfono no se leen y
+   esto tiene que servir en obra. Van en la ficha, en texto y con el nombre de
+   la tarea de la que depende. */
+function nodoTiempoAbrir(id){
+  S.nodoTiempoRaiz=(S.nodoTiempoRaiz===id?null:id);
+  renderCatalogo();
+}
+function _nodoTiempoFilas(){
+  /* Se arranca por capítulo —los hijos de la raíz y los de `cr_9`, que es
+     donde cuelga casi todo— y se abre al tocar. Con las 189 de golpe no se lee
+     nada en un teléfono. */
+  var out=[];
+  var mete=function(n, prof){
+    out.push({n:n, prof:prof});
+    if((S.nodoTiempoAbiertos||{})[n.id])
+      _nodoHijos(n.id).filter(_nodoPasaFiltroT).forEach(function(h){ mete(h, prof+1); });
+  };
+  var base=S.nodoTiempoRaiz?_nodoHijos(S.nodoTiempoRaiz):_nodoHijos(null);
+  /* ARRANCA POR CAPÍTULO, y eso incluye los de `cr_9`: ahí cuelga casi todo el
+     cronograma, así que dejarlo cerrado enseñaba TRES barras y parecía que la
+     vista estaba vacía. Los grandes contenedores se abren solos la primera vez
+     —una sola— y desde ahí manda lo que toque el dueño. */
+  if(!S.nodoTiempoRaiz && !S._nodoTiempoInit){
+    S._nodoTiempoInit=1;
+    S.nodoTiempoAbiertos=S.nodoTiempoAbiertos||{};
+    /* Se abren TODOS los hijos de la raíz que tengan algo dentro — que es lo
+       que quiere decir «arranca por capítulo»: los de la raíz y los de `cr_9`,
+       donde cuelgan los 31 del bloque 1. Un umbral por número de hijos
+       funcionaba contra la base y no contra un árbol más pequeño; esto
+       funciona en los dos. */
+    _nodoHijos(null).forEach(function(r){
+      _nodoHijos(r.id).forEach(function(h){
+        if(_nodoHijos(h.id).length) S.nodoTiempoAbiertos[h.id]=1;
+      });
+    });
+  }
+  base.filter(_nodoPasaFiltroT).forEach(function(n){
+    if(n.padre_id===null && _nodoHijos(n.id).length && !S.nodoTiempoRaiz){
+      _nodoHijos(n.id).filter(_nodoPasaFiltroT).forEach(function(h){ mete(h,0); });
+    }else mete(n,0);
+  });
+  return out;
+}
+function nodoTiempoToggle(id){
+  S.nodoTiempoAbiertos=S.nodoTiempoAbiertos||{};
+  if(S.nodoTiempoAbiertos[id]) delete S.nodoTiempoAbiertos[id]; else S.nodoTiempoAbiertos[id]=1;
+  renderCatalogo();
+}
+function _catTiempoHTML(){
+  var h=_catBuscaBarraHTML()+_catVistaSelHTML();
+  var filas=_nodoTiempoFilas().filter(function(x){ return x.n.inicio_plan && x.n.fin_plan; });
+  h+='<div style="font-size:19px;font-weight:800;margin:2px 0 3px">La línea de tiempo</div>';
+  h+=_nodoAvisoPlanHTML()+_nodoBarraTiempoHTML();
+  if(!filas.length)
+    return h+'<div class="empty" style="padding:26px 16px;color:var(--text3)">'+
+      'Ninguna tarea con fechas aquí.</div>';
+  /* La escala: del comienzo más temprano al fin más tardío de lo que se pinta,
+     más hoy — si hoy queda fuera, la raya no se vería y es la referencia. */
+  var hoy=(typeof today==='function'?today():'');
+  var ini='', fin='';
+  filas.forEach(function(x){
+    var a=String(x.n.inicio_plan), b=String(x.n.fin_plan);
+    if(!ini||a<ini) ini=a; if(!fin||b>fin) fin=b;
+  });
+  if(hoy&&hoy>fin) fin=hoy;
+  if(hoy&&hoy<ini) ini=hoy;
+  var d0=new Date(ini+'T00:00:00'), d1=new Date(fin+'T00:00:00');
+  var span=Math.max(1,(d1-d0)/86400000);
+  var pos=function(iso){
+    var d=new Date(String(iso)+'T00:00:00');
+    return Math.max(0,Math.min(100,((d-d0)/86400000)/span*100));
+  };
+  var NOMW=136, ANCHO=Math.max(620, Math.round(span*2.1));
+  /* Los meses de arriba, para que una barra diga CUÁNDO y no solo cuánto. */
+  var meses=[], cur=new Date(d0.getFullYear(), d0.getMonth(), 1);
+  while(cur<=d1){
+    var iso=cur.toISOString().slice(0,10);
+    meses.push({iso:iso, txt:NODO_MESES[cur.getMonth()], anio:cur.getFullYear(),
+                x:pos(iso<ini?ini:iso)});
+    cur=new Date(cur.getFullYear(), cur.getMonth()+1, 1);
+  }
+  h+='<div style="font-size:11.5px;color:var(--text3);margin-bottom:8px;line-height:1.5">'+
+     filas.length+' tareas · '+_nodoFecha(ini)+' → '+_nodoFecha(fin)+
+     ' · <b>la barra se llena con el avance de la obra</b>, no con el del archivo. Toca una para abrirla.</div>';
+  if(S.nodoTiempoRaiz)
+    h+='<button onclick="nodoTiempoAbrir(null)" style="'+_catBS+';margin-bottom:8px;min-height:44px;'+
+      'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:11.5px">'+
+      '‹ Ver todo el cronograma</button>';
+  h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1.5px solid var(--border2);'+
+     'border-radius:12px;background:var(--bg2)">'+
+     '<div style="min-width:'+(NOMW+ANCHO)+'px">';
+  /* La cabecera de meses */
+  h+='<div style="display:flex;align-items:flex-end;height:26px;border-bottom:1.5px solid var(--border2)">'+
+     '<div style="position:sticky;left:0;z-index:2;background:var(--bg3);width:'+NOMW+'px;'+
+       'min-width:'+NOMW+'px;height:26px"></div>'+
+     '<div style="position:relative;flex:1;height:26px">'+
+     meses.map(function(m,i){
+       return '<span style="position:absolute;left:'+m.x.toFixed(2)+'%;bottom:3px;font-size:9px;'+
+         'color:var(--text3);font-family:var(--mono);white-space:nowrap">'+m.txt+
+         (m.txt==='ene'||i===0?" '"+String(m.anio).slice(2):'')+'</span>';
+     }).join('')+'</div></div>';
+  filas.forEach(function(x){
+    var n=x.n, r=_nodoReal(n.id);
+    var a=pos(n.inicio_plan), b=pos(n.fin_plan);
+    var w=Math.max(0.8, b-a);
+    var pct=(r.pct===null?0:r.pct);
+    var est=_nodoEstado(n);
+    var col=est==='vencida'?'var(--red)':pct>=100?'var(--green)':pct>0?'var(--accent)':'var(--text3)';
+    var tieneHijos=_nodoHijos(n.id).length;
+    h+='<div style="display:flex;align-items:center;min-height:44px;border-bottom:1px solid var(--border)">'+
+      '<div style="position:sticky;left:0;z-index:1;background:var(--bg2);width:'+NOMW+'px;'+
+        'min-width:'+NOMW+'px;padding:4px 7px;box-sizing:border-box;display:flex;align-items:center;gap:3px">'+
+        (tieneHijos
+          ? '<button onclick="nodoTiempoToggle('+_catQ(n.id)+')" style="background:none;border:0;'+
+            'cursor:pointer;color:var(--text3);font-size:11px;min-width:18px;min-height:40px;padding:0">'+
+            ((S.nodoTiempoAbiertos||{})[n.id]?'▾':'▸')+'</button>'
+          : '<span style="min-width:18px"></span>')+
+        '<button onclick="nodoIr('+_catQ(n.id)+')" style="background:none;border:0;padding:0;'+
+          'text-align:left;cursor:pointer;color:var(--text);font-family:var(--font);font-size:10.5px;'+
+          'font-weight:700;line-height:1.2;min-height:40px;flex:1;overflow:hidden;'+
+          'margin-left:'+Math.min(x.prof,3)*6+'px">'+esc(String(n.nombre).slice(0,30))+'</button>'+
+      '</div>'+
+      '<div style="position:relative;flex:1;height:44px">'+
+        /* LA RAYA DE HOY, siempre visible. */
+        (hoy?'<span style="position:absolute;left:'+pos(hoy).toFixed(2)+'%;top:0;bottom:0;'+
+          'width:2px;background:var(--red);opacity:.5"></span>':'')+
+        '<span onclick="nodoIr('+_catQ(n.id)+')" title="'+esc(n.nombre)+' — '+
+          _nodoFecha(n.inicio_plan)+' → '+_nodoFecha(n.fin_plan)+'" '+
+          'style="position:absolute;left:'+a.toFixed(2)+'%;width:'+w.toFixed(2)+'%;top:12px;height:18px;'+
+          'border-radius:5px;background:var(--bg4,var(--bg3));border:1px solid '+col+';'+
+          'cursor:pointer;overflow:hidden">'+
+          '<span style="display:block;height:100%;width:'+pct+'%;background:'+col+';opacity:.75"></span>'+
+        '</span>'+
+        '<span style="position:absolute;left:calc('+(a+w).toFixed(2)+'% + 5px);top:13px;font-size:9.5px;'+
+          'font-family:var(--mono);color:'+col+';font-weight:800;white-space:nowrap">'+
+          (r.pct===null?'—':r.pct+'%')+'</span>'+
+      '</div></div>';
+  });
+  h+='</div></div>';
+  h+='<div style="margin-top:8px;font-size:10.5px;color:var(--text3);line-height:1.5">'+
+     'La raya roja es hoy. Rojo = pasó su fin sin estar al 100%.</div>';
+  return h+'<div style="height:110px"></div>';
+}
+
+/* ══ v113 · LAS 430 QUE NO ENCONTRARON CASA ══════════════════════════════
+   Las 2.445 actividades se repartieron por capítulo del app + nivel de la
+   ubicación. 430 quedaron en «POR UBICAR EN EL CRONOGRAMA», y NO es un error
+   del reparto: 415 nunca se clasificaron en el app, 9 son de Subida de
+   Materiales y 6 de aires acondicionados — y el cronograma no tiene ninguno de
+   esos dos capítulos.
+
+   Con el reparto de una en una esto no se termina nunca, así que hay casillas
+   y un «Llevar a…» con el árbol. */
+function _nodoPorUbicar(){
+  return _nodos().find(function(n){ return /POR UBICAR/i.test(String(n.nombre||'')); })||null;
+}
+function nodoUbicarAbrir(){
+  var n=_nodoPorUbicar();
+  if(!n){ showToast('No hay ninguna tarea «POR UBICAR»','warn',4000); return; }
+  S.nodoUbicar={nodo:n.id, q:'', ubic:'', cont:'', sel:{}, tope:40, destino:null};
+  renderCatalogo(); _catArriba();
+}
+function nodoUbicarCerrar(){ S.nodoUbicar=null; renderCatalogo(); _catArriba(); }
+function nodoUbicarTeclea(v){
+  if(!S.nodoUbicar) return;
+  S.nodoUbicar.q=v;
+  clearTimeout(S._nodoUbicarT);
+  S._nodoUbicarT=setTimeout(function(){ S._nodoUbicarFoco=true; renderCatalogo(); },260);
+}
+function nodoUbicarFiltro(k,v){ if(S.nodoUbicar){ S.nodoUbicar[k]=v; S.nodoUbicar.tope=40; renderCatalogo(); } }
+function nodoUbicarToggle(id){
+  var U=S.nodoUbicar; if(!U) return;
+  if(U.sel[id]) delete U.sel[id]; else U.sel[id]=1;
+  renderCatalogo();
+}
+function nodoUbicarTodas(){
+  var U=S.nodoUbicar; if(!U) return;
+  _nodoUbicarRes().slice(0,U.tope).forEach(function(a){ U.sel[a.id]=1; });
+  renderCatalogo();
+}
+function nodoUbicarMas(){ if(S.nodoUbicar){ S.nodoUbicar.tope+=40; renderCatalogo(); } }
+function nodoUbicarDestino(id){ if(S.nodoUbicar){ S.nodoUbicar.destino=id||null; renderCatalogo(); } }
+function _nodoUbicarRes(){
+  var U=S.nodoUbicar; if(!U) return [];
+  var q=_catNorm(String(U.q||'').trim());
+  return _nodoActsDirectas(U.nodo).filter(function(a){
+    if(U.ubic && (String(a.area||'').trim()||PAL_SIN_UBIC)!==U.ubic) return false;
+    if(U.cont && (_responsables(a.personal_nombre)[0]||'')!==U.cont) return false;
+    if(!q) return true;
+    return _catNorm(String(a.descripcion||'')+' '+String(a.area||'')+' '+
+                    String(a.personal_nombre||'')).indexOf(q)>=0;
+  });
+}
+function _nodoUbicarHTML(){
+  var U=S.nodoUbicar, n=_nodoPorId(U.nodo)||{};
+  var res=_nodoUbicarRes(), sel=Object.keys(U.sel).length;
+  var todas=_nodoActsDirectas(U.nodo);
+  var us={}, cs={};
+  todas.forEach(function(a){
+    us[String(a.area||'').trim()||PAL_SIN_UBIC]=1;
+    var c=_responsables(a.personal_nombre)[0]; if(c) cs[c]=1;
+  });
+  var h=_catBuscaBarraHTML()+
+    '<button onclick="nodoUbicarCerrar()" style="'+_catVolverBS+'">‹ El plan</button>'+
+    '<div style="font-size:18px;font-weight:800;margin:4px 0 3px">'+esc(n.nombre||'Por ubicar')+'</div>'+
+    '<div style="font-size:12px;color:var(--text3);line-height:1.55;margin-bottom:10px">'+
+      '<b>'+todas.length+'</b> actividades sin sitio en el cronograma. No es un error del reparto: '+
+      'la mayoría <b>nunca se clasificó</b> en el app, y el cronograma no tiene capítulo de '+
+      'subida de materiales ni de aires acondicionados. Marca varias y llévalas de una vez.</div>'+
+    '<div style="display:flex;align-items:center;gap:9px;background:var(--bg2);'+
+      'border:1.5px solid var(--border2);border-radius:var(--r2);padding:10px 13px;margin-bottom:8px">'+
+      '<input id="nodo-uq" type="search" value="'+esc(U.q)+'" oninput="nodoUbicarTeclea(this.value)" '+
+        'placeholder="Buscar entre las '+todas.length+'" '+
+        'style="flex:1;border:none;outline:none;font-size:14px;font-family:var(--font);'+
+        'background:transparent;color:var(--text);min-height:24px"></div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+      '<select onchange="nodoUbicarFiltro(\'ubic\',this.value)" style="'+_catCampoBS+';flex:1;min-width:140px">'+
+      '<option value="">Cualquier ubicación</option>'+
+      Object.keys(us).sort(function(x,y){ return _revOrdenArea(x)-_revOrdenArea(y)||x.localeCompare(y,'es'); })
+        .map(function(u){ return '<option value="'+esc(u)+'"'+(U.ubic===u?' selected':'')+'>'+esc(u)+'</option>'; }).join('')+
+      '</select>'+
+      '<select onchange="nodoUbicarFiltro(\'cont\',this.value)" style="'+_catCampoBS+';flex:1;min-width:140px">'+
+      '<option value="">Cualquier contratista</option>'+
+      Object.keys(cs).sort().map(function(c){ return '<option value="'+esc(c)+'"'+(U.cont===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+
+      '</select></div>';
+  h+=_catLab('Llevar a')+
+     '<select onchange="nodoUbicarDestino(this.value)" style="'+_catCampoBS+';margin-bottom:8px">'+
+     '<option value="">— escoge la tarea del cronograma —</option>'+
+     (function(){
+       var o='';
+       (function rec(pid, prof){
+         _nodoHijos(pid).forEach(function(x){
+           if(x.id===U.nodo) return;
+           o+='<option value="'+esc(x.id)+'"'+(U.destino===x.id?' selected':'')+'>'+
+              new Array(prof+1).join('   ')+esc(x.nombre)+'</option>';
+           rec(x.id, prof+1);
+         });
+       })(null,0);
+       return o;
+     })()+'</select>';
+  h+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+     '<button onclick="nodoUbicarLlevar()" style="'+_catBS+';flex:2;min-width:150px;min-height:50px;'+
+       'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)'+
+       ((sel&&U.destino)?'':';opacity:.45')+'">Llevar las '+sel+' marcadas</button>'+
+     '<button onclick="nodoUbicarTodas()" style="'+_catBS+';flex:1;min-width:110px;min-height:50px;'+
+       'font-size:11.5px;border:1.5px dashed var(--border2);background:none;color:var(--text2)">'+
+       'Marcar las que se ven</button></div>';
+  h+='<div style="font-size:12.5px;font-weight:800;margin:2px 0 8px">'+res.length+' encontrada'+
+     (res.length!==1?'s':'')+(res.length>U.tope?' <span style="color:var(--text3);font-weight:600">· se enseñan '+U.tope+'</span>':'')+'</div>';
+  res.slice(0,U.tope).forEach(function(a){
+    var on=!!U.sel[a.id];
+    h+='<button onclick="nodoUbicarToggle('+_catQ(a.id)+')" style="'+_catBS+';width:100%;margin-bottom:5px;'+
+      'min-height:56px;text-align:left;display:flex;align-items:flex-start;gap:10px;padding:9px 11px;'+
+      'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(on?'var(--accent-soft)':'var(--bg2)')+';color:var(--text)">'+
+      '<span style="font-size:16px;flex-shrink:0;line-height:1.3">'+(on?'☑':'☐')+'</span>'+
+      '<span style="flex:1;min-width:0">'+
+        '<span style="display:block;font-size:12.5px;font-weight:700;line-height:1.3">'+
+          esc(String(a.descripcion||'').slice(0,95))+'</span>'+
+        '<span style="display:block;font-size:10.5px;color:var(--text3);font-family:var(--mono);margin-top:2px">'+
+          esc(String(a.area||'sin ubicación'))+' · '+esc(_responsables(a.personal_nombre)[0]||'sin responsable')+
+          ' · '+(_catCerrada(a)?'cerrada':_catPct(a)+'%')+'</span>'+
+      '</span></button>';
+  });
+  if(res.length>U.tope)
+    h+='<button onclick="nodoUbicarMas()" style="'+_catBS+';width:100%;margin-top:4px;min-height:48px;'+
+       'border:1.5px dashed var(--border2);background:none;color:var(--text2)">Ver 40 más</button>';
+  return h+'<div style="height:110px"></div>';
+}
+/* LLEVAR NO CAMBIA LA ACTIVIDAD: solo cambia de nodo. Ni estado, ni
+   contratista, ni fecha. Es el mismo criterio que «Traer actividades». */
+async function nodoUbicarLlevar(){
+  var U=S.nodoUbicar; if(!U) return;
+  var ids=Object.keys(U.sel);
+  if(!ids.length){ showToast('No hay ninguna marcada','warn',3000); return; }
+  if(!U.destino){ showToast('Escoge a qué tarea van','warn',3000); return; }
+  var destino=U.destino, d=_nodoPorId(destino)||{}, origen=U.nodo;
+  setSS('syncing','Llevando…');
+  var ok=0, fallos=[];
+  try{
+    var filas=ids.map(function(a){ return {id:uid(), nodo_id:destino, actividad_id:a}; });
+    await sb('obra_nodo_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+             body:JSON.stringify(filas)});
+    for(var i=0;i<ids.length;i+=50){
+      var trozo=ids.slice(i,i+50).map(encodeURIComponent).join(',');
+      await sb('obra_nodo_actividad?nodo_id=eq.'+encodeURIComponent(origen)+
+               '&actividad_id=in.('+trozo+')',{method:'DELETE',prefer:'return=minimal'});
+    }
+    ids.forEach(function(a){
+      S.nodoPorN[origen]=(S.nodoPorN[origen]||[]).filter(function(x){ return x!==a; });
+      (S.nodoPorN[destino]=S.nodoPorN[destino]||[]).push(a);
+      S.nodoPorA[a]=((S.nodoPorA[a]||[]).filter(function(x){ return x!==origen; })).concat([destino]);
+      ok++;
+    });
+    S.nodoAmarres=(S.nodoAmarres||[]).filter(function(r){
+      return !(r.nodo_id===origen && ids.indexOf(r.actividad_id)>=0);
+    }).concat(filas);
+    logCambio('editado','plan',destino,d.nombre,ok+' actividades llevadas desde «'+
+      String((_nodoPorId(origen)||{}).nombre||'')+'» (no se tocó ninguna actividad)');
+    U.sel={};
+    setSS('ok','✓'); showToast(ok+' actividad'+(ok!==1?'es':'')+' en «'+(d.nombre||'')+'» ✓');
+  }catch(e){
+    setSS('err','Error'); showToast('No se pudo: '+((e&&e.message)||''),'err',8000);
+  }
+  renderCatalogo();
 }
 
 /* ── LO QUE SE HACE EN EL ÁRBOL ── */
@@ -19066,6 +19716,7 @@ function catPanelOtrosCerrar(){
   S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null;
   S.catMadreEdit=null; S.catMadreNueva=null; S.catSgEdit=null;
   S.catUbicRen=null; S.catUbicJuntar=null; S.catManual=null;
+  S.nodoPlan=null; S.nodoManual=null;
 }
 function nodoEditCampo(k,v){ if(S.nodoEdit){ S.nodoEdit[k]=v; _catPanel(); } }
 function _nodoEditHTML(){
@@ -19433,7 +20084,8 @@ async function nodoQuitar(nid, actId){
    (`_catAmbito`) y las cuatro vistas leen de ahí: si cada una resolviera lo
    suyo, cambiar de vista terminaría cambiando también lo que se mira, que es
    justo lo que no puede pasar. */
-var CAT_VISTAS=[['lista','Lista'],['edificio','Edificio'],['matriz','Matriz'],['arbol','Árbol']];
+var CAT_VISTAS=[['lista','Lista'],['edificio','Edificio'],['matriz','Matriz'],['arbol','Árbol'],
+                ['tiempo','Tiempo']];
 function catVista(){
   var v=S.catVista;
   if(!v){
@@ -19455,7 +20107,7 @@ function catVistaSet(v){
      la misma pantalla. Lo cazó la prueba, midiendo que las cuatro vistas daban
      el mismo texto. */
   S.catCurar=false; S.catGruposEdit=false; S.catRepes=null; S.catExactas=false;
-  S.nodoTraer=null; S.catCrear=null; S.catFuera=null;
+  S.nodoTraer=null; S.catCrear=null; S.catFuera=null; S.nodoUbicar=null;
   renderCatalogo(); _catArriba();
 }
 function _catVistaSelHTML(){
@@ -19644,6 +20296,9 @@ function _catMatrizHTML(){
 }
 
 /* ── VISTA ÁRBOL — el plan ── */
+/* Volver a la línea de tiempo desde una tarea abierta: si no, el único camino
+   es cambiar de vista, que suelta lo que estabas mirando. */
+function nodoVolverTiempo(){ S.nodoSel=null; renderCatalogo(); _catArriba(); }
 function _catVolverAmbitoHTML(){
   var A=_catAmbito();
   if(A.tipo==='cap')   return '<button onclick="catIrCap(null)" style="'+_catVolverBS+'">‹ Capítulos</button>';
@@ -19651,6 +20306,8 @@ function _catVolverAmbitoHTML(){
                               esc(String(S.catCap)+' · '+_catCapNom(S.catCap))+'</button>';
   if(A.tipo==='nodo'){
     var n=_nodoPorId(S.nodoSel)||{};
+    if(catVista()==='tiempo')
+      return '<button onclick="nodoVolverTiempo()" style="'+_catVolverBS+'">‹ La línea de tiempo</button>';
     return '<button onclick="nodoIr('+_catQ(n.padre_id||'')+')" style="'+_catVolverBS+'">‹ '+
       esc(n.padre_id?((_nodoPorId(n.padre_id)||{}).nombre||'Volver'):'El plan')+'</button>';
   }
@@ -19684,18 +20341,18 @@ function _catArbolFilaHTML(n, prof){
       (dir.length?'<span class="cat-fila-que" style="text-transform:none;letter-spacing:0;'+
         'font-weight:600;font-family:var(--mono);margin-top:2px">'+dir.length+' aquí mismo</span>':'')+
       '</button>'+
-    '<span class="cat-fila-der">'+
-      (av?'<span class="cat-fila-pct" style="color:'+(av.pct>=100?'var(--green)':av.pct>=50?'var(--accent)':'var(--text2)')+'">'+
-          av.pct+'%</span>'+_catBarraFilaHTML(av)+'<span class="cat-fila-nm">'+av.cerradas+'/'+av.total+'</span>'
-         :'<span class="cat-fila-pct" style="color:var(--text3)">—</span>'+
-          '<span style="display:inline-block;width:56px;flex-shrink:0"></span>'+
-          '<span class="cat-fila-nm">sin tareas</span>')+
-    '</span></div>';
+    '<span class="cat-fila-der">'+_nodoDerHTML(n)+'</span></div>';
+  /* LA SEGUNDA LÍNEA: lo que el cronograma ya sabe y hasta ahora no se veía.
+     Costo sin centavos, duración, la ventana de fechas, el % del archivo
+     etiquetado como «plan» —nunca como el avance— y el estado. */
+  var _pie=_nodoPieHTML(n);
+  if(_pie) h+='<div style="margin:2px 0 0 39px;font-size:10.5px;color:var(--text3);'+
+    'font-family:var(--mono);line-height:1.5">'+_pie+'</div>';
   if(n.notas)
     h+='<div style="margin:2px 0 0 39px;font-size:11.5px;color:var(--amber);line-height:1.45">'+
        '▸ nota: '+esc(n.notas)+'</div>';
   if(abierto){
-    hijos.forEach(function(x){ h+=_catArbolFilaHTML(x, prof+1); });
+    hijos.filter(_nodoPasaFiltroT).forEach(function(x){ h+=_catArbolFilaHTML(x, prof+1); });
     if(dir.length)
       h+='<div style="margin-left:'+Math.min(prof+1,5)*13+'px;margin-top:3px">'+
         dir.slice(0,8).map(function(a){
@@ -19730,19 +20387,16 @@ function _catArbolHTML(){
      '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
        'El otro eje: el capítulo dice si cuadra con lo contratado, el plan dice <b>qué falta para '+
        'poder entregar</b>. Una misma actividad vive en los dos.</div>';
+  /* NO HAY BOTÓN DE SEMBRAR. El cronograma vive solo en la base y el app no lo
+     sabe reconstruir: lo único honesto que se puede decir aquí es de dónde
+     sale y que se carga del archivo, no desde el catálogo. */
   if(!raices.length){
-    var plan=_nodoPlanSiembra();
-    h+='<div style="padding:16px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--border)">'+
-      '<div style="font-size:13.5px;font-weight:700;line-height:1.5;margin-bottom:10px">'+
-        'El plan está vacío. Se siembra <b>sobre lo que ya hay</b>: <b>'+plan.nodos+' nodos</b> '+
-        '—uno por capítulo con actividades y uno por grupo— con <b>'+plan.actividades+
-        ' actividades</b> colgadas.</div>'+
-      '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
-        'Todos nacen como <b>rama</b>: ningún entregable se inventa, los marcas tú. '+
-        'No se toca el catálogo — ni las partidas, ni sus amarres, ni los capítulos.</div>'+
-      '<button onclick="nodosSembrar()" style="'+_catBS+';width:100%;min-height:52px;'+
-        'border:1.5px solid var(--green);background:var(--green-light);color:var(--green);'+
-        'font-size:14px">Sembrar el plan</button></div>';
+    h+='<div style="padding:16px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--amber)">'+
+      '<div style="font-size:13.5px;font-weight:700;line-height:1.5;margin-bottom:8px">'+
+        'El plan está vacío.</div>'+
+      '<div style="font-size:12px;color:var(--text3);line-height:1.6">'+
+        esc(NODO_ORIGEN_TXT)+' Si hay que volver a cargarlo, se carga <b>del archivo de '+
+        'Project</b>, no desde el catálogo: el app no lo sabe reconstruir.</div></div>';
     return h+'<div style="height:100px"></div>';
   }
   var tot=_catAvance((function(){ var m={},o=[];
@@ -19758,25 +20412,26 @@ function _catArbolHTML(){
      'border:1.5px solid var(--border);font-size:11.5px;font-family:var(--mono);color:var(--text2);line-height:1.7">'+
      _nodos().length+' nodos · '+Object.keys(_vivas).length+' actividades en el plan<br>'+
      'En total: '+_catAvanceHTML(tot)+'</div>';
-  h+=_nodoAvisoRamasHTML();
+  h+=_nodoAvisoRamasHTML()+_nodoAvisoPlanHTML()+_nodoBarraTiempoHTML();
   h+='<button onclick="nodoNuevoAbrir(null)" style="'+_catBS+';width:100%;margin-bottom:10px;min-height:48px;'+
      'border:1.5px dashed var(--border2);background:none;color:var(--text3);font-weight:700">'+
      '+ Nodo al primer nivel</button>';
   h+='<div class="cat-filas" style="grid-template-columns:1fr">'+
-     raices.map(function(n){ return _catArbolFilaHTML(n,0); }).join('')+'</div>';
-  h+='<button onclick="catFueraAbrir()" style="'+_catBS+';width:100%;margin-top:10px;min-height:48px;'+
+     raices.filter(_nodoPasaFiltroT).map(function(n){ return _catArbolFilaHTML(n,0); }).join('')+'</div>';
+  var _pu=_nodoPorUbicar();
+  if(_pu)
+    h+='<button onclick="nodoUbicarAbrir()" style="'+_catBS+';width:100%;margin-top:4px;min-height:50px;'+
+      'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
+      'Por ubicar en el cronograma ('+_nodoActsDirectas(_pu.id).length+') — repartirlas</button>';
+  h+='<button onclick="catFueraAbrir()" style="'+_catBS+';width:100%;margin-top:8px;min-height:48px;'+
      'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-weight:700">'+
      'Lo que está fuera del plan</button>';
-  /* RESEMBRAR SOLO MIENTRAS NO HAYA TRABAJO DEL DUEÑO DENTRO. Con un
-     entregable marcado o una nota escrita, el botón dice por qué no se puede
-     en vez de desaparecer: un botón que se esfuma no explica nada. */
-  var _cur=_nodoCurado();
-  h+='<button onclick="nodosSembrar()" style="'+_catBS+';width:100%;margin-top:8px;min-height:48px;'+
-     'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);font-weight:700'+
-     (_cur.length?';opacity:.55':'')+'">'+
-     (_cur.length
-       ? 'No se resiembra: hay '+_cur.length+' nodo'+(_cur.length!==1?'s':'')+' con entregables o notas'
-       : 'Volver a sembrar con la jerarquía del cronograma')+'</button>';
+  /* DONDE ESTABA EL BOTÓN DE SEMBRAR, una línea que dice de dónde sale el
+     árbol. El botón reconstruía el plan desde el CATÁLOGO: pulsarlo habría
+     destruido el cronograma sin forma de rehacerlo desde el app. */
+  h+='<div style="margin-top:10px;padding:10px 12px;border-radius:11px;background:var(--bg2);'+
+     'border:1.5px solid var(--border);font-size:11px;color:var(--text3);line-height:1.6">'+
+     esc(NODO_ORIGEN_TXT)+'</div>';
   if(_huerf>0)
     h+='<div style="margin-top:8px;font-size:11px;color:var(--text3);line-height:1.5">'+
       _huerf+' amarre'+(_huerf!==1?'s':'')+' del plan apunta'+(_huerf!==1?'n':'')+
@@ -19810,13 +20465,19 @@ function _catNodoHTML(){
     h+='<div class="cat-fila-que" style="margin:0 0 4px">'+esc(_ETQ[n.origen])+
        (n.origen==='elemento'&&n.ref?' · <span style="font-family:var(--mono);text-transform:none">'+
          esc(String((_catPorId(n.ref)||{}).numero||''))+'</span>':'')+'</div>';
+  var _r=_nodoReal(n.id);
   h+='<div style="font-size:12px;font-family:var(--mono);margin:3px 0 4px">'+
-     /* EL AVANCE A MANO DEL ELEMENTO ES EL DE SU LÍNEA DEL PRESUPUESTO (v110):
-        el elemento ES esa línea, así que no se inventa otro sitio donde
-        guardarlo ni otro número que pueda contradecirla. */
-     (n.origen==='elemento'&&n.ref ? _catAvanceConManoHTML(av,'sub',n.ref) : _catAvanceHTML(av))+
+     (_r.fuente==='contado' ? _catAvanceHTML(_r.av)
+      : _r.fuente==='mano'  ? _catManualHTML(_r.man)
+      : '<span style="color:var(--text3)">— sin avance registrado</span>')+
+     (_nodoPlanPctHTML(n)?' &nbsp;'+_nodoPlanPctHTML(n):'')+
      '</div>'+
-     _catBarraHTML(av);
+     (_r.av?_catBarraHTML(_r.av):'')+
+     (_nodoEstadoHTML(n)?'<div style="margin:3px 0 0">'+_nodoEstadoHTML(n)+
+       (n.fin_plan?'<span style="color:var(--text3);font-family:var(--mono);font-size:10.5px"> · '+
+         (_nodoEstado(n)==='vencida'?'debía estar lista el ':'fin ')+_nodoFecha(n.fin_plan)+'</span>':'')+
+       '</div>':'')+
+     _nodoPlanFichaHTML(n);
   if(n.origen==='raiz' || n.origen==='acabados' || n.origen==='nivel')
     h+='<div style="height:8px"></div>'+_nodoAvisoRamasHTML();
   if(n.origen==='elemento'){
@@ -19840,6 +20501,15 @@ function _catNodoHTML(){
     h+='<div style="margin:8px 0 0;padding:10px 12px;border-radius:11px;background:var(--amber-light);'+
       'border:1.5px solid var(--amber);color:var(--amber);font-size:12px;line-height:1.5">'+
       '▸ '+esc(n.notas)+'</div>';
+  if(isAdmin())
+    h+='<div style="display:flex;gap:6px;margin:10px 0 0;flex-wrap:wrap">'+
+      '<button onclick="nodoPlanAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:130px;'+
+        'min-height:46px;font-size:12px;border:1.5px solid var(--border2);background:var(--bg3);'+
+        'color:var(--text2)">Fechas y costo</button>'+
+      '<button onclick="nodoManualAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:130px;'+
+        'min-height:46px;font-size:12px;border:1.5px dashed var(--amber);background:none;'+
+        'color:var(--amber)">'+(_nodoManual(n)?'Cambiar el avance a mano':'Avance a mano')+'</button>'+
+      '</div>';
   h+='<div style="display:flex;gap:6px;margin:10px 0;flex-wrap:wrap">'+
     '<button onclick="nodoTraerAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:120px;'+
       'min-height:46px;font-size:12px;border:1.5px solid var(--accent);background:var(--accent-fill);'+
@@ -20662,13 +21332,19 @@ function renderCatalogo(){
     else if(S.catCrear)       el.innerHTML=_catCrearHTML();
     else if(S.catFuera)       el.innerHTML=_catFueraHTML();
     else if(S.nodoTraer)      el.innerHTML=_nodoTraerHTML();
+    else if(S.nodoUbicar)     el.innerHTML=_nodoUbicarHTML();
     else if(catVista()==='arbol')    el.innerHTML=_catArbolHTML();
     /* Con un nodo abierto, «Lista» ES la lista de ese nodo. Sin esto, cambiar
        a Lista desde el plan caía en la pantalla de capítulos y parecía que se
        había perdido lo que se estaba mirando. */
-    else if(S.nodoSel && catVista()==='lista') el.innerHTML=_catArbolHTML();
+    /* Con un nodo abierto, «Lista» y «Tiempo» enseñan ESA tarea. En la línea de
+       tiempo es lo que hace que «toca una barra y se abre la tarea» sea verdad:
+       sin esto se ponía `S.nodoSel` y se seguía pintando el Gantt, así que el
+       toque no hacía nada visible. */
+    else if(S.nodoSel && (catVista()==='lista'||catVista()==='tiempo')) el.innerHTML=_catArbolHTML();
     else if(catVista()==='edificio') el.innerHTML=_catEdificioHTML();
     else if(catVista()==='matriz')   el.innerHTML=_catMatrizHTML();
+    else if(catVista()==='tiempo')   el.innerHTML=_catTiempoHTML();
     else if(S.catCap!==null && S.catCap!==undefined){
       if(S.catGruposEdit)     el.innerHTML=_catGruposEditHTML();
       else if(S.catCurar)     el.innerHTML=_catPartidasHTML();
@@ -20694,6 +21370,11 @@ function renderCatalogo(){
     if(_nq && S.nodoTraer && S._nodoTraerFoco && document.activeElement!==_nq){
       _nq.focus(); try{ _nq.setSelectionRange(_nq.value.length,_nq.value.length); }catch(e3){}
       S._nodoTraerFoco=false;
+    }
+    var _uq=document.getElementById('nodo-uq');
+    if(_uq && S.nodoUbicar && S._nodoUbicarFoco && document.activeElement!==_uq){
+      _uq.focus(); try{ _uq.setSelectionRange(_uq.value.length,_uq.value.length); }catch(e4){}
+      S._nodoUbicarFoco=false;
     }
     var _q=document.getElementById('cat-q');
     if(_q && S.catQ && document.activeElement!==_q && S._catQFoco){

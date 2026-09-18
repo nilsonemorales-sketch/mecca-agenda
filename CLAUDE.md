@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v112 — 18 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v113 — 18 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -218,7 +218,10 @@ mismos botones que cualquier otra.
 | **Renombrar o juntar una ubicación, o ponérsela a las que no tienen** | **Partidas → Ubicaciones** — `catUbicsAbrir()`, `_catUbicMover()`. Toca el `area` de todas sus actividades, avisando a cuántas |
 | **Poner un avance a mano en lo construido antes de mayo-2026** | **Partidas** — `catManualAbrir()`, en el capítulo, en la línea del presupuesto y en la ubicación. Nunca se mezcla con el contado ni sube de nivel |
 | **Armar el plan: jerarquías, entregables y notas** | **Partidas → vista Árbol** — `_catArbolHTML()`, `nodosSembrar()`, `nodoNuevoAbrir()`, `nodoMoverAbrir()`. Es el OTRO eje; no toca el catálogo |
-| **Ver la obra como el cronograma: nivel → capítulo → elemento** | **Partidas → Árbol** — `nodosSembrar()` (v112). Los elementos son las 274 líneas del presupuesto |
+| **Ver el cronograma del dueño: capítulo → nivel** | **Partidas → Árbol** — 189 tareas de su MS Project, con costos y fechas (v113). **No se siembra: vive en la base** |
+| **Ver el atraso y las barras en el tiempo** | **Partidas → vista Tiempo** — `_catTiempoHTML()`, `_nodoEstado()`. La barra se llena con el avance de la obra |
+| **Cambiar fechas, duración, costo o predecesoras** | **Partidas → una tarea → «Fechas y costo»** — `nodoPlanAbrir()`. Deja rastro con viejo y nuevo |
+| **Repartir las 430 sin sitio en el cronograma** | **Partidas → Árbol → «Por ubicar»** — `nodoUbicarAbrir()`, «Llevar a…» |
 | **Poner las operaciones de un elemento** | **Partidas → Árbol → un elemento** — `nodoOperaciones()`, `CAT_OPERACIONES`. Plantilla, no siembra |
 | **Meter actividades que ya existen en un entregable** | **Partidas → un nodo → «Traer actividades»** — `nodoTraerAbrir()`. No cambia la actividad |
 | **Ver lo mismo de otra manera** | **Partidas**, selector `[ Lista ] [ Edificio ] [ Matriz ] [ Árbol ]` — `catVistaSet()`, `_catAmbito()` |
@@ -770,7 +773,94 @@ vive en `obra_plan_fuera`. Se llegó a escribir la columna y se retiró en el ac
 — ese módulo nació con la regla de CERO escrituras a `obra_actividades`, y es lo
 único que permite borrarlo sin dejar rastro.
 
-#### LA JERARQUÍA SALE DEL CRONOGRAMA DEL DUEÑO (v112)
+#### EL PLAN ES EL CRONOGRAMA DEL DUEÑO, Y VIVE SOLO EN LA BASE (v113)
+
+El dueño pasó su MS Project completo —«PLANIFICACION MECCA 2-12-24», **189
+tareas, $94.905.422,35, 463 días, del 14-oct-2024 al 22-jul-2026**— y dijo:
+*«usar este que está más completo, que lo pueda editar y visualizar y trabajar
+de manera eficiente e interactiva».*
+
+Está sembrado **desde SQL, no desde el app**: 190 nodos (189 del cronograma + 1
+de «POR UBICAR»), una raíz `cr_2`, 2.445 amarres, cero rotos y cero sueltas. El
+costo de cada tarea madre cuadra con la suma de sus hijas hasta los
+$94.905.422,35.
+
+La jerarquía es **capítulo → nivel del edificio (N1…N7)**: `HORMIGON ARMADO` →
+`HORMIGÓN ARMADO N1…N7`, `PISOS N1` → `PISOS N1…N7`. El árbol
+capítulo→elemento de la v112 **ya no existe**.
+
+**🚨 NO HAY BOTÓN DE SEMBRAR, Y NO PUEDE HABERLO.** `nodosSembrar` y
+`_nodoPlanSiembra` **se quitaron enteros en la v113**. Construían el árbol desde
+el CATÁLOGO: pulsar «Volver a sembrar» habría **destruido el cronograma sin
+forma de rehacerlo desde el app**, porque los datos del Project no están en el
+código. Estaba frenado de casualidad —un nodo llevaba una nota y `_nodoCurado()`
+lo contaba como trabajo del dueño—, y eso no es una protección, es un accidente.
+En su sitio hay una línea que dice de dónde sale el árbol. **Si hay que volver a
+cargarlo, se carga del archivo.**
+
+`obra_nodos` guarda ahora `costo_plan`, `dias_plan`, `pred_plan` (tal como lo
+escribe Project: `'11CC+10 días;21'`), `inicio_plan`, `fin_plan`, `pct_plan`,
+`costo_real_plan` y las tres de `avance_manual`. `id` = `'cr_'+Id de Project` y
+`ref` = ese mismo Id, **que es lo que permite traducir las predecesoras a
+nombres**.
+
+#### EL % DEL ARCHIVO NO ES EL AVANCE
+
+Decisión del dueño, textual: el % sale **«de las actividades o los avances que yo
+llene»**. `_nodoReal(id)` lo resuelve **en un solo sitio**:
+
+1. con actividades → el **contado**, con `_catAvance`;
+2. sin ellas → el **de a mano** (`obra_nodos.avance_manual`), etiquetado con
+   quién y cuándo;
+3. sin ninguno → **«—»**. El del Project **no** se pone de sustituto.
+
+`pct_plan` se enseña siempre al lado, en gris y etiquetado «plan». **Ahí está el
+valor del módulo**, porque la diferencia es enorme: medido hoy, HORMIGON ARMADO
+va al **15% en el archivo y al 85% en la obra** (25/30); PORTAJE al 0% y al 42%
+(70/172); VENTANAS al 0% y al 9%. El archivo es de diciembre de 2024 y la obra
+lleva casi dos años andando.
+
+#### EL CRONOGRAMA SE ACABÓ, Y LA PANTALLA LO DICE
+
+`_nodoEstado` da tres estados —vencida, en curso, por venir— contando los días
+con `esDiaLaboral`. Medido el 18-sep-2026: de las **155 hojas con fecha, 144 ya
+pasaron su fin sin estar al 100%**, cero en curso y cero por venir. **No es que
+la obra vaya mal: es que el plan terminaba el 22-jul-2026.** La vista sale entera
+en rojo, y `_nodoAvisoPlanHTML` lo escribe arriba para que nadie crea que el
+módulo se rompió. Por eso lo que más falta es **volver a fechar**, y por eso
+existe «Fechas y costo».
+
+#### La línea de tiempo (quinta vista)
+
+Una barra por tarea, colocada por `inicio_plan`/`fin_plan` y **llena con el %
+REAL**, no con el del plan: una barra a medio llenar a la izquierda de la raya de
+hoy es una tarea atrasada y se ve de un golpe. Arranca por capítulo —se abren
+solos los hijos de la raíz que tengan algo— y **tocar una barra abre esa tarea**.
+
+**No se dibujan las flechas de las predecesoras**: en un teléfono no se leen.
+Van en la ficha, en texto y **con el nombre** de la tarea de la que depende.
+
+#### Editar el cronograma
+
+Fechas, duración, costo y predecesoras (`nodoPlanAbrir`), y el % a mano
+(`nodoManualAbrir`). **Todo cambio va a `obra_cambios` con el valor viejo y el
+nuevo**, campo por campo: es plata y son fechas de entrega.
+
+**El descuadre de costo SE ENSEÑA, NO SE ARREGLA SOLO.** Si el dueño escribe un
+costo distinto de la suma de sus hijas, manda lo suyo y queda marcado en la ficha
+y en un aviso. Él decide; el app avisa. Y hay un botón para calcularlo de las
+hijas cuando sí quiera eso.
+
+#### «POR UBICAR EN EL CRONOGRAMA» — 430 actividades
+
+El reparto cuadró 1.938 en una tarea exacta y 77 en el capítulo. Las **430** que
+quedaron **no son un error**: **415 nunca se clasificaron en el app**, 9 son de
+Subida de Materiales y 6 de aires acondicionados — y **el cronograma no tiene
+ninguno de esos dos capítulos**. Tienen pantalla propia (`nodoUbicarAbrir`) con
+buscador, filtros, casillas y «Llevar a…», porque de una en una eso no se termina
+nunca. **Llevar no cambia la actividad**: solo cambia de nodo.
+
+#### LA JERARQUÍA DE LA v112 (retirada, para que no se reconstruya)
 
 Pasó su **MS Project** —«PLANIFICACION MECCA», 285 tareas, 159 días, de julio a
 diciembre de 2024— y dijo: **«toma esto de guía para las jerarquías».** Su
@@ -1662,9 +1752,14 @@ mismo:**
 - **Editar una actividad CERRADA desde Partidas abre el formulario.** Es la
   comprobación que importa: hasta la v106 no hacía nada y no decía nada. Y
   `editAct('no-existe')` **avisa**
-- **Toda escritura a `obra_actividades` lleva su `POST obra_cambios` al lado.**
-  Esa es la firma de `Acciones`: uno suelto quiere decir que alguien escribió
-  por fuera
+- **Toda escritura a `obra_actividades` lleva su `POST obra_cambios` en la misma
+  operación.** Esa es la firma de `Acciones`: uno suelto quiere decir que alguien
+  escribió por fuera. *Ojo desde la v113:* `Acciones.eliminar` manda ahora tres
+  escrituras seguidas —los dos amarres y la actividad—, así que el `obra_cambios`
+  ya **no es el vecino inmediato** del `DELETE obra_actividades`. Las pruebas de
+  la v107 a la v109 que miran solo el vecino de al lado marcan ese borrado como
+  «suelto»: **es un falso positivo de la prueba, no una fuga**. El `logCambio` va
+  antes, como desde la v107
 - **El catálogo no sirve datos viejos.** Cambia un estado por fuera, toca el ↺ y
   la tarjeta tiene que cambiar. Y la hora de los datos se ve arriba, en ámbar a
   los 15 minutos
@@ -1727,18 +1822,23 @@ mismo:**
 - **El árbol NO toca el catálogo.** Cuenta `obra_partidas` y sus amarres antes y
   después de sembrar el plan: tienen que dar lo mismo, y las escrituras a esas
   dos tablas **cero**
-- **El árbol sale del cronograma: nivel → capítulo → elemento**, con el **nivel
-  arriba del capítulo**. Los cinco niveles dan **27 · 83 · 85 · 73 · 6**
-  elementos, y `BAJO NIVEL DE PISO → 3.00` tiene los **17** de siempre, con
-  Zapata ZR-1 entre ellos
-- **Las operaciones NO se siembran.** Cuenta los nodos con `origen='operacion'`
-  antes de tocar el botón: **cero**. El botón crea **6 y ni uno más**, y dos
-  veces no duplica
-- **Lo costeado y lo registrado cuelgan de ramas distintas, y se dice en
-  pantalla.** Si desaparece el aviso, los dos porcentajes se leen como si se
-  pudieran sumar
-- **No se resiembra sobre trabajo del dueño.** Marca un entregable y vuelve a
-  sembrar: tiene que negarse **diciendo cuál**
+- **El árbol del plan sale de la BASE, no de una siembra.** Busca `nodosSembrar`
+  y `_nodoPlanSiembra` en el código: tienen que dar **cero**. Si alguien los
+  repone, el primer toque destruye el cronograma
+- **El % del Project nunca es el avance.** `PISOS N4` va al **48% (21/44)** con
+  `pct_plan` en 0: si la fila enseña 0%, alguien puso el del archivo de
+  sustituto
+- **La fila del cronograma enseña costo, duración, fechas y el plan
+  etiquetado**: `$992.568 · 14 días · 18-mar-26 → 7-abr-26 · plan 0%`
+- **El contador de vencidas cuadra con la base**: hoy **144 de 155 hojas**, 0 en
+  curso y 0 por venir, porque el plan terminaba el 22-jul-2026
+- **Cambiar una fecha o un costo deja rastro con viejo y nuevo** en
+  `obra_cambios`
+- **El descuadre de costo se avisa y no se arregla solo**
+- **Borrar una actividad no deja amarres huérfanos.** Cuenta
+  `obra_partida_actividad` y `obra_nodo_actividad` antes y después
+- **Juntar partidas en la dirección prohibida se niega y dice por qué**
+- **Las cinco vistas siguen**: Lista, Edificio, Matriz, Árbol y Tiempo
 - **La siembra deja las 2.466 en algún nodo**, con un nodo por capítulo con
   actividades y uno por grupo. Y **sembrar dos veces no duplica**: para y lo dice
 - **Traer al plan no cambia la actividad.** Guarda el retrato de estado, avance,
@@ -1850,6 +1950,9 @@ pertenece a ningún nivel.
 | **v109** — la primera medición de «posibles repetidas» dio 2,8 millones de parejas: el relleno del arnés eran 2.400 partidas con nombres casi idénticos en el mismo capítulo. No existe en la obra —el capítulo más grande tiene 278— pero destapó que la comparación era n² sin tope. | Un fixture irreal puede señalar un límite real. En vez de arreglar solo el fixture, se metió un índice por palabra y un tope de 2.000 parejas que la pantalla dice. **Cuando una medición se dispara, pregunta si el dato es absurdo o si el código no aguanta el caso** — aquí eran las dos. |
 | **v110** — la lista de ubicaciones daba **30** en la prueba y **29** contra la base. No era el app: el arnés de la v106 trae una actividad en «N1 — Lobby», que en la obra no es una ubicación. Media hora buscando un fallo que estaba en el fixture. | Cuando un conteo se separa **en uno** del medido contra la base, mira primero de dónde salen las filas de la prueba. Un fixture que no reproduce la distribución real convierte cualquier número en una opinión — y al arreglarlo, arréglalo para que dé **exactamente** el de la base, no «parecido». |
 | **v110** — las tarjetas en rejilla usaban `repeat(auto-fill,minmax(160px,1fr))`. A 390px daban dos y a 1024px **cuatro**: en el iPad seguía siendo una rejilla, que es justo lo que el dueño pidió quitar. | «Dos columnas en pantalla ancha» es una `@media query`, no un `auto-fill`. `auto-fill` mete las que quepan, y en una pantalla grande eso nunca son dos. Y la prueba tiene que **contar cuántas caben por fila a cada ancho**, no mirar el CSS. |
+| **v113** — el botón «Volver a sembrar» de la v112 reconstruía el árbol desde el CATÁLOGO. Con el cronograma del dueño ya en la base, pulsarlo lo habría **destruido sin forma de rehacerlo**: los datos del Project no están en el código. Estaba frenado por casualidad, porque un nodo llevaba una nota. | Un botón que puede destruir algo que el app **no sabe reconstruir** no se protege con una condición: se quita. Y cuando una función deja de tener sentido, se borra entera — dejarla «por si acaso» es dejar el gatillo puesto. |
+| **v113** — `nodoPlanAbrir` asignaba `S.nodoPlan` y **después** llamaba a `catPanelOtrosCerrar()`, que lo pone a null: el panel de fechas y costo nacía vacío y el campo no existía. Lo mismo en `nodoManualAbrir`. | Una función de «cerrar todo lo demás» que enumera estados acaba incluyendo el que estás abriendo. Ciérrala **antes** de asignar, nunca después. Lo cazó la prueba al escribir en un campo que era `null`, no la lectura. |
+| **v113** — la línea de tiempo arrancaba con tres barras y parecía vacía: se abrían solos los contenedores con **10 hijos o más**, y ese umbral funcionaba contra la base (cr_9 tiene 31) pero no contra un árbol de prueba más pequeño. | Un umbral por tamaño convierte una regla en «depende de cuántos datos haya». Si la regla es «arranca por capítulo», exprésala por **estructura** —los hijos de la raíz que tengan algo— y funcionará igual con 26 nodos que con 190. |
 | **v112** — `Acciones.eliminar` **no limpia los amarres**. El dueño borró 21 actividades repetidas y quedaron **21 amarres huérfanos** en `obra_partida_actividad` y otros 21 en `obra_nodo_actividad`. Los conteos por actividad no mienten —se construyen desde `S.catActs`— pero la portada del plan contaba FILAS de la tabla de amarres y decía 2.466 donde había 2.445. | Cuando una fila se borra, **busca quién la apuntaba**. Y un contador que suma filas de una tabla de amarres miente en cuanto algo se borra: cuenta lo que existe de verdad, no lo que quedó apuntando. |
 | **v112** — 4 actividades vivas colgaban de una partida **desactivada** (la dejó `catJuntarEn` al juntar dos): como `_catAgendaDe` filtra por `activo`, esas cuatro **no salían en ningún capítulo del módulo**, invisibles. La siembra las habría perdido. | Una siembra que recorre CONTENEDORES pierde lo que cuelga de un contenedor apagado. Recorre **lo que se quiere colocar** —las actividades— y para cada una busca dónde va. Así «ninguna queda suelta» es verdad y no una esperanza. |
 | **v111** — se añadió `fuera_plan` como columna de `obra_actividades` y hubo que quitarla en el acto. Ese módulo nació con la regla de CERO escrituras a `obra_actividades` —es lo que permite borrarlo entero sin rastro— y la consulta de arranque tampoco se toca. El descarte es una decisión DEL PLAN: vive en `obra_plan_fuera`. | Antes de añadir una columna, pregunta **de quién es el dato**. Una decisión sobre el plan guardada en la tabla del trabajo ata dos cosas que se diseñaron para poder separarse, y se nota el día que hay que borrar una de las dos. |
@@ -1917,7 +2020,7 @@ orden de magnitud.
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
 | `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**. Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
-| `obra_nodos`, `obra_nodo_actividad`, `obra_plan_fuera` | **EL PLAN (v111, v112)** — el segundo eje, con la jerarquía del cronograma desde la v112 (`origen`, `ref`). El árbol del dueño: `tipo` (`rama`/`entregable`), `clase` (apartamento/taller/hito), `orden`, `notas` para lo que no es actividad. El amarre es una tabla aparte porque **una actividad puede estar en varios nodos a propósito**. `obra_plan_fuera` son los descartes: **no borra nada**, saca del plan. Se borran las tres y el catálogo queda exactamente igual. | 1.021 + 2.445 al sembrar |
+| `obra_nodos`, `obra_nodo_actividad`, `obra_plan_fuera` | **EL PLAN (v111→v113)** — el segundo eje. Desde la v113 son **las 189 tareas del MS Project del dueño**, sembradas desde SQL: `costo_plan`, `dias_plan`, `pred_plan`, `inicio_plan`, `fin_plan`, `pct_plan`, `costo_real_plan` y `avance_manual`. **No hay siembra desde el app.** El árbol del dueño: `tipo` (`rama`/`entregable`), `clase` (apartamento/taller/hito), `orden`, `notas` para lo que no es actividad. El amarre es una tabla aparte porque **una actividad puede estar en varios nodos a propósito**. `obra_plan_fuera` son los descartes: **no borra nada**, saca del plan. Se borran las tres y el catálogo queda exactamente igual. | 190 + 2.445 |
 | `obra_ubicaciones` | **Del módulo «Partidas» (v110).** Existe SOLO para guardarle el porcentaje a mano a una ubicación: el nombre sigue viviendo en `obra_actividades.area` y esta tabla no manda sobre nada. Hay fila únicamente para las que llevan algo escrito a mano. | 0 al nacer |
 
 ### Cosas de los datos que hay que saber
