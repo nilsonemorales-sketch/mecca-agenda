@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v108 — 18 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v109 — 18 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v108 (18 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v109 (18 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -566,6 +566,91 @@ pero el trabajo es de otro.**
 
 **Son 48 capítulos, no 47**: 29 numéricos (28 del presupuesto más «Sin
 clasificar»), 17 CI, IMP.1 y AC.
+
+#### EL CATÁLOGO NO PUEDE SERVIR DATOS VIEJOS (v109)
+
+**Pasó en obra y casi cuesta caro.** El dueño vio una tarjeta que decía «sin
+empezar · 4 días vencida» sobre `rec0817-2a-ptaserv` —«Instalación de la puerta
+del baño de servicio», 2A—, que está **completada al 100% desde el 13 de
+septiembre**, cerrada por él mismo. **Estuvo a punto de reabrir seis actividades
+buenas por creerle a la pantalla.**
+
+La causa: `cargarCatalogo()` corría **una sola vez por sesión** —la primera que
+se entra a Partidas— y `refrescarApp()` (el ↺) recargaba `S.acts` pero **no**
+`S.catActs`. Por eso la barra de arriba decía «sincronizado 8:56 p.m.» mientras
+la tarjeta enseñaba un estado de hacía cinco días: **las dos cosas eran ciertas
+a la vez**.
+
+Cuatro piezas, y ninguna es opcional:
+
+1. **El ↺ recarga también el catálogo**, pero solo si ya estaba cargado — no se
+   paga esa consulta a quien no ha entrado a Partidas.
+2. **Entrar con datos de más de 5 minutos los recarga solos** (`CAT_FRESCO_MS`).
+   No se bloquea la pantalla: se sigue pintando lo que hay y se repinta al
+   llegar lo nuevo.
+3. **LA HORA DE ESOS DATOS SE VE**, arriba de las cuatro pantallas del módulo
+   (`_catFrescoHTML`, dentro de `_catBuscaBarraHTML`, que es la única pieza que
+   se pinta en todos los niveles). A los 15 minutos pasa a **ámbar**
+   (`CAT_AMBAR_MS`), y mientras carga dice «trayendo datos…».
+4. **Lo que se escribe desde otra pantalla lo marca viejo** (`catMarcarViejo`,
+   llamado desde `_repintarDondeEstoy` cuando NO estás en el catálogo, y desde
+   `loadAll`). `Acciones` parchea `S.catActs` de lo que pasa por él, pero las
+   **partidas y los amarres no**, y lo que entra por otro camino —otra sesión,
+   la cola que sale sola— tampoco.
+
+**Si añades una pantalla que lea `S.catActs`, hereda este problema.** Un módulo
+que enseña lo que no es, no se puede usar para decidir.
+
+#### Posibles repetidas (v109) — que las busque el app
+
+Queja del dueño: *«ir agrupando las actividades en esas partidas que creamos,
+borrando las que sobren»*. `catJuntar` existe desde la v98, pero **había que
+saber de antemano cuáles se repiten** y marcarlas a mano entre 1.029. Eso no lo
+hace nadie.
+
+**LOS TOKENS CORTOS CUENTAN, y esa es la decisión que hace que la pantalla sirva
+o estorbe.** Comparando solo palabras de más de tres letras, «Limpieza en N6» y
+«Limpieza en N7» salían al **100%** — y son **dos pisos distintos**: `N6` y `N7`
+se caían por cortas. Contándolas dan **0,50** y no aparecen. Solo se tiran las de
+relleno (`CAT_RELLENO_REP`: de, la, el, los, las, en, del, con, por, una, uno).
+`parecido = palabras compartidas / las del nombre más largo`, **dentro del mismo
+capítulo**.
+
+Medido contra la base: **47** parejas a ≥0,90 · **214** a ≥0,75 · **498** a
+≥0,60. **La pantalla abre en ≥0,90**: bajar de tramo es una decisión, no lo
+primero que se ve.
+
+- **Juntar reusa `catJuntarEn`** de la v98: las actividades pasan a la que
+  queda, la otra se **desactiva, no se borra**, y `catDeshacer` lo devuelve. No
+  se abrió un segundo camino para lo mismo.
+- **Nada se junta sin ver las dos y escoger cuál queda**: los dos nombres están
+  en pantalla con su número de actividades, y se toca el que se queda.
+- **«No son la misma»** se guarda en `obra_config`, clave `cat_no_iguales`, un
+  JSON de parejas. Sin esto las 498 del tramo bajo reaparecen en cada carga y la
+  pantalla se vuelve ruido.
+- **Un índice por palabra** evita comparar las que no comparten ninguna: sin él
+  es n² dentro del capítulo. Y hay **tope de 2.000 parejas**, que la pantalla
+  **dice** si se alcanza — una lista de diez mil no la revisa nadie y en el
+  teléfono no se pinta.
+
+**Las EXACTAS son otra cosa**: misma descripción **y** mismo apartamento, o sea
+dos apuntes del mismo trabajo. Hoy son **15 grupos, 36 actividades, 21
+sobrantes**. Se quitan en tanda por **`Acciones.eliminar`** —que desde la v107
+escribe el rastro antes de borrar— y **se queda la MÁS ADELANTADA**: quedarse
+con la de cero y borrar la cerrada sería tirar trabajo hecho.
+
+#### El marcador y las partidas vacías (v109)
+
+**`_catMarcadorHTML`** va en la portada del módulo y sale de la base al pintarse,
+no se guarda: partidas, cuántas están colgadas de su línea del presupuesto y el
+porcentaje, posibles repetidas sin revisar, y cuántas actividades siguen en «Sin
+clasificar». Es el marcador del trabajo, y es lo que dice cuándo se puede parar.
+Hoy: 1.029 partidas · **1 colgada** · **417** actividades sin capítulo propio.
+
+**Quitar las vacías** vive dentro de «Ordenar las partidas de este capítulo».
+**Solo las que no tienen ni una actividad**: una partida con trabajo dentro no se
+quita, primero se mueven. Se desactivan —no se borran— y `catDeshacer` las
+devuelve.
 
 ### El Repaso por partida repetida (v94) — por qué existe
 
@@ -1291,6 +1376,12 @@ mismo:**
 - **Toda escritura a `obra_actividades` lleva su `POST obra_cambios` al lado.**
   Esa es la firma de `Acciones`: uno suelto quiere decir que alguien escribió
   por fuera
+- **El catálogo no sirve datos viejos.** Cambia un estado por fuera, toca el ↺ y
+  la tarjeta tiene que cambiar. Y la hora de los datos se ve arriba, en ámbar a
+  los 15 minutos
+- **«Limpieza en N6» y «Limpieza en N7» NO pueden salir como repetidas.** Es la
+  prueba que decide si esa pantalla sirve: si sale, alguien volvió a tirar los
+  tokens cortos y la pantalla propone fusionar plantas distintas
 - **La estructura de Partidas sale de `obra_capitulos` y `obra_subgrupos`**, con
   las constantes de respaldo. Fuerza las tablas a vacío y comprueba que el módulo
   sigue: 48 capítulos, «4.00 · Plomería», y los grupos siguen repartiendo
@@ -1415,6 +1506,8 @@ pertenece a ningún nivel.
 | **v107** — una sonda de la prueba buscaba las casillas por `textContent==='Marcar'` y daba **cero**: el botón lleva el símbolo ☐ pegado al texto, así que el contenido real era «☐Marcar». Parecía que las casillas no se pintaban. | Un botón con icono no tiene el texto que crees. Busca por el `onclick` —que es exacto y es lo que de verdad hace— y no por lo que se lee. Y de paso, esa sonda encontró un botón de 34 px que llevaba una versión colado: **medir lo visible paga, aunque el fallo no sea el que buscabas**. |
 | **v108** — convertir las expresiones de `CAT_SUBGRUPOS` a listas de palabras parecía mecánico y movió **44 actividades** de grupo en la primera medición. Ninguna era culpa del concepto: `\s?` emitía solo «den glass» y perdía «denglass»; `rot[oa]s?` dejaba la interrogación dentro y no casaba nunca; y la tabla de acentos del SQL de prueba mapeaba `ñ` a `e`, así que «pañete» no encontraba «panete». Con las tres arregladas: **cero**. | Una conversión «mecánica» de expresión a texto tiene más trampas de las que se ven leyendo. Lo único que las cazó fue **medir el antes y el después contra la base entera**, no revisar el conversor. Y dos de las tres estaban en el arnés, no en el app: cuando una medición da un número raro, **sospecha primero de lo que mide**. |
 | **v108** — dos sondas de la prueba daban «no cambia nada» y parecían un fallo: una editaba las palabras del grupo que va DESPUÉS (y gana el primero que coincide, así que no podía cambiar nada), y la otra escribía en un doble que no aplicaba las escrituras, así que al recargar volvía el estado viejo. | Para probar una regla de prioridad hay que tocar el lado que MANDA, no el que obedece. Y un doble que se traga las escrituras solo sirve mientras nada relea: en cuanto el código hace `cargarCatalogo()` después de escribir, el doble tiene que comportarse como la base o la prueba miente. |
+| **v109** — el módulo Partidas enseñó durante días un estado que ya no existía: «sin empezar · 4 días vencida» sobre una actividad **cerrada al 100% cinco días antes**. `cargarCatalogo()` corría una sola vez por sesión y el ↺ no la tocaba, así que la barra decía «sincronizado» y la tarjeta mentía, **las dos a la vez**. El dueño estuvo a punto de reabrir seis actividades buenas. | Una pantalla con su propia carga de datos necesita su propia política de frescura: **cuándo se recarga, y la hora a la vista**. Que otra parte del app diga «sincronizado» no cubre a la que lee de otro sitio — y dos relojes que no se miran hacen que el usuario le crea al equivocado. |
+| **v109** — la primera medición de «posibles repetidas» dio 2,8 millones de parejas: el relleno del arnés eran 2.400 partidas con nombres casi idénticos en el mismo capítulo. No existe en la obra —el capítulo más grande tiene 278— pero destapó que la comparación era n² sin tope. | Un fixture irreal puede señalar un límite real. En vez de arreglar solo el fixture, se metió un índice por palabra y un tope de 2.000 parejas que la pantalla dice. **Cuando una medición se dispara, pregunta si el dato es absurdo o si el código no aguanta el caso** — aquí eran las dos. |
 | **v105** — la prueba esperaba con `window.S && S.acts.length`, y `S` se declara con `let`: **no está en `window`**. La guarda daba siempre falso y la prueba se quedó 60 s dando por hecho que el app no había cargado. Antes de eso, buscaba el agrupador entre los `<button>` y el visible es un `<select>` —las pastillas con esas etiquetas viven en el panel de Filtros, plegado. | Un `let` de nivel superior es un global, pero **no una propiedad de `window`**: preguntar por `window.X` miente sin error. Y antes de dar por rota una pantalla, comprueba que estás tocando el control que el usuario ve — es otra vez el v58. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se

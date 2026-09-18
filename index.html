@@ -865,7 +865,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260918_108';
+const APP_VERSION='20260918_109';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1813,6 +1813,7 @@ let S={
   /* v108 — la estructura editable. Nace aquí por lo mismo que lo demás: el
      dueño entra DIRECTO a Partidas y una variable que no existe revienta la
      pantalla entera sin decir por qué (v103). */
+  catCargadoEn:0, catViejo:false, catRepes:null, catExactas:false, catNoIguales:{},
   catMadres:false, catMadreEdit:null, catMadreNueva:null,
   catGruposEdit:false, catSgEdit:null,
   catCaps:[], catSubs:[], catEstructuraErr:'',
@@ -2384,6 +2385,10 @@ function reintentarCarga(){
 }
 
 async function loadAll(){
+  /* El catalogo tiene su propia carga y no entra aqui: si se releyo la base,
+     lo suyo puede haberse quedado atras. Se marca, no se recarga — pagar esa
+     consulta cada 90 s sin estar en Partidas es un coste que nadie pidio. */
+  if(typeof catMarcarViejo==='function') catMarcarViejo();
   setSS('syncing','Cargando...');
   // Spin refresh button while loading
   const refBtn=document.getElementById('btn-refresh');
@@ -9898,7 +9903,18 @@ async function refrescarApp(){
     setTimeout(function(){ location.replace(location.pathname+'?_r='+Date.now()); },400);
     return;   // no se suelta el boton: la pagina se va
   }
-  try{ await loadAll(); showToast('Ya estás en la última versión · datos al día','ok',3000); }
+  try{
+    await loadAll();
+    /* EL ↺ TIENE QUE RECARGAR EL CATALOGO TAMBIEN (v109). `loadAll` refresca
+       `S.acts`, que NO trae las cerradas; el modulo Partidas trabaja sobre
+       `S.catActs`, que se cargaba UNA sola vez por sesion. Resultado: la barra
+       verde decia «sincronizado 8:56 p.m.» mientras la tarjeta enseñaba un
+       estado de hacia cinco dias, y las dos cosas eran ciertas a la vez. El
+       dueño estuvo a punto de reabrir seis actividades buenas por creerle.
+       Solo si ya estaba cargado: no se paga la carga a quien no ha entrado. */
+    if(S.catPartidas!==undefined){ try{ await cargarCatalogo(); }catch(e2){} }
+    showToast('Ya estás en la última versión · datos al día','ok',3000);
+  }
   catch(e){ showToast('No se pudieron traer los datos','err',4000); }
   if(b){ b.disabled=false; b.style.animation=''; }
 }
@@ -16420,6 +16436,15 @@ async function cargarCatalogo(){
       var cf=await sb('obra_config?key=eq.cat_grupos&limit=1');
       S.catGruposCustom=(cf&&cf[0]&&cf[0].value)?JSON.parse(cf[0].value):{};
     }catch(e3){ S.catGruposCustom={}; }
+    /* Las parejas que el dueño ya dijo que NO son la misma. Sin esto, las 498
+       del tramo bajo reaparecen en cada carga y la pantalla se vuelve ruido. */
+    try{
+      var cn=await sb('obra_config?key=eq.cat_no_iguales&limit=1');
+      var arr=(cn&&cn[0]&&cn[0].value)?JSON.parse(cn[0].value):[];
+      var mno={}; (arr||[]).forEach(function(k){ mno[k]=1; });
+      S.catNoIguales=mno;
+    }catch(e5){ S.catNoIguales={}; }
+    S._catRepes=null;
     /* LA ESTRUCTURA (v108). Si esto falla o viene vacío, `_capsLista` y
        `_sgLista` caen en las constantes del código y el módulo sigue entero:
        nunca una pantalla en blanco por una tabla que no contestó. */
@@ -16432,6 +16457,10 @@ async function cargarCatalogo(){
       S.catEstructuraErr=(e4&&e4.message)||'no se pudo leer la estructura';
     }
     S.catError='';
+    /* LA HORA DE ESTOS DATOS. Sin esto no hay forma de saber si lo que se ve
+       es de ahora o de hace cinco días — y eso ya casi cuesta seis actividades
+       buenas reabiertas. Ver `_catFrescoHTML`. */
+    S.catCargadoEn=Date.now(); S.catViejo=false;
     S._catMapa=null; S._catPrec=null;
     return true;
   }catch(e){
@@ -17290,7 +17319,7 @@ function _catOrdenFaltantes(acts, area){
   return {con:con, sin:sin};
 }
 
-function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; S.catGrupo=null; S.catUbic=null; S.catCurar=false; S.catGruposEdit=false; S.catMadres=false; renderCatalogo(); _catArriba(); }
+function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; S.catGrupo=null; S.catUbic=null; S.catCurar=false; S.catGruposEdit=false; S.catMadres=false; S.catRepes=null; S.catExactas=false; renderCatalogo(); _catArriba(); }
 /* ══ v107 · EDITAR DE VERDAD DESDE EL MÓDULO ═════════════════════════════
    Palabras del dueño: «necesito poder editar actividades. Me siento muy
    limitado en el módulo de prueba, no tengo todas las funciones, y no puedo
@@ -17652,6 +17681,338 @@ async function catTandaDeshacer(){
    EL CÓDIGO NO SE EDITA NUNCA. Es el amarre con el presupuesto de 2024: si se
    cambia, la estructura deja de cuadrar con lo que se contrató y con lo que se
    paga. Se cambia el NOMBRE, que es lo que se lee. */
+/* ══ v109 · EL CATÁLOGO NO PUEDE SERVIR DATOS VIEJOS ═════════════════════
+   Pasó en obra y casi cuesta caro: el dueño vio una tarjeta que decía «sin
+   empezar · 4 días vencida» sobre `rec0817-2a-ptaserv`, que está **completada
+   al 100% desde el 13 de septiembre**, cerrada por él mismo. Estuvo a punto de
+   reabrir seis actividades buenas por creerle a la pantalla.
+
+   La causa: `cargarCatalogo()` corría UNA sola vez por sesión —la primera que
+   se entra a Partidas— y `refrescarApp()` recargaba `S.acts` pero no
+   `S.catActs`. Por eso la barra de arriba decía «sincronizado» mientras la
+   tarjeta enseñaba un estado de hacía días: las dos cosas eran ciertas.
+
+   Cuatro piezas, y ninguna es opcional: el ↺ recarga el catálogo, entrar con
+   datos viejos los recarga solos, LA HORA SE VE, y lo que se escribe desde
+   otra pantalla marca el catálogo como viejo. */
+var CAT_FRESCO_MS  = 5*60*1000;    // a partir de aquí se recarga al entrar
+var CAT_AMBAR_MS   = 15*60*1000;   // a partir de aquí el aviso se pone en ámbar
+function _catDatosViejos(){
+  if(S.catViejo) return true;                       // alguien escribió por fuera
+  if(!S.catCargadoEn) return true;
+  return (Date.now()-S.catCargadoEn) > CAT_FRESCO_MS;
+}
+/* Lo marca quien escribe FUERA del módulo. `Acciones` ya parchea las copias
+   locales de una actividad que pasa por él; esto es para lo que entra por otro
+   camino —otra sesión, otro ingeniero, la cola que sale sola— y para que al
+   volver a Partidas se vuelva a preguntar en vez de creerse lo de antes. */
+function catMarcarViejo(){ S.catViejo=true; }
+function _catEdad(){ return S.catCargadoEn ? (Date.now()-S.catCargadoEn) : Infinity; }
+function _catFrescoHTML(){
+  if(!S.catCargadoEn) return '';
+  var ms=_catEdad(), viejo=ms>CAT_AMBAR_MS;
+  var d=new Date(S.catCargadoEn);
+  var h=d.getHours(), m=String(d.getMinutes()).padStart(2,'0');
+  var ampm=h>=12?'p.m.':'a.m.'; var h12=h%12||12;
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;'+
+      'margin-bottom:8px;padding:7px 11px;border-radius:10px;font-size:11px;line-height:1.4;'+
+      'background:'+(viejo?'var(--amber-light)':'var(--bg3)')+';'+
+      'border:1px solid '+(viejo?'var(--amber)':'var(--border)')+';'+
+      'color:'+(viejo?'var(--amber)':'var(--text3)')+'">'+
+      '<span style="font-family:var(--mono)">'+(S._catCargando?'trayendo datos…':'datos de las '+h12+':'+m+' '+ampm)+'</span>'+
+      '<button onclick="catRecargarAhora()" style="background:none;border:0;cursor:pointer;padding:0 6px;'+
+        'min-height:44px;font-size:11px;font-weight:800;color:inherit;text-decoration:underline">Actualizar</button>'+
+    '</div>';
+}
+async function catRecargarAhora(){
+  if(S._catCargando) return;
+  S._catCargando=true; renderCatalogo();
+  try{ await cargarCatalogo(); }catch(e){}
+  S._catCargando=false; renderCatalogo();
+}
+
+/* ══ v109 · POSIBLES REPETIDAS — que las busque el app ═══════════════════
+   Queja del dueño: «ir agrupando las actividades en esas partidas que creamos,
+   borrando las que sobren». `catJuntar` existe desde la v98, pero **hay que
+   saber de antemano cuáles se repiten** y marcarlas a mano entre 1.029. Eso no
+   lo hace nadie.
+
+   LOS TOKENS CORTOS CUENTAN, y esa es la decisión que hace que la pantalla
+   sirva o estorbe. Midiendo con palabras de más de tres letras, «Limpieza en
+   N6» y «Limpieza en N7» salían al 100% — son DOS PISOS DISTINTOS. `N6` y `N7`
+   se caían por cortas. Contándolas, esa pareja da **0,33** y no aparece.
+   Solo se tiran las de relleno: de, la, el, los, las, en, del, con, por, una,
+   uno. Medido hoy: **47** parejas a ≥0,90 · **214** a ≥0,75 · **498** a ≥0,60. */
+var CAT_RELLENO_REP={de:1,la:1,el:1,los:1,las:1,en:1,del:1,con:1,por:1,una:1,uno:1};
+function _catPalabrasRep(nombre){
+  return _catNorm(nombre).split(/[^a-z0-9]+/)
+    .filter(function(w){ return w && !CAT_RELLENO_REP[w]; });
+}
+function _catSimRep(wa, wb){
+  if(!wa.length || !wb.length) return 0;
+  var set={}; wb.forEach(function(w){ set[w]=1; });
+  var n=0, vis={};
+  wa.forEach(function(w){ if(set[w] && !vis[w]){ vis[w]=1; n++; } });
+  return n/Math.max(wa.length, wb.length);
+}
+function _catNoIguales(){ return S.catNoIguales||{}; }
+function _catClaveRep(a,b){ return a<b ? a+'|'+b : b+'|'+a; }
+/* Se calcula una vez por carga: son ~23.000 comparaciones dentro del capítulo
+   más grande y no hace falta rehacerlas en cada repintado. */
+function _catRepetidas(){
+  var sello=_catP().length+'|'+Object.keys(_catNoIguales()).length+'|'+(S.catCargadoEn||0);
+  if(S._catRepes && S._catRepesSello===sello) return S._catRepes;
+  var porCap={}, no=_catNoIguales();
+  _catAgenda().forEach(function(p){
+    (porCap[String(p.capitulo)]=porCap[String(p.capitulo)]||[]).push({p:p, w:_catPalabrasRep(p.nombre)});
+  });
+  var r=[], cortado=false;
+  var TOPE=2000;
+  Object.keys(porCap).forEach(function(cap){
+    if(cortado) return;
+    var L=porCap[cap];
+    /* Indice por palabra: dos nombres que no comparten NI UNA palabra no
+       pueden pasar de cero, asi que no hace falta compararlos. */
+    var idx={};
+    L.forEach(function(x,i){ x.w.forEach(function(w){ (idx[w]=idx[w]||[]).push(i); }); });
+    var hecho={};
+    for(var i=0;i<L.length && !cortado;i++){
+      var cand={};
+      L[i].w.forEach(function(w){ (idx[w]||[]).forEach(function(j){ if(j>i) cand[j]=1; }); });
+      var js=Object.keys(cand);
+      for(var k=0;k<js.length;k++){
+        var j=+js[k], cl=i+'-'+j;
+        if(hecho[cl]) continue; hecho[cl]=1;
+        var sm=_catSimRep(L[i].w, L[j].w);
+        if(sm<0.60) continue;
+        if(no[_catClaveRep(L[i].p.id, L[j].p.id)]) continue;
+        r.push({cap:cap, a:L[i].p, b:L[j].p, sim:sm});
+        /* TOPE. Si un capitulo llegara a tener miles de partidas casi iguales,
+           esto no puede colgar el telefono — y una lista de diez mil parejas no
+           la revisa nadie. Se para y SE DICE. */
+        if(r.length>=TOPE){ cortado=true; break; }
+      }
+    }
+  });
+  S._catRepesCortado=cortado;
+  r.sort(function(x,y){ return y.sim-x.sim || String(x.a.nombre).localeCompare(String(y.a.nombre)); });
+  S._catRepes=r; S._catRepesSello=sello;
+  return r;
+}
+/* Las EXACTAS son otra cosa: misma descripción Y mismo apartamento, o sea dos
+   actividades para el mismo trabajo. No se juntan partidas — se quita la que
+   sobra. Medido hoy: 15 grupos, 36 actividades, 21 sobrantes. */
+function _catExactas(){
+  var m={};
+  _catTodas().forEach(function(a){
+    var k=String(a.descripcion||'')+' '+String(a.area||'').trim();
+    (m[k]=m[k]||[]).push(a);
+  });
+  return Object.keys(m).filter(function(k){ return m[k].length>1; }).map(function(k){
+    /* Se queda la MÁS ADELANTADA. Quedarse con la de cero y borrar la cerrada
+       sería tirar trabajo hecho. A igualdad, la más vieja. */
+    var l=m[k].slice().sort(function(x,y){
+      return _catPct(y)-_catPct(x) || String(x.created_at||'').localeCompare(String(y.created_at||''));
+    });
+    return {queda:l[0], sobran:l.slice(1), desc:l[0].descripcion, area:l[0].area};
+  }).sort(function(x,y){ return y.sobran.length-x.sobran.length; });
+}
+
+function catRepesAbrir(){
+  S.catRepes={tramo:0.90}; S.catMadres=false; S.catCap=null; S.catGrupo=null; S.catUbic=null;
+  renderCatalogo(); _catArriba();
+}
+function catRepesCerrar(){ S.catRepes=null; renderCatalogo(); _catArriba(); }
+function catRepesTramo(t){ if(S.catRepes){ S.catRepes.tramo=t; renderCatalogo(); _catArriba(); } }
+function _catRepesHTML(){
+  var R=S.catRepes, todas=_catRepetidas(), ex=_catExactas();
+  var n90=todas.filter(function(x){ return x.sim>=0.90; }).length;
+  var n75=todas.filter(function(x){ return x.sim>=0.75; }).length;
+  var n60=todas.length;
+  var lista=todas.filter(function(x){ return x.sim>=R.tramo; });
+  var h=_catBuscaBarraHTML()+
+    '<button onclick="catRepesCerrar()" style="'+_catVolverBS+'">‹ Volver</button>'+
+    '<div style="font-size:19px;font-weight:800;margin:4px 0 3px">Posibles repetidas</div>'+
+    '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
+      'Se comparan por las palabras del nombre, <b>dentro del mismo capítulo</b>. '+
+      'Juntar <b>no borra</b>: las actividades pasan a la que se queda y la otra se desactiva, '+
+      'y se puede deshacer.</div>';
+  /* Las exactas primero: son basura segura y se quitan de una tanda. */
+  if(ex.length){
+    var sobran=ex.reduce(function(n,g){ return n+g.sobran.length; },0);
+    h+='<div style="background:var(--bg2);border:1.5px solid var(--amber);border-radius:12px;'+
+        'padding:12px 13px;margin-bottom:12px">'+
+      '<div style="font-size:13px;font-weight:800">Repetidas exactas: '+ex.length+' grupo'+(ex.length!==1?'s':'')+'</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:4px;line-height:1.5">'+
+        'Misma descripción y mismo apartamento — <b>'+sobran+' sobran</b>. Se queda la más adelantada.</div>'+
+      '<button onclick="catExactasAbrir()" style="'+_catBS+';width:100%;margin-top:9px;min-height:46px;'+
+        'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">Verlas y quitarlas</button>'+
+    '</div>';
+  }
+  var pill=function(t,txt,n){
+    var on=(R.tramo===t);
+    return '<button onclick="catRepesTramo('+t+')" style="'+_catBS+';flex:1;min-height:44px;font-size:11.5px;'+
+      'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
+      'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+txt+' ('+n+')</button>';
+  };
+  /* ABRE EN EL TRAMO DE ARRIBA. Bajar de tramo es una decisión, no lo primero
+     que se ve: a 0,60 son 498 parejas y la mayoría no son la misma cosa. */
+  h+='<div style="display:flex;gap:6px;margin-bottom:12px">'+
+      pill(0.90,'Casi iguales',n90)+pill(0.75,'Parecidas',n75)+pill(0.60,'Puede que',n60)+'</div>';
+  if(S._catRepesCortado)
+    h+='<div style="margin-bottom:10px;padding:10px 12px;border-radius:11px;background:var(--amber-light);'+
+      'border:1.5px solid var(--amber);color:var(--amber);font-size:11.5px;line-height:1.45">'+
+      'Hay tantas parecidas que la búsqueda se paró en 2.000 parejas. Ve resolviendo y al recargar salen las siguientes.</div>';
+  if(!lista.length)
+    h+='<div class="empty" style="padding:26px 16px;color:var(--green);font-weight:700">'+
+       'Nada que revisar en este tramo.</div>';
+  lista.slice(0,80).forEach(function(x){
+    var na=_catActsDe(x.a.id).length, nb=_catActsDe(x.b.id).length;
+    var lado=function(q,n,otra){
+      return '<button onclick="catRepJuntar('+_catQ(q.id)+','+_catQ(otra.id)+')" style="'+_catBS+';width:100%;'+
+        'text-align:left;min-height:52px;padding:9px 11px;margin-bottom:5px;display:block;'+
+        'border:1.5px solid var(--border2);background:var(--bg3);color:var(--text);font-weight:600;font-size:12.5px;'+
+        'line-height:1.35;white-space:normal">'+esc(q.nombre)+
+        '<span style="display:block;font-size:10.5px;color:var(--text3);font-family:var(--mono);'+
+        'font-weight:600;margin-top:3px">se queda esta · '+n+' actividad'+(n!==1?'es':'')+'</span></button>';
+    };
+    h+='<div style="background:var(--bg2);border:1.5px solid var(--border2);border-radius:12px;'+
+        'padding:11px 12px;margin-bottom:8px">'+
+      '<div style="font-size:10.5px;font-family:var(--mono);color:var(--text3);margin-bottom:7px">'+
+        esc(x.cap)+' · '+esc(_catCapNom(x.cap))+' · parecido '+Math.round(x.sim*100)+'%</div>'+
+      lado(x.a,na,x.b)+lado(x.b,nb,x.a)+
+      '<button onclick="catRepNoIgual('+_catQ(x.a.id)+','+_catQ(x.b.id)+')" style="'+_catBS+';width:100%;'+
+        'min-height:44px;font-size:11.5px;border:1.5px dashed var(--border2);background:none;color:var(--text3)">'+
+        'No son la misma</button>'+
+    '</div>';
+  });
+  if(lista.length>80)
+    h+='<div style="font-size:11.5px;color:var(--text3);text-align:center;padding:10px">'+
+       'Se enseñan 80 de '+lista.length+'. Ve resolviendo y salen las siguientes.</div>';
+  return h+'<div style="height:110px"></div>';
+}
+/* Reusa `catJuntarEn` de la v98: mueve los amarres, desactiva la otra, deja
+   rastro y guarda el deshacer. No se abre un segundo camino para lo mismo. */
+function catRepJuntar(quedaId, otraId){
+  S.catPick={modo:'juntar', ids:[quedaId, otraId], q:''};
+  return catJuntarEn(quedaId);
+}
+/* «No son la misma» — sin esto, las 498 del tramo bajo reaparecen para siempre
+   y la pantalla se vuelve ruido. Vive en `obra_config`, una clave y un JSON,
+   para que el módulo se siga borrando entero. */
+async function catRepNoIgual(idA, idB){
+  var k=_catClaveRep(idA, idB);
+  var m=Object.assign({}, _catNoIguales()); m[k]=1;
+  S.catNoIguales=m; S._catRepes=null;
+  renderCatalogo();
+  try{
+    await sb('obra_config',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+             body:JSON.stringify({key:'cat_no_iguales', value:JSON.stringify(Object.keys(m))})});
+  }catch(e){
+    delete S.catNoIguales[k]; S._catRepes=null; renderCatalogo();
+    showToast('No se pudo guardar: '+((e&&e.message)||''),'err',7000);
+  }
+}
+
+/* ── LAS EXACTAS, en tanda ── */
+function catExactasAbrir(){ S.catExactas=true; renderCatalogo(); _catArriba(); }
+function catExactasCerrar(){ S.catExactas=false; renderCatalogo(); _catArriba(); }
+function _catExactasHTML(){
+  var ex=_catExactas();
+  var sobran=ex.reduce(function(n,g){ return n+g.sobran.length; },0);
+  var h=_catBuscaBarraHTML()+
+    '<button onclick="catExactasCerrar()" style="'+_catVolverBS+'">‹ Posibles repetidas</button>'+
+    '<div style="font-size:19px;font-weight:800;margin:4px 0 3px">Repetidas exactas</div>'+
+    '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
+      'Misma descripción y mismo apartamento: son dos apuntes del mismo trabajo. '+
+      '<b>Se queda la más adelantada</b> —nunca se borra la que lleva más avance— y '+
+      'antes de borrar queda escrito en el historial qué era y en qué estado iba.</div>';
+  if(!ex.length) return h+'<div class="empty" style="padding:26px 16px;color:var(--green);font-weight:700">'+
+    'No hay ninguna repetida exacta.</div>';
+  ex.forEach(function(g){
+    h+='<div style="background:var(--bg2);border:1.5px solid var(--border2);border-radius:12px;'+
+        'padding:11px 12px;margin-bottom:6px">'+
+      '<div style="font-size:12.5px;font-weight:700;line-height:1.35">'+esc(g.desc)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:4px;line-height:1.6">'+
+        esc(g.area||'sin ubicación')+'<br>'+
+        'se queda: '+_catPct(g.queda)+'% ('+esc(g.queda.estado||'')+')<br>'+
+        'se quitan: '+g.sobran.map(function(a){ return _catPct(a)+'%'; }).join(' · ')+
+      '</div></div>';
+  });
+  h+='<button onclick="catExactasQuitar()" style="'+_catBS+';width:100%;margin-top:10px;min-height:52px;'+
+    'border:1.5px solid var(--red);background:var(--red-light);color:var(--red)">'+
+    'Quitar las '+sobran+' que sobran</button>';
+  return h+'<div style="height:110px"></div>';
+}
+async function catExactasQuitar(){
+  var ex=_catExactas();
+  var quitar=[]; ex.forEach(function(g){ g.sobran.forEach(function(a){ quitar.push(a); }); });
+  if(!quitar.length) return;
+  if(!confirm('Se quitan '+quitar.length+' actividades repetidas.\n\nLa más adelantada de cada grupo se queda. ¿Seguro?')) return;
+  S.catExactas=false; renderCatalogo();
+  var ok=0, fallos=[];
+  for(var i=0;i<quitar.length;i++){
+    /* Una por una POR `Acciones.eliminar`, que desde la v107 escribe el rastro
+       ANTES de borrar con el estado, el avance y el responsable. Si una falla,
+       se dice cuál y las demás sí se quitan. */
+    try{ await Acciones.eliminar(quitar[i].id); ok++; }
+    catch(e){ fallos.push(String(quitar[i].descripcion||'').slice(0,34)+' ('+((e&&e.message)||'')+')'); }
+  }
+  if(fallos.length) showToast('Se quitaron '+ok+'. NO se pudo con '+fallos.length+': '+fallos.join(' · '),'err',9000);
+  else showToast(ok+' quitada'+(ok!==1?'s':'')+' ✓');
+  try{ await cargarCatalogo(); }catch(e2){}
+  renderCatalogo();
+}
+
+/* ── EL MARCADOR: cuánto falta por ordenar ──
+   Hoy no hay forma de saber si va por la mitad o por el principio. Sale de la
+   base al pintarse, NO se guarda: es un espejo, no un dato. */
+function _catMarcadorHTML(){
+  var ag=_catAgenda(), colg=ag.filter(function(p){ return !!p.padre_id; }).length;
+  var pct=ag.length?Math.round(colg/ag.length*100):0;
+  var reps=_catRepetidas().filter(function(x){ return x.sim>=0.90; }).length;
+  var ex=_catExactas().reduce(function(n,g){ return n+g.sobran.length; },0);
+  var sinCap=0; _catAgendaDe('0').forEach(function(p){ sinCap+=_catActsDe(p.id).length; });
+  var linea=function(txt){ return '<div style="font-size:11.5px;color:var(--text2);line-height:1.7;'+
+    'font-family:var(--mono)">'+txt+'</div>'; };
+  return '<div style="margin:0 0 12px;padding:12px 13px;border-radius:12px;background:var(--bg2);'+
+      'border:1.5px solid var(--border)">'+
+    '<div style="font-size:13px;font-weight:800;margin-bottom:5px">Ordenando el catálogo</div>'+
+    linea(ag.length+' partidas · <b>'+colg+'</b> colgadas de su línea del presupuesto ('+pct+'%)')+
+    linea('<b>'+reps+'</b> posibles repetidas sin revisar'+(ex?' · <b>'+ex+'</b> exactas sobrando':''))+
+    linea('<b>'+sinCap+'</b> actividades en «'+esc(_catCapNom('0'))+'» sin capítulo propio')+
+    '<button onclick="catRepesAbrir()" style="'+_catBS+';width:100%;margin-top:9px;min-height:46px;'+
+      'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent)">'+
+      'Posibles repetidas ('+reps+')</button>'+
+  '</div>';
+}
+
+/* ── QUITAR LAS PARTIDAS VACÍAS ──
+   Al juntar o al mover actividades quedan partidas sin nada dentro. SOLO las
+   vacías: una partida con actividades no se quita, primero se mueven. */
+function _catVaciasDe(cap){
+  return _catAgendaDe(cap).filter(function(p){ return !_catActsDe(p.id).length; });
+}
+async function catQuitarVacias(){
+  var cap=String(S.catCap||''), v=_catVaciasDe(cap);
+  if(!v.length){ showToast('No hay ninguna partida vacía en este capítulo','warn',4000); return; }
+  if(!confirm('Se quitan '+v.length+' partida'+(v.length!==1?'s':'')+' sin actividades de «'+
+      _catCapNom(cap)+'».\n\nSe desactivan, no se borran, y se puede deshacer.\n\n¿Seguro?')) return;
+  _catGuardarUndo('quitar vacías', v.map(function(p){ return p.id; }));
+  setSS('syncing','Quitando...');
+  try{
+    for(var i=0;i<v.length;i++){
+      await sb('obra_partidas?id=eq.'+encodeURIComponent(v[i].id),{method:'PATCH',prefer:'return=minimal',
+               body:JSON.stringify({activo:false})});
+      logCambio('editado','partida',v[i].id,v[i].nombre,'partida vacía quitada de '+cap);
+    }
+    await cargarCatalogo();
+    setSS('ok','✓'); showToast(v.length+' vacía'+(v.length!==1?'s':'')+' quitada'+(v.length!==1?'s':'')+' ✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
+  renderCatalogo();
+}
+
 function catMadresAbrir(){ S.catMadres=true; S.catCap=null; S.catGrupo=null; S.catUbic=null; renderCatalogo(); _catArriba(); }
 function catMadresCerrar(){ S.catMadres=false; S.catMadreNueva=null; S.catMadreEdit=null; renderCatalogo(); _catArriba(); }
 function _catEnBase(){ return Array.isArray(S.catCaps) && S.catCaps.length>0; }
@@ -18098,6 +18459,8 @@ function catVolver(){
   else if(S.catPartida) S.catPartida=null;
   else if(S.catGruposEdit) S.catGruposEdit=false;
   else if(S.catCurar) S.catCurar=false;
+  else if(S.catExactas) S.catExactas=false;
+  else if(S.catRepes) S.catRepes=null;
   else if(S.catMadres) S.catMadres=false;
   else if(S.catUbic) S.catUbic=null;
   else if(S.catGrupo) S.catGrupo=null;
@@ -18131,6 +18494,14 @@ function renderCatalogo(){
     }
     return;
   }
+  /* SI LOS DATOS ESTAN VIEJOS, SE RECARGAN SOLOS AL ENTRAR (v109). Cinco
+     minutos, o de inmediato si algo escribio por fuera del modulo. No se
+     bloquea la pantalla: se sigue pintando lo que hay y se repinta al llegar
+     lo nuevo, con la hora a la vista para que se sepa cuál es cuál. */
+  if(!S._catCargando && _catDatosViejos()){
+    S._catCargando=true;
+    cargarCatalogo().then(function(){ S._catCargando=false; if(S.currentTab==='catalogo') renderCatalogo(); });
+  }
   try{
     /* La búsqueda manda sobre todo lo demás: está arriba y siempre visible, y
        lo que se escribe ahí es lo que se quiere ver ahora. */
@@ -18142,6 +18513,8 @@ function renderCatalogo(){
     else if(S.catPick)        el.innerHTML=_catPickHTML();
     else if(S.catSueltas)     el.innerHTML=_catSueltasHTML();
     else if(S.catPartida)     el.innerHTML=_catFichaHTML();
+    else if(S.catExactas)     el.innerHTML=_catExactasHTML();
+    else if(S.catRepes)       el.innerHTML=_catRepesHTML();
     else if(S.catMadres)      el.innerHTML=_catMadresHTML();
     else if(S.catCap!==null && S.catCap!==undefined){
       if(S.catGruposEdit)     el.innerHTML=_catGruposEditHTML();
@@ -18199,7 +18572,7 @@ function _catCabecera(){
 }
 
 function _catCapitulosHTML(){
-  var h=_catBuscaBarraHTML()+_catCabecera();
+  var h=_catBuscaBarraHTML()+_catCabecera()+_catMarcadorHTML();
   if(S.catAviso)
     h+='<div style="margin:0 0 12px;padding:12px 13px;border-radius:12px;'+
       'background:var(--red-light);border:1.5px solid var(--red);color:var(--red);'+
@@ -18266,6 +18639,7 @@ function _catCapitulosHTML(){
    por encontrar. */
 function _catBuscaBarraHTML(){
   var q=String(S.catQ||'');
+  var fresco=_catFrescoHTML();
   var ch=S.catQChips||{};
   var chip=function(k,t){
     var on=!!ch[k];
@@ -18273,7 +18647,8 @@ function _catBuscaBarraHTML(){
       'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
       'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+t+'</button>';
   };
-  return '<div style="display:flex;align-items:center;gap:9px;background:var(--bg2);'+
+  return fresco+
+    '<div style="display:flex;align-items:center;gap:9px;background:var(--bg2);'+
       'border:1.5px solid var(--border2);border-radius:var(--r2);padding:10px 13px;margin-bottom:8px">'+
       '<input id="cat-q" type="search" value="'+esc(q)+'" oninput="catBuscaTeclea(this.value)" '+
         'placeholder="Buscar en las '+_catTodas().length+' actividades" '+
@@ -18553,6 +18928,7 @@ function _catQ(s){
 
 function _catHerramientasHTML(){
   var n=_catSelIds().length;
+  var _vac=_catVaciasDe(String(S.catCap||'')).length;
   return '<div style="margin:10px 0 12px;padding:10px 12px;border-radius:12px;background:var(--bg3);'+
     'border:1.5px solid '+(n?'var(--accent)':'var(--border)')+'">'+
     '<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
@@ -18570,6 +18946,9 @@ function _catHerramientasHTML(){
       '<option value="">Mover a otro capítulo…</option>'+
       _capsLista().map(function(c){ return '<option value="'+esc(c.n)+'">'+esc(c.n)+' · '+esc(c.t)+'</option>'; }).join('')+
     '</select>'+
+    (_vac?'<button onclick="catQuitarVacias()" style="'+_catBS+';width:100%;margin-top:6px;'+
+      'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">'+
+      'Quitar las '+_vac+' partidas vacías</button>':'')+
     (S.catUndo?'<button onclick="catDeshacer()" style="'+_catBS+';width:100%;margin-top:6px;'+
       'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
       'Deshacer «'+esc(S.catUndo.que)+'»</button>':'')+
@@ -20278,6 +20657,11 @@ function _pctDictado(txt){
 function _repintarDondeEstoy(){
   try{
     if(S.currentTab==='catalogo'){ renderCatalogo(); return; }
+    /* Se escribio desde OTRA pantalla —Revision, la lista, el Repaso—: el
+       catalogo queda marcado como viejo y se vuelve a preguntar al entrar.
+       `Acciones` ya parchea `S.catActs` para lo que pasa por el, pero las
+       partidas y los amarres no, y lo que entra por otro camino tampoco. */
+    if(typeof catMarcarViejo==='function') catMarcarViejo();
     if(S.obraVista==='revision'){ renderRevision(); return; }
     renderActs();
   }catch(e){}
