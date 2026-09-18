@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260918_114';
+const APP_VERSION='20260918_115';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -17630,7 +17630,7 @@ function _catPanel(){
   var abierto=!!(S.catBorrar || S.catRepetir || S.catTandaPick || S.catMadreEdit || S.catMadreNueva ||
                  S.catSgEdit || S.catUbicRen || S.catUbicJuntar || S.catManual ||
                  S.nodoEdit || S.nodoNuevo || S.nodoMover || S.nodoPlan || S.nodoManual ||
-                 S.catPNueva);
+                 S.catPNueva || S.nodoCorrer);
   el.style.display=abierto?'block':'none';
   if(!abierto){ el.innerHTML=''; return; }
   try{
@@ -17648,6 +17648,7 @@ function _catPanel(){
                  : S.nodoPlan ? _nodoPlanEditHTML()
                  : S.nodoManual ? _nodoManualHTML()
                  : S.catPNueva ? _catPNuevaHTML()
+                 : S.nodoCorrer ? _nodoCorrerHTML()
                  : _catTandaPickHTML();
   }catch(e){
     console.warn('_catPanel:',e);
@@ -17660,7 +17661,7 @@ function catPanelCerrar(){ S.catBorrar=null; S.catRepetir=null; S.catTandaPick=n
   S.catMadreEdit=null; S.catMadreNueva=null; S.catSgEdit=null;
   S.catUbicRen=null; S.catUbicJuntar=null; S.catManual=null;
   S.nodoEdit=null; S.nodoNuevo=null; S.nodoMover=null;
-  S.nodoPlan=null; S.nodoManual=null; S.catPNueva=null; _catPanel(); }
+  S.nodoPlan=null; S.nodoManual=null; S.catPNueva=null; S.nodoCorrer=null; _catPanel(); }
 function _catPanelCab(titulo, sub){
   return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">'+
     '<div><div style="font-size:17px;font-weight:800;line-height:1.3">'+esc(titulo)+'</div>'+
@@ -19381,6 +19382,133 @@ function _nodoPieHTML(n){
   return p.join(' · ');
 }
 
+/* ══ v115 · REFECHAR EL PLAN ═════════════════════════════════════════════
+   El cronograma terminaba el 22-jul-2026 y hoy es septiembre: 144 de 155 hojas
+   salen vencidas. Lo que hacía falta no era otra pantalla, era **poder volver a
+   fecharlo**, y no de una en una.
+
+   Se corre TODO o desde una tarea hacia abajo, en DÍAS DE TRABAJO —
+   `_sumarDiasLab`, lunes a sábado menos feriados, el mismo criterio del
+   arrastre de la v104—. En días de calendario metería trabajo en domingo, que
+   es justo lo que el dueño corrige a mano.
+
+   NADA SE MUEVE SIN QUE LO VEA ANTES: la pantalla dice cuántas tareas, de qué
+   fecha a qué fecha, y cuánto se mueve la última. */
+function nodoCorrerAbrir(id){
+  if(!isAdmin()){ showToast('Solo el administrador','warn',4000); return; }
+  catPanelOtrosCerrar('nodoCorrer');
+  S.nodoCorrer={id:id||null, dias:'', hasta:''};
+  _catPanel();
+}
+function nodoCorrerValor(k,v){ if(S.nodoCorrer){ S.nodoCorrer[k]=String(v); S.nodoCorrer[k==='dias'?'hasta':'dias']=''; _catPanel(); } }
+/* Las tareas que se van a mover: una y lo que cuelga de ella, o el plan entero.
+   Solo las que tienen fechas — a una sin fecha no se le inventa ninguna. */
+function _nodoCorrerAlcance(){
+  var C=S.nodoCorrer; if(!C) return [];
+  var base=C.id?[_nodoPorId(C.id)].concat(_nodoDesc(C.id)):_nodos();
+  return base.filter(function(n){ return n && n.inicio_plan && n.fin_plan; });
+}
+function _nodoCorrerDias(){
+  var C=S.nodoCorrer; if(!C) return 0;
+  if(C.dias!=='') return parseInt(C.dias,10)||0;
+  if(C.hasta){
+    var ns=_nodoCorrerAlcance();
+    var ini=''; ns.forEach(function(n){ if(!ini||String(n.inicio_plan)<ini) ini=String(n.inicio_plan); });
+    if(!ini) return 0;
+    try{ return _diasLabEntre(ini, C.hasta); }catch(e){ return 0; }
+  }
+  return 0;
+}
+function _nodoCorrerHTML(){
+  var C=S.nodoCorrer, n=C.id?_nodoPorId(C.id):null;
+  var ns=_nodoCorrerAlcance(), d=_nodoCorrerDias();
+  var ini='', fin='';
+  ns.forEach(function(x){
+    if(!ini||String(x.inicio_plan)<ini) ini=String(x.inicio_plan);
+    if(!fin||String(x.fin_plan)>fin) fin=String(x.fin_plan);
+  });
+  var h=_catPanelCab(n?('Correr «'+n.nombre+'» y lo suyo'):'Refechar el plan entero',
+    n?('Se mueven <b>'+ns.length+'</b> tareas: ésta y las que cuelgan de ella.')
+     :('Se mueven las <b>'+ns.length+'</b> tareas con fecha. El plan terminaba el '+
+       _nodoFecha(fin)+'.'));
+  h+=_catLab('Correr cuántos días de trabajo')+
+     '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+     [30,60,90,120].map(function(v){
+       var on=(String(C.dias)===String(v));
+       return '<button onclick="nodoCorrerValor(\'dias\','+v+')" style="'+_catPBS+';flex:1;min-width:64px;'+
+         'border-color:'+(on?'var(--accent)':'var(--border2)')+';'+
+         'background:'+(on?'var(--accent-soft)':'var(--bg2)')+'">+'+v+'</button>';
+     }).join('')+'</div>'+
+     '<input id="cat-nc-d" type="number" value="'+esc(C.dias)+'" placeholder="o escribe los días" '+
+       'oninput="if(S.nodoCorrer){S.nodoCorrer.dias=this.value;S.nodoCorrer.hasta=\'\';}" '+
+       'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+       'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--mono);'+
+       'background:var(--bg2);color:var(--text);margin-bottom:12px">'+
+     _catLab('O que empiece en esta fecha')+
+     '<input type="date" value="'+esc(C.hasta)+'" onchange="nodoCorrerValor(\'hasta\',this.value)" '+
+       'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+       'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--font);'+
+       'background:var(--bg2);color:var(--text)">';
+  if(d>0 && ns.length)
+    h+='<div style="margin-top:12px;padding:11px 13px;border-radius:12px;background:var(--amber-light);'+
+      'border:1.5px solid var(--amber);color:var(--amber);font-size:12px;line-height:1.6">'+
+      '<b>'+ns.length+'</b> tareas se corren <b>'+d+' días de trabajo</b>.<br>'+
+      'Del '+_nodoFecha(ini)+' → '+_nodoFecha(fin)+'<br>'+
+      'pasan a '+_nodoFecha(_sumarDiasLab(ini,d))+' → '+_nodoFecha(_sumarDiasLab(fin,d))+'.<br>'+
+      '<span style="opacity:.85">La duración de cada una no cambia. Se saltan domingos y feriados.</span></div>';
+  h+='<button onclick="nodoCorrerHacer()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:52px;'+
+    'border-color:var(--green);background:var(--green-light);color:var(--green)'+
+    ((d>0&&ns.length)?'':';opacity:.45')+'">Correr las '+ns.length+'</button>';
+  return h+_catPanelPie();
+}
+async function nodoCorrerHacer(){
+  var C=S.nodoCorrer; if(!C) return;
+  var d=_nodoCorrerDias(), ns=_nodoCorrerAlcance();
+  if(!d || !ns.length){ showToast('Escoge cuántos días o una fecha','warn',4000); return; }
+  var quien=C.id?('«'+((_nodoPorId(C.id)||{}).nombre||'')+'» y lo suyo'):'el plan entero';
+  S.nodoCorrer=null; _catPanel();
+  setSS('syncing','Refechando…');
+  /* EL RETRATO DE ANTES, para poder deshacerlo de golpe. Mover 155 fechas sin
+     vuelta atrás no se le hace a nadie. */
+  S.nodoCorrerUndo=ns.map(function(n){
+    return {id:n.id, inicio:n.inicio_plan, fin:n.fin_plan};
+  });
+  var ok=0, fallos=[];
+  for(var i=0;i<ns.length;i++){
+    var n=ns[i];
+    try{
+      var ni=_sumarDiasLab(String(n.inicio_plan), d), nf=_sumarDiasLab(String(n.fin_plan), d);
+      await sb('obra_nodos?id=eq.'+encodeURIComponent(n.id),{method:'PATCH',prefer:'return=minimal',
+               body:JSON.stringify({inicio_plan:ni, fin_plan:nf})});
+      n.inicio_plan=ni; n.fin_plan=nf; ok++;
+    }catch(e){ fallos.push(String(n.nombre).slice(0,30)); }
+  }
+  logCambio('editado','plan',C.id||'plan','El cronograma',
+    'refechado '+quien+': '+ok+' tareas corridas '+d+' días de trabajo');
+  setSS(fallos.length?'err':'ok', fallos.length?'Error':'✓');
+  if(fallos.length) showToast('Se corrieron '+ok+'. NO se pudo con '+fallos.length+': '+fallos.join(' · '),'err',9000);
+  else showToast(ok+' tareas corridas '+d+' días ✓ — se puede deshacer');
+  renderCatalogo();
+}
+async function nodoCorrerDeshacer(){
+  var U=S.nodoCorrerUndo; if(!U||!U.length) return;
+  S.nodoCorrerUndo=null;
+  setSS('syncing','Deshaciendo…');
+  var fallos=0;
+  for(var i=0;i<U.length;i++){
+    try{
+      await sb('obra_nodos?id=eq.'+encodeURIComponent(U[i].id),{method:'PATCH',prefer:'return=minimal',
+               body:JSON.stringify({inicio_plan:U[i].inicio, fin_plan:U[i].fin})});
+      var n=_nodoPorId(U[i].id);
+      if(n){ n.inicio_plan=U[i].inicio; n.fin_plan=U[i].fin; }
+    }catch(e){ fallos++; }
+  }
+  logCambio('editado','plan','plan','El cronograma','deshecho el refechado de '+U.length+' tareas');
+  setSS(fallos?'err':'ok', fallos?'Error':'✓');
+  showToast(fallos?('Se devolvieron todas menos '+fallos):'Refechado deshecho ✓', fallos?'err':'ok', 6000);
+  renderCatalogo();
+}
+
 /* ══ v113 · LA LÍNEA DE TIEMPO ═══════════════════════════════════════════
    «Visualizar y trabajar de manera eficiente e interactiva.» Una tarea con
    `inicio_plan` y `fin_plan` es una barra: eso es un Gantt, y es la vista que
@@ -19729,7 +19857,7 @@ function nodoMoverAbrir(id){
    siguiente se acuerde; esto no. */
 var CAT_PANELES=['catBorrar','catRepetir','catTandaPick','catMadreEdit','catMadreNueva',
                  'catSgEdit','catUbicRen','catUbicJuntar','catManual','nodoEdit',
-                 'nodoNuevo','nodoMover','nodoPlan','nodoManual','catPNueva'];
+                 'nodoNuevo','nodoMover','nodoPlan','nodoManual','catPNueva','nodoCorrer'];
 function catPanelOtrosCerrar(salvo){
   CAT_PANELES.forEach(function(k){ if(k!==salvo) S[k]=null; });
 }
@@ -20099,7 +20227,7 @@ async function nodoQuitar(nid, actId){
    (`_catAmbito`) y las cuatro vistas leen de ahí: si cada una resolviera lo
    suyo, cambiar de vista terminaría cambiando también lo que se mira, que es
    justo lo que no puede pasar. */
-var CAT_VISTAS=[['lista','Lista'],['edificio','Edificio'],['matriz','Matriz'],['arbol','Árbol'],
+var CAT_VISTAS=[['lista','Lista'],['edificio','Edificio'],['matriz','Matriz'],['arbol','Cronograma'],
                 ['tiempo','Tiempo']];
 function catVista(){
   var v=S.catVista;
@@ -20328,58 +20456,171 @@ function _catVolverAmbitoHTML(){
   }
   return '';
 }
-function _catArbolFilaHTML(n, prof){
-  var av=_nodoAvance(n.id), hijos=_nodoHijos(n.id), dir=_nodoActsDirectas(n.id);
-  var abierto=!!(S.nodoAbiertos||{})[n.id];
-  var entre=(n.tipo==='entregable');
-  var h='<div style="margin-left:'+Math.min(prof,5)*13+'px;margin-bottom:5px">'+
-    '<div class="cat-fila" style="cursor:default;'+
-      (entre?'border-color:var(--green);background:var(--green-light)':'')+'">'+
-      ((hijos.length||dir.length)
-        ? '<button onclick="nodoAbrir('+_catQ(n.id)+')" style="background:none;border:0;cursor:pointer;'+
-          'color:var(--text3);font-size:13px;min-width:26px;min-height:44px;padding:0;flex-shrink:0">'+
-          (abierto?'▾':'▸')+'</button>'
-        : '<span style="min-width:26px;flex-shrink:0"></span>')+
-    '<button onclick="nodoIr('+_catQ(n.id)+')" class="cat-fila-nom" style="background:none;border:0;'+
-      'text-align:left;cursor:pointer;color:var(--text);font-family:var(--font);padding:0;min-height:44px">'+
-      (entre?'<span class="cat-fila-que" style="color:var(--green)">Entregable'+
-        (n.clase?' · '+esc(n.clase):'')+'</span>'
-       /* La fila dice QUÉ ES, como las de la v110: un elemento del presupuesto
-          y un grupo de trabajo no son la misma cosa aunque se vean igual. */
-       :({nivel:'Nivel · presupuesto', elemento:'Elemento', acabados:'Lo registrado',
-          'nivel-real':'Nivel', ubicacion:'Ubicación', grupo:'Clasificación',
-          operacion:'Operación'}[n.origen]
-         ? '<span class="cat-fila-que">'+esc({nivel:'Nivel · presupuesto', elemento:'Elemento',
-             acabados:'Lo registrado','nivel-real':'Nivel', ubicacion:'Ubicación',
-             grupo:'Clasificación', operacion:'Operación'}[n.origen])+'</span>' : ''))+
-      esc(n.nombre)+
-      (dir.length?'<span class="cat-fila-que" style="text-transform:none;letter-spacing:0;'+
-        'font-weight:600;font-family:var(--mono);margin-top:2px">'+dir.length+' aquí mismo</span>':'')+
+/* ══ v115 · EL CRONOGRAMA COMO TABLA DE FILAS QUE SE ABREN ═══════════════
+   Cuarta versión del módulo y el dueño seguía sin acoplarse: «no me gusta cómo
+   me estás presentando la información», «no me convence cómo se ve», «me siento
+   confuso para trabajar con él», «no me acoplo». Preguntado con opciones, lo
+   dijo en una línea suya: **«listas q se oculta y cada fila con sus botones»**,
+   y además «como en Project: tabla con columnas».
+
+   Son la MISMA cosa, y ya existe en este app: es el pliegue de Actividades
+   (`det-`, v87), donde los botones viven dentro de la fila y salen al tocarla.
+   Así que esto NO es una pantalla nueva: es el patrón que él ya sabe usar,
+   traído al cronograma.
+
+   Y NO SE AÑADE UNA SEXTA VISTA: **sustituye al Árbol**. Tenía cinco y dijo que
+   estaba confuso; meterle otra habría sido empeorar el problema que vino a
+   contar.
+
+   La fila cerrada es una LÍNEA DE TABLA con sus columnas —quién, costo,
+   fechas, avance— dentro de un contenedor que se desplaza a lo ancho, con el
+   nombre fijo a la izquierda. Al tocarla, el detalle se abre DEBAJO y pegado a
+   la izquierda, para que no haya que desplazarse para usar los botones. */
+
+/* QUIÉN HACE CADA TAREA. No está en el cronograma —Project no lo trajo— así
+   que sale de sus actividades: el responsable que más veces aparece. Es un
+   hecho de la obra, no una suposición. */
+function _nodoQuien(id){
+  var m={}, acts=_nodoActsTodas(id);
+  acts.forEach(function(a){
+    var q=_responsables(a.personal_nombre)[0]; if(!q) return;
+    m[q]=(m[q]||0)+1;
+  });
+  var ks=Object.keys(m);
+  if(!ks.length) return {nombre:'', n:0, otros:0};
+  ks.sort(function(x,y){ return m[y]-m[x]; });
+  return {nombre:ks[0], n:m[ks[0]], otros:ks.length-1};
+}
+/* LAS FECHAS REALES, de los hechos y no del plan. `obra_cambios` es el único
+   sitio donde consta cuándo se cerró algo (`S.catCierres`, v106): el comienzo
+   real es el primer cierre registrado de la tarea y el fin real el último, y
+   SOLO se da por terminada cuando están todas cerradas. Si falta una, no hay
+   fin real — no se inventa. */
+function _nodoFechasReales(id){
+  var ci=S.catCierres||{}, acts=_nodoActsTodas(id);
+  if(!acts.length) return {inicio:'', fin:'', completa:false};
+  var fs=[], cerradas=0;
+  acts.forEach(function(a){
+    if(_catCerrada(a)){ cerradas++; var f=ci[a.id]; if(f) fs.push(f); }
+  });
+  if(!fs.length) return {inicio:'', fin:'', completa:false};
+  fs.sort();
+  return {inicio:fs[0], fin:(cerradas===acts.length?fs[fs.length-1]:''),
+          completa:cerradas===acts.length};
+}
+function _nodoVacia(n){
+  return !_nodoHijos(n.id).length && !_nodoActsTodas(n.id).length;
+}
+function catCronoVacias(){
+  S.nodoOcultarVacias=!S.nodoOcultarVacias;
+  renderCatalogo();
+}
+/* La lista PLANA de lo que se está viendo, con su profundidad: una tabla no
+   tiene ramas, tiene sangría. Lo que se pliega es cada fila, no el árbol. */
+function _nodoFilasCrono(){
+  var out=[];
+  var mete=function(n, prof){
+    if(!_nodoPasaFiltroT(n)) return;
+    if(S.nodoOcultarVacias && _nodoVacia(n)) return;
+    out.push({n:n, prof:prof});
+    if((S.nodoAbiertos||{})[n.id])
+      _nodoHijos(n.id).forEach(function(h){ mete(h, prof+1); });
+  };
+  _nodoHijos(null).forEach(function(r){ mete(r,0); });
+  return out;
+}
+var CRONO_COLS=[['quien','Quién',110],['costo','Costo',92],['ini','Comienzo',78],
+                ['fin','Fin',78],['real','Fin real',78],['dias','Días',48]];
+function _catCronoFilaHTML(x, i, total){
+  var n=x.n, abierta=!!(S.nodoAbiertos||{})[n.id];
+  var r=_nodoReal(n.id), hijos=_nodoHijos(n.id).length;
+  var est=_nodoEstado(n), q=_nodoQuien(n.id), fr=_nodoFechasReales(n.id);
+  var vacia=_nodoVacia(n);
+  var col=est==='vencida'?'var(--red)':(r.pct!==null&&r.pct>=100)?'var(--green)':
+          (r.pct!==null&&r.pct>0)?'var(--accent)':'var(--text3)';
+  var cel=function(txt, ancho, extra){
+    return '<span style="min-width:'+ancho+'px;max-width:'+ancho+'px;padding:0 6px;'+
+      'font-family:var(--mono);font-size:10.5px;color:var(--text3);overflow:hidden;'+
+      'text-overflow:ellipsis;white-space:nowrap;flex-shrink:0'+(extra||'')+'">'+txt+'</span>';
+  };
+  var h='<div style="border-bottom:1px solid var(--border)">'+
+    '<div style="display:flex;align-items:center;min-height:46px;'+
+      (abierta?'background:var(--bg3);':'')+(vacia?'opacity:.62;':'')+'">'+
+      /* EL NOMBRE VA FIJO: es lo único que no se puede perder al desplazarse. */
+      '<button onclick="nodoAbrir('+_catQ(n.id)+')" style="position:sticky;left:0;z-index:1;'+
+        'background:'+(abierta?'var(--bg3)':'var(--bg2)')+';border:0;border-right:1.5px solid var(--border2);'+
+        'width:176px;min-width:176px;min-height:46px;text-align:left;cursor:pointer;'+
+        'padding:5px 7px 5px '+(7+Math.min(x.prof,4)*9)+'px;font-family:var(--font);color:var(--text)">'+
+        '<span style="display:flex;align-items:center;gap:4px">'+
+          '<span style="color:var(--text3);font-size:10px;flex-shrink:0">'+
+            (hijos?(abierta?'▾':'▸'):'·')+'</span>'+
+          '<span style="font-size:11.5px;font-weight:'+(hijos?'800':'600')+';line-height:1.2;'+
+            'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(n.nombre)+'</span>'+
+        '</span>'+
+        '<span style="display:flex;align-items:center;gap:5px;margin-top:2px">'+
+          '<span style="font-family:var(--mono);font-size:11px;font-weight:800;color:'+col+'">'+
+            (r.pct===null?'—':r.pct+'%')+'</span>'+
+          (r.av?'<span style="font-family:var(--mono);font-size:9.5px;color:var(--text3)">'+
+            r.av.cerradas+'/'+r.av.total+'</span>':'')+
+          (r.fuente==='mano'?'<span style="font-size:9px;color:var(--amber);font-weight:700">a mano</span>':'')+
+          (vacia?'<span style="font-size:9px;color:var(--text3)">vacía</span>':'')+
+        '</span>'+
       '</button>'+
-    '<span class="cat-fila-der">'+_nodoDerHTML(n)+'</span></div>';
-  /* LA SEGUNDA LÍNEA: lo que el cronograma ya sabe y hasta ahora no se veía.
-     Costo sin centavos, duración, la ventana de fechas, el % del archivo
-     etiquetado como «plan» —nunca como el avance— y el estado. */
-  var _pie=_nodoPieHTML(n);
-  if(_pie) h+='<div style="margin:2px 0 0 39px;font-size:10.5px;color:var(--text3);'+
-    'font-family:var(--mono);line-height:1.5">'+_pie+'</div>';
-  if(n.notas)
-    h+='<div style="margin:2px 0 0 39px;font-size:11.5px;color:var(--amber);line-height:1.45">'+
-       '▸ nota: '+esc(n.notas)+'</div>';
-  if(abierto){
-    hijos.filter(_nodoPasaFiltroT).forEach(function(x){ h+=_catArbolFilaHTML(x, prof+1); });
-    if(dir.length)
-      h+='<div style="margin-left:'+Math.min(prof+1,5)*13+'px;margin-top:3px">'+
-        dir.slice(0,8).map(function(a){
-          return '<div style="font-size:11.5px;color:var(--text2);line-height:1.5;padding:2px 0">'+
-            (_catCerrada(a)?'<span style="color:var(--green)">✓</span> ':'<span style="color:var(--text3)">·</span> ')+
-            esc(String(a.descripcion||'').slice(0,62))+
-            '<span style="color:var(--text3);font-family:var(--mono);font-size:10.5px"> — '+
-            esc(_responsables(a.personal_nombre)[0]||'sin responsable')+' · '+
-            esc(_catUbicCorto(String(a.area||'')||PAL_SIN_UBIC))+'</span></div>';
-        }).join('')+
-        (dir.length>8?'<div style="font-size:11px;color:var(--text3);padding:2px 0">y '+(dir.length-8)+' más…</div>':'')+
+      cel(q.nombre?esc(q.nombre)+(q.otros?' +'+q.otros:''):'—',110,';color:var(--text2)')+
+      cel(_nodoCosto(n.costo_plan,false)||'—',92)+
+      cel(_nodoFecha(n.inicio_plan)||'—',78)+
+      cel(_nodoFecha(n.fin_plan)||'—',78,est==='vencida'?';color:var(--red);font-weight:700':'')+
+      cel(fr.fin?_nodoFecha(fr.fin):(fr.inicio?'desde '+_nodoFecha(fr.inicio):'—'),78,
+          fr.fin?';color:var(--green);font-weight:700':'')+
+      cel((_nodoNum(n.dias_plan)!==null?_nodoNum(n.dias_plan):'—'),48)+
+      cel(est==='vencida'?('▲ '+_nodoDiasAtraso(n)+'d'):(NODO_EST_TXT[est]||''),72,
+          est==='vencida'?';color:var(--red);font-weight:800':'')+
+    '</div>';
+  /* ── EL PLIEGUE: los botones de ESTA tarea, pegados a la izquierda ── */
+  if(abierta){
+    var dir=_nodoActsDirectas(n.id);
+    h+='<div style="position:sticky;left:0;width:100%;max-width:100vw;box-sizing:border-box;'+
+      'padding:8px 10px 12px;background:var(--bg3)">';
+    if(isAdmin())
+      h+='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">'+
+        '<button onclick="nodoPlanAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
+          'min-height:44px;font-size:11px;border:1.5px solid var(--border2);background:var(--bg2);'+
+          'color:var(--text2)">Fechas y costo</button>'+
+        '<button onclick="nodoManualAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
+          'min-height:44px;font-size:11px;border:1.5px dashed var(--amber);background:none;'+
+          'color:var(--amber)">Avance a mano</button>'+
+        '<button onclick="nodoCorrerAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
+          'min-height:44px;font-size:11px;border:1.5px solid var(--border2);background:var(--bg2);'+
+          'color:var(--text2)">Correr fechas</button>'+
+        '<button onclick="nodoTraerAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
+          'min-height:44px;font-size:11px;border:1.5px solid var(--accent);background:var(--accent-fill);'+
+          'color:var(--accent-on)">Traer actividades</button>'+
+        '<button onclick="nodoIr('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
+          'min-height:44px;font-size:11px;border:1.5px solid var(--border2);background:var(--bg2);'+
+          'color:var(--text3)">Abrirla sola</button>'+
       '</div>';
+    if(n.pred_plan) h+=_nodoPredsHTML(n);
+    if(n.notas)
+      h+='<div style="margin:6px 0;font-size:11.5px;color:var(--amber);line-height:1.45">▸ '+esc(n.notas)+'</div>';
+    if(dir.length){
+      h+='<div class="cat-fila-que" style="margin:8px 0 5px">Sus actividades ('+dir.length+')</div>';
+      dir.slice(0,12).forEach(function(a){
+        h+='<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin:0 0 2px 2px">'+
+           esc(String(a.area||'sin ubicación'))+' · '+
+           esc(_responsables(a.personal_nombre)[0]||'sin responsable')+'</div>'+revCard(a);
+      });
+      if(dir.length>12)
+        h+='<button onclick="nodoIr('+_catQ(n.id)+')" style="'+_catBS+';width:100%;min-height:44px;'+
+          'font-size:11.5px;border:1.5px dashed var(--border2);background:none;color:var(--text2)">'+
+          'Ver las '+dir.length+' en su pantalla</button>';
+    }else if(!hijos){
+      /* LAS 57 VACÍAS: se dice qué son y qué hacer, en vez de dejar una fila
+         muda que parece rota. */
+      h+='<div style="font-size:11.5px;color:var(--text3);line-height:1.5;padding:6px 0">'+
+        'Esta tarea del cronograma <b>no tiene ninguna actividad</b> de la agenda. '+
+        'Tráele las suyas, o ponle el avance a mano si ya está hecha.</div>';
+    }
+    h+='</div>';
   }
   return h+'</div>';
 }
@@ -20391,69 +20632,67 @@ function _catArbolHTML(){
       'No se pudo leer el plan ('+esc(S.nodosErr)+'). El resto del módulo funciona igual.</div>';
   if(S.nodoSel) return h+_catNodoHTML();
   var raices=_nodoHijos(null);
-  /* LA RAÍZ SE ABRE SOLA la primera vez. Con el árbol del cronograma hay una
-     sola raíz —«PLANIFICACIÓN MECCA»— y una sesión nueva enseñaba UNA fila
-     cerrada: el plan entero parecía vacío hasta que alguien adivinara que hay
-     que tocar el triangulito. */
   if(raices.length===1 && !Object.keys(S.nodoAbiertos||{}).length){
     S.nodoAbiertos=S.nodoAbiertos||{}; S.nodoAbiertos[raices[0].id]=1;
+    _nodoHijos(raices[0].id).forEach(function(x){ S.nodoAbiertos[x.id]=1; });
   }
-  h+='<div style="font-size:19px;font-weight:800;margin:2px 0 3px">El plan</div>'+
-     '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
-       'El otro eje: el capítulo dice si cuadra con lo contratado, el plan dice <b>qué falta para '+
-       'poder entregar</b>. Una misma actividad vive en los dos.</div>';
-  /* NO HAY BOTÓN DE SEMBRAR. El cronograma vive solo en la base y el app no lo
-     sabe reconstruir: lo único honesto que se puede decir aquí es de dónde
-     sale y que se carga del archivo, no desde el catálogo. */
   if(!raices.length){
     h+='<div style="padding:16px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--amber)">'+
-      '<div style="font-size:13.5px;font-weight:700;line-height:1.5;margin-bottom:8px">'+
-        'El plan está vacío.</div>'+
-      '<div style="font-size:12px;color:var(--text3);line-height:1.6">'+
-        esc(NODO_ORIGEN_TXT)+' Si hay que volver a cargarlo, se carga <b>del archivo de '+
-        'Project</b>, no desde el catálogo: el app no lo sabe reconstruir.</div></div>';
+      '<div style="font-size:13.5px;font-weight:700;line-height:1.5;margin-bottom:8px">El plan está vacío.</div>'+
+      '<div style="font-size:12px;color:var(--text3);line-height:1.6">'+esc(NODO_ORIGEN_TXT)+
+      ' Si hay que volver a cargarlo, se carga <b>del archivo de Project</b>.</div></div>';
     return h+'<div style="height:100px"></div>';
   }
-  var tot=_catAvance((function(){ var m={},o=[];
-    raices.forEach(function(r){ _nodoActsTodas(r.id).forEach(function(a){ if(!m[a.id]){m[a.id]=1;o.push(a);} }); });
-    return o; })());
-  /* LAS ACTIVIDADES DEL PLAN SE CUENTAN VIVAS, no por filas de la tabla de
-     amarres. Hoy hay 21 amarres apuntando a actividades borradas —`Acciones.
-     eliminar` no limpia el amarre— y contar filas diría 2.466 donde hay 2.445.
-     Un número de más en la portada es de los que nadie vuelve a comprobar. */
-  var _vivas={}; (S.nodoAmarres||[]).forEach(function(r){ if(_findActAny(r.actividad_id)) _vivas[r.actividad_id]=1; });
-  var _huerf=(S.nodoAmarres||[]).length-Object.keys(_vivas).length;
-  h+='<div style="margin:0 0 12px;padding:11px 13px;border-radius:12px;background:var(--bg2);'+
-     'border:1.5px solid var(--border);font-size:11.5px;font-family:var(--mono);color:var(--text2);line-height:1.7">'+
-     _nodos().length+' nodos · '+Object.keys(_vivas).length+' actividades en el plan<br>'+
-     'En total: '+_catAvanceHTML(tot)+'</div>';
-  h+=_nodoAvisoRamasHTML()+_nodoAvisoPlanHTML()+_nodoBarraTiempoHTML();
-  h+='<button onclick="nodoNuevoAbrir(null)" style="'+_catBS+';width:100%;margin-bottom:10px;min-height:48px;'+
-     'border:1.5px dashed var(--border2);background:none;color:var(--text3);font-weight:700">'+
-     '+ Nodo al primer nivel</button>';
-  h+='<div class="cat-filas" style="grid-template-columns:1fr">'+
-     raices.filter(_nodoPasaFiltroT).map(function(n){ return _catArbolFilaHTML(n,0); }).join('')+'</div>';
+  var vacias=_nodos().filter(_nodoVacia).length;
+  h+='<div style="font-size:19px;font-weight:800;margin:2px 0 3px">El cronograma</div>'+
+     '<div style="font-size:11.5px;color:var(--text3);line-height:1.5;margin-bottom:10px">'+
+     esc(NODO_ORIGEN_TXT)+' <b>Toca una tarea y se abre con sus botones.</b></div>';
+  h+=_nodoAvisoPlanHTML()+_nodoBarraTiempoHTML();
+  if((S.nodoCorrerUndo||[]).length)
+    h+='<button onclick="nodoCorrerDeshacer()" style="'+_catBS+';width:100%;margin-bottom:8px;'+
+      'min-height:46px;border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
+      'Deshacer el refechado ('+S.nodoCorrerUndo.length+' tareas)</button>';
+  h+='<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">'+
+     '<button onclick="catCronoVacias()" style="'+_catBS+';flex:1;min-width:150px;min-height:44px;'+
+       'font-size:11.5px;border:1.5px solid '+(S.nodoOcultarVacias?'var(--accent)':'var(--border2)')+';'+
+       'background:'+(S.nodoOcultarVacias?'var(--accent-fill)':'var(--bg2)')+';'+
+       'color:'+(S.nodoOcultarVacias?'var(--accent-on)':'var(--text2)')+'">'+
+       (S.nodoOcultarVacias?'Viendo solo las que tienen trabajo':'Esconder las '+vacias+' vacías')+'</button>'+
+     (isAdmin()?'<button onclick="nodoCorrerAbrir(null)" style="'+_catBS+';flex:1;min-width:150px;'+
+       'min-height:44px;font-size:11.5px;border:1.5px solid var(--amber);background:var(--amber-light);'+
+       'color:var(--amber)">Refechar el plan entero</button>':'')+
+     '</div>';
+  var filas=_nodoFilasCrono();
+  h+='<div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-family:var(--mono)">'+
+     filas.length+' en pantalla · '+_nodos().length+' tareas · se desplaza a lo ancho →</div>';
+  h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1.5px solid var(--border2);'+
+     'border-radius:12px;background:var(--bg2)"><div style="min-width:740px">';
+  /* La cabecera de la tabla, con el nombre fijo igual que las filas. */
+  h+='<div style="display:flex;align-items:center;min-height:30px;background:var(--bg4,var(--bg3));'+
+     'border-bottom:1.5px solid var(--border2)">'+
+     '<span style="position:sticky;left:0;z-index:2;background:var(--bg4,var(--bg3));width:176px;'+
+       'min-width:176px;padding:0 7px;font-size:9.5px;font-weight:800;color:var(--text3);'+
+       'letter-spacing:.5px;border-right:1.5px solid var(--border2);line-height:30px">TAREA · AVANCE</span>'+
+     CRONO_COLS.map(function(c){
+       return '<span style="min-width:'+c[2]+'px;max-width:'+c[2]+'px;padding:0 6px;font-size:9.5px;'+
+         'font-weight:800;color:var(--text3);letter-spacing:.4px;flex-shrink:0">'+esc(c[1].toUpperCase())+'</span>';
+     }).join('')+
+     '<span style="min-width:72px;padding:0 6px;font-size:9.5px;font-weight:800;color:var(--text3);'+
+       'letter-spacing:.4px;flex-shrink:0">ESTADO</span>'+
+     '</div>';
+  filas.forEach(function(x,i){ h+=_catCronoFilaHTML(x,i,filas.length); });
+  h+='</div></div>';
   var _pu=_nodoPorUbicar();
   if(_pu)
-    h+='<button onclick="nodoUbicarAbrir()" style="'+_catBS+';width:100%;margin-top:4px;min-height:50px;'+
+    h+='<button onclick="nodoUbicarAbrir()" style="'+_catBS+';width:100%;margin-top:10px;min-height:48px;'+
       'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
-      'Por ubicar en el cronograma ('+_nodoActsDirectas(_pu.id).length+') — repartirlas</button>';
-  h+='<button onclick="catFueraAbrir()" style="'+_catBS+';width:100%;margin-top:8px;min-height:48px;'+
-     'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-weight:700">'+
+      'Por ubicar en el cronograma ('+_nodoActsDirectas(_pu.id).length+')</button>';
+  h+='<button onclick="catFueraAbrir()" style="'+_catBS+';width:100%;margin-top:8px;min-height:46px;'+
+     'font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">'+
      'Lo que está fuera del plan</button>';
-  /* DONDE ESTABA EL BOTÓN DE SEMBRAR, una línea que dice de dónde sale el
-     árbol. El botón reconstruía el plan desde el CATÁLOGO: pulsarlo habría
-     destruido el cronograma sin forma de rehacerlo desde el app. */
-  h+='<div style="margin-top:10px;padding:10px 12px;border-radius:11px;background:var(--bg2);'+
-     'border:1.5px solid var(--border);font-size:11px;color:var(--text3);line-height:1.6">'+
-     esc(NODO_ORIGEN_TXT)+'</div>';
-  if(_huerf>0)
-    h+='<div style="margin-top:8px;font-size:11px;color:var(--text3);line-height:1.5">'+
-      _huerf+' amarre'+(_huerf!==1?'s':'')+' del plan apunta'+(_huerf!==1?'n':'')+
-      ' a actividades que se borraron. No se cuentan, y se van al resembrar.</div>';
   return h+'<div style="height:110px"></div>';
 }
-/* La ficha de un nodo: sus números, sus botones y su trabajo. */
+
 function _catNodoHTML(){
   var n=_nodoPorId(S.nodoSel);
   if(!n) return '<button onclick="nodoIr(null)" style="'+_catVolverBS+'">‹ El plan</button>'+
@@ -20461,6 +20700,22 @@ function _catNodoHTML(){
   var av=_nodoAvance(n.id), hijos=_nodoHijos(n.id), dir=_nodoActsDirectas(n.id);
   var ruta=_nodoRuta(n.id).slice(0,-1);
   var h=_catVolverAmbitoHTML();
+  /* ── UNA SOLA PANTALLA POR TAREA ──
+     Lo pidió así: «una tarea a la vez, grande, con todo lo suyo». Se pasa a la
+     siguiente sin volver a la lista, en el mismo orden en que se ve. */
+  var _pl=_nodoFilasCrono().map(function(x){ return x.n.id; });
+  var _pi=_pl.indexOf(n.id);
+  if(_pi<0){ _pl=_nodos().map(function(x){ return x.id; }); _pi=_pl.indexOf(n.id); }
+  if(_pl.length>1)
+    h+='<div style="display:flex;align-items:center;gap:6px;margin:2px 0 8px">'+
+      '<button onclick="nodoIr('+_catQ(_pl[(_pi-1+_pl.length)%_pl.length])+')" style="'+_catBS+';'+
+        'min-width:52px;min-height:44px;font-size:15px;padding:0;border:1.5px solid var(--border2);'+
+        'background:var(--bg2);color:var(--text2)">‹</button>'+
+      '<span style="flex:1;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--text3)">'+
+        (_pi+1)+' de '+_pl.length+'</span>'+
+      '<button onclick="nodoIr('+_catQ(_pl[(_pi+1)%_pl.length])+')" style="'+_catBS+';'+
+        'min-width:52px;min-height:44px;font-size:15px;padding:0;border:1.5px solid var(--border2);'+
+        'background:var(--bg2);color:var(--text2)">›</button></div>';
   if(ruta.length)
     h+='<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin:0 0 3px">'+
        esc(ruta.map(function(x){ return x.nombre; }).join(' › '))+'</div>';

@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v114 — 18 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v115 — 18 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -218,7 +218,8 @@ mismos botones que cualquier otra.
 | **Renombrar o juntar una ubicación, o ponérsela a las que no tienen** | **Partidas → Ubicaciones** — `catUbicsAbrir()`, `_catUbicMover()`. Toca el `area` de todas sus actividades, avisando a cuántas |
 | **Poner un avance a mano en lo construido antes de mayo-2026** | **Partidas** — `catManualAbrir()`, en el capítulo, en la línea del presupuesto y en la ubicación. Nunca se mezcla con el contado ni sube de nivel |
 | **Armar el plan: jerarquías, entregables y notas** | **Partidas → vista Árbol** — `_catArbolHTML()`, `nodosSembrar()`, `nodoNuevoAbrir()`, `nodoMoverAbrir()`. Es el OTRO eje; no toca el catálogo |
-| **Ver el cronograma del dueño: capítulo → nivel** | **Partidas → Árbol** — 189 tareas de su MS Project, con costos y fechas (v113). **No se siembra: vive en la base** |
+| **Ver y trabajar el cronograma** | **Partidas → Cronograma** — tabla de filas que se abren con sus botones (v115). Columnas: quién, costo, fechas, fin real, estado |
+| **Refechar el plan, que venció en julio** | **Partidas → Cronograma → «Refechar el plan entero»** o «Correr fechas» en una tarea — `nodoCorrerAbrir()`, en días de trabajo y con deshacer |
 | **Ver el atraso y las barras en el tiempo** | **Partidas → vista Tiempo** — `_catTiempoHTML()`, `_nodoEstado()`. La barra se llena con el avance de la obra |
 | **Cambiar fechas, duración, costo o predecesoras** | **Partidas → una tarea → «Fechas y costo»** — `nodoPlanAbrir()`. Deja rastro con viejo y nuevo |
 | **Repartir las 430 sin sitio en el cronograma** | **Partidas → Árbol → «Por ubicar»** — `nodoUbicarAbrir()`, «Llevar a…» |
@@ -772,6 +773,46 @@ Por lo mismo, **«descartada del plan» NO es una columna de `obra_actividades`*
 vive en `obra_plan_fuera`. Se llegó a escribir la columna y se retiró en el acto
 — ese módulo nació con la regla de CERO escrituras a `obra_actividades`, y es lo
 único que permite borrarlo sin dejar rastro.
+
+#### CUATRO VERSIONES RECHAZADAS, Y LO QUE LAS ARREGLÓ (v115)
+
+Después de la v114 el dueño dijo: *«No me gusta cómo me estás presentando la
+información… no me convence cómo se ve… todavía me siento confuso para trabajar
+con él. No me acoplo.»* **Era la cuarta versión seguida del módulo** (v111, v112,
+v113, v114). Es exactamente el patrón del recorrido paso a paso y de «Hoy»: una
+pantalla que hay que rescatar cada versión no tiene un problema de puerta.
+
+**Lo que lo desbloqueó fue preguntar, no construir.** Preguntado con opciones,
+lo dijo en una línea suya: **«listas q se oculta y cada fila con sus botones»**,
+y «como en Project: tabla con columnas».
+
+**Las dos cosas son el pliegue de Actividades** (`det-`, v87), que él ya sabe
+usar. Así que la vista **no es nueva: es ese patrón traído al cronograma**. Y
+**NO se añadió una sexta vista: sustituyó al Árbol** — tenía cinco y dijo estar
+confuso; meterle otra habría empeorado lo que vino a contar.
+
+Cómo es: la fila cerrada es **una línea de tabla** con sus columnas —**quién,
+costo, comienzo, fin, fin real, días, estado**— en un contenedor que se desplaza
+a lo ancho, con el nombre **fijo** a la izquierda. Al tocarla, el detalle se abre
+**debajo y pegado a la izquierda**, con los botones de esa tarea y sus
+actividades en `revCard`. Y hay **‹ N de M ›** para pasar de una tarea a la
+siguiente sin volver a la lista.
+
+**Lo que faltaba del cronograma, y de dónde sale ahora:**
+
+- **Quién hace cada tarea** (`_nodoQuien`) — Project no lo trajo, así que sale
+  del responsable que más se repite en sus actividades. Es un hecho de la obra.
+- **Fechas reales** (`_nodoFechasReales`) — de `obra_cambios`, el único sitio
+  donde consta cuándo se cerró algo. **Solo hay fin real si están TODAS
+  cerradas**; si falta una, no se inventa. Medido: **10 hojas con fin real, 71
+  empezadas, 99 con actividades**.
+- **Las 57 vacías** — un interruptor las esconde, y abierta cada una dice qué
+  es y qué hacer en vez de quedarse muda.
+- **Refechar** (`nodoCorrerAbrir`) — el plan venció en julio. Se corre todo o
+  una tarea y lo suyo, **en días de trabajo** (`_sumarDiasLab`), con la vista
+  previa antes y **deshacer** después.
+
+*Y el % del archivo casi no sirve: solo **16 de 189** traen algo distinto de 0.*
 
 #### ORDENAR Y MODIFICAR LAS PARTIDAS, DESDE LA LISTA (v114)
 
@@ -1882,7 +1923,14 @@ mismo:**
 - **Borrar una actividad no deja amarres huérfanos.** Cuenta
   `obra_partida_actividad` y `obra_nodo_actividad` antes y después
 - **Juntar partidas en la dirección prohibida se niega y dice por qué**
-- **Las cinco vistas siguen**: Lista, Edificio, Matriz, Árbol y Tiempo
+- **Las cinco vistas siguen, y son CINCO**: Lista, Edificio, Matriz, Cronograma
+  y Tiempo. Si aparece una sexta, alguien volvió a añadir en vez de sustituir —
+  y el dueño ya dijo que con cinco estaba confuso
+- **La fila del cronograma se abre y trae SUS botones dentro.** Es el pliegue de
+  Actividades, no una pantalla aparte. Si los botones salen fuera de la fila, se
+  perdió lo único que hizo que se acoplara
+- **Refechar corre en días de TRABAJO y se deshace.** Corre 60 días y comprueba
+  que ningún fin cae en domingo, y que deshacer devuelve las fechas exactas
 - **«Por partida» ordena los números como NÚMEROS.** En el 3.00 tienen que salir
   **4, 6, 10, 11**. Si vuelven a salir 10, 11, 4, 6, alguien quitó el
   `{numeric:true}`
@@ -2003,6 +2051,7 @@ pertenece a ningún nivel.
 | **v109** — la primera medición de «posibles repetidas» dio 2,8 millones de parejas: el relleno del arnés eran 2.400 partidas con nombres casi idénticos en el mismo capítulo. No existe en la obra —el capítulo más grande tiene 278— pero destapó que la comparación era n² sin tope. | Un fixture irreal puede señalar un límite real. En vez de arreglar solo el fixture, se metió un índice por palabra y un tope de 2.000 parejas que la pantalla dice. **Cuando una medición se dispara, pregunta si el dato es absurdo o si el código no aguanta el caso** — aquí eran las dos. |
 | **v110** — la lista de ubicaciones daba **30** en la prueba y **29** contra la base. No era el app: el arnés de la v106 trae una actividad en «N1 — Lobby», que en la obra no es una ubicación. Media hora buscando un fallo que estaba en el fixture. | Cuando un conteo se separa **en uno** del medido contra la base, mira primero de dónde salen las filas de la prueba. Un fixture que no reproduce la distribución real convierte cualquier número en una opinión — y al arreglarlo, arréglalo para que dé **exactamente** el de la base, no «parecido». |
 | **v110** — las tarjetas en rejilla usaban `repeat(auto-fill,minmax(160px,1fr))`. A 390px daban dos y a 1024px **cuatro**: en el iPad seguía siendo una rejilla, que es justo lo que el dueño pidió quitar. | «Dos columnas en pantalla ancha» es una `@media query`, no un `auto-fill`. `auto-fill` mete las que quepan, y en una pantalla grande eso nunca son dos. Y la prueba tiene que **contar cuántas caben por fila a cada ancho**, no mirar el CSS. |
+| **v111→v115** — cuatro versiones seguidas del módulo y el dueño seguía sin acoplarse: «no me convence cómo se ve», «me siento confuso», «no me acoplo». Cada versión añadió funciones buenas —el plan, el cronograma, las vistas, ordenar— y ninguna preguntó **cómo quería trabajar**. Lo desbloqueó una pregunta con opciones: quería el pliegue que ya usa en Actividades, no una pantalla más. | **Es la cuarta vez que pasa lo mismo** (En Obra, el recorrido, Hoy, y ahora Partidas). El aviso está escrito desde la v82 y aun así se construyeron cuatro versiones antes de preguntar. Cuando el usuario diga «no me acoplo», **para y pregunta con opciones concretas**; añadir la quinta versión es repetir el error. Y fíjate si lo que pide **ya existe en otra pantalla del app**: casi siempre sí. |
 | **v114** — `catPNuevaAbrir` asignaba su estado y **después** llamaba a `catPanelOtrosCerrar()`, que lo ponía a null: el panel nacía vacío. **Es el mismo fallo de la v113**, que ya se había «arreglado» reordenando las líneas en las dos funciones de entonces. Reordenar depende de que el siguiente se acuerde, y el siguiente fui yo. | Cuando un fallo vuelve, **el arreglo anterior era una disciplina, no un diseño**. `catPanelOtrosCerrar(salvo)` recibe ahora la clave que se está abriendo y no la toca: da igual el orden en que se llame. Si un error se puede repetir siguiendo las reglas, cambia las reglas. |
 | **v113** — el botón «Volver a sembrar» de la v112 reconstruía el árbol desde el CATÁLOGO. Con el cronograma del dueño ya en la base, pulsarlo lo habría **destruido sin forma de rehacerlo**: los datos del Project no están en el código. Estaba frenado por casualidad, porque un nodo llevaba una nota. | Un botón que puede destruir algo que el app **no sabe reconstruir** no se protege con una condición: se quita. Y cuando una función deja de tener sentido, se borra entera — dejarla «por si acaso» es dejar el gatillo puesto. |
 | **v113** — `nodoPlanAbrir` asignaba `S.nodoPlan` y **después** llamaba a `catPanelOtrosCerrar()`, que lo pone a null: el panel de fechas y costo nacía vacío y el campo no existía. Lo mismo en `nodoManualAbrir`. | Una función de «cerrar todo lo demás» que enumera estados acaba incluyendo el que estás abriendo. Ciérrala **antes** de asignar, nunca después. Lo cazó la prueba al escribir en un campo que era `null`, no la lectura. |
