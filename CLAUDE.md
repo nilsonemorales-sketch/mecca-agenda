@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v113 — 18 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v114 — 18 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -225,7 +225,7 @@ mismos botones que cualquier otra.
 | **Poner las operaciones de un elemento** | **Partidas → Árbol → un elemento** — `nodoOperaciones()`, `CAT_OPERACIONES`. Plantilla, no siembra |
 | **Meter actividades que ya existen en un entregable** | **Partidas → un nodo → «Traer actividades»** — `nodoTraerAbrir()`. No cambia la actividad |
 | **Ver lo mismo de otra manera** | **Partidas**, selector `[ Lista ] [ Edificio ] [ Matriz ] [ Árbol ]` — `catVistaSet()`, `_catAmbito()` |
-| **Editar las partidas de un capítulo sin salir** | **Partidas → un capítulo → «Por partida»** — `_catPorPartidaHTML()`. Lleva a la ficha de siempre |
+| **Ordenar las partidas a tu gusto, renombrarlas, juntarlas, quitarlas o agregar** | **Partidas → un capítulo → «Por partida»** — `_catPorPartidaHTML()`, `CAT_ORDENES`, `catPartidaCorrer()`, `catPNuevaAbrir()` (v114) |
 | **Sacar del plan lo que sobra** | **Partidas → Árbol → «Lo que está fuera del plan»** — `catFueraAbrir()`. Descartar **no borra** |
 
 
@@ -772,6 +772,50 @@ Por lo mismo, **«descartada del plan» NO es una columna de `obra_actividades`*
 vive en `obra_plan_fuera`. Se llegó a escribir la columna y se retiró en el acto
 — ese módulo nació con la regla de CERO escrituras a `obra_actividades`, y es lo
 único que permite borrarlo sin dejar rastro.
+
+#### ORDENAR Y MODIFICAR LAS PARTIDAS, DESDE LA LISTA (v114)
+
+Palabras del dueño con el 3.00 delante: **«Necesito poder ordenar y
+modificar»**. Preguntado con opciones, escogió: **su propio orden arrastrando**,
+**ordenar por fechas**, **renombrar sin entrar**, **editar las actividades ahí
+mismo**, **borrar o juntar**, y **agregar**.
+
+**EL DESORDEN QUE VEÍA ERA NUESTRO.** La lista ordenaba con `localeCompare`
+sobre el nombre, y como cuatro partidas del 3.00 empiezan por número salían
+**10, 11, 4, 6** — alfabético sobre dígitos. Hoy hay **14 partidas así en 5
+capítulos**. Se lee el número como número (`_catNumDe`) y `localeCompare` va con
+`{numeric:true}`.
+
+**Cinco criterios** (`CAT_ORDENES`): **Mi orden · Nº · Nombre · Fecha ·
+Avance**, recordados en la sesión. Solo uno se guarda en la base:
+
+- **«Mi orden»** es el suyo, en `obra_partidas.orden` (columna nueva de la
+  v114). Con ese criterio puesto salen las flechas ▲▼, que **intercambian el
+  `orden` con el vecino** — dos escrituras, sin renumerar. La primera vez sí
+  numera la lista entera de 10 en 10, porque si todas están en nulo no hay con
+  quién intercambiar. **Con otro criterio las flechas no aparecen y, si se
+  llama a la función, se niega diciendo por qué**: mover a mano una lista
+  ordenada por avance no significaría nada.
+- Las que él no ha tocado van **detrás** de las que sí, en orden natural. Si
+  fueran delante, mover una sola mandaría el resto al azar.
+- **La fecha de una partida** es la entrega más próxima de sus actividades
+  **abiertas**; si están todas cerradas, la última que se cerró; si no hay,
+  al final. No se inventa ninguna.
+
+**Modificar sin salir de la lista:** el lápiz abre el nombre **en la propia
+fila** y guarda por `catFichaSet`, el camino de siempre; tocar la partida la
+**despliega** con sus actividades en `revCard` —la misma tarjeta del resto del
+módulo, no otra—; y con «Marcar varias» se **juntan** (reusa `catJuntarEn`) o se
+**quitan**.
+
+**Quitar no borra: desactiva, y `catDeshacer` la devuelve.** Si la partida tiene
+actividades dentro **se dice cuántas antes**, porque quitarla las deja sueltas
+—siguen vivas, pero fuera del capítulo— y eso no puede pasar callado.
+
+**Agregar** (`catPNuevaAbrir`) crea la partida en el capítulo y grupo que se
+esté mirando, vacía y al final de su orden. **Una repetida se rechaza diciendo
+cuál ya existe**: dos partidas iguales es lo que la pantalla de repetidas viene
+a limpiar.
 
 #### EL PLAN ES EL CRONOGRAMA DEL DUEÑO, Y VIVE SOLO EN LA BASE (v113)
 
@@ -1839,6 +1883,15 @@ mismo:**
   `obra_partida_actividad` y `obra_nodo_actividad` antes y después
 - **Juntar partidas en la dirección prohibida se niega y dice por qué**
 - **Las cinco vistas siguen**: Lista, Edificio, Matriz, Árbol y Tiempo
+- **«Por partida» ordena los números como NÚMEROS.** En el 3.00 tienen que salir
+  **4, 6, 10, 11**. Si vuelven a salir 10, 11, 4, 6, alguien quitó el
+  `{numeric:true}`
+- **«Mi orden» se guarda y sobrevive a recargar.** Sube una partida, recarga el
+  catálogo y tiene que seguir donde la dejaste. Y con otro criterio puesto, las
+  flechas **no mueven nada** y lo dicen
+- **Quitar una partida con actividades dentro avisa de cuántas quedan sueltas**,
+  y se puede deshacer
+- **Una partida repetida no se crea**: se rechaza diciendo cuál ya existe
 - **La siembra deja las 2.466 en algún nodo**, con un nodo por capítulo con
   actividades y uno por grupo. Y **sembrar dos veces no duplica**: para y lo dice
 - **Traer al plan no cambia la actividad.** Guarda el retrato de estado, avance,
@@ -1950,6 +2003,7 @@ pertenece a ningún nivel.
 | **v109** — la primera medición de «posibles repetidas» dio 2,8 millones de parejas: el relleno del arnés eran 2.400 partidas con nombres casi idénticos en el mismo capítulo. No existe en la obra —el capítulo más grande tiene 278— pero destapó que la comparación era n² sin tope. | Un fixture irreal puede señalar un límite real. En vez de arreglar solo el fixture, se metió un índice por palabra y un tope de 2.000 parejas que la pantalla dice. **Cuando una medición se dispara, pregunta si el dato es absurdo o si el código no aguanta el caso** — aquí eran las dos. |
 | **v110** — la lista de ubicaciones daba **30** en la prueba y **29** contra la base. No era el app: el arnés de la v106 trae una actividad en «N1 — Lobby», que en la obra no es una ubicación. Media hora buscando un fallo que estaba en el fixture. | Cuando un conteo se separa **en uno** del medido contra la base, mira primero de dónde salen las filas de la prueba. Un fixture que no reproduce la distribución real convierte cualquier número en una opinión — y al arreglarlo, arréglalo para que dé **exactamente** el de la base, no «parecido». |
 | **v110** — las tarjetas en rejilla usaban `repeat(auto-fill,minmax(160px,1fr))`. A 390px daban dos y a 1024px **cuatro**: en el iPad seguía siendo una rejilla, que es justo lo que el dueño pidió quitar. | «Dos columnas en pantalla ancha» es una `@media query`, no un `auto-fill`. `auto-fill` mete las que quepan, y en una pantalla grande eso nunca son dos. Y la prueba tiene que **contar cuántas caben por fila a cada ancho**, no mirar el CSS. |
+| **v114** — `catPNuevaAbrir` asignaba su estado y **después** llamaba a `catPanelOtrosCerrar()`, que lo ponía a null: el panel nacía vacío. **Es el mismo fallo de la v113**, que ya se había «arreglado» reordenando las líneas en las dos funciones de entonces. Reordenar depende de que el siguiente se acuerde, y el siguiente fui yo. | Cuando un fallo vuelve, **el arreglo anterior era una disciplina, no un diseño**. `catPanelOtrosCerrar(salvo)` recibe ahora la clave que se está abriendo y no la toca: da igual el orden en que se llame. Si un error se puede repetir siguiendo las reglas, cambia las reglas. |
 | **v113** — el botón «Volver a sembrar» de la v112 reconstruía el árbol desde el CATÁLOGO. Con el cronograma del dueño ya en la base, pulsarlo lo habría **destruido sin forma de rehacerlo**: los datos del Project no están en el código. Estaba frenado por casualidad, porque un nodo llevaba una nota. | Un botón que puede destruir algo que el app **no sabe reconstruir** no se protege con una condición: se quita. Y cuando una función deja de tener sentido, se borra entera — dejarla «por si acaso» es dejar el gatillo puesto. |
 | **v113** — `nodoPlanAbrir` asignaba `S.nodoPlan` y **después** llamaba a `catPanelOtrosCerrar()`, que lo pone a null: el panel de fechas y costo nacía vacío y el campo no existía. Lo mismo en `nodoManualAbrir`. | Una función de «cerrar todo lo demás» que enumera estados acaba incluyendo el que estás abriendo. Ciérrala **antes** de asignar, nunca después. Lo cazó la prueba al escribir en un campo que era `null`, no la lectura. |
 | **v113** — la línea de tiempo arrancaba con tres barras y parecía vacía: se abrían solos los contenedores con **10 hijos o más**, y ese umbral funcionaba contra la base (cr_9 tiene 31) pero no contra un árbol de prueba más pequeño. | Un umbral por tamaño convierte una regla en «depende de cuántos datos haya». Si la regla es «arranca por capítulo», exprésala por **estructura** —los hijos de la raíz que tengan algo— y funcionará igual con 26 nodos que con 190. |
@@ -2019,7 +2073,7 @@ orden de magnitud.
 | `obra_config` | Configuración compartida, clave/valor. | — |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
-| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**. Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
+| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**; **con `orden` desde v114** (el orden que el dueño pone a mano en «Por partida»). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
 | `obra_nodos`, `obra_nodo_actividad`, `obra_plan_fuera` | **EL PLAN (v111→v113)** — el segundo eje. Desde la v113 son **las 189 tareas del MS Project del dueño**, sembradas desde SQL: `costo_plan`, `dias_plan`, `pred_plan`, `inicio_plan`, `fin_plan`, `pct_plan`, `costo_real_plan` y `avance_manual`. **No hay siembra desde el app.** El árbol del dueño: `tipo` (`rama`/`entregable`), `clase` (apartamento/taller/hito), `orden`, `notas` para lo que no es actividad. El amarre es una tabla aparte porque **una actividad puede estar en varios nodos a propósito**. `obra_plan_fuera` son los descartes: **no borra nada**, saca del plan. Se borran las tres y el catálogo queda exactamente igual. | 190 + 2.445 |
 | `obra_ubicaciones` | **Del módulo «Partidas» (v110).** Existe SOLO para guardarle el porcentaje a mano a una ubicación: el nombre sigue viviendo en `obra_actividades.area` y esta tabla no manda sobre nada. Hay fila únicamente para las que llevan algo escrito a mano. | 0 al nacer |
 

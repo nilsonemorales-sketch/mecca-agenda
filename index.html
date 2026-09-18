@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260918_113';
+const APP_VERSION='20260918_114';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -17590,6 +17590,10 @@ function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPa
      mismo fallo de `revAbrir` en la v94. El modo por partida SÍ se recuerda:
      es una preferencia de cómo trabajar, no un contexto. */
   S.nodoSel=null; S.nodoTraer=null; S.catCrear=null; S.catFuera=null; S.nodoUbicar=null;
+  /* v114 · lo abierto, lo marcado y lo que se está renombrando son de ESTE
+     capítulo: si no se sueltan, al entrar en otro se sigue viendo lo de antes
+     —el mismo fallo de `revAbrir` en la v94. */
+  S.catPAbierta=null; S.catPSel=null; S.catPRen=null;
   renderCatalogo(); _catArriba(); }
 /* ══ v107 · EDITAR DE VERDAD DESDE EL MÓDULO ═════════════════════════════
    Palabras del dueño: «necesito poder editar actividades. Me siento muy
@@ -17625,7 +17629,8 @@ function _catPanel(){
   var el=_catPanelHost();
   var abierto=!!(S.catBorrar || S.catRepetir || S.catTandaPick || S.catMadreEdit || S.catMadreNueva ||
                  S.catSgEdit || S.catUbicRen || S.catUbicJuntar || S.catManual ||
-                 S.nodoEdit || S.nodoNuevo || S.nodoMover || S.nodoPlan || S.nodoManual);
+                 S.nodoEdit || S.nodoNuevo || S.nodoMover || S.nodoPlan || S.nodoManual ||
+                 S.catPNueva);
   el.style.display=abierto?'block':'none';
   if(!abierto){ el.innerHTML=''; return; }
   try{
@@ -17642,6 +17647,7 @@ function _catPanel(){
                  : S.nodoMover ? _nodoMoverHTML()
                  : S.nodoPlan ? _nodoPlanEditHTML()
                  : S.nodoManual ? _nodoManualHTML()
+                 : S.catPNueva ? _catPNuevaHTML()
                  : _catTandaPickHTML();
   }catch(e){
     console.warn('_catPanel:',e);
@@ -17654,7 +17660,7 @@ function catPanelCerrar(){ S.catBorrar=null; S.catRepetir=null; S.catTandaPick=n
   S.catMadreEdit=null; S.catMadreNueva=null; S.catSgEdit=null;
   S.catUbicRen=null; S.catUbicJuntar=null; S.catManual=null;
   S.nodoEdit=null; S.nodoNuevo=null; S.nodoMover=null;
-  S.nodoPlan=null; S.nodoManual=null; _catPanel(); }
+  S.nodoPlan=null; S.nodoManual=null; S.catPNueva=null; _catPanel(); }
 function _catPanelCab(titulo, sub){
   return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">'+
     '<div><div style="font-size:17px;font-weight:800;line-height:1.3">'+esc(titulo)+'</div>'+
@@ -19177,7 +19183,7 @@ function nodoPlanAbrir(id){
   /* Se cierra lo de antes PRIMERO: `catPanelOtrosCerrar` pone `S.nodoPlan` a
      null, así que llamarlo después de asignarlo lo borraba y el panel salía
      vacío. Lo cazó la prueba, no la lectura. */
-  S.nodoEdit=null; S.nodoNuevo=null; S.nodoMover=null; catPanelOtrosCerrar();
+  catPanelOtrosCerrar('nodoPlan');
   S.nodoPlan={id:id, costo:(n.costo_plan===null||n.costo_plan===undefined)?'':String(n.costo_plan),
               dias:(n.dias_plan===null||n.dias_plan===undefined)?'':String(n.dias_plan),
               inicio:String(n.inicio_plan||''), fin:String(n.fin_plan||''),
@@ -19276,7 +19282,7 @@ function nodoManualAbrir(id){
   if(!isAdmin()){ showToast('El avance a mano solo lo pone el administrador','warn',5000); return; }
   var n=_nodoPorId(id); if(!n) return;
   var m=_nodoManual(n);
-  S.nodoEdit=null; S.nodoNuevo=null; S.nodoMover=null; catPanelOtrosCerrar();
+  catPanelOtrosCerrar('nodoManual');
   S.nodoManual={id:id, nombre:n.nombre, valor:(m?String(m.pct):'')};
   _catPanel();
 }
@@ -19701,22 +19707,31 @@ function nodoAbrir(id){
 function nodoIr(id){ S.nodoSel=id||null; S.nodoTraer=null; renderCatalogo(); _catArriba(); }
 function nodoEditAbrir(id){
   var n=_nodoPorId(id); if(!n) return;
+  catPanelOtrosCerrar('nodoEdit');
   S.nodoEdit={id:id, nombre:n.nombre, tipo:n.tipo||'rama', clase:n.clase||'', notas:n.notas||''};
-  S.nodoNuevo=null; S.nodoMover=null; catPanelOtrosCerrar(); _catPanel();
+  _catPanel();
 }
 function nodoNuevoAbrir(pid){
+  catPanelOtrosCerrar('nodoNuevo');
   S.nodoNuevo={padre:pid||null, nombre:''};
-  S.nodoEdit=null; S.nodoMover=null; catPanelOtrosCerrar(); _catPanel();
+  _catPanel();
 }
 function nodoMoverAbrir(id){
+  catPanelOtrosCerrar('nodoMover');
   S.nodoMover={id:id, destino:undefined};
-  S.nodoEdit=null; S.nodoNuevo=null; catPanelOtrosCerrar(); _catPanel();
+  _catPanel();
 }
-function catPanelOtrosCerrar(){
-  S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null;
-  S.catMadreEdit=null; S.catMadreNueva=null; S.catSgEdit=null;
-  S.catUbicRen=null; S.catUbicJuntar=null; S.catManual=null;
-  S.nodoPlan=null; S.nodoManual=null;
+/* CIERRA TODAS LAS PANTALLAS DEL PANEL MENOS LA QUE SE ESTÁ ABRIENDO.
+   El argumento `salvo` no es un lujo: esta función enumera estados, y llamarla
+   DESPUÉS de asignar el tuyo lo pone a null y el panel nace vacío. Pasó en la
+   v113 con `nodoPlanAbrir` y `nodoManualAbrir`, se arregló reordenando… y
+   volvió a pasar en la v114 con `catPNuevaAbrir`. Reordenar depende de que el
+   siguiente se acuerde; esto no. */
+var CAT_PANELES=['catBorrar','catRepetir','catTandaPick','catMadreEdit','catMadreNueva',
+                 'catSgEdit','catUbicRen','catUbicJuntar','catManual','nodoEdit',
+                 'nodoNuevo','nodoMover','nodoPlan','nodoManual','catPNueva'];
+function catPanelOtrosCerrar(salvo){
+  CAT_PANELES.forEach(function(k){ if(k!==salvo) S[k]=null; });
 }
 function nodoEditCampo(k,v){ if(S.nodoEdit){ S.nodoEdit[k]=v; _catPanel(); } }
 function _nodoEditHTML(){
@@ -20663,27 +20678,374 @@ function _catCapModoHTML(){
         'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+x[1]+'</button>';
     }).join('')+'</div>';
 }
-function _catPorPartidaHTML(acts, cap){
-  /* Las partidas de la agenda que de verdad tienen algo de lo que se está
-     mirando. En el 3.00 son 25 partidas y 30 actividades, medido. */
-  var am=_catA(), vistos={}, ps=[];
+/* ══ v114 · ORDENAR Y MODIFICAR LAS PARTIDAS, DESDE LA LISTA ═════════════
+   Palabras del dueño, con la pantalla del 3.00 delante: «Necesito poder
+   ordenar y modificar».
+
+   EL DESORDEN QUE VEÍA ERA REAL Y ERA NUESTRO: la lista se ordenaba con
+   `localeCompare` sobre el nombre, y como cuatro partidas del 3.00 empiezan
+   por número salían **10, 11, 4, 6** — alfabético sobre dígitos. Hoy hay 14
+   partidas así en 5 capítulos. Se lee el número como número y se acabó.
+
+   Pero lo que pidió es más que eso: SU ORDEN, el de cómo se ejecuta la obra,
+   guardado (`obra_partidas.orden`). Los criterios calculados —número, nombre,
+   fecha, avance— siguen ahí para mirar; el suyo es el único que se guarda. */
+var CAT_ORDENES=[['mio','Mi orden'],['num','Nº'],['nombre','Nombre'],
+                 ['fecha','Fecha'],['avance','Avance']];
+function catOrdenSet(k){
+  S.catOrden=k;
+  try{ sessionStorage.setItem('mecca_cat_orden',k); }catch(e){}
+  renderCatalogo();
+}
+function catOrden(){
+  if(!S.catOrden){
+    var v=''; try{ v=sessionStorage.getItem('mecca_cat_orden')||''; }catch(e){}
+    S.catOrden=(CAT_ORDENES.some(function(x){ return x[0]===v; })?v:'mio');
+  }
+  return S.catOrden;
+}
+/* El número de delante, leído como NÚMERO. «10. Encofrado» → 10. Sin esto,
+   ordenar por nombre pone el 10 antes que el 4. */
+function _catNumDe(p){
+  var m=/^\s*(\d+)\s*[.)-]/.exec(String((p&&p.nombre)||''));
+  return m?parseInt(m[1],10):null;
+}
+/* LA FECHA DE UNA PARTIDA es la entrega más próxima de sus actividades ABIERTAS
+   —es lo que hay que atender—, y si están todas cerradas, la última que se
+   cerró. Las que no tienen fecha van al final: no se les inventa una. */
+function _catFechaDe(pid){
+  var acts=_catActsDe(pid), abierta='', cerrada='';
+  acts.forEach(function(a){
+    var f=String(a.fecha_fin||'').slice(0,10); if(!f) return;
+    if(_catCerrada(a)){ if(!cerrada||f>cerrada) cerrada=f; }
+    else if(!abierta||f<abierta) abierta=f;
+  });
+  return abierta||cerrada||'';
+}
+function _catOrdenarPartidas(ps){
+  var k=catOrden();
+  var conNum=function(p){ var n=_catNumDe(p); return n===null?1e9:n; };
+  var porNombre=function(a,b){ return String(a.nombre).localeCompare(String(b.nombre),'es',{numeric:true}); };
+  return ps.slice().sort(function(a,b){
+    if(k==='mio'){
+      /* Las que el dueño no ha tocado van detrás de las que sí, en el orden
+         natural: si no, una sola partida movida mandaría al resto al azar. */
+      var oa=(a.orden===null||a.orden===undefined)?1e9:a.orden;
+      var ob=(b.orden===null||b.orden===undefined)?1e9:b.orden;
+      return oa-ob || (conNum(a)-conNum(b)) || porNombre(a,b);
+    }
+    if(k==='num')    return (conNum(a)-conNum(b)) || porNombre(a,b);
+    if(k==='avance'){
+      var pa=_catAvancePartida(a.id), pb=_catAvancePartida(b.id);
+      return ((pa?pa.pct:101)-(pb?pb.pct:101)) || porNombre(a,b);   // lo atrasado primero
+    }
+    if(k==='fecha'){
+      var fa=_catFechaDe(a.id)||'9999', fb=_catFechaDe(b.id)||'9999';
+      return fa.localeCompare(fb) || porNombre(a,b);
+    }
+    return porNombre(a,b);
+  });
+}
+/* ── SUBIR Y BAJAR: se intercambia el `orden` con el vecino ──
+   Dos escrituras y ninguna renumeración. La primera vez hay que numerar las
+   que estén en nulo, porque si no todas valen lo mismo y no hay con quién
+   intercambiar. */
+async function catPartidaCorrer(pid, d){
+  if(!isAdmin()){ showToast('Solo el administrador','warn',4000); return; }
+  if(catOrden()!=='mio'){
+    showToast('Pon «Mi orden» arriba para poder moverlas','warn',5000); return;
+  }
+  var ps=_catOrdenarPartidas(_catPartidasEnPantalla());
+  var i=ps.findIndex(function(x){ return x.id===pid; });
+  var j=i+d;
+  if(i<0||j<0||j>=ps.length) return;
+  setSS('syncing','Moviendo…');
+  try{
+    var sinOrden=ps.filter(function(x){ return x.orden===null||x.orden===undefined; });
+    if(sinOrden.length){
+      /* Se numera la lista ENTERA tal como se está viendo, de 10 en 10: así el
+         primer movimiento no reordena nada por sorpresa. */
+      for(var k=0;k<ps.length;k++){
+        if(ps[k].orden===(k+1)*10) continue;
+        await sb('obra_partidas?id=eq.'+encodeURIComponent(ps[k].id),{method:'PATCH',
+                 prefer:'return=minimal',body:JSON.stringify({orden:(k+1)*10})});
+        ps[k].orden=(k+1)*10;
+      }
+    }
+    var a=ps[i], b=ps[j], oa=a.orden, ob=b.orden;
+    await sb('obra_partidas?id=eq.'+encodeURIComponent(a.id),{method:'PATCH',
+             prefer:'return=minimal',body:JSON.stringify({orden:ob})});
+    await sb('obra_partidas?id=eq.'+encodeURIComponent(b.id),{method:'PATCH',
+             prefer:'return=minimal',body:JSON.stringify({orden:oa})});
+    a.orden=ob; b.orden=oa;
+    setSS('ok','✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo mover: '+((e&&e.message)||''),'err',7000); }
+  renderCatalogo();
+}
+/* Las partidas que se están viendo ahora mismo, para que subir/bajar y las
+   casillas trabajen sobre LO MISMO que hay en pantalla. */
+function _catPartidasEnPantalla(){
+  var acts=S._catPPActs||[], am=_catA(), vistos={}, ps=[];
   acts.forEach(function(a){
     var pid=am[a.id]; if(!pid || vistos[pid]) return;
     var p=_catPorId(pid); if(!p || _catEsSub(p)) return;
     vistos[pid]=1; ps.push(p);
   });
-  ps.sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre),'es'); });
+  return ps;
+}
+/* ── RENOMBRAR SIN ENTRAR ──
+   Hoy son dos toques de ida y dos de vuelta por partida. El lápiz abre el
+   nombre ahí mismo y guarda por `catFichaSet`, que es el camino de siempre. */
+function catPartidaRenAbrir(pid){
+  var p=_catPorId(pid); if(!p) return;
+  S.catPRen={id:pid, nombre:String(p.nombre||'')};
+  renderCatalogo();
+}
+function catPartidaRenCerrar(){ S.catPRen=null; renderCatalogo(); }
+async function catPartidaRenGuardar(){
+  var R=S.catPRen; if(!R) return;
+  var i=document.getElementById('cat-pren');
+  var v=String((i&&i.value)||'').trim();
+  if(!v){ showToast('El nombre no puede quedar vacío','warn',4000); return; }
+  S.catPRen=null;
+  await catFichaSet(R.id,'nombre',v);
+}
+/* ── ABRIR LA PARTIDA EN LA MISMA LISTA ──
+   «Editar sus actividades»: se despliega y salen con `revCard`, la MISMA
+   tarjeta de Revisión y del resto del módulo. No se hace otra: dos tarjetas
+   para lo mismo es el error que este proyecto ya cometió con Hoy. */
+function catPartidaAbrir(pid){
+  S.catPAbierta=(S.catPAbierta===pid?null:pid);
+  renderCatalogo();
+}
+/* ── LAS CASILLAS: juntar y quitar ── */
+function catPSelModo(){ S.catPSel=S.catPSel?null:{}; renderCatalogo(); }
+function catPSelToggle(pid){
+  S.catPSel=S.catPSel||{};
+  if(S.catPSel[pid]) delete S.catPSel[pid]; else S.catPSel[pid]=1;
+  renderCatalogo();
+}
+function _catPSelIds(){ return Object.keys(S.catPSel||{}); }
+function catPJuntar(){
+  var ids=_catPSelIds();
+  if(ids.length<2){ showToast('Marca dos o más para juntarlas','warn',4000); return; }
+  S.catPick={modo:'juntar', ids:ids, q:''};
+  S.catPSel=null; renderCatalogo(); _catArriba();
+}
+/* QUITAR NO BORRA: desactiva, y `catDeshacer` la devuelve. Y si tiene
+   actividades dentro SE DICE CUÁNTAS antes, porque quitarla las deja sueltas
+   —siguen vivas, pero fuera de este capítulo— y eso no puede pasar callado. */
+async function catPQuitar(){
+  var ids=_catPSelIds();
+  if(!ids.length){ showToast('No hay ninguna marcada','warn',3000); return; }
+  var conActs=ids.filter(function(id){ return _catActsDe(id).length; });
+  var nActs=conActs.reduce(function(n,id){ return n+_catActsDe(id).length; },0);
+  var msg='Se quitan '+ids.length+' partida'+(ids.length!==1?'s':'')+'.\n\n';
+  msg+=conActs.length
+    ? conActs.length+' tiene'+(conActs.length!==1?'n':'')+' '+nActs+' actividades dentro: '+
+      'esas actividades NO se borran, pero quedan sueltas fuera de este capítulo.\n\n'
+    : 'Ninguna tiene actividades dentro.\n\n';
+  msg+='Se desactivan, no se borran, y se puede deshacer.\n\n¿Seguro?';
+  if(!confirm(msg)) return;
+  _catGuardarUndo('quitar partidas', ids);
+  setSS('syncing','Quitando…');
+  var ok=0, fallos=[];
+  for(var i=0;i<ids.length;i++){
+    try{
+      var p=_catPorId(ids[i]);
+      await sb('obra_partidas?id=eq.'+encodeURIComponent(ids[i]),{method:'PATCH',
+               prefer:'return=minimal',body:JSON.stringify({activo:false})});
+      logCambio('editado','partida',ids[i],(p&&p.nombre)||'',
+        'partida quitada de '+String(S.catCap||'')+
+        (_catActsDe(ids[i]).length?' ('+_catActsDe(ids[i]).length+' actividades quedaron sueltas)':''));
+      ok++;
+    }catch(e){ fallos.push(((_catPorId(ids[i])||{}).nombre||ids[i]).slice(0,40)); }
+  }
+  S.catPSel=null;
+  try{ await cargarCatalogo(); }catch(e){}
+  setSS(fallos.length?'err':'ok', fallos.length?'Error':'✓');
+  if(fallos.length) showToast('Se quitaron '+ok+'. NO se pudo con: '+fallos.join(' · '),'err',9000);
+  else showToast(ok+' quitada'+(ok!==1?'s':'')+' ✓ — se puede deshacer');
+  renderCatalogo();
+}
+/* ── AGREGAR UNA PARTIDA ──
+   Lo pidió él. Nace en el capítulo que se está mirando, con el grupo que se
+   esté mirando si lo hay, vacía y al final de su orden. */
+function catPNuevaAbrir(){
+  if(!isAdmin()){ showToast('Solo el administrador','warn',4000); return; }
+  catPanelOtrosCerrar('catPNueva');
+  S.catPNueva={nombre:''};
+  _catPanel();
+}
+function _catPNuevaHTML(){
+  var N=S.catPNueva, cap=String(S.catCap||'');
+  return _catPanelCab('Nueva partida',
+      'Nace en <b>'+esc(cap+' · '+_catCapNom(cap))+'</b>'+
+      (S.catGrupo?', grupo <b>'+esc(S.catGrupo)+'</b>':'')+', vacía y al final de tu orden.')+
+    '<input id="cat-pn-nom" type="text" value="'+esc(N.nombre)+'" '+
+      'placeholder="Vaciado de losa — Casetas" '+
+      'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+      'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--font);'+
+      'background:var(--bg2);color:var(--text)">'+
+    '<div style="font-size:11.5px;color:var(--text3);line-height:1.55;margin-top:10px">'+
+      'Nace <b>sin actividades</b>. Para meterle trabajo, ábrela y usa «Buscarle sus '+
+      'partidas» o crea la actividad desde el grupo.</div>'+
+    '<button onclick="catPNuevaCrear()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:52px;'+
+      'border-color:var(--green);background:var(--green-light);color:var(--green)">Crear la partida</button>'+
+    _catPanelPie();
+}
+async function catPNuevaCrear(){
+  var i=document.getElementById('cat-pn-nom');
+  var nom=String((i&&i.value)||'').trim();
+  if(!nom){ showToast('Ponle nombre','warn',3000); return; }
+  var cap=String(S.catCap||'');
+  /* Si ya existe una con ese nombre en el capítulo, se dice y no se crea: dos
+     partidas iguales es justo lo que la pantalla de repetidas viene a limpiar. */
+  var ya=_catAgendaDe(cap).find(function(p){
+    return _catNorm(p.nombre)===_catNorm(nom);
+  });
+  if(ya){ showToast('Ya hay una que se llama «'+ya.nombre+'» en este capítulo.','err',7000); return; }
+  var ps=_catAgendaDe(cap);
+  var tope=Math.max.apply(null, ps.map(function(p){ return (p.orden===null||p.orden===undefined)?0:p.orden; }).concat([0]));
+  var fila={id:uid(), tipo:'agenda', capitulo:cap, numero:'', nombre:nom,
+            oficio:'', unidad:'', aplica:'', codigo_presupuesto:'', activo:true,
+            padre_id:null, precio_unitario:0, valor:null, seccion:'',
+            grupo:S.catGrupo||null, orden:tope+10};
+  S.catPNueva=null; _catPanel();
+  setSS('syncing','Creando…');
+  try{
+    await sb('obra_partidas',{method:'POST',prefer:'return=minimal',body:JSON.stringify(fila)});
+    (S.catPartidas=S.catPartidas||[]).push(fila);
+    S._catMapa=null;
+    logCambio('creado','partida',fila.id,nom,'partida creada en '+cap+(S.catGrupo?' · '+S.catGrupo:''));
+    setSS('ok','✓'); showToast('«'+nom+'» creada ✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo crear: '+((e&&e.message)||''),'err',8000); }
+  renderCatalogo();
+}
+
+function _catPorPartidaHTML(acts, cap){
+  S._catPPActs=acts;
+  var ps=_catOrdenarPartidas(_catPartidasEnPantalla());
   if(!ps.length)
     return '<div class="empty" style="padding:24px 16px;color:var(--text3)">'+
-      'Aquí no hay partidas de la agenda.</div>';
-  var h='<div style="font-size:11.5px;color:var(--text3);margin-bottom:8px">'+
+      'Aquí no hay partidas de la agenda.'+
+      (isAdmin()?'<br><button onclick="catPNuevaAbrir()" style="'+_catBS+';margin-top:14px;'+
+        'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)">'+
+        '+ Crear una partida</button>':'')+'</div>';
+  var mio=(catOrden()==='mio'), sel=S.catPSel, nSel=_catPSelIds().length;
+  var h='<div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">'+
+    CAT_ORDENES.map(function(o){
+      var on=(catOrden()===o[0]);
+      return '<button onclick="catOrdenSet('+_catQ(o[0])+')" style="'+_catBS+';flex:1;min-width:62px;'+
+        'min-height:44px;font-size:11.5px;border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+        'background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
+        'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+o[1]+'</button>';
+    }).join('')+'</div>';
+  h+='<div style="font-size:11.5px;color:var(--text3);margin-bottom:8px;line-height:1.5">'+
     ps.length+' partida'+(ps.length!==1?'s':'')+' · '+acts.length+' actividades. '+
-    'Toca una para <b>renombrarla</b>, <b>cambiarla de capítulo</b> o <b>de grupo</b>.</div>';
-  h+='<div class="cat-filas">'+ps.map(function(p){
-    return _catFilaHTML({onclick:'catIrPartida('+_catQ(p.id)+')', que:'Partida',
-      nombre:p.nombre, av:_catAvancePartida(p.id),
-      meta:_catGrupoDe(p)||_catCapNom(p.capitulo)});
-  }).join('')+'</div>';
+    (mio?'Con <b>Mi orden</b> puedes subirlas y bajarlas, y se guarda.'
+        :'Ordenadas por <b>'+esc((CAT_ORDENES.find(function(o){return o[0]===catOrden();})||['',''])[1])+
+         '</b>. Pon «Mi orden» para moverlas a mano.')+
+    ' Toca una para <b>abrirla</b>, o el lápiz para <b>renombrarla</b>.</div>';
+  if(isAdmin())
+    h+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+      '<button onclick="catPNuevaAbrir()" style="'+_catBS+';flex:1;min-width:120px;min-height:44px;'+
+        'font-size:11.5px;border:1.5px solid var(--green);background:var(--green-light);'+
+        'color:var(--green)">+ Nueva partida</button>'+
+      '<button onclick="catPSelModo()" style="'+_catBS+';flex:1;min-width:120px;min-height:44px;'+
+        'font-size:11.5px;border:1.5px solid '+(sel?'var(--accent)':'var(--border2)')+';'+
+        'background:'+(sel?'var(--accent-fill)':'var(--bg2)')+';'+
+        'color:'+(sel?'var(--accent-on)':'var(--text2)')+'">'+
+        (sel?'Dejar de marcar':'Marcar varias')+'</button>'+
+      (S.catUndo?'<button onclick="catDeshacer()" style="'+_catBS+';flex:1;min-width:120px;min-height:44px;'+
+        'font-size:11.5px;border:1.5px solid var(--amber);background:var(--amber-light);'+
+        'color:var(--amber)">Deshacer lo último</button>':'')+
+      '</div>';
+  if(sel)
+    h+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+      '<button onclick="catPJuntar()" style="'+_catBS+';flex:1;min-width:120px;min-height:46px;'+
+        'font-size:11.5px;border:1.5px solid var(--accent);background:var(--accent-fill);'+
+        'color:var(--accent-on)'+(nSel>=2?'':';opacity:.45')+'">Juntar las '+nSel+'</button>'+
+      '<button onclick="catPQuitar()" style="'+_catBS+';flex:1;min-width:120px;min-height:46px;'+
+        'font-size:11.5px;border:1.5px solid var(--red);background:var(--red-light);'+
+        'color:var(--red)'+(nSel?'':';opacity:.45')+'">Quitar las '+nSel+'</button></div>';
+  ps.forEach(function(p, i){
+    var abierta=(S.catPAbierta===p.id);
+    var ren=(S.catPRen&&S.catPRen.id===p.id);
+    var av=_catAvancePartida(p.id), f=_catFechaDe(p.id);
+    var marcada=!!(S.catPSel||{})[p.id];
+    h+='<div style="margin-bottom:6px">';
+    if(ren){
+      /* RENOMBRAR EN LA PROPIA FILA: la caja sustituye a la fila, no se abre
+         otra pantalla. Volver atrás es cancelar. */
+      h+='<div style="background:var(--bg2);border:1.5px solid var(--accent);border-radius:12px;padding:10px 11px">'+
+        '<input id="cat-pren" type="text" value="'+esc(S.catPRen.nombre)+'" '+
+          'style="width:100%;box-sizing:border-box;min-height:46px;border:1.5px solid var(--border2);'+
+          'border-radius:11px;padding:0 12px;font-size:14px;font-family:var(--font);'+
+          'background:var(--bg3);color:var(--text)">'+
+        '<div style="display:flex;gap:6px;margin-top:8px">'+
+          '<button onclick="catPartidaRenGuardar()" style="'+_catBS+';flex:1;min-height:44px;font-size:12px;'+
+            'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)">Guardar</button>'+
+          '<button onclick="catPartidaRenCerrar()" style="'+_catBS+';flex:1;min-height:44px;font-size:12px;'+
+            'border:1.5px solid var(--border2);background:var(--bg3);color:var(--text3)">Cancelar</button>'+
+        '</div></div></div>';
+      return;
+    }
+    h+='<div class="cat-fila" style="cursor:default'+(marcada?';border-color:var(--accent)':'')+'">'+
+      (sel
+        ? '<button onclick="catPSelToggle('+_catQ(p.id)+')" style="background:none;border:0;cursor:pointer;'+
+          'font-size:16px;min-width:26px;min-height:44px;padding:0;color:var(--text2);flex-shrink:0">'+
+          (marcada?'☑':'☐')+'</button>'
+        : (mio && isAdmin()
+            ? '<span style="display:flex;flex-direction:column;flex-shrink:0;margin-right:2px">'+
+              '<button onclick="catPartidaCorrer('+_catQ(p.id)+',-1)" style="background:none;border:0;'+
+                'cursor:pointer;color:var(--text3);font-size:12px;min-width:26px;min-height:22px;padding:0'+
+                (i===0?';opacity:.3':'')+'">▲</button>'+
+              '<button onclick="catPartidaCorrer('+_catQ(p.id)+',1)" style="background:none;border:0;'+
+                'cursor:pointer;color:var(--text3);font-size:12px;min-width:26px;min-height:22px;padding:0'+
+                (i===ps.length-1?';opacity:.3':'')+'">▼</button></span>'
+            : ''))+
+      '<button onclick="catPartidaAbrir('+_catQ(p.id)+')" class="cat-fila-nom" style="background:none;'+
+        'border:0;text-align:left;cursor:pointer;color:var(--text);font-family:var(--font);padding:0;'+
+        'min-height:44px">'+
+        '<span class="cat-fila-que">Partida'+(abierta?' · abierta':'')+'</span>'+
+        esc(p.nombre)+
+        '<span class="cat-fila-que" style="text-transform:none;letter-spacing:0;font-weight:600;'+
+          'font-family:var(--mono);margin-top:2px">'+
+          esc(_catGrupoDe(p)||_catCapNom(p.capitulo))+
+          (f?' · entrega '+esc(_nodoFecha(f)):'')+'</span>'+
+      '</button>'+
+      (isAdmin()?'<button onclick="catPartidaRenAbrir('+_catQ(p.id)+')" title="Renombrar" '+
+        'style="background:none;border:0;cursor:pointer;font-size:15px;min-width:40px;min-height:44px;'+
+        'padding:0;flex-shrink:0">✏️</button>':'')+
+      '<span class="cat-fila-der">'+
+        (av?'<span class="cat-fila-pct" style="color:'+
+            (av.pct>=100?'var(--green)':av.pct>=50?'var(--accent)':'var(--text2)')+'">'+av.pct+'%</span>'+
+            _catBarraFilaHTML(av)+'<span class="cat-fila-nm">'+av.cerradas+'/'+av.total+'</span>'
+           :'<span class="cat-fila-pct" style="color:var(--text3)">—</span>'+
+            '<span style="display:inline-block;width:56px;flex-shrink:0"></span>'+
+            '<span class="cat-fila-nm">vacía</span>')+
+      '</span></div>';
+    if(abierta){
+      var suyas=_catActsDe(p.id);
+      h+='<div style="margin:6px 0 0 10px;padding-left:8px;border-left:2px solid var(--border2)">';
+      h+='<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">'+
+        '<button onclick="catIrPartida('+_catQ(p.id)+')" style="'+_catBS+';flex:1;min-width:130px;'+
+          'min-height:44px;font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg3);'+
+          'color:var(--text2)">Abrir la ficha — capítulo y grupo</button></div>';
+      if(!suyas.length)
+        h+='<div class="empty" style="padding:16px;color:var(--text3);font-size:12px">'+
+           'Esta partida no tiene actividades.</div>';
+      suyas.forEach(function(a){
+        h+='<div style="font-size:10.5px;color:var(--text3);font-family:var(--mono);margin:0 0 2px 2px">'+
+           esc(String(a.area||'sin ubicación'))+' · '+
+           esc(_responsables(a.personal_nombre)[0]||'sin responsable')+'</div>'+
+           revCard(a);
+      });
+      h+='</div>';
+    }
+    h+='</div>';
+  });
   return h;
 }
 
