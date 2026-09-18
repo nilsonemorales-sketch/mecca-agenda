@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v110 — 18 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v111 — 18 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -217,6 +217,11 @@ mismos botones que cualquier otra.
 | **Agrupar la obra en capítulos, subpartidas y partidas (PRUEBA)** | **Partidas** — `renderCatalogo()`, solo admin. Ver «El Catálogo de partidas» en §3.5 |
 | **Renombrar o juntar una ubicación, o ponérsela a las que no tienen** | **Partidas → Ubicaciones** — `catUbicsAbrir()`, `_catUbicMover()`. Toca el `area` de todas sus actividades, avisando a cuántas |
 | **Poner un avance a mano en lo construido antes de mayo-2026** | **Partidas** — `catManualAbrir()`, en el capítulo, en la línea del presupuesto y en la ubicación. Nunca se mezcla con el contado ni sube de nivel |
+| **Armar el plan: jerarquías, entregables y notas** | **Partidas → vista Árbol** — `_catArbolHTML()`, `nodosSembrar()`, `nodoNuevoAbrir()`, `nodoMoverAbrir()`. Es el OTRO eje; no toca el catálogo |
+| **Meter actividades que ya existen en un entregable** | **Partidas → un nodo → «Traer actividades»** — `nodoTraerAbrir()`. No cambia la actividad |
+| **Ver lo mismo de otra manera** | **Partidas**, selector `[ Lista ] [ Edificio ] [ Matriz ] [ Árbol ]` — `catVistaSet()`, `_catAmbito()` |
+| **Editar las partidas de un capítulo sin salir** | **Partidas → un capítulo → «Por partida»** — `_catPorPartidaHTML()`. Lleva a la ficha de siempre |
+| **Sacar del plan lo que sobra** | **Partidas → Árbol → «Lo que está fuera del plan»** — `catFueraAbrir()`. Descartar **no borra** |
 
 
 **Los botones de registrar son LOS MISMOS en los dos sitios, aunque no
@@ -737,6 +742,127 @@ en `obra_cambios` lleva **el valor viejo y el nuevo**.
 (`_catUbicListaHTML`): ahí el contado es de esa ubicación **dentro de ese
 capítulo** y el de a mano es de la ubicación entera. Mezclar dos alcances es lo
 mismo que prohíbe la regla 1.
+
+### DOS EJES Y NO UNO (v111) — el capítulo para la plata, el árbol para entregar
+
+Seis versiones construyeron una **clasificación**: reglas que reparten solas
+las 2.466 actividades por capítulo del presupuesto y el dueño corrige lo que
+caiga mal. Eso está bien y **se queda**. Pero no es con lo que se dirige una
+obra. Palabras suyas: *«Quiero poder trabajar con libertad, teniendo a mano y
+pudiendo utilizar las actividades que tengo. Quiero poner jerarquías,
+entregables, y también poder limpiar un poco.»*
+
+| | para qué | quién lo arma |
+|---|---|---|
+| **Capítulo del presupuesto** | cuadrar con lo contratado y lo que se paga | las reglas |
+| **El plan** (`obra_nodos`) | saber qué falta para poder **entregar** | **el dueño** |
+
+**UNA MISMA ACTIVIDAD VIVE EN LOS DOS.** El plan se monta **al lado** del
+catálogo, no encima: **el árbol no toca `obra_partidas`, ni sus amarres, ni los
+capítulos.** Si se borrara entero, el catálogo seguiría exactamente igual.
+Comprobado antes y después de sembrar: 2.433 partidas y 2.466 amarres, y **cero
+escrituras** a `obra_partidas` / `obra_partida_actividad`.
+
+Por lo mismo, **«descartada del plan» NO es una columna de `obra_actividades`**:
+vive en `obra_plan_fuera`. Se llegó a escribir la columna y se retiró en el acto
+— ese módulo nació con la regla de CERO escrituras a `obra_actividades`, y es lo
+único que permite borrarlo sin dejar rastro.
+
+#### La siembra: sobre lo que ya hay, no en blanco
+
+Decisión del dueño: **«sí, pero sobre lo que ya hay»**. Un nodo por capítulo
+**con actividades** y, debajo, uno por grupo de trabajo. Las actividades se
+cuelgan del nodo del grupo si lo tiene; si no, del capítulo — así **las 2.466
+quedan en alguno**.
+
+**Solo los grupos que tienen algo.** De los 44 definidos hay **uno vacío hoy**
+—«Closets y despensa» en 11.00—: sembrarlo fabricaría de entrada un nodo que la
+pantalla de limpiar ofrecería quitar. Contra la base de hoy, la siembra son
+**19 nodos de capítulo + 43 de grupo = 62 nodos** y **2.466 amarres**.
+
+**Todos nacen `rama`. NINGÚN ENTREGABLE SE INVENTA:** los marca él, y un
+entregable sin clase (apartamento / taller / hito) se rechaza.
+
+`nodosSembrar` **para** si ya hay un solo nodo, igual que `catSembrar` en la
+v102: sembrar encima duplicaría el plan que el dueño armó a mano.
+
+#### Traer, quitar, y lo que eso NO hace
+
+**Traer y quitar NO cambian la actividad**: ni estado, ni contratista, ni fecha.
+Solo escriben en `obra_nodo_actividad`. **Por eso no pasan por `Acciones`** —no
+hay coherencia ni sellado de horas que garantizar, y hacerlo pasar por ahí
+dejaría en el historial que la actividad se editó, que es mentira. Comprobado:
+traer cinco son **1 `POST obra_nodo_actividad` y 0 escrituras a
+`obra_actividades`**, y el retrato de las cinco no cambia en nada.
+
+**Quitar del nodo no borra**: la actividad sigue viva en Obra y en su capítulo.
+
+**Una actividad puede estar en varios nodos A PROPÓSITO** —«Instalación de
+cerraduras — 4B» es de *Entregar el 4B* y de *Dimedes termina su taller*— y
+entonces **cuenta en los dos avances y se dice**, en la lista al traerla y en la
+ficha del nodo. Dentro de un mismo subárbol, en cambio, se cuenta **una sola
+vez**: eso no sería «está en dos sitios», sería sumar mal.
+
+**El avance del nodo es `_catAvance`, la misma cuenta del catálogo.** Comprobado
+nodo por nodo contra su capítulo: los siete dan lo mismo. Una segunda fórmula
+haría que el árbol y el capítulo cantaran números distintos — el error de Hoy.
+
+#### Las cuatro maneras de verlo
+
+`[ Lista ] [ Edificio ] [ Matriz ] [ Árbol ]`, y **el selector se recuerda en la
+sesión**. **Lo que se ve cambia; lo que se mira, no**: el ámbito se resuelve en
+**un solo sitio** (`_catAmbito`) y las cuatro leen de ahí. Si cada vista
+resolviera lo suyo, cambiar de vista terminaría cambiando lo que se mira.
+
+**EL EDIFICIO ES EL ALZADO QUE YA EXISTE. No dibujes otro.** Es el mismo SVG de
+Hoy —`torreHTML` / `_dibujarTorreEn`—, con el núcleo de escaleras, las celosías,
+los balcones y el penthouse retranqueado. Lo único que se le cambió es **de
+dónde saca los números**: `torreHTML(persona, fuente)` y `_torreDatos(persona,
+fuente)`, y con `fuente='catalogo'` salen de **`S.catActs`**, filtrados por lo
+que se esté mirando.
+
+**NO se reusó `S._torre`** a propósito: `cargarTorre` guarda su resultado y **no
+respeta la frescura de la v109**. Pintar el catálogo con eso traería de vuelta
+el fallo que casi cuesta seis actividades reabiertas. Comprobado: con `S.catActs`
+vacío el dibujo se queda sin una sola área.
+
+El toque se resuelve **una vez, con la caja delante** (`var tap=…` en
+`_dibujarTorreEn`): el dibujo vive en tres pantallas y el del catálogo lleva a
+otro sitio. Con `_torreTap` a secas dentro de cada closure, abría la hoja del
+apartamento de Hoy.
+
+**Lo que no es apartamento va DEBAJO, en filas** (`_torreOtras`), no dentro del
+alzado. En el catálogo salen todas las que tengan algo; en Hoy, solo las que
+tienen trabajo abierto.
+
+**La matriz es NUEVA, y aquí está por qué.** `renderActsMatriz` es ubicaciones ×
+**talleres de UN contratista**, con su `<select>`, su consulta (`loadMatrizActs`)
+y su caché. Generalizarla pedía cambiarle las tres cosas, y es una pantalla
+verificada que se usa en Actividades. La del módulo es **ubicaciones ×
+capítulos** (o × grupos, o × hijos del nodo), lee de `S.catActs` y calcula con
+`_catAvance`. **Vacío y cero no se ven igual**: la celda sin nada va rayada y
+con un guión; la de 0% lleva su número.
+
+#### «Por partida» — lo que faltaba era llegar
+
+El dueño abrió **3.00 · Hormigón Armado**, le salieron las nueve ubicaciones y
+nada más: *«No puedo editar estas partidas dentro de hormigón armado.»* Tenía
+razón: desde ahí no había camino a las partidas. Ahora hay un interruptor
+**[ Por ubicación ] [ Por partida ]** dentro del capítulo, y desde cada fila se
+entra a la ficha de siempre — que ya sabía renombrar, cambiar de capítulo y
+cambiar de grupo. **No se construyó otra ficha.**
+
+#### Crear en varias ubicaciones a la vez
+
+*«Muchas de ellas se pudieran repetir en varias ubicaciones.»* `catCrearAbrir`
+solo **escoge las ubicaciones** y se las pasa al formulario de siempre por
+`ctx.areas`; el alta sigue siendo `showAddAct` → `saveAct` → `Acciones.crear`.
+**No se abrió la puerta once.** El resumen con los nombres sale antes de
+continuar, y lo que nace queda amarrado al nodo de donde salió.
+
+**No lo juntes con «Repetir en…» de la v107**: aquella parte de una actividad
+que YA existe y ofrece los apartamentos que no la tienen. Ésta es al crearla de
+cero. Dos momentos, dos pantallas.
 
 ### El Repaso por partida repetida (v94) — por qué existe
 
@@ -1521,6 +1647,28 @@ mismo:**
   debajo. Si los dos existen y difieren, se ven los dos
 - **Un ingeniero no puede poner porcentajes a mano** —ni desde el botón ni
   llamando a la función— y sigue sin ver la pestaña
+- **El árbol NO toca el catálogo.** Cuenta `obra_partidas` y sus amarres antes y
+  después de sembrar el plan: tienen que dar lo mismo, y las escrituras a esas
+  dos tablas **cero**
+- **La siembra deja las 2.466 en algún nodo**, con un nodo por capítulo con
+  actividades y uno por grupo. Y **sembrar dos veces no duplica**: para y lo dice
+- **Traer al plan no cambia la actividad.** Guarda el retrato de estado, avance,
+  responsable, fecha y área de las que traigas y compáralo después: idéntico. Y
+  **cero escrituras a `obra_actividades`**
+- **El avance de un nodo da lo mismo que el de su capítulo.** Si un nodo sembrado
+  y su capítulo no coinciden, alguien escribió una segunda fórmula
+- **El selector cambia la vista sin cambiar el ámbito**, y se recuerda
+- **El edificio del módulo se pinta con `S.catActs`.** Demuéstralo: vacía
+  `S.catActs` y el dibujo tiene que quedarse sin una sola área. Si sigue
+  pintando, volvió a leer del guardado de `cargarTorre` y con él el fallo de los
+  datos viejos de la v109
+- **Mirando 10.00 · Pisos, el alzado pinta PH 20% · 6A 47% · 6B 45% · 5A 55% ·
+  5B 60% · 4A 57% · 4B 39%** (medido el 18-sep-2026). Y **la torre de Hoy sigue
+  igual**: es el mismo dibujo, no una copia
+- **En la matriz, una celda sin actividades se ve DISTINTA de una en 0%**
+- **3.00 «Por partida» da 25 partidas y 30 actividades**, y desde la fila se
+  llega a la ficha que renombra y cambia de capítulo. **«Por ubicación» sigue
+  dando** 4A 1/1 · 4B 3/3 · PH 5/5 · Áreas Comunes N7 6/7 · Parqueo 4/8
 - **El catálogo se comprueba contra INVARIANTES, no contra cifras.** La obra se
   mueve mientras programas —un día se cerraron 13 partidas en una tarde y el
   reparto dejó de cuadrar contra una tabla congelada—. Lo que tiene que dar
@@ -1613,6 +1761,10 @@ pertenece a ningún nivel.
 | **v109** — la primera medición de «posibles repetidas» dio 2,8 millones de parejas: el relleno del arnés eran 2.400 partidas con nombres casi idénticos en el mismo capítulo. No existe en la obra —el capítulo más grande tiene 278— pero destapó que la comparación era n² sin tope. | Un fixture irreal puede señalar un límite real. En vez de arreglar solo el fixture, se metió un índice por palabra y un tope de 2.000 parejas que la pantalla dice. **Cuando una medición se dispara, pregunta si el dato es absurdo o si el código no aguanta el caso** — aquí eran las dos. |
 | **v110** — la lista de ubicaciones daba **30** en la prueba y **29** contra la base. No era el app: el arnés de la v106 trae una actividad en «N1 — Lobby», que en la obra no es una ubicación. Media hora buscando un fallo que estaba en el fixture. | Cuando un conteo se separa **en uno** del medido contra la base, mira primero de dónde salen las filas de la prueba. Un fixture que no reproduce la distribución real convierte cualquier número en una opinión — y al arreglarlo, arréglalo para que dé **exactamente** el de la base, no «parecido». |
 | **v110** — las tarjetas en rejilla usaban `repeat(auto-fill,minmax(160px,1fr))`. A 390px daban dos y a 1024px **cuatro**: en el iPad seguía siendo una rejilla, que es justo lo que el dueño pidió quitar. | «Dos columnas en pantalla ancha» es una `@media query`, no un `auto-fill`. `auto-fill` mete las que quepan, y en una pantalla grande eso nunca son dos. Y la prueba tiene que **contar cuántas caben por fila a cada ancho**, no mirar el CSS. |
+| **v111** — se añadió `fuera_plan` como columna de `obra_actividades` y hubo que quitarla en el acto. Ese módulo nació con la regla de CERO escrituras a `obra_actividades` —es lo que permite borrarlo entero sin rastro— y la consulta de arranque tampoco se toca. El descarte es una decisión DEL PLAN: vive en `obra_plan_fuera`. | Antes de añadir una columna, pregunta **de quién es el dato**. Una decisión sobre el plan guardada en la tabla del trabajo ata dos cosas que se diseñaron para poder separarse, y se nota el día que hay que borrar una de las dos. |
+| **v111** — dos sondas señalaron fallos que se había causado la propia prueba: la que compara el avance del nodo con el de su capítulo corría DESPUÉS de que otra sonda metiera nodos nuevos dentro de un capítulo (95% contra 97%), y la de «quitar del nodo» esperaba que quedara en 1 nodo cuando la siembra ya la había dejado en uno, así que quedaban 2. | Una sonda que escribe **contamina a las de abajo**. Ponla antes, o mide contra el estado que tú misma dejaste. Y cuando una comprobación falle por uno, repasa **qué hizo la prueba antes**, no solo lo que hace el app. |
+| **v111** — con «Lo que está fuera del plan» abierto, el selector de vistas **no hacía nada**: `S.catFuera` se comprueba antes que la vista en `renderCatalogo` y `catVistaSet` no lo soltaba. Se tocaba Edificio y seguía la misma pantalla. Lo cazó una sonda que medía el texto de las cuatro vistas y **las cuatro daban lo mismo**. | Cuando una pantalla se comprueba ANTES que el selector, el selector deja de existir para ella. Y la manera de verlo no es leer el `if`: es **medir que las cuatro vistas dan cosas distintas**. Dos botones que devuelven la misma pantalla no se distinguen de dos botones que funcionan. |
+| **v111** — la sonda de «crear en cuatro ubicaciones» dio cero ubicaciones en el formulario: `showAddAct` abre PRIMERO el menú de tipo (propio / contratista / administrativa) y el formulario no existe hasta que se escoge. La prueba estaba midiendo el menú. | Si una pantalla tiene un paso intermedio, la prueba **lo tiene que dar**, como lo da el usuario. Medir el primer modal que aparece y llamarlo «el formulario» es el mismo error de v58: tocar lo que no se toca. |
 | **v105** — la prueba esperaba con `window.S && S.acts.length`, y `S` se declara con `let`: **no está en `window`**. La guarda daba siempre falso y la prueba se quedó 60 s dando por hecho que el app no había cargado. Antes de eso, buscaba el agrupador entre los `<button>` y el visible es un `<select>` —las pastillas con esas etiquetas viven en el panel de Filtros, plegado. | Un `let` de nivel superior es un global, pero **no una propiedad de `window`**: preguntar por `window.X` miente sin error. Y antes de dar por rota una pantalla, comprueba que estás tocando el control que el usuario ve — es otra vez el v58. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
@@ -1674,6 +1826,7 @@ orden de magnitud.
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
 | `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**. Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
+| `obra_nodos`, `obra_nodo_actividad`, `obra_plan_fuera` | **EL PLAN (v111)** — el segundo eje. El árbol del dueño: `tipo` (`rama`/`entregable`), `clase` (apartamento/taller/hito), `orden`, `notas` para lo que no es actividad. El amarre es una tabla aparte porque **una actividad puede estar en varios nodos a propósito**. `obra_plan_fuera` son los descartes: **no borra nada**, saca del plan. Se borran las tres y el catálogo queda exactamente igual. | 62 + 2.466 al sembrar |
 | `obra_ubicaciones` | **Del módulo «Partidas» (v110).** Existe SOLO para guardarle el porcentaje a mano a una ubicación: el nombre sigue viviendo en `obra_actividades.area` y esta tabla no manda sobre nada. Hay fila únicamente para las que llevan algo escrito a mano. | 0 al nacer |
 
 ### Cosas de los datos que hay que saber
