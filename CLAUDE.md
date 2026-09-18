@@ -1,7 +1,7 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v109 — 18 de septiembre de 2026.** Antes de escribir, comprueba
-la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
+**Al día a v110 — 18 de septiembre de 2026.** Antes de escribir, comprueba
+la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
 
@@ -215,6 +215,8 @@ mismos botones que cualquier otra.
 | **Mover TODAS las fechas de un sitio o un contratista** | **Obra**, barra «Todas a…» — `trTodas()` |
 | **REGISTRAR con todo el detalle** | **Actividades**, al abrir la fila — `_actFilaRapidaHTML()`, `_actFilaAvanceHTML()` |
 | **Agrupar la obra en capítulos, subpartidas y partidas (PRUEBA)** | **Partidas** — `renderCatalogo()`, solo admin. Ver «El Catálogo de partidas» en §3.5 |
+| **Renombrar o juntar una ubicación, o ponérsela a las que no tienen** | **Partidas → Ubicaciones** — `catUbicsAbrir()`, `_catUbicMover()`. Toca el `area` de todas sus actividades, avisando a cuántas |
+| **Poner un avance a mano en lo construido antes de mayo-2026** | **Partidas** — `catManualAbrir()`, en el capítulo, en la línea del presupuesto y en la ubicación. Nunca se mezcla con el contado ni sube de nivel |
 
 
 **Los botones de registrar son LOS MISMOS en los dos sitios, aunque no
@@ -651,6 +653,90 @@ Hoy: 1.029 partidas · **1 colgada** · **417** actividades sin capítulo propio
 **Solo las que no tienen ni una actividad**: una partida con trabajo dentro no se
 quita, primero se mueven. Se desactivan —no se borran— y `catDeshacer` las
 devuelve.
+
+#### El formato de lista (v110) — filas, no tarjetas
+
+Dentro de un capítulo las ubicaciones salían en **rejilla de tarjetas**: en el
+iPad se veían tres enormes con el resto de la pantalla vacío, en el teléfono
+obligaban a bajar, y **no decían de qué eran** —«General 100% · 1/1» sin saber a
+qué colgaba—. Ahora hay **una fila por cosa** (`_catFilaHTML`, clases
+`.cat-filas` / `.cat-fila`): nombre a la izquierda, y a la derecha porcentaje,
+barra y `cerradas/total` **alineados**, para que se lean en columna. La fila dice
+**qué es**: partida madre, clasificación o ubicación.
+
+**Dos columnas en pantalla ancha y una en el teléfono, con `@media`, no con
+`auto-fill`**: `repeat(auto-fill,minmax(160px,1fr))` metía cuatro a 1024px y
+volvía a ser una rejilla. Las filas miden 47px — el mínimo de este app son 44.
+
+Lo usan la portada de capítulos, los grupos de trabajo y la lista de
+ubicaciones. **Sin actividades no hay barra ni porcentaje**, igual que en la
+tarjeta: dice «—  sin tareas».
+
+#### Las ubicaciones ya son una lista (v110)
+
+**La ubicación no existe como cosa: es un texto suelto dentro de cada actividad**
+(`obra_actividades.area`). Por eso no se podía renombrar, y por eso está sucia.
+Medido: **29 ubicaciones**, con cuatro fachadas (una se llama solo «Fachada», con
+1), dos generales («General» 28 y «Toda la obra» 8), «techo» en minúscula y **17
+actividades sin ninguna**.
+
+La pantalla es **Partidas → Ubicaciones** (`catUbicsAbrir`,
+`_catUbicsPantallaHTML`, `_catUbicsTodas`). Desde ahí:
+
+- **Renombrar** (`catUbicRenAbrir` → `_catUbicMover`) — cambia el `area` de
+  **todas** sus actividades.
+- **Juntar en otra** (`catUbicJuntarAbrir` → `_catUbicMover`) — el **mismo
+  motor**: las dos cosas son escribir otro `area` en las mismas actividades, y
+  dos funciones separadas terminarían contando distinto.
+- **Ponerle ubicación a las que no tienen** (`catSinUbicAbrir`), marcando varias.
+
+**RENOMBRAR O JUNTAR DICE A CUÁNTAS ACTIVIDADES TOCA, ANTES DE TOCARLAS.**
+Renombrar «N2 — Apto 2A» toca **240**. Si el dueño se equivoca de fila tiene que
+verlo antes, no después. El aviso se repinta **solo él** (`cat-ur-aviso`), no el
+panel: repintar ahí perdería el foco y el nombre a medio escribir.
+
+Todo va por **`Acciones.editar`**, una llamada por actividad y **un solo
+repintado** al final —repintar por actividad sobre 240 es el tirón de la v86—, y
+la tanda entera se deshace de golpe (`catTandaDeshacer`, rama `campo==='area'`).
+Una que se caiga no tumba las demás y **se dice cuál**.
+
+Las actividades sin `area` se llaman **«Sin ubicación»** en todo el app, desde la
+constante **`PAL_SIN_UBIC`**. Con dos nombres distintos parecerían dos cosas.
+
+#### El porcentaje a mano (v110) — el único número que no se cuenta
+
+Existe porque **la obra anterior a mayo de 2026 no tiene ni una actividad**: la
+agenda arrancó el 27 de mayo y todo lo de antes está construido y pagado sin
+tareas que contar. Medido: **29 capítulos de 48** y **273 líneas del presupuesto
+de 274** salen en cero **para siempre** sin él.
+
+Se pone en tres niveles —**línea del presupuesto, capítulo y ubicación**—, con
+columnas `avance_manual`, `avance_manual_por` y `avance_manual_fecha` en
+`obra_partidas` y `obra_capitulos`, y **tabla propia `obra_ubicaciones`** porque
+la ubicación no existe como fila.
+
+Tres reglas, y ninguna es de estilo:
+
+- **NUNCA SE MEZCLA CON EL CONTADO.** Si hay actividades **manda el contado** y
+  el de a mano va debajo etiquetado; si no hay, se enseña el de a mano, también
+  etiquetado; si los dos existen y no coinciden, **se ven los dos**.
+  Promediarlos inventaría un tercer número que no es ninguno de los dos.
+  Todo eso vive en **`_catAvanceConManoHTML`**, en un solo sitio.
+- **NO SUBE DE NIVEL.** Un capítulo no hereda el de sus líneas ni la torre el de
+  los capítulos. Comprobado: poner 100% a mano en una línea vacía **no mueve el
+  capítulo**.
+- **SE VE DISTINTO SIEMPRE** (`.cat-mano`, ámbar y borde punteado), con **quién
+  lo puso y cuándo**. Si se viera igual que los demás, en seis meses nadie
+  sabría cuál se contó y cuál se escribió.
+
+**Solo administrador**, comprobado en `catManualAbrir` **y otra vez en la
+escritura** (`_catManualAplicar`) por si alguien llega por otro camino. El rastro
+en `obra_cambios` lleva **el valor viejo y el nuevo**.
+
+*Ojo:* el de la ubicación **no se enseña dentro de un capítulo**
+(`_catUbicListaHTML`): ahí el contado es de esa ubicación **dentro de ese
+capítulo** y el de a mano es de la ubicación entera. Mezclar dos alcances es lo
+mismo que prohíbe la regla 1.
 
 ### El Repaso por partida repetida (v94) — por qué existe
 
@@ -1418,6 +1504,23 @@ mismo:**
   `_isoAddDias`
 - **La duración no cambia con el arrastre.** Una de 8 días de trabajo sigue
   siendo de 8 después de moverse
+- **El capítulo 2.00 sale en FILAS, no en tarjetas**, con Parqueo 94% · 8/9,
+  General 100% · 1/1 y Sin ubicación 100% · 1/1, y la cabecera 95% · 10/11. Una
+  columna a 390px, **dos** a 1024px, y ninguna fila por debajo de 44px
+- **La lista de ubicaciones da 29**, con «Sin ubicación 17» entre ellas, sobre
+  2.466 actividades
+- **Renombrar o juntar una ubicación DICE A CUÁNTAS TOCA antes de tocarlas**:
+  «techo» → «Techo» avisa de 1; «Fachada» dentro de «Fachada Frontal» avisa de 1
+  y deja 12; «N2 — Apto 2A» avisa de **240**. Si un aviso sale sin número o con
+  el número equivocado, no se puede usar
+- **Ponerle ubicación a tres sin ubicación son 3 llamadas a `Acciones` y UN
+  repintado**, y la tanda se deshace entera
+- **El porcentaje a mano no se mezcla ni sube.** Ponle 100% a una línea del
+  presupuesto vacía: sale **etiquetado** con quién y cuándo, y **el capítulo no
+  cambia**. En un capítulo con actividades, manda el contado y el de a mano sale
+  debajo. Si los dos existen y difieren, se ven los dos
+- **Un ingeniero no puede poner porcentajes a mano** —ni desde el botón ni
+  llamando a la función— y sigue sin ver la pestaña
 - **El catálogo se comprueba contra INVARIANTES, no contra cifras.** La obra se
   mueve mientras programas —un día se cerraron 13 partidas en una tarde y el
   reparto dejó de cuadrar contra una tabla congelada—. Lo que tiene que dar
@@ -1508,6 +1611,8 @@ pertenece a ningún nivel.
 | **v108** — dos sondas de la prueba daban «no cambia nada» y parecían un fallo: una editaba las palabras del grupo que va DESPUÉS (y gana el primero que coincide, así que no podía cambiar nada), y la otra escribía en un doble que no aplicaba las escrituras, así que al recargar volvía el estado viejo. | Para probar una regla de prioridad hay que tocar el lado que MANDA, no el que obedece. Y un doble que se traga las escrituras solo sirve mientras nada relea: en cuanto el código hace `cargarCatalogo()` después de escribir, el doble tiene que comportarse como la base o la prueba miente. |
 | **v109** — el módulo Partidas enseñó durante días un estado que ya no existía: «sin empezar · 4 días vencida» sobre una actividad **cerrada al 100% cinco días antes**. `cargarCatalogo()` corría una sola vez por sesión y el ↺ no la tocaba, así que la barra decía «sincronizado» y la tarjeta mentía, **las dos a la vez**. El dueño estuvo a punto de reabrir seis actividades buenas. | Una pantalla con su propia carga de datos necesita su propia política de frescura: **cuándo se recarga, y la hora a la vista**. Que otra parte del app diga «sincronizado» no cubre a la que lee de otro sitio — y dos relojes que no se miran hacen que el usuario le crea al equivocado. |
 | **v109** — la primera medición de «posibles repetidas» dio 2,8 millones de parejas: el relleno del arnés eran 2.400 partidas con nombres casi idénticos en el mismo capítulo. No existe en la obra —el capítulo más grande tiene 278— pero destapó que la comparación era n² sin tope. | Un fixture irreal puede señalar un límite real. En vez de arreglar solo el fixture, se metió un índice por palabra y un tope de 2.000 parejas que la pantalla dice. **Cuando una medición se dispara, pregunta si el dato es absurdo o si el código no aguanta el caso** — aquí eran las dos. |
+| **v110** — la lista de ubicaciones daba **30** en la prueba y **29** contra la base. No era el app: el arnés de la v106 trae una actividad en «N1 — Lobby», que en la obra no es una ubicación. Media hora buscando un fallo que estaba en el fixture. | Cuando un conteo se separa **en uno** del medido contra la base, mira primero de dónde salen las filas de la prueba. Un fixture que no reproduce la distribución real convierte cualquier número en una opinión — y al arreglarlo, arréglalo para que dé **exactamente** el de la base, no «parecido». |
+| **v110** — las tarjetas en rejilla usaban `repeat(auto-fill,minmax(160px,1fr))`. A 390px daban dos y a 1024px **cuatro**: en el iPad seguía siendo una rejilla, que es justo lo que el dueño pidió quitar. | «Dos columnas en pantalla ancha» es una `@media query`, no un `auto-fill`. `auto-fill` mete las que quepan, y en una pantalla grande eso nunca son dos. Y la prueba tiene que **contar cuántas caben por fila a cada ancho**, no mirar el CSS. |
 | **v105** — la prueba esperaba con `window.S && S.acts.length`, y `S` se declara con `let`: **no está en `window`**. La guarda daba siempre falso y la prueba se quedó 60 s dando por hecho que el app no había cargado. Antes de eso, buscaba el agrupador entre los `<button>` y el visible es un `<select>` —las pastillas con esas etiquetas viven en el panel de Filtros, plegado. | Un `let` de nivel superior es un global, pero **no una propiedad de `window`**: preguntar por `window.X` miente sin error. Y antes de dar por rota una pantalla, comprueba que estás tocando el control que el usuario ve — es otra vez el v58. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
@@ -1567,8 +1672,9 @@ orden de magnitud.
 | `obra_ordenes_compra` | Órdenes a proveedores. | ~72 |
 | `obra_config` | Configuración compartida, clave/valor. | — |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
-| `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. | 48 + 44 |
-| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
+| `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
+| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**. Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
+| `obra_ubicaciones` | **Del módulo «Partidas» (v110).** Existe SOLO para guardarle el porcentaje a mano a una ubicación: el nombre sigue viviendo en `obra_actividades.area` y esta tabla no manda sobre nada. Hay fila únicamente para las que llevan algo escrito a mano. | 0 al nacer |
 
 ### Cosas de los datos que hay que saber
 

@@ -534,6 +534,31 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 @media(max-width:600px){#bn-plan{display:none!important}}
 /* Override global button/select rules inside plan toolbar */
 #c-plan select{min-height:unset!important;display:inline-block!important;height:32px!important;line-height:32px!important}
+/* ── v110 · EL FORMATO DE LISTA DEL MÓDULO PARTIDAS ──
+   Antes eran tarjetas en rejilla: en el iPad salían tres enormes con el resto
+   de la pantalla vacío, en el teléfono obligaban a bajar, y no decían de qué
+   eran. Ahora es una FILA por cosa: nombre a la izquierda, número y barra a la
+   derecha ALINEADOS, para que se lean en columna.
+   Dos columnas en pantalla ancha y una en el teléfono — no `auto-fill`, que a
+   1024px metía cuatro y volvía a ser una rejilla. */
+.cat-filas{display:grid;grid-template-columns:1fr;gap:5px}
+@media(min-width:700px){.cat-filas{grid-template-columns:1fr 1fr;gap:5px 8px}}
+.cat-fila{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;text-align:left;
+  padding:8px 11px;border:1.5px solid var(--border2);border-radius:12px;background:var(--bg2);
+  color:var(--text);cursor:pointer;font-family:var(--font)}
+.cat-fila-nom{flex:1;min-width:0;font-size:13px;font-weight:800;line-height:1.25;
+  overflow:hidden;text-overflow:ellipsis}
+.cat-fila-que{font-size:9.5px;font-weight:700;color:var(--text3);text-transform:uppercase;
+  letter-spacing:.4px;line-height:1.3;display:block}
+.cat-fila-der{display:flex;align-items:center;gap:7px;flex-shrink:0;font-family:var(--mono);font-size:11.5px}
+.cat-fila-pct{min-width:38px;text-align:right;font-weight:800}
+.cat-fila-nm{min-width:48px;text-align:right;color:var(--text3);font-size:10.5px}
+/* EL PORCENTAJE A MANO TIENE QUE VERSE DISTINTO SIEMPRE. Es el único número
+   del módulo que no sale de un hecho registrado: si se ve igual que los
+   demás, en seis meses nadie sabrá cuál se contó y cuál se escribió. */
+.cat-mano{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10.5px;
+  font-weight:700;color:var(--amber);background:var(--amber-light);border:1px dashed var(--amber);
+  border-radius:8px;padding:2px 7px;line-height:1.45;margin-top:3px}
 </style>
 
 </head>
@@ -865,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260918_109';
+const APP_VERSION='20260919_110';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -886,6 +911,10 @@ const APP_VERSION='20260918_109';
    demás — el botón se lee, la voz se habla, son dos cosas distintas. */
 var PAL_COMPLETADA='Completada';
 var PAL_SIN_CAMBIOS='Sin cambios';
+/* Las actividades a las que nadie les puso `area` se llaman de UNA sola forma
+   en todo el app. Son 17 hoy, y con dos nombres distintos —«Sin ubicación» en
+   una pantalla y «(sin ubicación)» en otra— parecerían dos cosas. */
+var PAL_SIN_UBIC='Sin ubicación';
 
 /* ══ LA VOZ, ESCONDIDA — NO RETIRADA ══════════════════════════════════
    Decisión del dueño en v97. El motivo: la voz se comporta DISTINTO según
@@ -16338,6 +16367,109 @@ function _catAvanceHTML(av, chico){
     '<span style="color:var(--text3)'+(chico?';font-size:10px':'')+'"> · '+
     av.cerradas+'/'+av.total+'</span>';
 }
+
+/* ══ v110 · EL PORCENTAJE A MANO ═════════════════════════════════════════
+   Existe porque LA OBRA ANTERIOR A MAYO DE 2026 NO TIENE NI UNA ACTIVIDAD:
+   la agenda arrancó el 27 de mayo y todo lo de antes —zapatas, plateas,
+   columnas, muros— está construido y pagado sin una sola tarea que contar.
+   Medido: 29 capítulos de 48 y 273 líneas del presupuesto de 274 salen en
+   cero PARA SIEMPRE si no se puede escribir el avance a mano.
+
+   Tres reglas que no se tocan:
+
+   1. NUNCA SE MEZCLA CON EL CONTADO. Si hay actividades manda el contado y el
+      de a mano va debajo; si no hay, se enseña el de a mano; si los dos
+      existen y no coinciden, SE VEN LOS DOS. Promediarlos inventaría un
+      tercer número que no es ninguno de los dos.
+   2. NO SUBE DE NIVEL. Un capítulo no hereda el de sus líneas, ni la torre el
+      de los capítulos. Un porcentaje declarado y uno contado no se suman.
+   3. SE VE DISTINTO SIEMPRE — etiqueta, color y borde propios (`.cat-mano`),
+      con quién lo puso y cuándo. Es el único número del módulo que no sale de
+      un hecho registrado: si se viera igual que los demás, en seis meses
+      nadie sabría cuál se contó y cuál se escribió, y ahí es donde un módulo
+      deja de servir para decidir. */
+var CAT_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function _catFechaCorta(iso){
+  var m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return String(iso||'');
+  return String(parseInt(m[3],10))+'-'+(CAT_MESES[parseInt(m[2],10)-1]||m[2]);
+}
+/* `tipo` es 'cap' (partida madre), 'sub' (línea del presupuesto) o 'ubic'
+   (ubicación). Cada uno vive en su tabla; la ubicación necesita la suya
+   (`obra_ubicaciones`) porque hoy NO existe como fila: es un texto suelto
+   dentro de cada actividad. */
+function _catManualFila(tipo, id){
+  var k=String(id==null?'':id);
+  if(tipo==='cap')  return (S.catCaps||[]).find(function(x){ return String(x.id)===k; })||null;
+  if(tipo==='sub')  return _catPorId(k)||null;
+  if(tipo==='ubic') return (S.catUbicRows||[]).find(function(x){ return String(x.id)===k; })||null;
+  return null;
+}
+function _catManual(tipo, id){
+  var r=_catManualFila(tipo,id);
+  if(!r) return null;
+  var v=r.avance_manual;
+  if(v===null || v===undefined || v==='') return null;
+  var p=parseInt(v,10); if(isNaN(p)) return null;
+  return {pct:Math.max(0,Math.min(100,p)), por:String(r.avance_manual_por||''),
+          fecha:String(r.avance_manual_fecha||'')};
+}
+function _catManualHTML(m){
+  if(!m) return '';
+  var quien=[m.por, m.fecha?_catFechaCorta(m.fecha):''].filter(Boolean).join(', ');
+  return '<span class="cat-mano" title="Escrito a mano: no sale de tareas contadas">'+
+    'a mano: '+m.pct+'%'+(quien?' <span style="font-weight:600;opacity:.9">— '+esc(quien)+'</span>':'')+'</span>';
+}
+/* El contado y el de a mano, cada uno con su cara. Ver la regla 1 de arriba. */
+function _catAvanceConManoHTML(av, tipo, id, chico){
+  var m=(tipo?_catManual(tipo,id):null);
+  if(!av && !m) return _catAvanceHTML(null);
+  if(!av) return _catManualHTML(m);
+  return _catAvanceHTML(av,chico)+(m?'<br>'+_catManualHTML(m):'');
+}
+
+/* ── LA FILA, QUE SUSTITUYE A LA TARJETA (v110) ──
+   Nombre a la izquierda, número y barra a la derecha ALINEADOS, y la fila dice
+   QUÉ ES —partida madre, clasificación o ubicación—, que es lo que faltaba:
+   se veía «General 100% · 1/1» sin saber a qué colgaba. */
+function _catBarraFilaHTML(av){
+  if(!av) return '';
+  var col=av.pct>=100?'var(--green)':av.pct>=50?'var(--accent)':'var(--text2)';
+  /* Lleva la MISMA clase `cat-barra` que la de la tarjeta: es la misma barra de
+     7px de la v103, puesta de lado. Si se le pusiera otra, la comprobación de
+     «hay barra en los tres sitios» contaría de menos sin que nadie lo viera. */
+  return '<span class="cat-barra" role="img" aria-label="'+av.pct+'% de las tareas cerradas" '+
+    'style="display:inline-block;width:56px;height:7px;border-radius:99px;flex-shrink:0;'+
+    'background:var(--bg4,var(--bg3));overflow:hidden">'+
+    '<span style="display:block;height:100%;width:'+Math.max(0,Math.min(100,av.pct))+'%;'+
+    'background:'+col+';border-radius:99px"></span></span>';
+}
+function _catFilaHTML(o){
+  var av=o.av, m=(o.tipo?_catManual(o.tipo,o.id):null);
+  var der;
+  if(av){
+    var col=av.pct>=100?'var(--green)':av.pct>=50?'var(--accent)':'var(--text2)';
+    der='<span class="cat-fila-pct" style="color:'+col+'">'+av.pct+'%</span>'+
+        _catBarraFilaHTML(av)+
+        '<span class="cat-fila-nm">'+av.cerradas+'/'+av.total+'</span>';
+  }else{
+    /* SIN ACTIVIDADES NO HAY BARRA NI PORCENTAJE, igual que en la tarjeta: una
+       barra en cero y una barra vacía se ven igual y no son lo mismo. */
+    der='<span class="cat-fila-pct" style="color:var(--text3)">—</span>'+
+        '<span style="display:inline-block;width:56px;flex-shrink:0"></span>'+
+        '<span class="cat-fila-nm">sin tareas</span>';
+  }
+  return '<button onclick="'+o.onclick+'" class="cat-fila"'+
+    (o.borde?' style="border-color:'+o.borde+'"':'')+'>'+
+    '<span class="cat-fila-nom">'+
+      (o.que?'<span class="cat-fila-que">'+esc(o.que)+'</span>':'')+
+      esc(o.nombre)+
+      (o.meta?'<span class="cat-fila-que" style="text-transform:none;letter-spacing:0;'+
+        'font-weight:600;font-family:var(--mono);margin-top:2px">'+o.meta+'</span>':'')+
+      (m?'<br>'+_catManualHTML(m):'')+
+    '</span>'+
+    '<span class="cat-fila-der">'+der+'</span></button>';
+}
 /* Va por el índice desde v106 (`_catMapa`): recorrer las 2.466 por cada
    partida eran medio millón de comparaciones para pintar un capítulo. */
 function _catActsDe(pid){ return _catMapa()[pid]||[]; }
@@ -16456,6 +16588,12 @@ async function cargarCatalogo(){
       S.catCaps=[]; S.catSubs=[];
       S.catEstructuraErr=(e4&&e4.message)||'no se pudo leer la estructura';
     }
+    /* LAS UBICACIONES CON PORCENTAJE A MANO (v110). La tabla NO manda sobre
+       las actividades: el nombre de la ubicación sigue viviendo en `area`, y
+       aquí solo hay fila para las que llevan algo escrito a mano. Si no carga,
+       el módulo sigue entero — se queda sin ese número, no sin pantalla. */
+    try{ S.catUbicRows=await sb('obra_ubicaciones?order=id.asc')||[]; }
+    catch(e6){ S.catUbicRows=[]; }
     S.catError='';
     /* LA HORA DE ESTOS DATOS. Sin esto no hay forma de saber si lo que se ve
        es de ahora o de hace cinco días — y eso ya casi cuesta seis actividades
@@ -17256,7 +17394,7 @@ function _catMapa(){
    como se construye, que es como el dueño lo mira. */
 function _catUbicsDe(acts){
   var m={};
-  acts.forEach(function(a){ var k=String(a.area||'').trim()||'Sin ubicación'; (m[k]=m[k]||[]).push(a); });
+  acts.forEach(function(a){ var k=String(a.area||'').trim()||PAL_SIN_UBIC; (m[k]=m[k]||[]).push(a); });
   return Object.keys(m).sort(function(x,y){
     return _revOrdenArea(x)-_revOrdenArea(y) || x.localeCompare(y,'es');
   }).map(function(k){ return {area:k, acts:m[k], av:_catAvance(m[k])}; });
@@ -17319,7 +17457,8 @@ function _catOrdenFaltantes(acts, area){
   return {con:con, sin:sin};
 }
 
-function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; S.catGrupo=null; S.catUbic=null; S.catCurar=false; S.catGruposEdit=false; S.catMadres=false; S.catRepes=null; S.catExactas=false; renderCatalogo(); _catArriba(); }
+function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; S.catGrupo=null; S.catUbic=null; S.catCurar=false; S.catGruposEdit=false; S.catMadres=false; S.catRepes=null; S.catExactas=false; S.catUbics=false; S.catSinUbic=false;
+  renderCatalogo(); _catArriba(); }
 /* ══ v107 · EDITAR DE VERDAD DESDE EL MÓDULO ═════════════════════════════
    Palabras del dueño: «necesito poder editar actividades. Me siento muy
    limitado en el módulo de prueba, no tengo todas las funciones, y no puedo
@@ -17352,7 +17491,8 @@ function _catPanelHost(){
 }
 function _catPanel(){
   var el=_catPanelHost();
-  var abierto=!!(S.catBorrar || S.catRepetir || S.catTandaPick || S.catMadreEdit || S.catMadreNueva || S.catSgEdit);
+  var abierto=!!(S.catBorrar || S.catRepetir || S.catTandaPick || S.catMadreEdit || S.catMadreNueva ||
+                 S.catSgEdit || S.catUbicRen || S.catUbicJuntar || S.catManual);
   el.style.display=abierto?'block':'none';
   if(!abierto){ el.innerHTML=''; return; }
   try{
@@ -17361,6 +17501,9 @@ function _catPanel(){
                  : S.catMadreEdit ? _catMadreEditHTML()
                  : S.catMadreNueva ? _catMadreNuevaHTML()
                  : S.catSgEdit ? _catSgEditHTML()
+                 : S.catUbicRen ? _catUbicRenHTML()
+                 : S.catUbicJuntar ? _catUbicJuntarHTML()
+                 : S.catManual ? _catManualHTMLPanel()
                  : _catTandaPickHTML();
   }catch(e){
     console.warn('_catPanel:',e);
@@ -17370,7 +17513,8 @@ function _catPanel(){
   }
 }
 function catPanelCerrar(){ S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null;
-  S.catMadreEdit=null; S.catMadreNueva=null; S.catSgEdit=null; _catPanel(); }
+  S.catMadreEdit=null; S.catMadreNueva=null; S.catSgEdit=null;
+  S.catUbicRen=null; S.catUbicJuntar=null; S.catManual=null; _catPanel(); }
 function _catPanelCab(titulo, sub){
   return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">'+
     '<div><div style="font-size:17px;font-weight:800;line-height:1.3">'+esc(titulo)+'</div>'+
@@ -17664,6 +17808,9 @@ async function catTandaDeshacer(){
       if(campo==='contratista')  await Acciones.asignar(p.id, p.personal_nombre, 'responsable → '+(p.personal_nombre||'—')+' (deshecha la tanda)');
       else if(campo==='fecha')   await Acciones.editar(p.id, {fecha_fin:p.fecha_fin}, 'deshecha la tanda de Partidas');
       else if(campo==='estado')  await Acciones.editar(p.id, {estado:p.estado, porcentaje:p.porcentaje}, 'deshecha la tanda de Partidas');
+      /* v110 · la ubicación vuelve a donde estaba, incluso al vacío: eso es lo
+         que había, y «sin ubicación» es un estado legítimo de la obra. */
+      else if(campo==='area')    await Acciones.editar(p.id, {area:p.area}, 'deshecho el cambio de ubicación');
       else if(campo==='grupo'){
         var q=_catA()[p.id], pp=q?_catPorId(q):null;
         if(pp) await catMoverGrupo(pp.id, p.grupo||'');
@@ -17982,6 +18129,12 @@ function _catMarcadorHTML(){
     linea(ag.length+' partidas · <b>'+colg+'</b> colgadas de su línea del presupuesto ('+pct+'%)')+
     linea('<b>'+reps+'</b> posibles repetidas sin revisar'+(ex?' · <b>'+ex+'</b> exactas sobrando':''))+
     linea('<b>'+sinCap+'</b> actividades en «'+esc(_catCapNom('0'))+'» sin capítulo propio')+
+    (function(){
+      /* v110 · las ubicaciones también se ordenan aquí: hay cuatro fachadas,
+         dos generales y un «techo» en minúscula. */
+      var us=_catUbicsTodas(), su=us.find(function(u){ return u.area===PAL_SIN_UBIC; });
+      return linea('<b>'+us.length+'</b> ubicaciones'+(su?' · <b>'+su.n+'</b> actividades sin ubicación':''));
+    })()+
     '<button onclick="catRepesAbrir()" style="'+_catBS+';width:100%;margin-top:9px;min-height:46px;'+
       'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent)">'+
       'Posibles repetidas ('+reps+')</button>'+
@@ -18012,6 +18165,435 @@ async function catQuitarVacias(){
   }catch(e){ setSS('err','Error'); showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
   renderCatalogo();
 }
+
+/* ══ v110 · LAS UBICACIONES, QUE HOY NO SON UNA LISTA ════════════════════
+   LA UBICACIÓN NO EXISTE COMO COSA: es un texto suelto dentro de cada
+   actividad (`obra_actividades.area`). Por eso no se podía renombrar —habría
+   que editar actividad por actividad— y por eso está sucia: cuatro fachadas
+   (una se llama solo «Fachada», con 1 actividad), dos generales («General» 28
+   y «Toda la obra» 8), «techo» en minúscula, y 17 actividades sin ninguna.
+
+   Aquí se renombra, se junta y se les pone ubicación a las que no tienen. Todo
+   por `Acciones.editar` —una llamada por actividad, UN solo repintado— y la
+   tanda entera se deshace de golpe, que es el patrón de la v107.
+
+   EL AVISO CON EL NÚMERO NO ES ADORNO: renombrar «N2 — Apto 2A» toca 240
+   actividades. Si el dueño se equivoca de fila, tiene que verlo ANTES. */
+function catUbicsAbrir(){
+  S.catUbics=true; S.catCap=null; S.catGrupo=null; S.catUbic=null;
+  S.catMadres=false; S.catSinUbic=false; renderCatalogo(); _catArriba();
+}
+function catUbicsCerrar(){
+  S.catUbics=false; S.catSinUbic=false; S.catUbicRen=null; S.catUbicJuntar=null;
+  renderCatalogo(); _catArriba();
+}
+/* Las actividades que llevan EXACTAMENTE ese texto en `area`. Se compara
+   recortado, que es como se agrupa: si no, un « Parqueo» con espacio delante
+   se quedaría fuera de su propio renombrado. */
+function _catUbicActs(area){
+  var k=String(area||'');
+  return _catTodas().filter(function(a){
+    return (String(a.area||'').trim()||PAL_SIN_UBIC)===k;
+  });
+}
+function _catUbicsTodas(){
+  var m={};
+  _catTodas().forEach(function(a){
+    var k=String(a.area||'').trim()||PAL_SIN_UBIC;
+    (m[k]=m[k]||[]).push(a);
+  });
+  /* ALFABÉTICO NO SIRVE —«Escalera», «Fachada» y «General» caerían antes que
+     «N2 — Apto 2A»—: es el orden del edificio, el mismo `_revOrdenArea` que
+     usa todo el app. Las que no tienen ubicación van al final: son trabajo por
+     colocar, no un sitio de la obra. */
+  return Object.keys(m).sort(function(x,y){
+    if(x===PAL_SIN_UBIC) return 1;
+    if(y===PAL_SIN_UBIC) return -1;
+    return _revOrdenArea(x)-_revOrdenArea(y) || x.localeCompare(y,'es');
+  }).map(function(k){ return {area:k, n:m[k].length, acts:m[k], av:_catAvance(m[k])}; });
+}
+function _catUbicsPantallaHTML(){
+  if(S.catSinUbic) return _catSinUbicHTML();
+  var us=_catUbicsTodas();
+  var tot=us.reduce(function(n,u){ return n+u.n; },0);
+  var sin=us.find(function(u){ return u.area===PAL_SIN_UBIC; });
+  var h=_catBuscaBarraHTML()+
+    '<button onclick="catUbicsCerrar()" style="'+_catVolverBS+'">‹ Volver</button>'+
+    '<div style="font-size:19px;font-weight:800;margin:4px 0 3px">Ubicaciones</div>'+
+    '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px">'+
+      '<b>'+us.length+'</b> ubicaciones sobre '+tot+' actividades. La ubicación vive dentro de cada '+
+      'actividad: renombrarla aquí <b>cambia el área de todas las suyas</b>, y siempre se dice '+
+      'a cuántas antes de tocarlas.</div>';
+  if(S.catUndo && S.catUndo.campo==='area')
+    h+='<button onclick="catTandaDeshacer()" style="'+_catBS+';width:100%;margin-bottom:10px;min-height:46px;'+
+      'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
+      'Deshacer lo último ('+S.catUndo.previas.length+' actividad'+(S.catUndo.previas.length!==1?'es':'')+')</button>';
+  if(sin)
+    h+='<button onclick="catSinUbicAbrir()" style="'+_catBS+';width:100%;margin-bottom:12px;min-height:50px;'+
+      'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
+      'Ponerle ubicación a las '+sin.n+' que no tienen</button>';
+  us.forEach(function(u){
+    var esSin=(u.area===PAL_SIN_UBIC);
+    h+='<div style="background:var(--bg2);border:1.5px solid '+(esSin?'var(--amber)':'var(--border2)')+';'+
+        'border-radius:12px;padding:10px 12px;margin-bottom:6px">'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:800;line-height:1.3">'+esc(u.area)+'</div>'+
+          '<div style="font-size:11px;font-family:var(--mono);margin-top:3px">'+
+            _catAvanceConManoHTML(u.av,'ubic',u.area)+
+            '<span style="color:var(--text3)"> · '+u.n+' actividad'+(u.n!==1?'es':'')+'</span></div>'+
+        '</div>'+
+        '<span class="cat-fila-der">'+_catBarraFilaHTML(u.av)+'</span>'+
+      '</div>'+
+      (esSin?'':'<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'+
+        '<button onclick="catUbicRenAbrir('+_catQ(u.area)+')" style="'+_catBS+';flex:1;min-width:92px;'+
+          'min-height:44px;font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg3);'+
+          'color:var(--text2)">Renombrar</button>'+
+        '<button onclick="catUbicJuntarAbrir('+_catQ(u.area)+')" style="'+_catBS+';flex:1;min-width:92px;'+
+          'min-height:44px;font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg3);'+
+          'color:var(--text2)">Juntar en otra</button>'+
+        '<button onclick="catManualAbrir(\'ubic\','+_catQ(u.area)+','+_catQ(u.area)+')" style="'+_catBS+';flex:1;'+
+          'min-width:92px;min-height:44px;font-size:11.5px;border:1.5px dashed var(--amber);'+
+          'background:none;color:var(--amber)">Avance a mano</button>'+
+      '</div>')+
+    '</div>';
+  });
+  return h+'<div style="height:110px"></div>';
+}
+
+/* ── RENOMBRAR ── */
+function catUbicRenAbrir(area){
+  if(String(area)===PAL_SIN_UBIC){
+    showToast('Esas no tienen ubicación: usa el botón de arriba para ponérsela','warn',5000); return;
+  }
+  S.catUbicRen={area:String(area), nuevo:String(area)};
+  S.catUbicJuntar=null; S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null;
+  S.catMadreEdit=null; S.catMadreNueva=null; S.catManual=null; _catPanel();
+}
+function catUbicRenTeclea(v){
+  if(!S.catUbicRen) return;
+  S.catUbicRen.nuevo=v;
+  /* Se repinta SOLO el aviso, no el panel: repintar aquí perdería el foco y la
+     mitad del nombre a medio escribir. */
+  var el=document.getElementById('cat-ur-aviso');
+  if(el) el.innerHTML=_catUbicRenFrase();
+}
+function _catUbicRenFrase(){
+  var R=S.catUbicRen; if(!R) return '';
+  var n=_catUbicActs(R.area).length;
+  var nuevo=String(R.nuevo||'').trim();
+  var f='Renombrar «<b>'+esc(R.area)+'</b>» → «<b>'+esc(nuevo||'…')+'</b>» afecta <b>'+n+
+        '</b> actividad'+(n!==1?'es':'')+'.';
+  if(nuevo && nuevo!==R.area){
+    var ya=_catUbicActs(nuevo).length;
+    if(ya) f+='<br>Ya hay una ubicación con ese nombre ('+ya+'): quedarían <b>juntas</b>, '+(ya+n)+' en total.';
+  }
+  return f;
+}
+function _catUbicRenHTML(){
+  var R=S.catUbicRen;
+  return _catPanelCab('Renombrar la ubicación',
+      'Cambia el área de <b>todas</b> sus actividades, una por una. Se puede deshacer entero.')+
+    '<input id="cat-ur-nom" type="text" value="'+esc(R.nuevo)+'" oninput="catUbicRenTeclea(this.value)" '+
+      'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+      'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--font);'+
+      'background:var(--bg2);color:var(--text)">'+
+    '<div id="cat-ur-aviso" style="margin-top:10px;padding:11px 13px;border-radius:12px;'+
+      'background:var(--amber-light);border:1.5px solid var(--amber);color:var(--amber);'+
+      'font-size:12.5px;line-height:1.5">'+_catUbicRenFrase()+'</div>'+
+    '<button onclick="catUbicRenHacer()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:52px;'+
+      'border-color:var(--green);background:var(--green-light);color:var(--green)">Renombrar</button>'+
+    _catPanelPie();
+}
+async function catUbicRenHacer(){
+  var R=S.catUbicRen; if(!R) return;
+  var i=document.getElementById('cat-ur-nom');
+  var nuevo=String((i&&i.value)||R.nuevo||'').trim();
+  if(!nuevo){ showToast('Ponle nombre a la ubicación','warn',3000); return; }
+  if(nuevo===R.area){ showToast('Es el mismo nombre','warn',3000); return; }
+  var desde=R.area;
+  S.catUbicRen=null; _catPanel();
+  await _catUbicMover(desde, nuevo, 'ubicación renombrada: «'+desde+'» → «'+nuevo+'»');
+}
+
+/* ── JUNTAR ── */
+function catUbicJuntarAbrir(area){
+  if(String(area)===PAL_SIN_UBIC){
+    showToast('Esas no tienen ubicación: usa el botón de arriba para ponérsela','warn',5000); return;
+  }
+  S.catUbicJuntar={area:String(area), hacia:''};
+  S.catUbicRen=null; S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null;
+  S.catMadreEdit=null; S.catMadreNueva=null; S.catManual=null; _catPanel();
+}
+function catUbicJuntarHacia(v){ if(S.catUbicJuntar){ S.catUbicJuntar.hacia=v; _catPanel(); } }
+function _catUbicJuntarHTML(){
+  var J=S.catUbicJuntar;
+  var n=_catUbicActs(J.area).length;
+  var h=_catPanelCab('Juntar «'+J.area+'» dentro de otra',
+      'Sus <b>'+n+'</b> actividad'+(n!==1?'es pasan':' pasa')+' a la ubicación que escojas. '+
+      '«'+esc(J.area)+'» desaparece por sí sola: no queda nadie con ese texto.');
+  _catUbicsTodas().forEach(function(u){
+    if(u.area===J.area || u.area===PAL_SIN_UBIC) return;
+    var on=(J.hacia===u.area);
+    h+='<button onclick="catUbicJuntarHacia('+_catQ(u.area)+')" style="'+_catPBS+';width:100%;margin-bottom:6px;'+
+      'text-align:left;display:flex;align-items:center;justify-content:space-between;gap:10px;'+
+      'border-color:'+(on?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(on?'var(--accent-soft)':'var(--bg2)')+'">'+
+      '<span>'+esc(u.area)+'</span>'+
+      '<span style="font-family:var(--mono);font-size:11px;color:var(--text3)">'+u.n+'</span></button>';
+  });
+  if(J.hacia)
+    h+='<div style="margin-top:8px;padding:11px 13px;border-radius:12px;background:var(--amber-light);'+
+      'border:1.5px solid var(--amber);color:var(--amber);font-size:12.5px;line-height:1.5">'+
+      'Juntar «<b>'+esc(J.area)+'</b>» ('+n+') dentro de «<b>'+esc(J.hacia)+'</b>» ('+
+      _catUbicActs(J.hacia).length+') afecta <b>'+n+'</b> actividad'+(n!==1?'es':'')+
+      ' y deja <b>'+(n+_catUbicActs(J.hacia).length)+'</b> en la de destino.</div>';
+  h+='<button onclick="catUbicJuntarHacer()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:52px;'+
+    'border-color:var(--green);background:var(--green-light);color:var(--green)'+
+    (J.hacia?'':';opacity:.45')+'">Juntar</button>';
+  return h+_catPanelPie();
+}
+async function catUbicJuntarHacer(){
+  var J=S.catUbicJuntar; if(!J) return;
+  if(!J.hacia){ showToast('Escoge en cuál se junta','warn',3000); return; }
+  var desde=J.area, hacia=J.hacia;
+  S.catUbicJuntar=null; _catPanel();
+  await _catUbicMover(desde, hacia, 'ubicación juntada: «'+desde+'» → «'+hacia+'»');
+}
+
+/* EL MOTOR de renombrar y de juntar es EL MISMO: las dos cosas son escribir
+   otro `area` en las mismas actividades. Dos funciones separadas contarían
+   distinto tarde o temprano. */
+async function _catUbicMover(desde, hacia, detalle){
+  var acts=_catUbicActs(desde).slice();
+  if(!acts.length){ showToast('No hay ninguna actividad en «'+desde+'»','warn',4000); return; }
+  /* EL RETRATO DE ANTES, guardado antes de escribir nada: después ya no se
+     sabe de dónde venían. */
+  S.catUndo={campo:'area', previas:acts.map(function(a){
+    return {id:a.id, area:String(a.area||''), nombre:String(a.descripcion||'')};
+  })};
+  setSS('syncing','Guardando…');
+  var ok=0, fallos=[];
+  for(var i=0;i<acts.length;i++){
+    try{ await Acciones.editar(acts[i].id, {area:hacia}, detalle); ok++; }
+    catch(e){
+      /* UNA QUE SE CAIGA NO TUMBA LAS DEMÁS, y se dice CUÁL. */
+      fallos.push(String(acts[i].descripcion||acts[i].id).slice(0,40)+' ('+((e&&e.message)||'')+')');
+    }
+  }
+  /* Si la ubicación llevaba un porcentaje a mano, su fila sigue al nombre: si
+     no, el número se quedaría colgado de un texto que ya no existe. */
+  try{ await _catUbicFilaRenombrar(desde, hacia); }catch(e2){}
+  setSS(fallos.length?'err':'ok', fallos.length?'Error':'✓');
+  if(fallos.length) showToast('Se cambiaron '+ok+'. NO se pudo con '+fallos.length+': '+fallos.join(' · '),'err',9000);
+  else showToast(ok+' actividad'+(ok!==1?'es':'')+' en «'+hacia+'» ✓');
+  /* UN SOLO REPINTADO al final. Repintar por actividad sobre 240 es lo que
+     hacía que cada toque fuera un tirón (v86). */
+  _repintarDondeEstoy();
+}
+async function _catUbicFilaRenombrar(desde, hacia){
+  var r=(S.catUbicRows||[]).find(function(x){ return String(x.id)===String(desde); });
+  if(!r) return;
+  var destino=(S.catUbicRows||[]).find(function(x){ return String(x.id)===String(hacia); });
+  /* Si el destino ya tiene el suyo escrito a mano, NO se pisa: el número de la
+     que se va se descarta y se dice. Dos porcentajes declarados no se suman. */
+  if(destino){
+    await sb('obra_ubicaciones?id=eq.'+encodeURIComponent(desde),{method:'DELETE',prefer:'return=minimal'});
+    S.catUbicRows=S.catUbicRows.filter(function(x){ return String(x.id)!==String(desde); });
+    showToast('«'+desde+'» tenía un avance a mano y «'+hacia+'» también: se quedó el de «'+hacia+'»','warn',7000);
+    return;
+  }
+  await sb('obra_ubicaciones?id=eq.'+encodeURIComponent(desde),{method:'PATCH',prefer:'return=minimal',
+           body:JSON.stringify({id:String(hacia), nombre:String(hacia)})});
+  r.id=String(hacia); r.nombre=String(hacia);
+}
+
+/* ── LAS QUE NO TIENEN UBICACIÓN ── */
+function catSinUbicAbrir(){ S.catSinUbic=true; S.catSinSel={}; S.catSinHacia=''; renderCatalogo(); _catArriba(); }
+function catSinUbicCerrar(){ S.catSinUbic=false; S.catSinSel={}; renderCatalogo(); _catArriba(); }
+function catSinUbicToggle(id){
+  S.catSinSel=S.catSinSel||{};
+  if(S.catSinSel[id]) delete S.catSinSel[id]; else S.catSinSel[id]=1;
+  renderCatalogo();
+}
+function catSinUbicHacia(v){ S.catSinHacia=v; renderCatalogo(); }
+function _catSinUbicHTML(){
+  var acts=_catUbicActs(PAL_SIN_UBIC);
+  var sel=Object.keys(S.catSinSel||{});
+  var h=_catBuscaBarraHTML()+
+    '<button onclick="catSinUbicCerrar()" style="'+_catVolverBS+'">‹ Ubicaciones</button>'+
+    '<div style="font-size:19px;font-weight:800;margin:4px 0 3px">Sin ubicación ('+acts.length+')</div>'+
+    '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px">'+
+      'Marca las que van al mismo sitio y ponles la ubicación de una vez.</div>';
+  h+='<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;'+
+     'letter-spacing:.5px;margin:0 0 4px">¿A qué ubicación van?</div>'+
+     '<select onchange="catSinUbicHacia(this.value)" style="'+_catCampoBS+';margin-bottom:10px">'+
+     '<option value="">— escoge una —</option>'+
+     _catUbicsTodas().filter(function(u){ return u.area!==PAL_SIN_UBIC; }).map(function(u){
+       return '<option value="'+esc(u.area)+'"'+(S.catSinHacia===u.area?' selected':'')+'>'+
+         esc(u.area)+' ('+u.n+')</option>';
+     }).join('')+'</select>';
+  h+='<button onclick="catSinUbicHacer()" style="'+_catBS+';width:100%;margin-bottom:12px;min-height:50px;'+
+    'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)'+
+    ((sel.length&&S.catSinHacia)?'':';opacity:.45')+'">'+
+    'Ponerles «'+esc(S.catSinHacia||'…')+'» a las '+sel.length+' marcadas</button>';
+  if(S.catUndo && S.catUndo.campo==='area')
+    h+='<button onclick="catTandaDeshacer()" style="'+_catBS+';width:100%;margin-bottom:12px;min-height:46px;'+
+      'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
+      'Deshacer lo último ('+S.catUndo.previas.length+')</button>';
+  if(!acts.length)
+    h+='<div class="empty" style="padding:24px 16px;color:var(--green);font-weight:700">'+
+       'Todas las actividades tienen ubicación ✓</div>';
+  acts.forEach(function(a){
+    var on=!!(S.catSinSel||{})[a.id];
+    h+='<button onclick="catSinUbicToggle('+_catQ(a.id)+')" style="'+_catBS+';width:100%;margin-bottom:5px;'+
+      'min-height:52px;text-align:left;display:flex;align-items:center;gap:10px;padding:8px 11px;'+
+      'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(on?'var(--accent-soft)':'var(--bg2)')+';color:var(--text)">'+
+      '<span style="font-size:16px;flex-shrink:0">'+(on?'☑':'☐')+'</span>'+
+      '<span style="flex:1;min-width:0">'+
+        '<span style="display:block;font-size:12.5px;font-weight:700;line-height:1.3">'+
+          esc(String(a.descripcion||'').slice(0,90))+'</span>'+
+        '<span style="display:block;font-size:10.5px;color:var(--text3);font-family:var(--mono);margin-top:2px">'+
+          esc(_responsables(a.personal_nombre)[0]||'sin responsable')+' · '+esc(String(a.estado||''))+'</span>'+
+      '</span></button>';
+  });
+  return h+'<div style="height:110px"></div>';
+}
+async function catSinUbicHacer(){
+  var sel=Object.keys(S.catSinSel||{});
+  if(!sel.length){ showToast('No hay ninguna marcada','warn',3000); return; }
+  if(!S.catSinHacia){ showToast('Escoge a qué ubicación van','warn',3000); return; }
+  var hacia=S.catSinHacia;
+  S.catUndo={campo:'area', previas:sel.map(function(id){
+    var a=_findActAny(id)||{};
+    return {id:id, area:String(a.area||''), nombre:String(a.descripcion||'')};
+  })};
+  S.catSinSel={};
+  setSS('syncing','Guardando…');
+  var ok=0, fallos=[];
+  for(var i=0;i<sel.length;i++){
+    try{ await Acciones.editar(sel[i], {area:hacia}, 'ubicación puesta: «'+hacia+'» (estaba sin ubicación)'); ok++; }
+    catch(e){
+      var a=_findActAny(sel[i])||{};
+      fallos.push(String(a.descripcion||sel[i]).slice(0,40)+' ('+((e&&e.message)||'')+')');
+    }
+  }
+  setSS(fallos.length?'err':'ok', fallos.length?'Error':'✓');
+  if(fallos.length) showToast('Se pusieron '+ok+'. NO se pudo con '+fallos.length+': '+fallos.join(' · '),'err',9000);
+  else showToast(ok+' actividad'+(ok!==1?'es':'')+' en «'+hacia+'» ✓');
+  _repintarDondeEstoy();
+}
+
+/* ══ v110 · PONER EL AVANCE A MANO ═══════════════════════════════════════
+   SOLO ADMINISTRADOR. El módulo entero ya lo es, pero esto se comprueba otra
+   vez aquí y en la escritura: es el único número que no sale de un hecho
+   registrado, y un ingeniero no lo puede escribir aunque llegue por otro
+   camino. */
+function catManualAbrir(tipo, id, nombre){
+  if(!isAdmin()){ showToast('El avance a mano solo lo pone el administrador','warn',5000); return; }
+  var m=_catManual(tipo,id);
+  S.catManual={tipo:tipo, id:String(id), nombre:String(nombre||id), valor:(m?String(m.pct):'')};
+  S.catUbicRen=null; S.catUbicJuntar=null; S.catBorrar=null; S.catRepetir=null;
+  S.catTandaPick=null; S.catMadreEdit=null; S.catMadreNueva=null; _catPanel();
+}
+function catManualValor(v){ if(S.catManual){ S.catManual.valor=String(v); _catPanel(); } }
+function _catManualAvance(tipo, id){
+  if(tipo==='cap')  return _catAvanceCap(String(id));
+  if(tipo==='sub')  return _catAvanceSub(String(id));
+  return _catAvance(_catUbicActs(String(id)));
+}
+function _catManualHTMLPanel(){
+  var M=S.catManual;
+  var av=_catManualAvance(M.tipo,M.id), m=_catManual(M.tipo,M.id);
+  var que={cap:'la partida madre', sub:'la línea del presupuesto', ubic:'la ubicación'}[M.tipo];
+  var h=_catPanelCab('Avance a mano — '+M.nombre,
+    'Para lo que está hecho y pagado pero no tiene tareas que contar: la obra anterior a '+
+    'mayo de 2026 no tiene ni una actividad. Se guarda con tu nombre y la fecha, '+
+    '<b>no se mezcla con el contado y no sube al capítulo ni a la torre</b>.');
+  h+='<div style="padding:11px 13px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--border);'+
+     'margin-bottom:12px;font-size:12px;line-height:1.6;font-family:var(--mono)">'+
+     'Contado en '+esc(que)+': '+_catAvanceHTML(av)+
+     (m?'<br>'+_catManualHTML(m):'')+'</div>';
+  var chip=function(v){
+    var on=(String(M.valor)===String(v));
+    return '<button onclick="catManualValor('+v+')" style="'+_catPBS+';flex:1;min-width:64px;'+
+      'border-color:'+(on?'var(--amber)':'var(--border2)')+';'+
+      'background:'+(on?'var(--amber-light)':'var(--bg2)')+';'+
+      'color:'+(on?'var(--amber)':'var(--text2)')+'">'+v+'%</button>';
+  };
+  h+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+     chip(25)+chip(50)+chip(75)+chip(100)+'</div>'+
+     '<input id="cat-man-v" type="number" min="0" max="100" value="'+esc(M.valor)+'" '+
+       'placeholder="0 a 100" oninput="if(S.catManual)S.catManual.valor=this.value" '+
+       'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+       'border-radius:12px;padding:0 13px;font-size:16px;font-family:var(--mono);'+
+       'background:var(--bg2);color:var(--text)">'+
+     '<button onclick="catManualGuardar()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:52px;'+
+       'border-color:var(--amber);background:var(--amber-light);color:var(--amber)">'+
+       'Guardar el avance a mano</button>';
+  if(m)
+    h+='<button onclick="catManualQuitar()" style="'+_catPBS+';width:100%;margin-top:6px;min-height:48px;'+
+      'color:var(--text3)">Quitarlo — que vuelva a salir solo lo contado</button>';
+  return h+_catPanelPie();
+}
+async function _catManualEscribir(tipo, id, val){
+  var por=(S.user&&S.user.nombre)||'', hoy=(typeof today==='function'?today():'');
+  var body = (val===null)
+    ? {avance_manual:null, avance_manual_por:null, avance_manual_fecha:null}
+    : {avance_manual:val, avance_manual_por:por, avance_manual_fecha:hoy};
+  if(tipo==='cap'){
+    await sb('obra_capitulos?id=eq.'+encodeURIComponent(id),{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify(body)});
+    var c=(S.catCaps||[]).find(function(x){ return String(x.id)===String(id); });
+    if(c) Object.assign(c, body);
+  }else if(tipo==='sub'){
+    await sb('obra_partidas?id=eq.'+encodeURIComponent(id),{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify(body)});
+    var p=_catPorId(String(id));
+    if(p) Object.assign(p, body);
+  }else{
+    /* La ubicación puede no tener fila todavía: solo existen las que llevan
+       algo escrito a mano. */
+    var r=(S.catUbicRows||[]).find(function(x){ return String(x.id)===String(id); });
+    if(r){
+      await sb('obra_ubicaciones?id=eq.'+encodeURIComponent(id),{method:'PATCH',prefer:'return=minimal',
+               body:JSON.stringify(body)});
+      Object.assign(r, body);
+    }else{
+      var fila=Object.assign({id:String(id), nombre:String(id), activo:true}, body);
+      await sb('obra_ubicaciones',{method:'POST',prefer:'return=minimal',body:JSON.stringify(fila)});
+      (S.catUbicRows=S.catUbicRows||[]).push(fila);
+    }
+  }
+}
+async function _catManualAplicar(val){
+  var M=S.catManual; if(!M) return;
+  if(!isAdmin()){ showToast('El avance a mano solo lo pone el administrador','warn',5000); return; }
+  var antes=_catManual(M.tipo,M.id);
+  var tipo=M.tipo, id=M.id, nombre=M.nombre;
+  S.catManual=null; _catPanel();
+  try{
+    await _catManualEscribir(tipo, id, val);
+    /* EL RASTRO LLEVA EL VALOR VIEJO Y EL NUEVO. Un número escrito a mano sin
+       saber qué había antes no se puede revisar después. */
+    var pref={cap:'cap_', sub:'sub_', ubic:'ubic_'}[tipo]||'';
+    logCambio('editado','partida', pref+id, nombre,
+      'avance a mano: '+(antes?antes.pct+'%':'—')+' → '+(val===null?'—':val+'%'));
+    showToast(val===null?'Quitado el avance a mano ✓':'Avance a mano: '+val+'% ✓');
+  }catch(e){ showToast('No se pudo guardar: '+((e&&e.message)||''),'err',7000); }
+  renderCatalogo();
+}
+function catManualGuardar(){
+  var M=S.catManual; if(!M) return;
+  var i=document.getElementById('cat-man-v');
+  var raw=String((i&&i.value)||M.valor||'').trim();
+  if(raw===''){ showToast('Escribe un número del 0 al 100','warn',4000); return; }
+  var v=parseInt(raw,10);
+  if(isNaN(v) || v<0 || v>100){ showToast('Tiene que ser un número del 0 al 100','warn',4000); return; }
+  return _catManualAplicar(v);
+}
+function catManualQuitar(){ return _catManualAplicar(null); }
 
 function catMadresAbrir(){ S.catMadres=true; S.catCap=null; S.catGrupo=null; S.catUbic=null; renderCatalogo(); _catArriba(); }
 function catMadresCerrar(){ S.catMadres=false; S.catMadreNueva=null; S.catMadreEdit=null; renderCatalogo(); _catArriba(); }
@@ -18045,7 +18627,8 @@ function _catMadresHTML(){
             '<span style="font-family:var(--mono);color:var(--text3)">'+esc(x.c.n)+'</span> · '+esc(x.c.t)+
             (x.c.presup?'':'<span style="font-size:10px;color:var(--amber);font-weight:700;'+
               'margin-left:6px;white-space:nowrap">fuera del presupuesto</span>')+'</div>'+
-          '<div style="font-size:11px;font-family:var(--mono);margin-top:3px">'+_catAvanceHTML(x.av)+
+          '<div style="font-size:11px;font-family:var(--mono);margin-top:3px">'+
+            _catAvanceConManoHTML(x.av,'cap',x.c.n)+
             '<span style="color:var(--text3)"> · '+x.p+' partida'+(x.p!==1?'s':'')+' · '+x.a+' actividades</span></div>'+
           _catBarraHTML(x.av)+
         '</div>'+
@@ -18516,6 +19099,7 @@ function renderCatalogo(){
     else if(S.catExactas)     el.innerHTML=_catExactasHTML();
     else if(S.catRepes)       el.innerHTML=_catRepesHTML();
     else if(S.catMadres)      el.innerHTML=_catMadresHTML();
+    else if(S.catUbics)       el.innerHTML=_catUbicsPantallaHTML();
     else if(S.catCap!==null && S.catCap!==undefined){
       if(S.catGruposEdit)     el.innerHTML=_catGruposEditHTML();
       else if(S.catCurar)     el.innerHTML=_catPartidasHTML();
@@ -18598,31 +19182,29 @@ function _catCapitulosHTML(){
     var s=_catSubsDe(c.n).length, p=_catAgendaDe(c.n).length;
     (s||p ? llenos : vacios).push({c:c, s:s, p:p, a:_catActsDeCap(c.n), av:_catAvanceCap(c.n)});
   });
+  /* UNA FILA POR CAPÍTULO (v110), con su nombre a la izquierda y el número, la
+     barra y el cerradas/total a la derecha, alineados para leerse en columna.
+     Y dice qué es, que era lo que faltaba. */
   var tarjeta=function(x){
-    return '<button onclick="catIrCap(\''+x.c.n+'\')" style="'+_catBS+';min-height:78px;width:100%;'+
-      'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;'+
-      'text-align:left;border:1.5px solid '+(x.c.n==='0'&&x.p?'var(--amber)':'var(--border2)')+';'+
-      'background:var(--bg2);color:var(--text)">'+
-      '<span style="font-size:12.5px;font-weight:800;line-height:1.25">'+esc(x.c.n)+' · '+esc(x.c.t)+'</span>'+
-      '<span class="cat-cap-av" style="font-size:11px;font-family:var(--mono);line-height:1.35">'+
-        _catAvanceHTML(x.av)+'</span>'+
-      _catBarraHTML(x.av)+
-      '<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
-        x.s+' subpartidas · '+x.p+' partidas</span></button>';
+    return _catFilaHTML({onclick:'catIrCap(\''+x.c.n+'\')', que:'Partida madre',
+      nombre:x.c.n+' · '+x.c.t, av:x.av, tipo:'cap', id:x.c.n,
+      meta:x.s+' subpartidas · '+x.p+' partidas',
+      borde:(x.c.n==='0'&&x.p?'var(--amber)':'')});
   };
-  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">'+
-     llenos.map(tarjeta).join('')+'</div>';
+  h+='<div class="cat-filas">'+llenos.map(tarjeta).join('')+'</div>';
   if(vacios.length){
     h+='<button onclick="catVerVacios()" style="'+_catBS+';width:100%;margin-top:10px;'+
       'border:1.5px dashed var(--border2);background:none;color:var(--text3);font-weight:700">'+
       (S.catVacios?'Esconder los '+vacios.length+' vacíos':'Ver los '+vacios.length+' vacíos')+'</button>';
     if(S.catVacios)
-      h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:8px">'+
-         vacios.map(tarjeta).join('')+'</div>';
+      h+='<div class="cat-filas" style="margin-top:8px">'+vacios.map(tarjeta).join('')+'</div>';
   }
   h+='<button onclick="catMadresAbrir()" style="'+_catBS+';width:100%;margin-top:12px;min-height:52px;'+
     'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent)">'+
     'Partidas madre ('+_capsLista().length+') — ver, renombrar, ordenar y crear</button>';
+  h+='<button onclick="catUbicsAbrir()" style="'+_catBS+';width:100%;margin-top:8px;min-height:52px;'+
+    'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent)">'+
+    'Ubicaciones ('+_catUbicsTodas().length+') — renombrar, juntar y ponerle a las que no tienen</button>';
   var sue=_catSueltas().length;
   h+='<button onclick="catSueltasAbrir()" style="'+_catBS+';width:100%;margin-top:8px;min-height:52px;'+
     'border:1.5px dashed '+(sue?'var(--amber)':'var(--border2)')+';background:none;'+
@@ -18689,8 +19271,16 @@ function _catGruposHTML(){
     '<button onclick="catIrCap(null)" style="'+_catVolverBS+'">‹ Capítulos</button>'+
     '<div style="font-size:17px;font-weight:800;margin:4px 0 2px;line-height:1.25">'+esc(cap)+' · '+esc(nom)+'</div>';
   var avCap=_catAvanceCap(cap);
-  h+='<div style="font-size:12px;font-family:var(--mono);margin-bottom:4px">'+_catAvanceHTML(avCap)+'</div>'+
-     _catBarraHTML(avCap)+'<div style="height:10px"></div>';
+  h+='<div style="font-size:12px;font-family:var(--mono);margin-bottom:4px">'+
+       _catAvanceConManoHTML(avCap,'cap',cap)+'</div>'+
+     _catBarraHTML(avCap)+
+     /* El avance a mano del capítulo se pone aquí, que es donde se está
+        mirando. 29 de los 48 capítulos no tienen ni una actividad. */
+     (isAdmin()?'<button onclick="catManualAbrir(\'cap\','+_catQ(cap)+','+_catQ(cap+' · '+nom)+')" '+
+       'style="'+_catBS+';width:100%;margin-top:8px;min-height:44px;font-size:11.5px;'+
+       'border:1.5px dashed var(--amber);background:none;color:var(--amber)">'+
+       (_catManual('cap',cap)?'Cambiar el avance a mano':'Poner el avance a mano')+'</button>':'')+
+     '<div style="height:10px"></div>';
   var gs=_catGruposDe(cap);
   /* Un capítulo sin tabla de grupos NO se subdivide: es chico y partirlo sería
      ruido. Va directo a las ubicaciones. */
@@ -18702,16 +19292,10 @@ function _catGruposHTML(){
               .filter(function(x){ return x.acts.length || _catGruposCustom(cap).indexOf(x.g)>=0; });
   if(!filas.length)
     h+='<div class="empty" style="padding:24px 16px;color:var(--text3)">Este capítulo no tiene partidas todavía.</div>';
-  filas.forEach(function(x){
-    var av=_catAvance(x.acts);
-    h+='<button onclick="catIrGrupo('+_catQ(x.g)+')" style="'+_catBS+';width:100%;min-height:66px;'+
-      'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;'+
-      'text-align:left;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text);'+
-      'margin-bottom:6px;padding:10px 12px">'+
-      '<span style="font-size:13px;font-weight:800;line-height:1.3">'+esc(x.g)+'</span>'+
-      '<span style="font-size:11px;font-family:var(--mono)">'+_catAvanceHTML(av)+'</span>'+
-      _catBarraHTML(av)+'</button>';
-  });
+  h+='<div class="cat-filas">'+filas.map(function(x){
+    return _catFilaHTML({onclick:'catIrGrupo('+_catQ(x.g)+')', que:'Clasificación',
+                         nombre:x.g, av:_catAvance(x.acts)});
+  }).join('')+'</div>';
   h+='<button onclick="catGrupoNuevoAbrir()" style="'+_catBS+';width:100%;margin-top:8px;min-height:48px;'+
      'border:1.5px dashed var(--border2);background:none;color:var(--text3);font-weight:700">'+
      '+ Crear un grupo en este capítulo</button>';
@@ -18736,14 +19320,16 @@ function _catGruposHTML(){
 function _catUbicListaHTML(acts, g){
   var us=_catUbicsDe(acts);
   if(!us.length) return '<div class="empty" style="padding:24px 16px;color:var(--text3)">Sin actividades.</div>';
-  var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px">';
+  /* FILAS, no tarjetas (v110). Y cada una dice QUE ES: se veía «General 100% ·
+     1/1» sin saber a qué colgaba.
+     El porcentaje a mano de una ubicación NO se enseña aquí a propósito: el de
+     la fila está contado DENTRO de este capítulo y el de a mano es de la
+     ubicación entera. Mezclar dos alcances es exactamente lo que la regla
+     prohíbe — ese número vive en la pantalla de Ubicaciones. */
+  var h='<div class="cat-filas">';
   us.forEach(function(u){
-    h+='<button onclick="catIrUbic('+_catQ(u.area)+')" style="'+_catBS+';min-height:70px;width:100%;'+
-      'display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;'+
-      'text-align:left;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text);padding:9px 11px">'+
-      '<span style="font-size:12.5px;font-weight:800;line-height:1.25">'+esc(_catUbicCorto(u.area))+'</span>'+
-      '<span style="font-size:11px;font-family:var(--mono)">'+_catAvanceHTML(u.av)+'</span>'+
-      _catBarraHTML(u.av)+'</button>';
+    h+=_catFilaHTML({onclick:'catIrUbic('+_catQ(u.area)+')', que:'Ubicación',
+                     nombre:_catUbicCorto(u.area), av:u.av});
   });
   return h+'</div><div style="height:100px"></div>';
 }
@@ -18762,7 +19348,7 @@ function _catUbicHTML(){
 function _catUnidadHTML(){
   var cap=String(S.catCap), g=S.catGrupo, area=S.catUbic;
   var todas=(g?_catActsDeGrupo(cap,g):(function(){ var r=[]; _catAgendaDe(cap).forEach(function(p){ r=r.concat(_catActsDe(p.id)); }); return r; })())
-            .filter(function(a){ return (String(a.area||'').trim()||'Sin ubicación')===area; });
+            .filter(function(a){ return (String(a.area||'').trim()||PAL_SIN_UBIC)===area; });
   var av=_catAvance(todas);
   var o=_catOrdenFaltantes(todas, area);
   var cerradas=todas.filter(_catCerrada);
@@ -19004,7 +19590,7 @@ function _catPartidasHTML(){
            lo que rastrea la línea hasta la hoja del Excel cuando algo no
            cuadra con lo contratado. */
         '<span class="cat-sub-av" style="font-size:11px;font-family:var(--mono);line-height:1.35">'+
-          _catAvanceHTML(_catAvanceSub(s.id))+'</span>'+
+          _catAvanceConManoHTML(_catAvanceSub(s.id),'sub',s.id)+'</span>'+
         _catBarraHTML(_catAvanceSub(s.id))+
         '<span class="cat-sub-meta" style="font-size:10.5px;color:var(--text3);font-family:var(--mono);line-height:1.35">'+
           esc(s.id)+'<br>'+esc(s.seccion)+'</span>'+
@@ -19057,7 +19643,7 @@ function _catFichaSubHTML(p){
     '<div class="obranow-header"><div>'+
       '<div style="font-size:15px;font-weight:800;line-height:1.3">'+esc(p.numero)+' · '+esc(p.nombre)+'</div>'+
       '<div class="cat-ficha-av" style="font-size:12px;font-family:var(--mono);margin-top:5px">'+
-        _catAvanceHTML(_catAvanceSub(p.id))+'</div>'+
+        _catAvanceConManoHTML(_catAvanceSub(p.id),'sub',p.id)+'</div>'+
       '<div style="font-size:11px;color:var(--amber);margin-top:3px;font-weight:800;font-family:var(--mono)">'+
         'DEL PRESUPUESTO · NO SE EDITA</div>'+
     '</div></div>'+
@@ -19073,6 +19659,14 @@ function _catFichaSubHTML(p){
     '<button onclick="catBuscarPartidas(\''+p.id+'\')" style="'+_catBS+';width:100%;min-height:52px;'+
       'margin-bottom:8px;border:1.5px solid var(--accent);background:var(--accent-fill);'+
       'color:var(--accent-on);font-size:14px">Buscarle sus partidas</button>'+
+    /* EL AVANCE A MANO NO ES EDITAR LA LÍNEA: el nombre, el código y la sección
+       siguen sin tocarse. Es lo único que se le puede escribir, y hace falta
+       porque 273 de las 274 líneas no tienen NADA colgado — zapatas, plateas y
+       columnas están construidas y pagadas sin una tarea que contar. */
+    (isAdmin()?'<button onclick="catManualAbrir(\'sub\','+_catQ(p.id)+','+_catQ(String(p.numero||'')+' · '+String(p.nombre||''))+')" '+
+      'style="'+_catBS+';width:100%;margin-bottom:8px;min-height:50px;border:1.5px dashed var(--amber);'+
+      'background:none;color:var(--amber)">'+
+      (_catManual('sub',p.id)?'Cambiar el avance a mano':'Poner el avance a mano')+'</button>':'')+
     '<button onclick="catDesactivarSub(\''+p.id+'\')" style="'+_catBS+';width:100%;margin-bottom:14px;'+
       'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">Desactivar — no aplica en esta obra</button>'+
     '<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
