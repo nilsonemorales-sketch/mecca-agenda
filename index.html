@@ -865,7 +865,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260918_107';
+const APP_VERSION='20260918_108';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1810,6 +1810,12 @@ let S={
      mismo que `revHechas` en la v103: el dueño entra DIRECTO a Partidas y una
      variable que no existe revienta la pantalla entera sin decir por qué. */
   catBorrar:null, catRepetir:null, catTandaPick:null, catUndo:null,
+  /* v108 — la estructura editable. Nace aquí por lo mismo que lo demás: el
+     dueño entra DIRECTO a Partidas y una variable que no existe revienta la
+     pantalla entera sin decir por qué (v103). */
+  catMadres:false, catMadreEdit:null, catMadreNueva:null,
+  catGruposEdit:false, catSgEdit:null,
+  catCaps:[], catSubs:[], catEstructuraErr:'',
   catSelModo:false, catSel2:{}, _catAltaCtx:null,
   catQ:'', catQVivo:'', catQChips:{}, catQTope:50, catCerradasOpen:false,
   catCierres:{}, catCierresErr:'', catGruposCustom:{},
@@ -15794,8 +15800,47 @@ var CAT_CAPITULOS=[
   {n:'AC',    t:'Aires acondicionados'},
   {n:'0',     t:'Sin clasificar'}
 ];
+/* ══ v108 · LA ESTRUCTURA VIVE EN LA BASE, NO EN EL CODIGO ═══════════════
+   Palabras del dueño: «quiero poder visualizar las partidas madre en una lista
+   y poder agregar lo que sea necesario y poder trabajar todo desde la app».
+   Mientras los capitulos y los grupos fueran constantes, cada partida madre
+   nueva era una VERSION nueva: paso dos veces en dos dias —AC para los aires
+   del lobby y del gimnasio, y la verja perimetral— y va a volver a pasar,
+   porque la obra descubre trabajo que el presupuesto de 2024 no tenia.
+
+   Ahora viven en `obra_capitulos` y `obra_subgrupos`. Las constantes SE QUEDAN
+   en el archivo como RESPALDO: si las tablas no cargan o vienen vacias, el
+   modulo sigue con ellas. Un catalogo que se cae porque no contesto una tabla
+   no sirve en una obra. */
+function _capsLista(){
+  var t=S.catCaps;
+  if(Array.isArray(t) && t.length)
+    return t.filter(function(c){ return c && c.activo!==false; })
+      .slice().sort(function(x,y){ return (x.orden||0)-(y.orden||0); })
+      .map(function(c){ return {n:String(c.id), t:c.nombre, presup:c.en_presupuesto!==false}; });
+  return CAT_CAPITULOS.map(function(c){ return {n:c.n, t:c.t, presup:!(c.n==='AC'||c.n==='0')}; });
+}
+/* Las palabras se guardan en llano, separadas por coma, y se comparan
+   NORMALIZADAS —minusculas y sin tildes, `_catNorm`— buscandolas DENTRO de la
+   descripcion. Por eso «grifer» coge «griferia»: es un trozo, no una palabra
+   entera. Medido al convertir las expresiones a palabras: **cero** actividades
+   cambiaron de grupo en los seis capitulos (1.706 actividades). */
+function _sgPal(txt){
+  return String(txt||'').split(',').map(function(w){ return _catNorm(w.trim()); }).filter(Boolean);
+}
+function _sgLista(cap){
+  var t=S.catSubs;
+  if(Array.isArray(t) && t.length){
+    return t.filter(function(g){ return g && String(g.capitulo)===String(cap) && g.activo!==false; })
+      .slice().sort(function(x,y){ return (x.orden||0)-(y.orden||0); })
+      .map(function(g){ return {id:g.id, nombre:g.nombre, orden:g.orden||0, palabras:_sgPal(g.palabras)}; });
+  }
+  return (CAT_SUBGRUPOS[String(cap)]||[]).map(function(r,i){
+    return {id:'', nombre:r[0], orden:i*10, re:r[1]};
+  });
+}
 function _catCapNom(n){
-  var c=CAT_CAPITULOS.find(function(x){ return String(x.n)===String(n); });
+  var c=_capsLista().find(function(x){ return String(x.n)===String(n); });
   return c?c.t:'Sin clasificar';
 }
 
@@ -16375,6 +16420,17 @@ async function cargarCatalogo(){
       var cf=await sb('obra_config?key=eq.cat_grupos&limit=1');
       S.catGruposCustom=(cf&&cf[0]&&cf[0].value)?JSON.parse(cf[0].value):{};
     }catch(e3){ S.catGruposCustom={}; }
+    /* LA ESTRUCTURA (v108). Si esto falla o viene vacío, `_capsLista` y
+       `_sgLista` caen en las constantes del código y el módulo sigue entero:
+       nunca una pantalla en blanco por una tabla que no contestó. */
+    try{
+      S.catCaps=await sb('obra_capitulos?order=orden.asc')||[];
+      S.catSubs=await sb('obra_subgrupos?order=capitulo.asc,orden.asc')||[];
+      S.catEstructuraErr=(S.catCaps.length?'':'no vinieron capítulos');
+    }catch(e4){
+      S.catCaps=[]; S.catSubs=[];
+      S.catEstructuraErr=(e4&&e4.message)||'no se pudo leer la estructura';
+    }
     S.catError='';
     S._catMapa=null; S._catPrec=null;
     return true;
@@ -16403,7 +16459,11 @@ async function cargarCatalogo(){
    2 de Felix y Jefrey (Albañilería). Mirando solo la primera, el capítulo
    dependía de en qué orden llegaran las filas de la base — o sea, de nada. */
 function _catCapIdx(n){
-  for(var i=0;i<CAT_CAPITULOS.length;i++) if(String(CAT_CAPITULOS[i].n)===String(n)) return i;
+  /* El desempate de `_catCapMayoria` sale del ORDEN de la lista, y esa lista
+     ahora puede haberla reordenado el dueño. Por eso reordenar en la pantalla
+     de partidas madre cambia de verdad quien gana un empate. */
+  var L=_capsLista();
+  for(var i=0;i<L.length;i++) if(String(L[i].n)===String(n)) return i;
   return 999;
 }
 function _catCapMayoria(items, desc){
@@ -16911,7 +16971,12 @@ async function catMover(cap){
     logCambio('movidas','partida',ids[0],_catCapNom(cap),
               ids.length+' partidas movidas al capítulo '+cap+' — '+_catCapNom(cap));
     await cargarCatalogo();
-    S.catSel={}; setSS('ok','✓'); showToast(ids.length+' movidas ✓');
+    S.catSel={}; setSS('ok','✓');
+    /* QUE LO AVISE, no que lo haga callado: al cambiar de capítulo la partida
+       se suelta de su línea del presupuesto, porque la que tenía es de otro
+       capítulo y dejarla sería mentir sobre lo contratado. */
+    showToast(ids.length+' movida'+(ids.length!==1?'s':'')+' a «'+_catCapNom(cap)+
+      '» ✓ — se soltaron de su línea del presupuesto','ok',7000);
   }catch(e){ setSS('err','Error'); showToast('No se pudo mover: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
 }
@@ -17081,10 +17146,15 @@ var CAT_SUBGRUPOS={
   ]
 };
 function _catSubDe(cap, desc){
-  var t=CAT_SUBGRUPOS[String(cap)];
-  if(!t) return '';
-  var d=String(desc||'');
-  for(var i=0;i<t.length;i++){ if(!t[i][1] || t[i][1].test(d)) return t[i][0]; }
+  var t=_sgLista(cap);
+  if(!t.length) return '';
+  var cru=String(desc||''), d=_catNorm(cru);
+  for(var i=0;i<t.length;i++){
+    var g=t[i];
+    if(g.re){ if(g.re.test(cru)) return g.nombre; continue; }   // respaldo: la constante
+    if(!g.palabras || !g.palabras.length) return g.nombre;      // «Otros»: sin palabras, lo recoge todo
+    for(var j=0;j<g.palabras.length;j++) if(d.indexOf(g.palabras[j])>=0) return g.nombre;
+  }
   return 'Otros';
 }
 /* LO MOVIDO A MANO MANDA SOBRE LA REGLA y no se pierde al recalcular: vive en
@@ -17107,7 +17177,7 @@ function _catGruposCustom(cap){
    define pero que hoy no tiene nada no aporta, y uno recién creado tiene que
    verse para poder mover cosas dentro. */
 function _catGruposDe(cap){
-  var base=(CAT_SUBGRUPOS[String(cap)]||[]).map(function(x){ return x[0]; });
+  var base=_sgLista(cap).map(function(g){ return g.nombre; });
   var vistos={}, orden=[];
   base.forEach(function(g){ vistos[g]=1; orden.push(g); });
   _catGruposCustom(cap).forEach(function(g){ if(!vistos[g]){ vistos[g]=1; orden.push(g); } });
@@ -17220,7 +17290,7 @@ function _catOrdenFaltantes(acts, area){
   return {con:con, sin:sin};
 }
 
-function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; S.catGrupo=null; S.catUbic=null; S.catCurar=false; renderCatalogo(); _catArriba(); }
+function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; S.catGrupo=null; S.catUbic=null; S.catCurar=false; S.catGruposEdit=false; S.catMadres=false; renderCatalogo(); _catArriba(); }
 /* ══ v107 · EDITAR DE VERDAD DESDE EL MÓDULO ═════════════════════════════
    Palabras del dueño: «necesito poder editar actividades. Me siento muy
    limitado en el módulo de prueba, no tengo todas las funciones, y no puedo
@@ -17253,12 +17323,15 @@ function _catPanelHost(){
 }
 function _catPanel(){
   var el=_catPanelHost();
-  var abierto=!!(S.catBorrar || S.catRepetir || S.catTandaPick);
+  var abierto=!!(S.catBorrar || S.catRepetir || S.catTandaPick || S.catMadreEdit || S.catMadreNueva || S.catSgEdit);
   el.style.display=abierto?'block':'none';
   if(!abierto){ el.innerHTML=''; return; }
   try{
     el.innerHTML = S.catBorrar ? _catBorrarHTML()
                  : S.catRepetir ? _catRepetirHTML()
+                 : S.catMadreEdit ? _catMadreEditHTML()
+                 : S.catMadreNueva ? _catMadreNuevaHTML()
+                 : S.catSgEdit ? _catSgEditHTML()
                  : _catTandaPickHTML();
   }catch(e){
     console.warn('_catPanel:',e);
@@ -17267,7 +17340,8 @@ function _catPanel(){
       ';margin-top:14px;border-color:var(--accent);background:var(--accent-fill);color:var(--accent-on)">Cerrar</button></div>';
   }
 }
-function catPanelCerrar(){ S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null; _catPanel(); }
+function catPanelCerrar(){ S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null;
+  S.catMadreEdit=null; S.catMadreNueva=null; S.catSgEdit=null; _catPanel(); }
 function _catPanelCab(titulo, sub){
   return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px">'+
     '<div><div style="font-size:17px;font-weight:800;line-height:1.3">'+esc(titulo)+'</div>'+
@@ -17571,6 +17645,443 @@ async function catTandaDeshacer(){
   _repintarDondeEstoy();
 }
 
+/* ══ v108 · LA PANTALLA DE LAS PARTIDAS MADRE ════════════════════════════
+   Lo que pidió el dueño: verlas en una lista y poder agregar lo que haga
+   falta sin esperar una versión. Renombrar, reordenar, desactivar y crear.
+
+   EL CÓDIGO NO SE EDITA NUNCA. Es el amarre con el presupuesto de 2024: si se
+   cambia, la estructura deja de cuadrar con lo que se contrató y con lo que se
+   paga. Se cambia el NOMBRE, que es lo que se lee. */
+function catMadresAbrir(){ S.catMadres=true; S.catCap=null; S.catGrupo=null; S.catUbic=null; renderCatalogo(); _catArriba(); }
+function catMadresCerrar(){ S.catMadres=false; S.catMadreNueva=null; S.catMadreEdit=null; renderCatalogo(); _catArriba(); }
+function _catEnBase(){ return Array.isArray(S.catCaps) && S.catCaps.length>0; }
+
+function _catMadresHTML(){
+  var h=_catBuscaBarraHTML()+
+    '<button onclick="catMadresCerrar()" style="'+_catVolverBS+'">‹ Volver</button>'+
+    '<div style="font-size:19px;font-weight:800;margin:4px 0 3px">Partidas madre</div>'+
+    '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
+      'El <b>código</b> no se cambia: es el amarre con el presupuesto. El nombre y el orden sí. '+
+      'El orden además decide quién gana cuando una partida cae empatada entre dos capítulos.</div>';
+  if(!_catEnBase())
+    h+='<div style="margin-bottom:12px;padding:11px 13px;border-radius:12px;background:var(--amber-light);'+
+      'border:1.5px solid var(--amber);color:var(--amber);font-size:12px;line-height:1.5">'+
+      'La estructura no cargó de la base'+(S.catEstructuraErr?' ('+esc(S.catEstructuraErr)+')':'')+
+      ', así que esto se está leyendo del código y <b>no se puede editar</b>. '+
+      'El resto del módulo funciona igual.</div>';
+  var L=_capsLista();
+  var filas=L.map(function(c){
+    return {c:c, p:_catAgendaDe(c.n).length, a:_catActsDeCap(c.n), av:_catAvanceCap(c.n)};
+  });
+  var llenos=filas.filter(function(x){ return x.p; }), vacios=filas.filter(function(x){ return !x.p; });
+  var fila=function(x,i,n){
+    var puede=_catEnBase();
+    return '<div style="background:var(--bg2);border:1.5px solid var(--border2);border-radius:12px;'+
+        'padding:11px 12px;margin-bottom:6px">'+
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:800;line-height:1.3">'+
+            '<span style="font-family:var(--mono);color:var(--text3)">'+esc(x.c.n)+'</span> · '+esc(x.c.t)+
+            (x.c.presup?'':'<span style="font-size:10px;color:var(--amber);font-weight:700;'+
+              'margin-left:6px;white-space:nowrap">fuera del presupuesto</span>')+'</div>'+
+          '<div style="font-size:11px;font-family:var(--mono);margin-top:3px">'+_catAvanceHTML(x.av)+
+            '<span style="color:var(--text3)"> · '+x.p+' partida'+(x.p!==1?'s':'')+' · '+x.a+' actividades</span></div>'+
+          _catBarraHTML(x.av)+
+        '</div>'+
+        (puede?'<div style="display:flex;flex-direction:column;gap:3px">'+
+          '<button onclick="catMadreSubir('+_catQ(x.c.n)+')" style="'+_catBS+';min-height:44px;min-width:44px;'+
+            'padding:0;font-size:15px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)'+
+            (i===0?';opacity:.35':'')+'">↑</button>'+
+          '<button onclick="catMadreBajar('+_catQ(x.c.n)+')" style="'+_catBS+';min-height:44px;min-width:44px;'+
+            'padding:0;font-size:15px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)'+
+            (i===n-1?';opacity:.35':'')+'">↓</button>'+
+        '</div>':'')+
+      '</div>'+
+      (puede?'<div style="display:flex;gap:6px;margin-top:8px">'+
+        '<button onclick="catMadreEditar('+_catQ(x.c.n)+')" style="'+_catBS+';flex:1;min-height:44px;'+
+          'font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)">Renombrar</button>'+
+        '<button onclick="catIrCap('+_catQ(x.c.n)+')" style="'+_catBS+';flex:1;min-height:44px;'+
+          'font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)">Grupos y partidas</button>'+
+        '<button onclick="catMadreDesactivar('+_catQ(x.c.n)+')" style="'+_catBS+';flex:1;min-height:44px;'+
+          'font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text3)">Desactivar</button>'+
+      '</div>':'')+
+    '</div>';
+  };
+  if(_catEnBase())
+    h+='<button onclick="catMadreNuevaAbrir()" style="'+_catBS+';width:100%;margin-bottom:10px;min-height:50px;'+
+      'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)">+ Nueva partida madre</button>';
+  h+=llenos.map(function(x,i){ return fila(x,i,llenos.length); }).join('');
+  if(vacios.length){
+    h+='<button onclick="catVerVacios()" style="'+_catBS+';width:100%;margin-top:8px;min-height:46px;'+
+      'border:1.5px dashed var(--border2);background:none;color:var(--text3)">'+
+      (S.catVacios?'Esconder las '+vacios.length+' vacías':'Ver las '+vacios.length+' vacías')+'</button>';
+    if(S.catVacios) h+='<div style="height:8px"></div>'+vacios.map(function(x,i){ return fila(x,i,vacios.length); }).join('');
+  }
+  return h+'<div style="height:110px"></div>';
+}
+
+/* Renombrar y crear van en el panel a pantalla completa, con su caja de texto.
+   Cero `prompt()`: no se escribe en un diálogo del navegador estando de pie. */
+function catMadreEditar(id){
+  var c=_capsLista().find(function(x){ return x.n===String(id); });
+  if(!c) return;
+  S.catMadreEdit={id:String(id), nombre:c.t}; S.catMadreNueva=null;
+  S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null; _catPanel();
+}
+function catMadreNuevaAbrir(){
+  S.catMadreNueva={codigo:'', nombre:''}; S.catMadreEdit=null;
+  S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null; _catPanel();
+}
+function _catMadreEditHTML(){
+  var E=S.catMadreEdit;
+  return _catPanelCab('Renombrar la partida madre',
+      'El código <b>'+esc(E.id)+'</b> no cambia: es lo que la amarra al presupuesto.')+
+    '<input id="cat-me-nom" type="text" value="'+esc(E.nombre)+'" '+
+      'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+      'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--font);'+
+      'background:var(--bg2);color:var(--text)">'+
+    '<button onclick="catMadreGuardar()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:50px;'+
+      'border-color:var(--green);background:var(--green-light);color:var(--green)">Guardar el nombre</button>'+
+    _catPanelPie();
+}
+function _catMadreNuevaHTML(){
+  var N=S.catMadreNueva;
+  return _catPanelCab('Nueva partida madre',
+      'Para trabajo que la obra descubrió y el presupuesto de 2024 no tenía — como los aires '+
+      'del lobby o la verja. Nace <b>fuera del presupuesto</b> y al final de la lista, antes de «Sin clasificar».')+
+    _catLab('Código (corto, no se cambia después)')+
+    '<input id="cat-mn-cod" type="text" value="'+esc(N.codigo)+'" placeholder="VERJA" '+
+      'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+      'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--mono);'+
+      'background:var(--bg2);color:var(--text);margin-bottom:10px">'+
+    _catLab('Nombre')+
+    '<input id="cat-mn-nom" type="text" value="'+esc(N.nombre)+'" placeholder="Verja perimetral" '+
+      'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+      'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--font);'+
+      'background:var(--bg2);color:var(--text)">'+
+    '<button onclick="catMadreCrear()" style="'+_catPBS+';width:100%;margin-top:12px;min-height:50px;'+
+      'border-color:var(--green);background:var(--green-light);color:var(--green)">Crear la partida madre</button>'+
+    _catPanelPie();
+}
+async function catMadreGuardar(){
+  var E=S.catMadreEdit; if(!E) return;
+  var i=document.getElementById('cat-me-nom');
+  var nom=String((i&&i.value)||'').trim();
+  if(!nom){ showToast('Ponle nombre','warn',3000); return; }
+  S.catMadreEdit=null; _catPanel();
+  try{
+    await sb('obra_capitulos?id=eq.'+encodeURIComponent(E.id),{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify({nombre:nom})});
+    var c=(S.catCaps||[]).find(function(x){ return String(x.id)===E.id; });
+    var antes=c?c.nombre:'';
+    if(c) c.nombre=nom;
+    logCambio('editado','partida','cap_'+E.id,nom,'partida madre renombrada: «'+antes+'» → «'+nom+'»');
+    showToast('Renombrada ✓');
+  }catch(e){ showToast('No se pudo renombrar: '+((e&&e.message)||''),'err',7000); }
+  renderCatalogo();
+}
+async function catMadreCrear(){
+  var ci=document.getElementById('cat-mn-cod'), ni=document.getElementById('cat-mn-nom');
+  var cod=String((ci&&ci.value)||'').trim().toUpperCase(), nom=String((ni&&ni.value)||'').trim();
+  if(S.catMadreNueva){ S.catMadreNueva.codigo=cod; S.catMadreNueva.nombre=nom; }
+  if(!cod || !nom){ showToast('Hacen falta el código y el nombre','warn',4000); return; }
+  /* UN CÓDIGO REPETIDO SE RECHAZA DICIENDO CUÁL. Si se dejara pasar habría dos
+     partidas madre con el mismo amarre y el presupuesto dejaría de cuadrar. */
+  var ya=(S.catCaps||[]).find(function(x){ return String(x.id).toUpperCase()===cod; });
+  if(ya){ showToast('Ese código ya es «'+ya.nombre+'». Ponle otro.','err',7000); return; }
+  /* Al final, pero ANTES de «Sin clasificar»: ese tiene que seguir siendo el
+     último para que un empate contra un capítulo de verdad lo gane el de verdad. */
+  var sinClas=(S.catCaps||[]).find(function(x){ return String(x.id)==='0'; });
+  var tope=Math.max.apply(null,(S.catCaps||[]).filter(function(x){ return String(x.id)!=='0'; })
+    .map(function(x){ return x.orden||0; }).concat([0]));
+  var fila={id:cod, nombre:nom, orden:tope+10, activo:true, en_presupuesto:false};
+  S.catMadreNueva=null; _catPanel();
+  try{
+    await sb('obra_capitulos',{method:'POST',prefer:'return=minimal',body:JSON.stringify(fila)});
+    if(sinClas && (sinClas.orden||0)<=fila.orden){
+      sinClas.orden=fila.orden+10;
+      await sb('obra_capitulos?id=eq.0',{method:'PATCH',prefer:'return=minimal',
+               body:JSON.stringify({orden:sinClas.orden})});
+    }
+    (S.catCaps=S.catCaps||[]).push(fila);
+    logCambio('creado','partida','cap_'+cod,nom,'partida madre nueva, fuera del presupuesto');
+    showToast('«'+cod+' · '+nom+'» creada ✓');
+  }catch(e){ showToast('No se pudo crear: '+((e&&e.message)||''),'err',7000); }
+  renderCatalogo();
+}
+async function catMadreDesactivar(id){
+  var n=_catAgendaDe(String(id)).length;
+  /* NO SE DEJA si tiene partidas: desactivarla las escondería sin decir dónde
+     fueron a parar. Primero se vacía, y para eso está «Ordenar las partidas». */
+  if(n){ showToast('Tiene '+n+' partida'+(n!==1?'s':'')+' dentro. Muévelas primero con «Ordenar las partidas de este capítulo».','warn',8000); return; }
+  if(String(id)==='0'){ showToast('«Sin clasificar» no se desactiva: es donde cae lo que no reconoce ninguna regla.','warn',6000); return; }
+  if(!confirm('¿Desactivar «'+_catCapNom(id)+'»? Deja de salir en la lista.')) return;
+  try{
+    await sb('obra_capitulos?id=eq.'+encodeURIComponent(id),{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify({activo:false})});
+    var c=(S.catCaps||[]).find(function(x){ return String(x.id)===String(id); });
+    if(c) c.activo=false;
+    logCambio('editado','partida','cap_'+id,_catCapNom(id),'partida madre desactivada');
+    showToast('Desactivada ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
+  renderCatalogo();
+}
+function catMadreSubir(id){ return _catMadreMover(id,-1); }
+function catMadreBajar(id){ return _catMadreMover(id, 1); }
+async function _catMadreMover(id, dir){
+  var L=_capsLista(), i=L.findIndex(function(x){ return x.n===String(id); });
+  var j=i+dir;
+  if(i<0 || j<0 || j>=L.length) return;
+  var a=(S.catCaps||[]).find(function(x){ return String(x.id)===L[i].n; });
+  var b=(S.catCaps||[]).find(function(x){ return String(x.id)===L[j].n; });
+  if(!a || !b) return;
+  var oa=a.orden||0, ob=b.orden||0;
+  a.orden=ob; b.orden=oa;
+  renderCatalogo();                       // se ve movido antes de que conteste la base
+  try{
+    await sb('obra_capitulos?id=eq.'+encodeURIComponent(a.id),{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({orden:ob})});
+    await sb('obra_capitulos?id=eq.'+encodeURIComponent(b.id),{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({orden:oa})});
+  }catch(e){
+    a.orden=oa; b.orden=ob; renderCatalogo();
+    showToast('No se pudo mover: '+((e&&e.message)||''),'err',7000);
+  }
+}
+
+/* ── LOS GRUPOS DE TRABAJO, EDITABLES Y CON PRUEBA ANTES DE GUARDAR ── */
+function catGruposEditAbrir(){ S.catGruposEdit=true; renderCatalogo(); _catArriba(); }
+function catGruposEditCerrar(){ S.catGruposEdit=false; S.catSgEdit=null; renderCatalogo(); _catArriba(); }
+function _catGruposEditHTML(){
+  var cap=String(S.catCap||''), L=_sgLista(cap);
+  var h=_catBuscaBarraHTML()+
+    '<button onclick="catGruposEditCerrar()" style="'+_catVolverBS+'">‹ '+esc(cap)+' · '+esc(_catCapNom(cap))+'</button>'+
+    '<div style="font-size:18px;font-weight:800;margin:4px 0 3px">Grupos de trabajo</div>'+
+    '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
+      'Cada grupo se reconoce por sus <b>palabras</b>, y <b>gana el primero que coincide</b>: por eso el '+
+      'orden es parte de la regla. «Otros» va siempre al final y recoge lo que nadie reconoció.</div>';
+  if(!_catEnBase())
+    return h+'<div class="empty" style="padding:26px 16px;color:var(--text3);line-height:1.5">'+
+      'La estructura no cargó de la base, así que los grupos se están leyendo del código y no se pueden editar aquí.</div>';
+  if(!L.length)
+    h+='<div class="empty" style="padding:22px 16px;color:var(--text3)">Este capítulo no se subdivide todavía.</div>';
+  L.forEach(function(g,i){
+    var n=_catActsDeGrupo(cap,g.nombre).length;
+    var esOtros=(g.nombre==='Otros');
+    h+='<div style="background:var(--bg2);border:1.5px solid var(--border2);border-radius:12px;padding:11px 12px;margin-bottom:6px">'+
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:800;line-height:1.3">'+esc(g.nombre)+
+            '<span style="color:var(--text3);font-weight:600;font-family:var(--mono);font-size:11px"> · '+n+'</span></div>'+
+          '<div style="font-size:11px;color:var(--text3);margin-top:3px;line-height:1.45;word-break:break-word">'+
+            (esOtros?'lo que no reconoce ninguna regla':esc(g.palabras.join(', ')||'— sin palabras'))+'</div>'+
+        '</div>'+
+        (esOtros?'':'<div style="display:flex;flex-direction:column;gap:3px">'+
+          '<button onclick="catSgMover('+_catQ(g.id)+',-1)" style="'+_catBS+';min-height:44px;min-width:44px;padding:0;'+
+            'font-size:15px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)'+(i===0?';opacity:.35':'')+'">↑</button>'+
+          '<button onclick="catSgMover('+_catQ(g.id)+',1)" style="'+_catBS+';min-height:44px;min-width:44px;padding:0;'+
+            'font-size:15px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)">↓</button>'+
+        '</div>')+
+      '</div>'+
+      (esOtros?'':'<div style="display:flex;gap:6px;margin-top:8px">'+
+        '<button onclick="catSgEditar('+_catQ(g.id)+')" style="'+_catBS+';flex:1;min-height:44px;font-size:11.5px;'+
+          'border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2)">Nombre y palabras</button>'+
+        '<button onclick="catSgDesactivar('+_catQ(g.id)+')" style="'+_catBS+';flex:1;min-height:44px;font-size:11.5px;'+
+          'border:1.5px solid var(--border2);background:var(--bg3);color:var(--text3)">Quitar</button>'+
+      '</div>')+
+    '</div>';
+  });
+  h+='<button onclick="catSgNuevo()" style="'+_catBS+';width:100%;margin-top:8px;min-height:48px;'+
+    'border:1.5px dashed var(--border2);background:none;color:var(--text3);font-weight:700">+ Grupo de trabajo</button>';
+  return h+'<div style="height:110px"></div>';
+}
+function catSgEditar(id){
+  var g=(S.catSubs||[]).find(function(x){ return String(x.id)===String(id); });
+  if(!g) return;
+  S.catSgEdit={id:String(id), nombre:g.nombre, palabras:String(g.palabras||''), nuevo:false, prueba:null};
+  S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null; S.catMadreEdit=null; S.catMadreNueva=null;
+  _catPanel();
+}
+function catSgNuevo(){
+  S.catSgEdit={id:'', nombre:'', palabras:'', nuevo:true, prueba:null};
+  S.catBorrar=null; S.catRepetir=null; S.catTandaPick=null; S.catMadreEdit=null; S.catMadreNueva=null;
+  _catPanel();
+}
+function _catSgLeer(){
+  var E=S.catSgEdit; if(!E) return;
+  var n=document.getElementById('cat-sg-nom'), p=document.getElementById('cat-sg-pal');
+  if(n) E.nombre=n.value;
+  if(p) E.palabras=p.value;
+}
+/* LA PRUEBA ANTES DE GUARDAR. Sin esto, editar una regla es a ciegas: en este
+   proyecto una palabra mal puesta —«mueble de ba», que no cogía «muebles de
+   baño»— mandó 22 actividades al capítulo equivocado y nadie lo vio hasta que
+   se midió. Se calcula sobre TODAS las actividades del capítulo, con la regla
+   nueva puesta en su sitio, y se dice qué entra y qué sale, en los dos sentidos. */
+function catSgProbar(){
+  _catSgLeer();
+  var E=S.catSgEdit; if(!E) return;
+  var cap=String(S.catCap||''), L=_sgLista(cap);
+  var pal=_sgPal(E.palabras);
+  if(!pal.length){ showToast('Escribe al menos una palabra','warn',4000); return; }
+  /* La lista con el cambio aplicado: si es nuevo va justo antes de «Otros». */
+  var sim=L.map(function(g){
+    return (g.id && g.id===E.id) ? {nombre:E.nombre||g.nombre, palabras:pal} : {nombre:g.nombre, palabras:g.palabras, re:g.re};
+  });
+  if(E.nuevo){
+    var iOtros=sim.findIndex(function(g){ return g.nombre==='Otros'; });
+    sim.splice(iOtros<0?sim.length:iOtros, 0, {nombre:E.nombre||'(el grupo nuevo)', palabras:pal});
+  }
+  var quien=function(lista, desc){
+    var d=_catNorm(String(desc||'')), cru=String(desc||'');
+    for(var i=0;i<lista.length;i++){
+      var g=lista[i];
+      if(g.re){ if(g.re.test(cru)) return g.nombre; continue; }
+      if(!g.palabras || !g.palabras.length) return g.nombre;
+      for(var j=0;j<g.palabras.length;j++) if(d.indexOf(g.palabras[j])>=0) return g.nombre;
+    }
+    return 'Otros';
+  };
+  var nom=E.nombre||'(el grupo nuevo)';
+  var entran={}, salen={}, total=0, iguales=0, cambian=[];
+  _catAgendaDe(cap).forEach(function(p){
+    var acts=_catActsDe(p.id); if(!acts.length) return;
+    var manual=String(p.grupo||'').trim();
+    var antes=manual || quien(L, p.nombre);
+    var desp  =manual || quien(sim, p.nombre);
+    if(desp===nom) total+=acts.length;
+    if(antes===desp){ if(desp===nom) iguales+=acts.length; return; }
+    cambian.push({nombre:p.nombre, n:acts.length, de:antes, a:desp});
+    if(desp===nom) entran[antes]=(entran[antes]||0)+acts.length;
+    if(antes===nom) salen[desp]=(salen[desp]||0)+acts.length;
+  });
+  E.prueba={nom:nom, total:total, iguales:iguales, entran:entran, salen:salen,
+            cambian:cambian.sort(function(x,y){ return y.n-x.n; })};
+  E.verCambios=false;
+  _catPanel();
+}
+function catSgVerCambios(){ if(S.catSgEdit){ S.catSgEdit.verCambios=!S.catSgEdit.verCambios; _catPanel(); } }
+function _catSgEditHTML(){
+  var E=S.catSgEdit, cap=String(S.catCap||'');
+  var h=_catPanelCab(E.nuevo?'Grupo de trabajo nuevo':'Nombre y palabras',
+      'En <b>'+esc(cap)+' · '+esc(_catCapNom(cap))+'</b>. Las palabras van separadas por coma y se buscan '+
+      '<b>dentro</b> de la descripción, sin tildes ni mayúsculas: «grifer» coge «grifería».')+
+    _catLab('Nombre del grupo')+
+    '<input id="cat-sg-nom" type="text" value="'+esc(E.nombre)+'" placeholder="Zócalos" '+
+      'style="width:100%;box-sizing:border-box;min-height:48px;border:1.5px solid var(--border2);'+
+      'border-radius:12px;padding:0 13px;font-size:15px;font-family:var(--font);'+
+      'background:var(--bg2);color:var(--text);margin-bottom:10px">'+
+    _catLab('Palabras que lo reconocen')+
+    '<textarea id="cat-sg-pal" rows="3" placeholder="zocalo, zócalo" '+
+      'style="width:100%;box-sizing:border-box;min-height:70px;border:1.5px solid var(--border2);'+
+      'border-radius:12px;padding:10px 13px;font-size:14px;font-family:var(--font);line-height:1.5;'+
+      'background:var(--bg2);color:var(--text);resize:vertical">'+esc(E.palabras)+'</textarea>'+
+    '<button onclick="catSgProbar()" style="'+_catPBS+';width:100%;margin-top:10px;min-height:50px;'+
+      'border-color:var(--accent);background:var(--accent-soft);color:var(--accent)">Probar estas palabras</button>';
+  var P=E.prueba;
+  if(P){
+    var lin=function(m){ return Object.keys(m).sort(function(a,b){ return m[b]-m[a]; })
+      .map(function(k){ return esc(k)+' ('+m[k]+')'; }).join(' · '); };
+    var nEntran=Object.keys(P.entran).reduce(function(n,k){ return n+P.entran[k]; },0);
+    var nSalen =Object.keys(P.salen ).reduce(function(n,k){ return n+P.salen[k]; },0);
+    h+='<div style="margin-top:12px;padding:12px 13px;border-radius:12px;background:var(--bg3);'+
+        'border:1.5px solid var(--border);font-size:12.5px;line-height:1.7">'+
+      '<div style="font-weight:800;margin-bottom:5px">Con estas palabras: '+P.total+' actividades</div>'+
+      '<div style="color:var(--text2);font-family:var(--mono);font-size:11.5px">'+
+        '· '+P.iguales+' ya estaban aquí<br>'+
+        '· '+nEntran+' vienen de otros grupos'+(nEntran?': '+lin(P.entran):'')+'<br>'+
+        '· '+nSalen+' se irían a'+(nSalen?': '+lin(P.salen):'')+
+      '</div></div>';
+    if(P.cambian.length)
+      h+='<button onclick="catSgVerCambios()" style="'+_catPBS+';width:100%;margin-top:8px;min-height:46px;'+
+        'border-style:dashed;color:var(--text2)">'+(E.verCambios?'Esconder':'Ver')+' las '+P.cambian.length+' que cambian</button>'+
+        (E.verCambios?'<div style="margin-top:6px;font-size:11.5px;line-height:1.7;color:var(--text2)">'+
+          P.cambian.slice(0,60).map(function(c){
+            return '· '+esc(String(c.nombre).slice(0,58))+' <span style="font-family:var(--mono);color:var(--text3)">'+
+              esc(c.de)+' → '+esc(c.a)+' ('+c.n+')</span>'; }).join('<br>')+
+          (P.cambian.length>60?'<br>… y '+(P.cambian.length-60)+' más':'')+'</div>':'');
+    h+='<button onclick="catSgGuardar()" style="'+_catPBS+';width:100%;margin-top:10px;min-height:52px;'+
+      'border-color:var(--green);background:var(--green-light);color:var(--green)">Guardar</button>';
+  }else{
+    h+='<div style="margin-top:12px;font-size:12px;color:var(--text3);line-height:1.5">'+
+      'Prueba las palabras antes de guardar: así ves qué entra y qué sale <b>antes</b> de moverlo.</div>';
+  }
+  return h+_catPanelPie();
+}
+async function catSgGuardar(){
+  _catSgLeer();
+  var E=S.catSgEdit; if(!E) return;
+  /* NINGUNA REGLA SE GUARDA SIN QUE EL DUEÑO HAYA VISTO QUÉ CAMBIA. */
+  if(!E.prueba){ showToast('Primero prueba las palabras','warn',4000); return; }
+  var cap=String(S.catCap||'');
+  var nom=String(E.nombre||'').trim(), pal=String(E.palabras||'').trim();
+  if(!nom || !pal){ showToast('Hacen falta el nombre y las palabras','warn',4000); return; }
+  S.catSgEdit=null; _catPanel();
+  try{
+    if(E.nuevo){
+      var L=_sgLista(cap);
+      var iO=L.findIndex(function(g){ return g.nombre==='Otros'; });
+      var ord=(iO>=0 ? (L[iO].orden||0) : (L.length?((L[L.length-1].orden||0)+10):0));
+      var fila={id:'sg_'+uid(), capitulo:cap, nombre:nom, palabras:pal, orden:ord, activo:true};
+      await sb('obra_subgrupos',{method:'POST',prefer:'return=minimal',body:JSON.stringify(fila)});
+      (S.catSubs=S.catSubs||[]).push(fila);
+      /* «Otros» se corre detrás: tiene que quedar SIEMPRE el último. */
+      if(iO>=0){
+        var o=(S.catSubs||[]).find(function(x){ return String(x.id)===String(L[iO].id); });
+        if(o){ o.orden=ord+10;
+          await sb('obra_subgrupos?id=eq.'+encodeURIComponent(o.id),{method:'PATCH',prefer:'return=minimal',
+                   body:JSON.stringify({orden:o.orden})}); }
+      }
+      logCambio('creado','partida','sg_'+cap,nom,'grupo de trabajo nuevo en '+cap+': '+pal);
+    }else{
+      await sb('obra_subgrupos?id=eq.'+encodeURIComponent(E.id),{method:'PATCH',prefer:'return=minimal',
+               body:JSON.stringify({nombre:nom, palabras:pal})});
+      var g=(S.catSubs||[]).find(function(x){ return String(x.id)===String(E.id); });
+      var antes=g?String(g.palabras||''):'';
+      if(g){ g.nombre=nom; g.palabras=pal; }
+      logCambio('editado','partida','sg_'+E.id,nom,'palabras del grupo: «'+antes+'» → «'+pal+'»');
+    }
+    S._catMapa=null;
+    showToast('Guardado ✓');
+  }catch(e){ showToast('No se pudo guardar: '+((e&&e.message)||''),'err',7000); }
+  renderCatalogo();
+}
+async function catSgDesactivar(id){
+  var g=(S.catSubs||[]).find(function(x){ return String(x.id)===String(id); });
+  if(!g) return;
+  if(g.nombre==='Otros'){ showToast('«Otros» no se quita: es donde cae lo que no reconoce ninguna regla.','warn',6000); return; }
+  var n=_catActsDeGrupo(String(S.catCap||''), g.nombre).length;
+  if(!confirm('¿Quitar el grupo «'+g.nombre+'»?'+(n?'\n\nSus '+n+' actividades pasan al grupo que las reconozca, o a «Otros».':''))) return;
+  try{
+    await sb('obra_subgrupos?id=eq.'+encodeURIComponent(id),{method:'PATCH',prefer:'return=minimal',
+             body:JSON.stringify({activo:false})});
+    g.activo=false; S._catMapa=null;
+    logCambio('editado','partida','sg_'+id,g.nombre,'grupo de trabajo quitado');
+    showToast('Quitado ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
+  renderCatalogo();
+}
+async function catSgMover(id, dir){
+  var cap=String(S.catCap||''), L=_sgLista(cap);
+  var i=L.findIndex(function(x){ return String(x.id)===String(id); });
+  var j=i+dir;
+  if(i<0 || j<0 || j>=L.length) return;
+  /* «Otros» no se mueve de sitio: siempre el último. */
+  if(L[i].nombre==='Otros' || L[j].nombre==='Otros'){
+    showToast('«Otros» va siempre al final.','warn',4000); return;
+  }
+  var a=(S.catSubs||[]).find(function(x){ return String(x.id)===String(L[i].id); });
+  var b=(S.catSubs||[]).find(function(x){ return String(x.id)===String(L[j].id); });
+  if(!a||!b) return;
+  var oa=a.orden||0, ob=b.orden||0;
+  a.orden=ob; b.orden=oa; S._catMapa=null; renderCatalogo();
+  try{
+    await sb('obra_subgrupos?id=eq.'+encodeURIComponent(a.id),{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({orden:ob})});
+    await sb('obra_subgrupos?id=eq.'+encodeURIComponent(b.id),{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({orden:oa})});
+  }catch(e){
+    a.orden=oa; b.orden=ob; renderCatalogo();
+    showToast('No se pudo mover: '+((e&&e.message)||''),'err',7000);
+  }
+}
+
 function catCurarAbrir(){ S.catCurar=true; renderCatalogo(); _catArriba(); }
 function catIrGrupo(g){ S.catCurar=false; S.catGrupo=g||null; S.catUbic=null; S.catPartida=null; renderCatalogo(); _catArriba(); }
 function catIrUbic(u){ S.catUbic=u||null; S.catPartida=null; renderCatalogo(); _catArriba(); }
@@ -17585,7 +18096,9 @@ function catVolver(){
   else if(S.catBuscar) S.catBuscar=null;
   else if(S.catPick) S.catPick=null;
   else if(S.catPartida) S.catPartida=null;
+  else if(S.catGruposEdit) S.catGruposEdit=false;
   else if(S.catCurar) S.catCurar=false;
+  else if(S.catMadres) S.catMadres=false;
   else if(S.catUbic) S.catUbic=null;
   else if(S.catGrupo) S.catGrupo=null;
   else { S.catCap=null; S.catSueltas=false; S.catSel={}; }
@@ -17629,8 +18142,10 @@ function renderCatalogo(){
     else if(S.catPick)        el.innerHTML=_catPickHTML();
     else if(S.catSueltas)     el.innerHTML=_catSueltasHTML();
     else if(S.catPartida)     el.innerHTML=_catFichaHTML();
+    else if(S.catMadres)      el.innerHTML=_catMadresHTML();
     else if(S.catCap!==null && S.catCap!==undefined){
-      if(S.catCurar)          el.innerHTML=_catPartidasHTML();
+      if(S.catGruposEdit)     el.innerHTML=_catGruposEditHTML();
+      else if(S.catCurar)     el.innerHTML=_catPartidasHTML();
       else if(S.catUbic)      el.innerHTML=_catUnidadHTML();
       else if(S.catGrupo)     el.innerHTML=_catUbicHTML();
       else                    el.innerHTML=_catGruposHTML();
@@ -17706,7 +18221,7 @@ function _catCapitulosHTML(){
     return h;
   }
   var llenos=[], vacios=[];
-  CAT_CAPITULOS.forEach(function(c){
+  _capsLista().forEach(function(c){
     var s=_catSubsDe(c.n).length, p=_catAgendaDe(c.n).length;
     (s||p ? llenos : vacios).push({c:c, s:s, p:p, a:_catActsDeCap(c.n), av:_catAvanceCap(c.n)});
   });
@@ -17732,8 +18247,11 @@ function _catCapitulosHTML(){
       h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:8px">'+
          vacios.map(tarjeta).join('')+'</div>';
   }
+  h+='<button onclick="catMadresAbrir()" style="'+_catBS+';width:100%;margin-top:12px;min-height:52px;'+
+    'border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent)">'+
+    'Partidas madre ('+_capsLista().length+') — ver, renombrar, ordenar y crear</button>';
   var sue=_catSueltas().length;
-  h+='<button onclick="catSueltasAbrir()" style="'+_catBS+';width:100%;margin-top:12px;min-height:52px;'+
+  h+='<button onclick="catSueltasAbrir()" style="'+_catBS+';width:100%;margin-top:8px;min-height:52px;'+
     'border:1.5px dashed '+(sue?'var(--amber)':'var(--border2)')+';background:none;'+
     'color:'+(sue?'var(--amber)':'var(--text3)')+'">Sin partida ('+sue+') — la bandeja de sueltas</button>';
   h+='<button onclick="catSembrar()" style="'+_catBS+';width:100%;margin-top:8px;border:1.5px solid var(--border2);'+
@@ -17801,7 +18319,7 @@ function _catGruposHTML(){
   var gs=_catGruposDe(cap);
   /* Un capítulo sin tabla de grupos NO se subdivide: es chico y partirlo sería
      ruido. Va directo a las ubicaciones. */
-  if(!CAT_SUBGRUPOS[cap] && !_catGruposCustom(cap).length){
+  if(!_sgLista(cap).length && !_catGruposCustom(cap).length){
     var acts=[]; _catAgendaDe(cap).forEach(function(p){ acts=acts.concat(_catActsDe(p.id)); });
     return h+_catUbicListaHTML(acts, null);
   }
@@ -17826,9 +18344,16 @@ function _catGruposHTML(){
      pantalla, no de existir: son el amarre con lo contratado y con lo que se
      paga, y de aquí se cuelgan las partidas. Va abajo y plegado porque es
      trabajo de escritorio, no de obra. */
-  h+='<button onclick="catCurarAbrir()" style="'+_catBS+';width:100%;margin-top:6px;min-height:46px;'+
+  /* EL NOMBRE DE ESTE BOTON IMPORTA. Decía «Las líneas del presupuesto (N) y
+     las partidas sueltas», que no dice en ninguna parte que ahí se reclasifica:
+     el dueño lo buscó y no lo encontró. Ahora dice lo que hace, y no está
+     escondido al final. */
+  h+='<button onclick="catCurarAbrir()" style="'+_catBS+';width:100%;margin-top:6px;min-height:48px;'+
+     'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-weight:700">'+
+     'Ordenar las partidas de este capítulo ('+_catAgendaDe(cap).length+')</button>';
+  h+='<button onclick="catGruposEditAbrir()" style="'+_catBS+';width:100%;margin-top:6px;min-height:46px;'+
      'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);font-weight:700">'+
-     'Las líneas del presupuesto ('+_catSubsDe(cap).length+') y las partidas sueltas</button>';
+     'Editar los grupos de trabajo y sus palabras</button>';
   return h+'<div style="height:100px"></div>';
 }
 
@@ -17971,7 +18496,7 @@ function _catCasillaHTML(a){
 function _catMoverPieHTML(a){
   var pid=_catA()[a.id]; if(!pid) return '';
   var cap=String(S.catCap||'');
-  if(!CAT_SUBGRUPOS[cap] && !_catGruposCustom(cap).length) return '';
+  if(!_sgLista(cap).length && !_catGruposCustom(cap).length) return '';
   return '<div style="margin:-6px 0 12px 2px">'+
     '<button onclick="catMoverAbrir('+_catQ(pid)+')" style="background:none;border:0;'+
     /* 44 px, como todo lo que se toca: se usa con el dedo. Estaba en 34 desde
@@ -18043,7 +18568,7 @@ function _catHerramientasHTML(){
       'style="width:100%;margin-top:6px;min-height:44px;padding:0 10px;border:1.5px solid '+(n?'var(--accent)':'var(--border2)')+';'+
       'border-radius:11px;background:var(--bg2);color:var(--text);font-size:12.5px;font-family:var(--font)">'+
       '<option value="">Mover a otro capítulo…</option>'+
-      CAT_CAPITULOS.map(function(c){ return '<option value="'+esc(c.n)+'">'+esc(c.n)+' · '+esc(c.t)+'</option>'; }).join('')+
+      _capsLista().map(function(c){ return '<option value="'+esc(c.n)+'">'+esc(c.n)+' · '+esc(c.t)+'</option>'; }).join('')+
     '</select>'+
     (S.catUndo?'<button onclick="catDeshacer()" style="'+_catBS+';width:100%;margin-top:6px;'+
       'border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
@@ -18226,7 +18751,7 @@ function _catFichaAgendaHTML(p){
         'style="'+_catCampoBS+';min-height:56px;padding:9px 10px;line-height:1.4;resize:vertical">'+esc(p.nombre)+'</textarea></div>'+
       '<div style="margin-bottom:8px">'+_catLab('Capítulo')+
         '<select onchange="catFichaSet(\''+p.id+'\',\'capitulo\',this.value)" style="'+_catCampoBS+'">'+
-        CAT_CAPITULOS.map(function(c){
+        _capsLista().map(function(c){
           return '<option value="'+esc(c.n)+'"'+(String(p.capitulo)===String(c.n)?' selected':'')+'>'+
             esc(c.n)+' · '+esc(c.t)+'</option>';
         }).join('')+'</select></div>'+

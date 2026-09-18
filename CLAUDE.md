@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v107 — 18 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v108 — 18 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~820): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v107 (18 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v108 (18 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -486,6 +486,87 @@ lo primero, lo recién creado no aparecía en Partidas hasta recargar, porque el
 catálogo tiene su propia carga. Las dos líneas están en la capa de escritura
 porque es el único sitio que sabe con certeza que la actividad existe en la base.
 
+#### La estructura vive en la BASE, no en el código (v108)
+
+Palabras del dueño: *«quiero poder visualizar las partidas madre en una lista y
+poder agregar lo que sea necesario y poder trabajar todo desde la app»*.
+Mientras `CAT_CAPITULOS` y `CAT_SUBGRUPOS` fueran constantes, **cada partida
+madre nueva era una versión nueva** — pasó dos veces en dos días, `AC` para los
+aires del lobby y del gimnasio y la verja perimetral, y va a volver a pasar
+porque la obra descubre trabajo que el presupuesto de 2024 no tenía.
+
+Ahora viven en **`obra_capitulos`** y **`obra_subgrupos`**, y se leen por
+**`_capsLista()`** y **`_sgLista(cap)`**. Nada lee ya las constantes
+directamente.
+
+**LAS CONSTANTES SE QUEDAN EN EL ARCHIVO COMO RESPALDO.** Si las tablas no
+cargan o vienen vacías, los dos accesos caen en `CAT_CAPITULOS` y
+`CAT_SUBGRUPOS` y el módulo sigue entero — con un aviso en la pantalla de
+partidas madre diciendo que no se puede editar. Un catálogo que se cae porque
+no contestó una tabla no sirve en una obra. **No las borres.**
+
+**EL CÓDIGO DE UN CAPÍTULO NO SE EDITA NUNCA.** Es el amarre con el presupuesto:
+si se cambia, la estructura deja de cuadrar con lo contratado y con lo que se
+paga. Se cambia el **nombre**, que es lo que se lee. Un código repetido se
+rechaza **diciendo cuál es** el que ya lo tiene.
+
+**`en_presupuesto=false`** marca lo que la obra descubrió y el Excel de 2024 no
+tenía. Hoy son dos: `AC` y `'0'`. Lo que se crea desde el app nace así, porque
+si fuera del presupuesto ya estaría.
+
+**`orden` ordena la lista Y ROMPE LOS EMPATES** de `_catCapMayoria` — ahora
+`_catCapIdx` lee de `_capsLista()`, así que subir un capítulo en la pantalla
+cambia de verdad quién gana. Comprobado: con 8.00 por encima de 5.00, el empate
+1-1 de «Resane» pasa de 5.00 a 8.00 y vuelve al bajarlo. **`'0'` tiene que
+quedar el último**: es lo que hace que un empate contra un capítulo de verdad lo
+gane el capítulo de verdad, y por eso al crear uno nuevo se corre `'0'` detrás.
+
+**Las palabras sustituyen a las expresiones.** Se guardan en llano, separadas por
+coma, y se buscan **dentro** de la descripción normalizada con `_catNorm`: por
+eso «grifer» coge «grifería». **Gana el primer grupo que coincide**, así que el
+orden de los grupos es parte de la regla. Medido al convertir: **cero
+actividades cambian de grupo** en los seis capítulos (1.706 actividades), en la
+base y comprobado otra vez dentro del app contra la constante.
+
+*Lo que costó llegar a ese cero, para que no se repita:* la conversión de
+expresión a palabras tiene tres trampas y las tres se vieron midiendo, no
+leyendo. `\b` desaparece —`gas` suelto también entra en «fu**gas**», así que la
+palabra sembrada es **`de gas`**, que cubre las 53 sin coger la de las fugas—;
+`\s?` es un espacio **opcional** y hay que emitir las dos formas, o se pierde
+«denglass» pegado; y `[oa]s?` necesita expandir **también** la interrogación
+suelta, o queda un `rotos?` que no casa nunca. **Si tocas el conversor, vuelve a
+medir contra la base capítulo por capítulo.**
+
+**«Otros» va siempre al final y no se quita.** Es donde cae lo que no reconoce
+ninguna regla; sin él se pierde trabajo de vista. Al crear un grupo nuevo se
+inserta antes y se corre «Otros» detrás.
+
+**NINGUNA REGLA SE GUARDA SIN QUE EL DUEÑO HAYA VISTO QUÉ CAMBIA.**
+`catSgProbar` simula la lista con el cambio puesto en su sitio y dice, antes de
+escribir nada: cuántas quedarían, cuántas ya estaban, cuántas **entran** de qué
+grupos y cuántas **salen** a qué grupos, con la lista de las que se mueven.
+`catSgGuardar` **se niega si no se ha probado**. Sin esto, editar una regla es a
+ciegas: en este proyecto una palabra mal puesta —«mueble de ba», que no cogía
+«muebles de baño»— mandó 22 actividades al capítulo equivocado y nadie lo vio
+hasta que se midió.
+
+**«Ordenar las partidas de este capítulo»** es el botón que antes decía «Las
+líneas del presupuesto (N) y las partidas sueltas». Ese nombre no decía en
+ninguna parte que ahí se reclasifica y **el dueño lo buscó y no lo encontró**.
+Mueve en bloque con `catMover`: una llamada por partida, **un solo repintado**, y
+`catDeshacer` devuelve la tanda entera. Al cambiar de capítulo la partida **se
+suelta de su línea del presupuesto** —la que tenía es de otro capítulo— y ahora
+**se avisa**, no se hace callado.
+
+*El caso que lo destapó:* de las 11 partidas de `2.00 Movimiento de tierra`, 9
+están mal — seis son de plomería (agua negra, registros, trampas de grasa) y
+tres de la verja y las casetas. Cayeron ahí porque la regla mira el oficio
+Ayudante más *excavación*, *compactación* y *nivelación*: **excava el ayudante,
+pero el trabajo es de otro.**
+
+**Son 48 capítulos, no 47**: 29 numéricos (28 del presupuesto más «Sin
+clasificar»), 17 CI, IMP.1 y AC.
+
 ### El Repaso por partida repetida (v94) — por qué existe
 
 **El dueño pone la obra al día por PARTIDA REPETIDA, no por apartamento.** Ese
@@ -836,6 +917,8 @@ presupuesto.
 ```sql
 DROP TABLE IF EXISTS obra_partida_actividad;
 DROP TABLE IF EXISTS obra_partidas;
+DROP TABLE IF EXISTS obra_subgrupos;
+DROP TABLE IF EXISTS obra_capitulos;
 ```
 
 …más el bloque `CATÁLOGO DE PARTIDAS` de `index.html` y sus seis enganches
@@ -1208,6 +1291,12 @@ mismo:**
 - **Toda escritura a `obra_actividades` lleva su `POST obra_cambios` al lado.**
   Esa es la firma de `Acciones`: uno suelto quiere decir que alguien escribió
   por fuera
+- **La estructura de Partidas sale de `obra_capitulos` y `obra_subgrupos`**, con
+  las constantes de respaldo. Fuerza las tablas a vacío y comprueba que el módulo
+  sigue: 48 capítulos, «4.00 · Plomería», y los grupos siguen repartiendo
+- **Convertir o tocar las palabras de un grupo no mueve el reparto sin que se
+  vea.** Compara capítulo por capítulo contra la constante: hoy dan **cero
+  diferencias** sobre 1.706 actividades
 - **El capítulo de Partidas está GUARDADO.** Si tocas `_catCapDe`, mide cuántas
   partidas cambiarían ANTES de escribir, y dilo. Un cambio de regla sin `UPDATE`
   no mueve nada; un `UPDATE` sin medir pisa la curación del dueño
@@ -1324,6 +1413,8 @@ pertenece a ningún nivel.
 | **v106** — el prompt traía la tabla de subpartidas con sus conteos, pero no las palabras que los producen. Reconstruirlas a ciegas dio 12.00 exacto y el resto a ±3, con dos grupos bastante fuera. | La tabla de un prompt es el **destino**, no el camino. Si te dan números sin la regla que los genera, reconstruye lo que puedas, **di en qué te separas** y deja la corrección a mano puesta — no te inventes palabras hasta que el número cuadre, porque entonces el grupo deja de querer decir algo. |
 | **v107** — el botón de editar iba a ponerse tal cual sobre las tarjetas del catálogo. `showAddAct` va por **índice de `S.acts`**, que no trae las cerradas: sobre las 1.406 cerradas —que son justo las que Partidas enseña y ninguna otra pantalla— no habría hecho nada, sin error y sin mensaje. | Antes de poner un botón nuevo sobre una pantalla, mira **de qué array lee** la función que va a llamar. En este app hay dos cargas de actividades y solo una trae lo cerrado; el `if(ai>=0)` sin `else` convierte esa diferencia en un botón muerto. Tercera vez que la misma grieta corta en sitio distinto (v102, v103, v107). |
 | **v107** — una sonda de la prueba buscaba las casillas por `textContent==='Marcar'` y daba **cero**: el botón lleva el símbolo ☐ pegado al texto, así que el contenido real era «☐Marcar». Parecía que las casillas no se pintaban. | Un botón con icono no tiene el texto que crees. Busca por el `onclick` —que es exacto y es lo que de verdad hace— y no por lo que se lee. Y de paso, esa sonda encontró un botón de 34 px que llevaba una versión colado: **medir lo visible paga, aunque el fallo no sea el que buscabas**. |
+| **v108** — convertir las expresiones de `CAT_SUBGRUPOS` a listas de palabras parecía mecánico y movió **44 actividades** de grupo en la primera medición. Ninguna era culpa del concepto: `\s?` emitía solo «den glass» y perdía «denglass»; `rot[oa]s?` dejaba la interrogación dentro y no casaba nunca; y la tabla de acentos del SQL de prueba mapeaba `ñ` a `e`, así que «pañete» no encontraba «panete». Con las tres arregladas: **cero**. | Una conversión «mecánica» de expresión a texto tiene más trampas de las que se ven leyendo. Lo único que las cazó fue **medir el antes y el después contra la base entera**, no revisar el conversor. Y dos de las tres estaban en el arnés, no en el app: cuando una medición da un número raro, **sospecha primero de lo que mide**. |
+| **v108** — dos sondas de la prueba daban «no cambia nada» y parecían un fallo: una editaba las palabras del grupo que va DESPUÉS (y gana el primero que coincide, así que no podía cambiar nada), y la otra escribía en un doble que no aplicaba las escrituras, así que al recargar volvía el estado viejo. | Para probar una regla de prioridad hay que tocar el lado que MANDA, no el que obedece. Y un doble que se traga las escrituras solo sirve mientras nada relea: en cuanto el código hace `cargarCatalogo()` después de escribir, el doble tiene que comportarse como la base o la prueba miente. |
 | **v105** — la prueba esperaba con `window.S && S.acts.length`, y `S` se declara con `let`: **no está en `window`**. La guarda daba siempre falso y la prueba se quedó 60 s dando por hecho que el app no había cargado. Antes de eso, buscaba el agrupador entre los `<button>` y el visible es un `<select>` —las pastillas con esas etiquetas viven en el panel de Filtros, plegado. | Un `let` de nivel superior es un global, pero **no una propiedad de `window`**: preguntar por `window.X` miente sin error. Y antes de dar por rota una pantalla, comprueba que estás tocando el control que el usuario ve — es otra vez el v58. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
@@ -1383,6 +1474,7 @@ orden de magnitud.
 | `obra_ordenes_compra` | Órdenes a proveedores. | ~72 |
 | `obra_config` | Configuración compartida, clave/valor. | — |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
+| `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. | 48 + 44 |
 | `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
 
 ### Cosas de los datos que hay que saber
