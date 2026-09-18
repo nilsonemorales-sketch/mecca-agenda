@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260918_111';
+const APP_VERSION='20260918_112';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -18799,60 +18799,184 @@ function _nodoNuevoOrden(pid){
    mano el día que lo necesite.
 
    TODOS NACEN `rama`. Ningún entregable se inventa: los marca él. */
+/* ══ v112 · LA JERARQUÍA SALE DEL CRONOGRAMA DEL DUEÑO ═══════════════════
+   Pasó su MS Project —«PLANIFICACION MECCA», 285 tareas, 159 días— y dijo:
+   «toma esto de guía para las jerarquías». Su cronograma ordena así:
+
+     proyecto → NIVEL del edificio → CAPÍTULO → ELEMENTO → OPERACIÓN
+
+   y EL NIVEL VA ARRIBA DEL CAPÍTULO. La v111 lo había puesto al revés
+   (capítulo → grupo), que es como se clasifica para pagar, no como se
+   construye.
+
+   NO HAY QUE INVENTAR NADA: el nivel de «elemento» ya estaba en la base. Las
+   274 subpartidas del presupuesto SON los elementos —comprobado contra el
+   BAJO NIVEL DE PISO: Replanteo, Zapata ZR-1…ZR-6, Platea de fundación, Muro
+   Cisterna, Platea Cisterna, Viga/Losa/Tapa Cisterna, Rampa— y su campo
+   `seccion` ES el nivel.
+
+   EL PROBLEMA HONESTO, Y POR QUÉ HAY DOS RAMAS: el presupuesto costeó UN
+   NIVEL TIPO y lo multiplicó, así que tiene 4 niveles («SEGUNDO NIVEL», no 2A
+   ni 2B). La obra registrada vive en los sitios reales — 29 ubicaciones sobre
+   18 niveles. Forzar lo segundo dentro de lo primero sería mentir sobre
+   dónde está el trabajo, así que cuelgan de ramas distintas Y SE DICE EN
+   PANTALLA: una es lo costeado, la otra lo registrado. */
+var NODO_RAIZ='PLANIFICACIÓN MECCA';
+var NODO_ACABADOS='ACABADOS Y TERMINACIÓN';
+/* Las operaciones que el cronograma repite bajo cada elemento, con SU nombre.
+   NO SE SIEMBRAN: 274 elementos × 6 serían 1.644 nodos vacíos que nadie pidió.
+   Son plantilla — un botón dentro del elemento— y el dueño quita los que no
+   apliquen. */
+var CAT_OPERACIONES=['Subida de Materiales','Nivelación y Compactación','Envarillado',
+                     'Encofrado','Vaciado','Desencofrado'];
+
+/* De qué capítulo y de qué grupo es una actividad, MIRANDO LA ACTIVIDAD y no
+   la partida activa. Hace falta porque hoy hay 4 actividades vivas colgadas de
+   una partida DESACTIVADA (las dejó `catJuntarEn` al juntar dos partidas): con
+   `_catAgendaDe`, que filtra por activo, esas cuatro no salen en ningún
+   capítulo y la siembra las perdería. Ninguna se queda fuera. */
+function _nodoCapGrupoDe(a){
+  var pid=_catA()[a.id];
+  var p=pid?_catPorId(pid):null;
+  if(!p || _catEsSub(p)) return {cap:'0', grupo:''};
+  return {cap:String(p.capitulo||'0'), grupo:_catGrupoDe(p)||''};
+}
+/* El retrato de lo que se va a sembrar, calculado ANTES de escribir nada: la
+   pantalla dice cuántos nodos van a salir y de dónde. */
 function _nodoPlanSiembra(){
-  var caps=[], total=0;
-  _capsLista().forEach(function(c){
-    var ps=_catAgendaDe(c.n);
-    var acts=[]; ps.forEach(function(p){ acts=acts.concat(_catActsDe(p.id)); });
-    if(!acts.length) return;
-    var grupos=[];
-    _catGruposDe(c.n).forEach(function(g){
-      var ga=_catActsDeGrupo(c.n,g);
-      if(ga.length) grupos.push({nombre:g, acts:ga});
-    });
-    caps.push({cap:c.n, nombre:c.n+' · '+c.t, acts:acts, grupos:grupos});
-    total+=acts.length;
+  /* ── RAMA 1: lo COSTEADO, del presupuesto de 2024 ── */
+  var porSec={};
+  _catSubs().forEach(function(sp){
+    var sec=String(sp.seccion||'').trim()||'Sin nivel';
+    var S1=porSec[sec]||(porSec[sec]={nivel:sec, caps:{}, n:0});
+    var cap=String(sp.capitulo||'0');
+    (S1.caps[cap]=S1.caps[cap]||[]).push(sp);
+    S1.n++;
   });
-  var nodos=caps.length+caps.reduce(function(n,c){ return n+c.grupos.length; },0);
-  return {caps:caps, nodos:nodos, actividades:total};
+  var niveles=Object.keys(porSec).sort(function(x,y){
+    return _catSeccOrden(x)-_catSeccOrden(y) || x.localeCompare(y,'es');
+  }).map(function(k){ return porSec[k]; });
+  /* ── RAMA 2: lo REGISTRADO, la agenda, en los sitios reales ── */
+  var porNiv={};
+  _catTodas().forEach(function(a){
+    var area=String(a.area||'').trim()||PAL_SIN_UBIC;
+    var niv=_catNivel(area);
+    var cg=_nodoCapGrupoDe(a);
+    var N=porNiv[niv]||(porNiv[niv]={nivel:niv, ubics:{}, n:0});
+    /* Si el área NO lleva guión —Parqueo, Terraza, General— el nivel Y la
+       ubicación son la misma cosa: se usa una sola, no dos iguales anidadas. */
+    var uk=(area===niv)?'':area;
+    var U=N.ubics[uk]||(N.ubics[uk]={area:area, propio:(uk===''), caps:{}, n:0});
+    var C=U.caps[cg.cap]||(U.caps[cg.cap]={cap:cg.cap, grupos:{}, sueltas:[], n:0});
+    if(cg.grupo) (C.grupos[cg.grupo]=C.grupos[cg.grupo]||[]).push(a);
+    else C.sueltas.push(a);
+    C.n++; U.n++; N.n++;
+  });
+  var acab=Object.keys(porNiv).sort(function(x,y){
+    return _catNivelOrden(x)-_catNivelOrden(y) || x.localeCompare(y,'es');
+  }).map(function(k){ return porNiv[k]; });
+  /* La cuenta de nodos, para poder decirla antes de crearlos. */
+  var nPres=niveles.length, nElem=0;
+  niveles.forEach(function(N){ nPres+=Object.keys(N.caps).length;
+    Object.keys(N.caps).forEach(function(c){ nElem+=N.caps[c].length; }); });
+  nPres+=nElem;
+  var nAcab=1;
+  acab.forEach(function(N){
+    nAcab++;
+    Object.keys(N.ubics).forEach(function(uk){
+      var U=N.ubics[uk];
+      if(!U.propio) nAcab++;
+      Object.keys(U.caps).forEach(function(ck){
+        nAcab++; nAcab+=Object.keys(U.caps[ck].grupos).length;
+      });
+    });
+  });
+  return {niveles:niveles, acabados:acab,
+          nodos:1+nPres+nAcab, elementos:nElem,
+          actividades:_catTodas().length};
+}
+/* El guardia de la regla 1: NO se resiembra sobre trabajo del dueño. Un
+   entregable marcado o una nota escrita son decisiones suyas que la siembra
+   borraría, así que se para y se dice CUÁL. */
+function _nodoCurado(){
+  return _nodos().filter(function(n){
+    return n.tipo==='entregable' || String(n.notas||'').trim();
+  });
 }
 async function nodosSembrar(){
   if(!isAdmin()){ showToast('Solo el administrador','warn',4000); return; }
-  /* EL MISMO GUARDIA DE LA v102: sembrar encima borraría el plan que el dueño
-     armó a mano. Migrar es una decisión; arrasar no. */
-  if(_nodos().length){
-    showToast('El plan ya tiene '+_nodos().length+' nodos. Sembrar otra vez los duplicaría: '+
-              'no se hace.','err',8000);
+  var curados=_nodoCurado();
+  if(curados.length){
+    showToast('No se resiembra: hay '+curados.length+' nodo'+(curados.length!==1?'s':'')+
+      ' con trabajo tuyo («'+curados.slice(0,3).map(function(n){ return n.nombre; }).join('», «')+
+      '»). Sembrar encima lo borraría.','err',10000);
     return;
   }
   var plan=_nodoPlanSiembra();
   if(!plan.nodos){ showToast('No hay nada que sembrar todavía','warn',4000); return; }
-  if(!confirm('Se van a crear '+plan.nodos+' nodos —uno por capítulo con actividades y uno por '+
-      'grupo— y a colgar '+plan.actividades+' actividades.\n\nNo se toca el catálogo: ni las '+
-      'partidas, ni sus amarres, ni los capítulos.\n\n¿Seguro?')) return;
+  var viejos=_nodos().length;
+  if(!confirm('El árbol toma la jerarquía de tu cronograma: nivel → capítulo → elemento.\n\n'+
+      'Se crean '+plan.nodos+' nodos ('+plan.elementos+' elementos del presupuesto) y se cuelgan '+
+      plan.actividades+' actividades.\n'+
+      (viejos?('Se quitan los '+viejos+' nodos de antes. No tienen entregables ni notas.\n'):'')+
+      '\nNo se toca el catálogo: ni las partidas, ni sus amarres, ni los capítulos.\n\n¿Seguro?')) return;
   setSS('syncing','Sembrando el plan…');
-  var filas=[], amarres=[];
-  plan.caps.forEach(function(c, i){
-    var nidC='nc_'+String(c.cap).replace(/[^A-Za-z0-9]/g,'')+'_'+uid().slice(-5);
-    filas.push({id:nidC, padre_id:null, nombre:c.nombre, tipo:'rama', clase:null,
-                orden:i*100, activo:true, notas:null});
-    var conGrupo={};
-    c.grupos.forEach(function(g, j){
-      var nidG='ng_'+uid().slice(-7)+'_'+j;
-      filas.push({id:nidG, padre_id:nidC, nombre:g.nombre, tipo:'rama', clase:null,
-                  orden:j*10, activo:true, notas:null});
-      g.acts.forEach(function(a){
-        conGrupo[a.id]=1;
-        amarres.push({id:uid(), nodo_id:nidG, actividad_id:a.id});
+  var filas=[], amarres=[], o=0;
+  var nodo=function(padre, nombre, origen, ref, orden){
+    var id='nd_'+uid()+'_'+(o++);
+    filas.push({id:id, padre_id:padre, nombre:nombre, tipo:'rama', clase:null,
+                orden:orden, activo:true, notas:null, origen:origen, ref:ref||null});
+    return id;
+  };
+  var raiz=nodo(null, NODO_RAIZ, 'raiz', null, 0);
+  /* ── lo COSTEADO ── */
+  plan.niveles.forEach(function(N, i){
+    var nn=nodo(raiz, N.nivel, 'nivel', null, i*100);
+    Object.keys(N.caps).sort(function(x,y){
+      return String(x).localeCompare(String(y),'es',{numeric:true});
+    }).forEach(function(cap, j){
+      var nc=nodo(nn, cap+' · '+_catCapNom(cap), 'capitulo', cap, j*10);
+      N.caps[cap].slice().sort(function(a,b){
+        return String(a.numero).localeCompare(String(b.numero),'es',{numeric:true});
+      }).forEach(function(sp, k){
+        /* EL ELEMENTO ES LA SUBPARTIDA, con su nombre y su código del Excel.
+           `ref` guarda su id: así el avance a mano del elemento ES el de su
+           línea del presupuesto (v110), sin inventar otro sitio donde
+           guardarlo. */
+        nodo(nc, sp.nombre, 'elemento', sp.id, k*10);
       });
     });
-    /* Las que no cayeron en ningún grupo se cuelgan del capítulo. Así las
-       2.466 quedan en alguno: ninguna se pierde por el camino. */
-    c.acts.forEach(function(a){
-      if(!conGrupo[a.id]) amarres.push({id:uid(), nodo_id:nidC, actividad_id:a.id});
+  });
+  /* ── lo REGISTRADO ── */
+  var na=nodo(raiz, NODO_ACABADOS, 'acabados', null, plan.niveles.length*100+100);
+  plan.acabados.forEach(function(N, i){
+    var nn=nodo(na, N.nivel, 'nivel-real', null, i*100);
+    Object.keys(N.ubics).forEach(function(uk, j){
+      var U=N.ubics[uk];
+      var nu=U.propio ? nn : nodo(nn, U.area, 'ubicacion', U.area, j*10);
+      Object.keys(U.caps).sort(function(x,y){
+        return String(x).localeCompare(String(y),'es',{numeric:true});
+      }).forEach(function(cap, k){
+        var C=U.caps[cap];
+        var nc=nodo(nu, cap+' · '+_catCapNom(cap), 'capitulo-real', cap, k*10);
+        Object.keys(C.grupos).forEach(function(g, m){
+          var ng=nodo(nc, g, 'grupo', g, m*10);
+          C.grupos[g].forEach(function(a){ amarres.push({id:uid(), nodo_id:ng, actividad_id:a.id}); });
+        });
+        /* Las que no caen en ningún grupo se cuelgan del capítulo: así NINGUNA
+           queda suelta. */
+        C.sueltas.forEach(function(a){ amarres.push({id:uid(), nodo_id:nc, actividad_id:a.id}); });
+      });
     });
   });
   try{
+    /* Se borra lo viejo PRIMERO y en su orden: los amarres antes que los nodos,
+       porque un amarre sin nodo no lo lee nadie y un nodo sin amarres sí se ve.
+       Si esto se cayera a la mitad, el plan queda corto pero no incoherente. */
+    if(viejos){
+      await sb('obra_nodo_actividad?id=not.is.null',{method:'DELETE',prefer:'return=minimal'});
+      await sb('obra_nodos?id=not.is.null',{method:'DELETE',prefer:'return=minimal'});
+    }
     for(var i=0;i<filas.length;i+=100)
       await sb('obra_nodos',{method:'POST',prefer:'return=minimal',
                body:JSON.stringify(filas.slice(i,i+100))});
@@ -18860,8 +18984,10 @@ async function nodosSembrar(){
       await sb('obra_nodo_actividad',{method:'POST',prefer:'return=minimal',
                body:JSON.stringify(amarres.slice(j,j+300))});
     logCambio('creado','plan','siembra','El plan',
-      'plan sembrado: '+filas.length+' nodos, '+amarres.length+' actividades colgadas');
+      'árbol sembrado con la jerarquía del cronograma: '+filas.length+' nodos ('+
+      plan.elementos+' elementos), '+amarres.length+' actividades colgadas');
     await cargarCatalogo();
+    S.nodoAbiertos={}; S.nodoAbiertos[raiz]=1;
     setSS('ok','✓');
     showToast(filas.length+' nodos y '+amarres.length+' actividades ✓');
   }catch(e){
@@ -18869,6 +18995,51 @@ async function nodosSembrar(){
     showToast('No se pudo sembrar: '+((e&&e.message)||''),'err',9000);
   }
   renderCatalogo();
+}
+
+/* ── LAS OPERACIONES, COMO PLANTILLA ──
+   El cronograma repite el mismo juego de verbos bajo cada elemento. Sembrarlos
+   daría 1.644 nodos vacíos, así que se ponen de una vez cuando hacen falta y
+   el dueño quita los que no apliquen. */
+async function nodoOperaciones(id){
+  var n=_nodoPorId(id); if(!n) return;
+  if(!isAdmin()){ showToast('Solo el administrador','warn',4000); return; }
+  var ya=_nodoHijos(id).filter(function(h){ return h.origen==='operacion'; });
+  if(ya.length){ showToast('Este elemento ya tiene sus '+ya.length+' operaciones','warn',5000); return; }
+  var base=_nodoNuevoOrden(id);
+  var filas=CAT_OPERACIONES.map(function(t,i){
+    return {id:'nd_'+uid()+'_op'+i, padre_id:id, nombre:t, tipo:'rama', clase:null,
+            orden:base+i*10, activo:true, notas:null, origen:'operacion', ref:null};
+  });
+  setSS('syncing','Añadiendo…');
+  try{
+    await sb('obra_nodos',{method:'POST',prefer:'return=minimal',body:JSON.stringify(filas)});
+    filas.forEach(function(f){ (S.nodos=S.nodos||[]).push(f); });
+    S.nodoAbiertos=S.nodoAbiertos||{}; S.nodoAbiertos[id]=1;
+    logCambio('creado','plan',id,n.nombre,'añadidas las '+filas.length+' operaciones del cronograma');
+    setSS('ok','✓'); showToast(filas.length+' operaciones ✓');
+  }catch(e){ setSS('err','Error'); showToast('No se pudo: '+((e&&e.message)||''),'err',8000); }
+  renderCatalogo();
+}
+/* De qué rama cuelga un nodo: lo COSTEADO o lo REGISTRADO. Se usa para
+   avisarlo en pantalla, que es la regla 6. */
+function _nodoRama(id){
+  var r=_nodoRuta(id);
+  for(var i=0;i<r.length;i++){
+    if(r[i].origen==='acabados') return 'acabados';
+    if(r[i].origen==='nivel')    return 'presupuesto';
+  }
+  return '';
+}
+var NODO_AVISO_RAMAS='<b>Dos formas de cortar la misma obra.</b> '+
+  '«'+NODO_RAIZ+'» es <b>lo costeado</b>: el presupuesto de 2024, que costeó un nivel tipo '+
+  'y lo multiplicó — por eso dice «SEGUNDO NIVEL» y no 2A ni 2B, y por eso sus elementos '+
+  'no tienen actividades. «'+NODO_ACABADOS+'» es <b>lo registrado</b>: la agenda, en los '+
+  'sitios reales de la obra. Los números de una rama y de la otra no se suman.';
+function _nodoAvisoRamasHTML(){
+  return '<div style="margin:0 0 12px;padding:11px 13px;border-radius:12px;'+
+    'background:var(--amber-light);border:1.5px solid var(--amber);color:var(--amber);'+
+    'font-size:11.5px;line-height:1.55">'+NODO_AVISO_RAMAS+'</div>';
 }
 
 /* ── LO QUE SE HACE EN EL ÁRBOL ── */
@@ -19500,7 +19671,15 @@ function _catArbolFilaHTML(n, prof){
     '<button onclick="nodoIr('+_catQ(n.id)+')" class="cat-fila-nom" style="background:none;border:0;'+
       'text-align:left;cursor:pointer;color:var(--text);font-family:var(--font);padding:0;min-height:44px">'+
       (entre?'<span class="cat-fila-que" style="color:var(--green)">Entregable'+
-        (n.clase?' · '+esc(n.clase):'')+'</span>':'')+
+        (n.clase?' · '+esc(n.clase):'')+'</span>'
+       /* La fila dice QUÉ ES, como las de la v110: un elemento del presupuesto
+          y un grupo de trabajo no son la misma cosa aunque se vean igual. */
+       :({nivel:'Nivel · presupuesto', elemento:'Elemento', acabados:'Lo registrado',
+          'nivel-real':'Nivel', ubicacion:'Ubicación', grupo:'Clasificación',
+          operacion:'Operación'}[n.origen]
+         ? '<span class="cat-fila-que">'+esc({nivel:'Nivel · presupuesto', elemento:'Elemento',
+             acabados:'Lo registrado','nivel-real':'Nivel', ubicacion:'Ubicación',
+             grupo:'Clasificación', operacion:'Operación'}[n.origen])+'</span>' : ''))+
       esc(n.nombre)+
       (dir.length?'<span class="cat-fila-que" style="text-transform:none;letter-spacing:0;'+
         'font-weight:600;font-family:var(--mono);margin-top:2px">'+dir.length+' aquí mismo</span>':'')+
@@ -19540,6 +19719,13 @@ function _catArbolHTML(){
       'No se pudo leer el plan ('+esc(S.nodosErr)+'). El resto del módulo funciona igual.</div>';
   if(S.nodoSel) return h+_catNodoHTML();
   var raices=_nodoHijos(null);
+  /* LA RAÍZ SE ABRE SOLA la primera vez. Con el árbol del cronograma hay una
+     sola raíz —«PLANIFICACIÓN MECCA»— y una sesión nueva enseñaba UNA fila
+     cerrada: el plan entero parecía vacío hasta que alguien adivinara que hay
+     que tocar el triangulito. */
+  if(raices.length===1 && !Object.keys(S.nodoAbiertos||{}).length){
+    S.nodoAbiertos=S.nodoAbiertos||{}; S.nodoAbiertos[raices[0].id]=1;
+  }
   h+='<div style="font-size:19px;font-weight:800;margin:2px 0 3px">El plan</div>'+
      '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
        'El otro eje: el capítulo dice si cuadra con lo contratado, el plan dice <b>qué falta para '+
@@ -19562,10 +19748,17 @@ function _catArbolHTML(){
   var tot=_catAvance((function(){ var m={},o=[];
     raices.forEach(function(r){ _nodoActsTodas(r.id).forEach(function(a){ if(!m[a.id]){m[a.id]=1;o.push(a);} }); });
     return o; })());
+  /* LAS ACTIVIDADES DEL PLAN SE CUENTAN VIVAS, no por filas de la tabla de
+     amarres. Hoy hay 21 amarres apuntando a actividades borradas —`Acciones.
+     eliminar` no limpia el amarre— y contar filas diría 2.466 donde hay 2.445.
+     Un número de más en la portada es de los que nadie vuelve a comprobar. */
+  var _vivas={}; (S.nodoAmarres||[]).forEach(function(r){ if(_findActAny(r.actividad_id)) _vivas[r.actividad_id]=1; });
+  var _huerf=(S.nodoAmarres||[]).length-Object.keys(_vivas).length;
   h+='<div style="margin:0 0 12px;padding:11px 13px;border-radius:12px;background:var(--bg2);'+
      'border:1.5px solid var(--border);font-size:11.5px;font-family:var(--mono);color:var(--text2);line-height:1.7">'+
-     _nodos().length+' nodos · '+(S.nodoAmarres||[]).length+' actividades en el plan<br>'+
+     _nodos().length+' nodos · '+Object.keys(_vivas).length+' actividades en el plan<br>'+
      'En total: '+_catAvanceHTML(tot)+'</div>';
+  h+=_nodoAvisoRamasHTML();
   h+='<button onclick="nodoNuevoAbrir(null)" style="'+_catBS+';width:100%;margin-bottom:10px;min-height:48px;'+
      'border:1.5px dashed var(--border2);background:none;color:var(--text3);font-weight:700">'+
      '+ Nodo al primer nivel</button>';
@@ -19574,6 +19767,20 @@ function _catArbolHTML(){
   h+='<button onclick="catFueraAbrir()" style="'+_catBS+';width:100%;margin-top:10px;min-height:48px;'+
      'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-weight:700">'+
      'Lo que está fuera del plan</button>';
+  /* RESEMBRAR SOLO MIENTRAS NO HAYA TRABAJO DEL DUEÑO DENTRO. Con un
+     entregable marcado o una nota escrita, el botón dice por qué no se puede
+     en vez de desaparecer: un botón que se esfuma no explica nada. */
+  var _cur=_nodoCurado();
+  h+='<button onclick="nodosSembrar()" style="'+_catBS+';width:100%;margin-top:8px;min-height:48px;'+
+     'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3);font-weight:700'+
+     (_cur.length?';opacity:.55':'')+'">'+
+     (_cur.length
+       ? 'No se resiembra: hay '+_cur.length+' nodo'+(_cur.length!==1?'s':'')+' con entregables o notas'
+       : 'Volver a sembrar con la jerarquía del cronograma')+'</button>';
+  if(_huerf>0)
+    h+='<div style="margin-top:8px;font-size:11px;color:var(--text3);line-height:1.5">'+
+      _huerf+' amarre'+(_huerf!==1?'s':'')+' del plan apunta'+(_huerf!==1?'n':'')+
+      ' a actividades que se borraron. No se cuentan, y se van al resembrar.</div>';
   return h+'<div style="height:110px"></div>';
 }
 /* La ficha de un nodo: sus números, sus botones y su trabajo. */
@@ -19592,8 +19799,43 @@ function _catNodoHTML(){
     h+='<div style="display:inline-block;font-size:10.5px;font-weight:800;color:var(--green);'+
       'background:var(--green-light);border:1px solid var(--green);border-radius:8px;'+
       'padding:2px 8px;margin-bottom:5px">ENTREGABLE'+(n.clase?' · '+esc(n.clase).toUpperCase():'')+'</div>';
-  h+='<div style="font-size:12px;font-family:var(--mono);margin:3px 0 4px">'+_catAvanceHTML(av)+'</div>'+
+  /* QUÉ ES ESTE NODO, y de qué rama cuelga. Sin esto, «Zapata ZR-1» y
+     «Zócalos» se ven igual y son cosas distintas: una es un elemento costeado
+     en 2024 y la otra un grupo de trabajo registrado hoy. */
+  var _ETQ={raiz:'Proyecto', nivel:'Nivel · presupuesto', capitulo:'Capítulo',
+            elemento:'Elemento del presupuesto', acabados:'Lo registrado',
+            'nivel-real':'Nivel', ubicacion:'Ubicación', 'capitulo-real':'Capítulo',
+            grupo:'Clasificación', operacion:'Operación'};
+  if(_ETQ[n.origen])
+    h+='<div class="cat-fila-que" style="margin:0 0 4px">'+esc(_ETQ[n.origen])+
+       (n.origen==='elemento'&&n.ref?' · <span style="font-family:var(--mono);text-transform:none">'+
+         esc(String((_catPorId(n.ref)||{}).numero||''))+'</span>':'')+'</div>';
+  h+='<div style="font-size:12px;font-family:var(--mono);margin:3px 0 4px">'+
+     /* EL AVANCE A MANO DEL ELEMENTO ES EL DE SU LÍNEA DEL PRESUPUESTO (v110):
+        el elemento ES esa línea, así que no se inventa otro sitio donde
+        guardarlo ni otro número que pueda contradecirla. */
+     (n.origen==='elemento'&&n.ref ? _catAvanceConManoHTML(av,'sub',n.ref) : _catAvanceHTML(av))+
+     '</div>'+
      _catBarraHTML(av);
+  if(n.origen==='raiz' || n.origen==='acabados' || n.origen==='nivel')
+    h+='<div style="height:8px"></div>'+_nodoAvisoRamasHTML();
+  if(n.origen==='elemento'){
+    var _ops=_nodoHijos(n.id).filter(function(x){ return x.origen==='operacion'; });
+    h+='<div style="height:8px"></div>'+
+      '<button onclick="nodoOperaciones('+_catQ(n.id)+')" style="'+_catBS+';width:100%;min-height:46px;'+
+      'font-size:12px;border:1.5px '+(_ops.length?'solid var(--border2)':'dashed var(--accent)')+';'+
+      'background:'+(_ops.length?'var(--bg2)':'none')+';color:'+(_ops.length?'var(--text3)':'var(--accent)')+'"'+
+      (_ops.length?' disabled':'')+'>'+
+      (_ops.length?'Ya tiene sus '+_ops.length+' operaciones'
+                  :'Añadir las '+CAT_OPERACIONES.length+' operaciones del cronograma')+'</button>'+
+      '<div style="font-size:11px;color:var(--text3);line-height:1.5;margin-top:5px">'+
+      esc(CAT_OPERACIONES.join(' · '))+'. Quita las que no apliquen.</div>';
+    if(isAdmin() && n.ref)
+      h+='<button onclick="catManualAbrir(\'sub\','+_catQ(n.ref)+','+_catQ(n.nombre)+')" '+
+        'style="'+_catBS+';width:100%;margin-top:6px;min-height:46px;font-size:11.5px;'+
+        'border:1.5px dashed var(--amber);background:none;color:var(--amber)">'+
+        (_catManual('sub',n.ref)?'Cambiar el avance a mano':'Poner el avance a mano')+'</button>';
+  }
   if(n.notas)
     h+='<div style="margin:8px 0 0;padding:10px 12px;border-radius:11px;background:var(--amber-light);'+
       'border:1.5px solid var(--amber);color:var(--amber);font-size:12px;line-height:1.5">'+
