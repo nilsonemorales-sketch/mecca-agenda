@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260918_116';
+const APP_VERSION='20260919_117';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -19010,9 +19010,20 @@ function _nodoNum(v){
 }
 /* Pesos dominicanos con separador de miles. En la FILA van sin centavos —a
    390px cada carácter cuenta— y en la ficha con ellos: ahí sí hay sitio y ahí
-   es donde se cuadra contra el presupuesto. */
-function _nodoCosto(v, conCentavos){
+   es donde se cuadra contra el presupuesto.
+
+   Y CON `corto`, ABREVIADO (v117). El dueño hizo una captura del cronograma en
+   su iPhone y la celda decía «$94,90…»: un número a medias miente más que uno
+   redondeado, porque no se sabe si son noventa mil o noventa millones. En la
+   fila va «$94.9 MM» y «$992.6 k», que es como se dice en obra; el número
+   exacto sigue entero en la ficha, que es donde se cuadra la plata. */
+function _nodoCosto(v, conCentavos, corto){
   var n=_nodoNum(v); if(n===null) return '';
+  if(corto){
+    var a=Math.abs(n), s=(n<0?'-$':'$');
+    if(a>=1e6) return s+(a/1e6).toFixed(1)+' MM';
+    if(a>=1e5) return s+(a/1e3).toFixed(1)+' k';
+  }
   try{
     return '$'+n.toLocaleString('es-DO',{minimumFractionDigits:conCentavos?2:0,
                                          maximumFractionDigits:conCentavos?2:0});
@@ -19083,6 +19094,9 @@ function _nodoDiasAtraso(n){
   catch(e){ return 0; }
 }
 var NODO_EST_TXT={vencida:'vencida', encurso:'en curso', porvenir:'aún no toca'};
+/* De cuántos responsables distintos en adelante la columna QUIÉN deja de dar
+   un nombre y dice cuántos son. Ver `_nodoQuien`. */
+var NODO_QUIEN_MAX=3;
 function _nodoEstadoHTML(n){
   var e=_nodoEstado(n); if(!e) return '';
   if(e==='vencida'){
@@ -19196,7 +19210,10 @@ function _nodoBarraTiempoHTML(){
       'min-height:46px;font-size:11.5px;border:1.5px solid '+(on?col:'var(--border2)')+';'+
       'background:'+(on?col.replace(')','-light)').replace('var(--red-light)','var(--red-light)'):'var(--bg2)')+';'+
       'color:'+(on?col:'var(--text2)')+'">'+
-      '<span style="font-family:var(--mono);font-weight:800">'+n+'</span> '+txt+'</button>';
+      /* El número y la palabra SEPARADOS (v117): salían pegados —«144vencidas»—
+         porque un espacio suelto entre dos cajas se lo come el ajuste de línea
+         cuando el botón va justo. Con `&nbsp;` y un margen no se puede comer. */
+      '<span style="font-family:var(--mono);font-weight:800;margin-right:4px">'+n+'</span>&nbsp;'+txt+'</button>';
   };
   return '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
     chip('vencida','vencidas','var(--red)')+
@@ -20382,8 +20399,12 @@ function _catVistaSelHTML(){
     'padding:6px 0 7px;margin:-6px 0 4px;display:flex;gap:5px">'+
     CAT_VISTAS.map(function(v){
       var on=(catVista()===v[0]);
+      /* SIN MARCO (v117). Los cinco iban con borde y el puesto lo llevaba en
+         morado claro: en el teléfono se lee como un recuadro rosado alrededor
+         de toda la barra y tapa lo que sí importa, que es cuál está puesto.
+         Sin borde, el puesto se distingue por el relleno y ya. */
       return '<button onclick="catVistaSet('+_catQ(v[0])+')" style="'+_catBS+';flex:1;min-height:44px;'+
-        'font-size:12px;border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+        'font-size:12px;padding:0 6px;border:0;'+
         'background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
         'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+v[1]+'</button>';
     }).join('')+'</div>';
@@ -20614,6 +20635,12 @@ function _nodoQuien(id){
   var ks=Object.keys(m);
   if(!ks.length) return {nombre:'', n:0, otros:0};
   ks.sort(function(x,y){ return m[y]-m[x]; });
+  /* CON MUCHOS RESPONSABLES, NINGUNO ES EL RESPONSABLE (v117). En la raíz
+     salía «Dimedes Estebe…» porque es quien más se repite entre 2.445
+     actividades — y eso no es quién hace el cronograma entero, es ruido con
+     nombre propio. De cuatro para arriba se dice cuántos son y ya. */
+  if(ks.length>NODO_QUIEN_MAX)
+    return {nombre:'varios ('+ks.length+')', n:acts.length, otros:0, varios:true};
   return {nombre:ks[0], n:m[ks[0]], otros:ks.length-1};
 }
 /* LAS FECHAS REALES, de los hechos y no del plan. `obra_cambios` es el único
@@ -20654,9 +20681,38 @@ function _nodoFilasCrono(){
   _nodoHijos(null).forEach(function(r){ mete(r,0); });
   return out;
 }
-var CRONO_COLS=[['quien','Quién',110],['costo','Costo',92],['ini','Comienzo',78],
-                ['fin','Fin',78],['real','Fin real',78],['dias','Días',48]];
-function _catCronoFilaHTML(x, i, total){
+/* ── QUE SE LEA EN EL TELÉFONO (v117) ──
+   «No se lee bien», con una captura del iPhone delante. Decisión suya: tabla,
+   pero que se lea. Así que no hay ni un dato nuevo: se reparten los píxeles de
+   los que ya había.
+
+   · El nombre pasa de 176 a 210px y va en DOS líneas: a 176 no cabía ni
+     «RECONOCIMIENTO DEL SOLAR», y el texto se salía por encima de la columna
+     de al lado porque el `flex:1` no encogía (le faltaba `min-width:0`).
+   · «COMIENZO» no cabía en su cabecera y salía «COMI…». Se llama INICIO, que
+     es más corto y dice lo mismo.
+   · Los anchos llevan holgura a propósito: en el iPhone la tipografía mono es
+     más ancha que la de escritorio, así que lo que cuadra justo aquí sale
+     cortado allá. Es el bug de la v27 otra vez — Chromium no lo reproduce. */
+var CRONO_NOMW=210, CRONO_ESTW=74, CRONO_ATAJOW=72;
+var CRONO_COLS=[['quien','Quién',104],['costo','Costo',86],['ini','Inicio',88],
+                ['fin','Fin',88],['real','Fin real',124],['dias','Días',46]];
+function _cronoAnchoTabla(){
+  return CRONO_NOMW+CRONO_ESTW+(isAdmin()?CRONO_ATAJOW:0)+
+    CRONO_COLS.reduce(function(s,c){ return s+c[2]; },0);
+}
+/* Los seis botones del pliegue no caben en una fila de teléfono, y apretarlos
+   los dejaba de 34px. Tres a la vista —los tres que se usan— y tres detrás de
+   «Más». NO SE CAMBIA LO QUE HACEN: son las mismas seis llamadas. */
+var CRONO_MAS=[['nodoManualAbrir','Avance a mano','dashed var(--amber)','none','var(--amber)'],
+               ['nodoCorrerAbrir','Correr fechas','solid var(--border2)','var(--bg2)','var(--text2)'],
+               ['nodoIr','Abrirla sola','solid var(--border2)','var(--bg2)','var(--text3)']];
+function nodoMasBtns(id){
+  S.nodoMas=S.nodoMas||{};
+  if(S.nodoMas[id]) delete S.nodoMas[id]; else S.nodoMas[id]=1;
+  renderCatalogo();
+}
+function _catCronoFilaHTML(x, i, total, anchoPli){
   var n=x.n, abierta=!!(S.nodoAbiertos||{})[n.id];
   var r=_nodoReal(n.id), hijos=_nodoHijos(n.id).length;
   var est=_nodoEstado(n), q=_nodoQuien(n.id), fr=_nodoFechasReales(n.id);
@@ -20669,21 +20725,33 @@ function _catCronoFilaHTML(x, i, total){
       'text-overflow:ellipsis;white-space:nowrap;flex-shrink:0'+(extra||'')+'">'+txt+'</span>';
   };
   var h='<div style="border-bottom:1px solid var(--border)">'+
-    '<div style="display:flex;align-items:center;min-height:46px;'+
+    '<div style="display:flex;align-items:center;min-height:52px;'+
       (abierta?'background:var(--bg3);':'')+(vacia?'opacity:.62;':'')+'">'+
-      /* EL NOMBRE VA FIJO: es lo único que no se puede perder al desplazarse. */
+      /* EL NOMBRE VA FIJO: es lo único que no se puede perder al desplazarse.
+         Y VA EN DOS LÍNEAS, con corte por palabra. Si aun así no cabe, el
+         recorte es POR EL FINAL —eso hace `-webkit-line-clamp`—, nunca por el
+         principio: el dueño vio «ANIFICACION MECCA» y lo primero que se lee no
+         puede ser una palabra rota. El `min-width:0` es lo que hace que encoja
+         de verdad; sin él el texto se salía por encima de la columna vecina. */
       '<button onclick="nodoAbrir('+_catQ(n.id)+')" style="position:sticky;left:0;z-index:1;'+
         'background:'+(abierta?'var(--bg3)':'var(--bg2)')+';border:0;border-right:1.5px solid var(--border2);'+
-        'width:176px;min-width:176px;min-height:46px;text-align:left;cursor:pointer;'+
-        'padding:5px 7px 5px '+(7+Math.min(x.prof,4)*9)+'px;font-family:var(--font);color:var(--text)">'+
-        '<span style="display:flex;align-items:center;gap:4px">'+
-          '<span style="color:var(--text3);font-size:10px;flex-shrink:0">'+
+        /* EL BOTÓN ES `flex` A PROPÓSITO. El contenido de un `<button>` se mete
+           en una caja anónima que se encoge hasta el texto, así que el nombre
+           se quedaba en 76px de los 196 que hay y partía mucho antes de tiempo;
+           ni `width:100%` lo arregla, porque ese 100% es de la caja encogida.
+           En columna y estirado, las dos filas ocupan el ancho de verdad. */
+        'width:'+CRONO_NOMW+'px;min-width:'+CRONO_NOMW+'px;min-height:52px;text-align:left;cursor:pointer;'+
+        'display:flex;flex-direction:column;justify-content:center;align-items:stretch;'+
+        'padding:6px 7px 6px '+(7+Math.min(x.prof,4)*9)+'px;font-family:var(--font);color:var(--text)">'+
+        '<span style="display:flex;align-items:flex-start;gap:4px">'+
+          '<span style="color:var(--text3);font-size:10px;flex-shrink:0;line-height:1.5">'+
             (hijos?(abierta?'▾':'▸'):'·')+'</span>'+
-          '<span style="font-size:11.5px;font-weight:'+(hijos?'800':'600')+';line-height:1.2;'+
-            'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+esc(n.nombre)+'</span>'+
+          '<span data-nom style="font-size:11.5px;font-weight:'+(hijos?'800':'600')+';line-height:1.25;'+
+            'flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;'+
+            'overflow:hidden;overflow-wrap:break-word">'+esc(n.nombre)+'</span>'+
           /* QUE SE NOTE QUE SE TOCA. Sin esta señal la fila parece una línea de
              tabla muerta y el dueño no sabía que ahí dentro estaba todo. */
-          '<span style="color:var(--text3);font-size:11px;flex-shrink:0;'+
+          '<span style="color:var(--text3);font-size:11px;flex-shrink:0;line-height:1.4;'+
             (abierta?'transform:rotate(90deg);':'')+'">›</span>'+
         '</span>'+
         '<span style="display:flex;align-items:center;gap:5px;margin-top:2px">'+
@@ -20700,50 +20768,59 @@ function _catCronoFilaHTML(x, i, total){
          dos, y en la fila cerrada — que es donde el dueño está mirando.
          NO reescribe nada: llama a `nodoTraerAbrir` y a `catCrearAbrir`. */
       (isAdmin()
-        ? '<span style="display:flex;gap:2px;flex-shrink:0;padding:0 4px">'+
+        ? '<span style="display:flex;gap:2px;flex-shrink:0;padding:0 4px;width:'+CRONO_ATAJOW+'px">'+
           '<button onclick="nodoTraerAbrir('+_catQ(n.id)+')" title="Traer actividades" '+
-            'style="min-width:34px;min-height:44px;border:0;background:none;cursor:pointer;'+
+            'style="min-width:32px;min-height:44px;border:0;background:none;cursor:pointer;'+
             'color:var(--accent);font-size:16px;font-weight:800;padding:0">+</button>'+
           '<button onclick="catCrearAbrir('+_catQ(n.id)+')" title="Crear actividad aquí" '+
-            'style="min-width:34px;min-height:44px;border:0;background:none;cursor:pointer;'+
+            'style="min-width:32px;min-height:44px;border:0;background:none;cursor:pointer;'+
             'color:var(--green);font-size:14px;padding:0">✎</button></span>'
         : '')+
-      cel(q.nombre?esc(q.nombre)+(q.otros?' +'+q.otros:''):'—',110,';color:var(--text2)')+
-      cel(_nodoCosto(n.costo_plan,false)||'—',92)+
-      cel(_nodoFecha(n.inicio_plan)||'—',78)+
-      cel(_nodoFecha(n.fin_plan)||'—',78,est==='vencida'?';color:var(--red);font-weight:700':'')+
-      cel(fr.fin?_nodoFecha(fr.fin):(fr.inicio?'desde '+_nodoFecha(fr.inicio):'—'),78,
+      cel(q.nombre?esc(q.nombre)+(q.otros?' +'+q.otros:''):'—',CRONO_COLS[0][2],';color:var(--text2)')+
+      /* ABREVIADO: ver `_nodoCosto`. Aquí es donde salía «$94,90…». */
+      cel(_nodoCosto(n.costo_plan,false,true)||'—',CRONO_COLS[1][2])+
+      cel(_nodoFecha(n.inicio_plan)||'—',CRONO_COLS[2][2])+
+      cel(_nodoFecha(n.fin_plan)||'—',CRONO_COLS[3][2],est==='vencida'?';color:var(--red);font-weight:700':'')+
+      cel(fr.fin?_nodoFecha(fr.fin):(fr.inicio?'desde '+_nodoFecha(fr.inicio):'—'),CRONO_COLS[4][2],
           fr.fin?';color:var(--green);font-weight:700':'')+
-      cel((_nodoNum(n.dias_plan)!==null?_nodoNum(n.dias_plan):'—'),48)+
-      cel(est==='vencida'?('▲ '+_nodoDiasAtraso(n)+'d'):(NODO_EST_TXT[est]||''),72,
+      cel((_nodoNum(n.dias_plan)!==null?_nodoNum(n.dias_plan):'—'),CRONO_COLS[5][2])+
+      cel(est==='vencida'?('▲ '+_nodoDiasAtraso(n)+'d'):(NODO_EST_TXT[est]||''),CRONO_ESTW,
           est==='vencida'?';color:var(--red);font-weight:800':'')+
     '</div>';
   /* ── EL PLIEGUE: los botones de ESTA tarea, pegados a la izquierda ── */
   if(abierta){
     var dir=_nodoActsDirectas(n.id);
-    h+='<div style="position:sticky;left:0;width:100%;max-width:100vw;box-sizing:border-box;'+
+    /* EL PLIEGUE MIDE LO QUE MIDE LA PANTALLA, NO LA TABLA. Con `width:100%`
+       medía los 850px del contenedor que se desplaza, así que los botones se
+       repartían a lo ancho de la tabla y la mitad quedaban fuera del teléfono
+       aunque el pliegue estuviera pegado a la izquierda. `max-width:100vw`
+       tampoco valía: 100vw son 390px y lo que de verdad se ve son 359.
+       El ancho se mide del contenedor y se pasa desde `_catArbolHTML`. */
+    var anchoP=anchoPli?('width:'+anchoPli+'px;'):'width:100%;';
+    var mas=!!(S.nodoMas||{})[n.id];
+    h+='<div style="position:sticky;left:0;'+anchoP+'box-sizing:border-box;'+
       'padding:8px 10px 12px;background:var(--bg3)">';
-    if(isAdmin())
-      h+='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">'+
-        '<button onclick="nodoPlanAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
-          'min-height:44px;font-size:11px;border:1.5px solid var(--border2);background:var(--bg2);'+
-          'color:var(--text2)">Fechas y costo</button>'+
-        '<button onclick="nodoManualAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
-          'min-height:44px;font-size:11px;border:1.5px dashed var(--amber);background:none;'+
-          'color:var(--amber)">Avance a mano</button>'+
-        '<button onclick="nodoCorrerAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
-          'min-height:44px;font-size:11px;border:1.5px solid var(--border2);background:var(--bg2);'+
-          'color:var(--text2)">Correr fechas</button>'+
-        '<button onclick="nodoTraerAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
-          'min-height:44px;font-size:11px;border:1.5px solid var(--accent);background:var(--accent-fill);'+
-          'color:var(--accent-on)">Traer actividades</button>'+
-        '<button onclick="catCrearAbrir('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
-          'min-height:44px;font-size:11px;border:1.5px solid var(--green);background:var(--green-light);'+
-          'color:var(--green)">Crear actividad</button>'+
-        '<button onclick="nodoIr('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:104px;'+
-          'min-height:44px;font-size:11px;border:1.5px solid var(--border2);background:var(--bg2);'+
-          'color:var(--text3)">Abrirla sola</button>'+
-      '</div>';
+    if(isAdmin()){
+      var bt=function(fn, txt, borde, fondo, texto){
+        return '<button onclick="'+fn+'('+_catQ(n.id)+')" style="'+_catBS+';flex:1;min-width:98px;'+
+          'min-height:44px;font-size:11px;padding:0 6px;border:1.5px '+borde+';'+
+          'background:'+fondo+';color:'+texto+'">'+txt+'</button>';
+      };
+      /* LOS TRES QUE SE USAN, a la vista. Los otros tres detrás de «Más»:
+         seis en una fila de 359px los dejaba de 34px y en obra no se aciertan.
+         SON LAS MISMAS SEIS LLAMADAS DE SIEMPRE: aquí solo se reparten. */
+      h+='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'+
+        bt('nodoTraerAbrir','Traer actividades','solid var(--accent)','var(--accent-fill)','var(--accent-on)')+
+        bt('catCrearAbrir','Crear actividad','solid var(--green)','var(--green-light)','var(--green)')+
+        bt('nodoPlanAbrir','Fechas y costo','solid var(--border2)','var(--bg2)','var(--text2)')+
+      '</div>'+
+      '<button onclick="nodoMasBtns('+_catQ(n.id)+')" style="'+_catBS+';width:100%;min-height:44px;'+
+        'font-size:11px;margin-bottom:6px;border:1.5px solid var(--border2);background:none;'+
+        'color:var(--text3)">'+(mas?'Menos ⌃':'Más ⌄ ('+CRONO_MAS.length+')')+'</button>'+
+      (mas?'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">'+
+        CRONO_MAS.map(function(m){ return bt(m[0],m[1],m[2],m[3],m[4]); }).join('')+
+        '</div>':'');
+    }
     if(n.pred_plan) h+=_nodoPredsHTML(n);
     if(n.notas)
       h+='<div style="margin:6px 0;font-size:11.5px;color:var(--amber);line-height:1.45">▸ '+esc(n.notas)+'</div>';
@@ -20777,9 +20854,11 @@ function _catArbolHTML(){
       'No se pudo leer el plan ('+esc(S.nodosErr)+'). El resto del módulo funciona igual.</div>';
   if(S.nodoSel) return h+_catNodoHTML();
   var raices=_nodoHijos(null);
+  /* AL ENTRAR, SOLO LA RAÍZ (v117). Se abría también cada hija suya: quince
+     filas de golpe en un teléfono, y la primera decisión del dueño era cerrar
+     cosas. Se abre una y él baja por donde quiera. */
   if(raices.length===1 && !Object.keys(S.nodoAbiertos||{}).length){
     S.nodoAbiertos=S.nodoAbiertos||{}; S.nodoAbiertos[raices[0].id]=1;
-    _nodoHijos(raices[0].id).forEach(function(x){ S.nodoAbiertos[x.id]=1; });
   }
   if(!raices.length){
     h+='<div style="padding:16px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--amber)">'+
@@ -20810,22 +20889,35 @@ function _catArbolHTML(){
   var filas=_nodoFilasCrono();
   h+='<div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-family:var(--mono)">'+
      filas.length+' en pantalla · '+_nodos().length+' tareas · se desplaza a lo ancho →</div>';
-  h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1.5px solid var(--border2);'+
-     'border-radius:12px;background:var(--bg2)"><div style="min-width:740px">';
+  /* SIN `-webkit-overflow-scrolling:touch` (v117). En Safari de iPhone esa
+     propiedad ROMPE `position:sticky` dentro del contenedor: el nombre dejaba
+     de quedarse fijo y al desplazarse a lo ancho se veía su final —«ANIFICACION
+     MECCA»—. En Chromium sticky agarra igual con ella puesta, así que esto NO
+     se caza aquí: es el bug de la v27 otra vez, que pasó las 16 pruebas y
+     tumbó el app en el iPhone. Desde iOS 13 el desplazamiento por inercia es
+     el de serie, así que quitarla no cuesta nada.
+     El ancho útil sale del contenedor REAL, que es lo que mide la pantalla:
+     el pliegue lo necesita para no repartir sus botones a lo ancho de la tabla. */
+  var _cc=document.getElementById('c-catalogo');
+  var anchoPli=Math.max(240,((_cc&&_cc.clientWidth)||357)-3);
+  h+='<div style="overflow-x:auto;border:1.5px solid var(--border2);'+
+     'border-radius:12px;background:var(--bg2)"><div style="min-width:'+_cronoAnchoTabla()+'px">';
   /* La cabecera de la tabla, con el nombre fijo igual que las filas. */
   h+='<div style="display:flex;align-items:center;min-height:30px;background:var(--bg4,var(--bg3));'+
      'border-bottom:1.5px solid var(--border2)">'+
-     '<span style="position:sticky;left:0;z-index:2;background:var(--bg4,var(--bg3));width:176px;'+
-       'min-width:176px;padding:0 7px;font-size:9.5px;font-weight:800;color:var(--text3);'+
+     '<span style="position:sticky;left:0;z-index:2;background:var(--bg4,var(--bg3));width:'+CRONO_NOMW+'px;'+
+       'min-width:'+CRONO_NOMW+'px;padding:0 7px;font-size:9.5px;font-weight:800;color:var(--text3);'+
        'letter-spacing:.5px;border-right:1.5px solid var(--border2);line-height:30px">TAREA · AVANCE</span>'+
+     (isAdmin()?'<span style="min-width:'+CRONO_ATAJOW+'px;flex-shrink:0"></span>':'')+
      CRONO_COLS.map(function(c){
        return '<span style="min-width:'+c[2]+'px;max-width:'+c[2]+'px;padding:0 6px;font-size:9.5px;'+
-         'font-weight:800;color:var(--text3);letter-spacing:.4px;flex-shrink:0">'+esc(c[1].toUpperCase())+'</span>';
+         'font-weight:800;color:var(--text3);letter-spacing:.4px;flex-shrink:0;overflow:hidden;'+
+         'text-overflow:ellipsis;white-space:nowrap">'+esc(c[1].toUpperCase())+'</span>';
      }).join('')+
-     '<span style="min-width:72px;padding:0 6px;font-size:9.5px;font-weight:800;color:var(--text3);'+
-       'letter-spacing:.4px;flex-shrink:0">ESTADO</span>'+
+     '<span style="min-width:'+CRONO_ESTW+'px;padding:0 6px;font-size:9.5px;font-weight:800;'+
+       'color:var(--text3);letter-spacing:.4px;flex-shrink:0">ESTADO</span>'+
      '</div>';
-  filas.forEach(function(x,i){ h+=_catCronoFilaHTML(x,i,filas.length); });
+  filas.forEach(function(x,i){ h+=_catCronoFilaHTML(x,i,filas.length,anchoPli); });
   h+='</div></div>';
   var _pu=_nodoPorUbicar();
   if(_pu)

@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v116 — 18 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v117 — 19 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v109 (18 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v117 (19 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -219,7 +219,8 @@ mismos botones que cualquier otra.
 | **Crear una ubicación que no existe todavía** | **Partidas → Ubicaciones → «+ Nueva ubicación»** — `catUbicNuevaAbrir()` (v116). Vive en `obra_ubicaciones` y nace vacía |
 | **Poner un avance a mano en lo construido antes de mayo-2026** | **Partidas** — `catManualAbrir()`, en el capítulo, en la línea del presupuesto y en la ubicación. Nunca se mezcla con el contado ni sube de nivel |
 | **Armar el plan: jerarquías, entregables y notas** | **Partidas → vista Árbol** — `_catArbolHTML()`, `nodosSembrar()`, `nodoNuevoAbrir()`, `nodoMoverAbrir()`. Es el OTRO eje; no toca el catálogo |
-| **Ver y trabajar el cronograma** | **Partidas → Cronograma** — tabla de filas que se abren con sus botones (v115). Columnas: quién, costo, fechas, fin real, estado |
+| **Ver y trabajar el cronograma** | **Partidas → Cronograma** — tabla de filas que se abren con sus botones (v115). Columnas: quién, costo, inicio, fin, fin real, días, estado. El nombre va fijo a la izquierda, en dos líneas, y el costo abreviado (v117) |
+| **Los otros tres botones de una tarea** | **Partidas → Cronograma → la fila abierta → «Más»** — Avance a mano, Correr fechas y Abrirla sola (v117). Son las mismas llamadas de siempre |
 | **Refechar el plan, que venció en julio** | **Partidas → Cronograma → «Refechar el plan entero»** o «Correr fechas» en una tarea — `nodoCorrerAbrir()`, en días de trabajo y con deshacer |
 | **Ver el atraso y las barras en el tiempo** | **Partidas → vista Tiempo** — `_catTiempoHTML()`, `_nodoEstado()`. La barra se llena con el avance de la obra |
 | **Cambiar fechas, duración, costo o predecesoras** | **Partidas → una tarea → «Fechas y costo»** — `nodoPlanAbrir()`. Deja rastro con viejo y nuevo |
@@ -814,6 +815,74 @@ creyendo que no existía**. Ahora es `position:sticky` con fondo propio: medido,
 tras desplazar 900px estaría en **-678** y se queda en **106** — sigue visible.
 Una línea de 44px que no se mueve, y desde cualquier sitio del módulo se ve
 dónde estás y a dónde puedes ir.
+
+#### QUE SE LEA EN EL TELÉFONO (v117)
+
+Captura del iPhone y tres palabras: **«No se lee bien.»** Y la decisión, suya:
+**tabla, pero que se lea.** No se convirtió en fichas, no se añadió ni un dato ni
+una función nueva. Se repartieron los píxeles que ya había, midiendo.
+
+**El nombre no se corta nunca.** Salía **«ANIFICACION MECCA»**, comido por la
+izquierda. Tres cosas, y las tres hacían falta:
+
+- **`-webkit-overflow-scrolling:touch` ROMPE `position:sticky` en Safari de
+  iPhone.** Se quitó **solo del contenedor del cronograma**; los otros dos del
+  módulo no se tocaron. Desde iOS 13 la inercia es la de serie, así que no
+  cuesta nada. **Esto Chromium no lo reproduce:** ahí sticky agarra con la
+  propiedad puesta, medido en las dos versiones. Es el bug de la v27 otra vez.
+- **176 → 210px y dos líneas**, con corte por palabra (`-webkit-line-clamp:2`).
+  Si aun así no cabe, el recorte es **por el final**, nunca por el principio.
+- **El botón es `display:flex` en columna.** El contenido de un `<button>` se
+  mete en una caja anónima que se encoge hasta el texto: el nombre se quedaba en
+  **76px de los 196** que hay, y **`width:100%` no lo arregla** porque ese 100%
+  es de la caja encogida. Medido: 76 → 178. Antes, además, se salía **por encima
+  de la columna vecina**, porque al `flex:1` le faltaba `min-width:0`.
+
+**Ninguna celda enseña un número a medias.** Salía «$94,90…». El costo se
+abrevia en la FILA —**`$94.9 MM`**, **`$992.6 k`**, y entero por debajo de cien
+mil— con el tercer argumento de `_nodoCosto`; el número exacto **sigue entero en
+la ficha**, que es donde se cuadra la plata. La cabecera dice **INICIO**, que
+cabe; «COMIENZO» salía «COMI…». Medido a 390px: **18 celdas cortadas → 0**.
+
+**Y la cabecera no cuadraba con sus columnas.** Desde la v116 la fila lleva el
+atajo `+ ✎` y la cabecera no dejaba su hueco: las etiquetas iban **72px a la
+izquierda** de sus números, «COSTO» encima de QUIÉN. Se comprueba comparando los
+bordes izquierdos de cabecera y celdas, no leyéndolo.
+
+**Las columnas llevan holgura a propósito.** En el iPhone la tipografía mono es
+más ancha que la de escritorio, así que lo que cuadra justo en Chromium sale
+cortado en la obra. Se exige **16px de margen** sobre lo medido aquí. La celda
+más larga de la tabla es **«desde 18-mar-26»** (fin real a medias), por eso esa
+columna es la ancha.
+
+**El pliegue mide lo que mide la PANTALLA, no la tabla.** Con `width:100%` medía
+los 850px del contenedor que se desplaza y los botones se repartían a lo ancho
+de la tabla: **dos quedaban fuera del teléfono**. Y `max-width:100vw` tampoco
+vale —100vw son 390px y lo que de verdad se ve son 359—. El ancho **se mide del
+`#c-catalogo` al pintar** y se le pasa a `_catCronoFilaHTML`. Medido: 390 → 359
+a 390px, y 789 sobre un contenedor de 790 en el iPad.
+
+**Tres botones a la vista y tres detrás de «Más».** Seis en una fila de 359px los
+dejaba de 34px. A la vista: **Traer actividades · Crear actividad · Fechas y
+costo**; detrás: **Avance a mano · Correr fechas · Abrirla sola** (`CRONO_MAS`,
+`nodoMasBtns`). **SON LAS MISMAS SEIS LLAMADAS**: aquí solo se reparten.
+
+**Al entrar, solo la raíz.** Se abría también cada hija suya —quince filas de
+golpe— y la primera decisión del dueño era cerrar cosas.
+
+**Y en QUIÉN, «varios (N)» de cuatro en adelante** (`NODO_QUIEN_MAX`). En la raíz
+salía «Dimedes Estebe…» porque es quien más se repite entre 2.445 actividades, y
+eso no es el responsable de nada: medido contra la base, **son 38 distintos**.
+
+**Fuera el marco de las cinco vistas.** Iban con borde y el puesto lo llevaba en
+morado claro: en el teléfono se lee como un recuadro rosado alrededor de la barra
+entera. Sin borde, el puesto se distingue por el relleno.
+
+*Lo que cambia de paso y está bien:* con el árbol cerrado, el **‹ N de M ›** de
+la pantalla de una tarea cae en su rama de respaldo —`_nodoFilasCrono()` no la
+contiene— y pasa a recorrer **el plan entero** en vez de las filas visibles. Es
+la rama que ya existía, y recorrer las 190 en orden es más útil que recorrer
+quince.
 
 #### El atajo de la fila NO reescribe nada (v116)
 
@@ -1977,6 +2046,26 @@ mismo:**
   `<select>` de Actividades sin haber entrado a Partidas
 - **El selector de vistas se queda pegado arriba** al bajar por una lista larga.
   Si se pierde de vista, el Cronograma vuelve a ser invisible
+- **A 390px, NINGUNA celda del cronograma enseña un número a medias**, y con
+  **16px de holgura** sobre lo que mide Chromium — en el iPhone la mono es más
+  ancha. Mide el texto con un `Range`: en una caja con `overflow:hidden` el
+  `scrollWidth` nunca baja del `clientWidth` y decía «cabe justo» en todas
+- **El nombre de la tarea se queda fijo al desplazar la tabla a lo ancho.**
+  Mídelo desplazando 400px y comparando la posición, no a ojo. Y el contenedor
+  **no puede llevar `-webkit-overflow-scrolling:touch`**: en Safari de iPhone eso
+  rompe `sticky` y el nombre vuelve a salir comido por la izquierda. Chromium no
+  lo reproduce — compruébalo sobre el estilo
+- **La cabecera del cronograma cuadra con sus columnas.** Compara los bordes
+  izquierdos de las etiquetas y de las celdas: si el atajo `+ ✎` se queda sin su
+  hueco, todas las etiquetas se corren 72px
+- **El pliegue de la fila cabe en la pantalla**, con sus botones dentro y ninguno
+  fuera. Compruébalo a 390px **y a 1024**: el ancho sale del contenedor, no de
+  `100vw`
+- **Al entrar al cronograma solo viene abierta la raíz.** Si una prueba toca la
+  primera fila, la CIERRA — abre una cerrada, o deja el árbol igual en las dos
+  versiones antes de medir
+- **En QUIÉN, con más de tres responsables distintos sale «varios (N)».** En la
+  raíz son 38: si vuelve a salir un nombre propio, alguien quitó `NODO_QUIEN_MAX`
 - **Las cinco vistas siguen, y son CINCO**: Lista, Edificio, Matriz, Cronograma
   y Tiempo. Si aparece una sexta, alguien volvió a añadir en vez de sustituir —
   y el dueño ya dijo que con cinco estaba confuso
@@ -2107,6 +2196,9 @@ pertenece a ningún nivel.
 | **v110** — las tarjetas en rejilla usaban `repeat(auto-fill,minmax(160px,1fr))`. A 390px daban dos y a 1024px **cuatro**: en el iPad seguía siendo una rejilla, que es justo lo que el dueño pidió quitar. | «Dos columnas en pantalla ancha» es una `@media query`, no un `auto-fill`. `auto-fill` mete las que quepan, y en una pantalla grande eso nunca son dos. Y la prueba tiene que **contar cuántas caben por fila a cada ancho**, no mirar el CSS. |
 | **v111→v115** — cuatro versiones seguidas del módulo y el dueño seguía sin acoplarse: «no me convence cómo se ve», «me siento confuso», «no me acoplo». Cada versión añadió funciones buenas —el plan, el cronograma, las vistas, ordenar— y ninguna preguntó **cómo quería trabajar**. Lo desbloqueó una pregunta con opciones: quería el pliegue que ya usa en Actividades, no una pantalla más. | **Es la cuarta vez que pasa lo mismo** (En Obra, el recorrido, Hoy, y ahora Partidas). El aviso está escrito desde la v82 y aun así se construyeron cuatro versiones antes de preguntar. Cuando el usuario diga «no me acoplo», **para y pregunta con opciones concretas**; añadir la quinta versión es repetir el error. Y fíjate si lo que pide **ya existe en otra pantalla del app**: casi siempre sí. |
 | **v116** — el dueño pasó días sin poder llegar al Cronograma: el selector de vistas se pintaba arriba del todo y con 25 filas debajo se iba fuera de la pantalla. No era un fallo de la vista, era que **no se podía llegar a ella**. | Una pantalla a la que no se llega no existe, aunque funcione. Cuando el usuario diga que algo «falta», comprueba primero si está y **no se ve**: es más barato de arreglar y es lo que pasa casi siempre. Un selector de navegación va pegado (`sticky`), no al principio del documento. |
+| **v117** — el nombre del cronograma salía «ANIFICACION MECCA» en el iPhone: `-webkit-overflow-scrolling:touch` rompe `position:sticky` en Safari. **En Chromium sticky agarraba igual con la propiedad puesta**, medido en las dos versiones, así que ninguna prueba de escritorio podía cazarlo. Es la misma forma del `InvalidStateError` de la v27. | Cuando el fallo es del navegador del usuario y no del tuyo, **la prueba no puede ser «se ve bien aquí»**: comprueba la CAUSA sobre el estilo —que la propiedad ya no esté— y dilo claro en el informe. Medir en el navegador equivocado y dar por bueno es cómo se tumbó el app dos veces. |
+| **v117** — el nombre se quedaba en **76px de los 196** que tenía el botón, así que partía muchísimo antes de tiempo, y `width:100%` no lo arreglaba. El contenido de un `<button>` va en una caja anónima que se encoge hasta el texto, y ese 100% es de la caja encogida. Aparte, se salía **por encima de la columna vecina** porque al `flex:1` le faltaba `min-width:0`. | Un `<button>` no es un `<div>`: si dentro va una maqueta, hazlo `display:flex` tú. Y `flex:1` **no encoge** sin `min-width:0` — por eso el texto se desborda en vez de recortarse con «…». Las dos se vieron midiendo el ancho de la caja, no leyendo el CSS. |
+| **v117** — la primera medición de «celdas cortadas» dio **cero en todas**: comparaba `scrollWidth` con `clientWidth`, y en una caja con `overflow:hidden` el `scrollWidth` nunca baja del `clientWidth`. La sonda decía que todo cabía justo, incluidas las que en el teléfono salían recortadas. | Para saber si un texto cabe, mide **el texto** (`Range.getBoundingClientRect`), no la caja. Una comparación que da siempre el mismo resultado no está midiendo: es el `/lock/i` de la v90 con otra cara. |
 | **v116** — `catCrearAbrir` no hacía nada si se llamaba desde la pantalla de Ubicaciones: `S.catUbics` se comprueba antes en `renderCatalogo`, así que se ponía `S.catCrear` y se seguía pintando lo de antes. **Tercera vez con la misma forma** (v111 con `catFuera`, v113/v114 con los paneles). | En una función que despacha por una cadena de `else if`, **abrir una pantalla es también cerrar las que se comprueban antes**. Si esto vuelve a pasar, la cadena tiene que dejar de ser una cadena: una sola variable «qué estoy mirando» en vez de doce banderas. |
 | **v114** — `catPNuevaAbrir` asignaba su estado y **después** llamaba a `catPanelOtrosCerrar()`, que lo ponía a null: el panel nacía vacío. **Es el mismo fallo de la v113**, que ya se había «arreglado» reordenando las líneas en las dos funciones de entonces. Reordenar depende de que el siguiente se acuerde, y el siguiente fui yo. | Cuando un fallo vuelve, **el arreglo anterior era una disciplina, no un diseño**. `catPanelOtrosCerrar(salvo)` recibe ahora la clave que se está abriendo y no la toca: da igual el orden en que se llame. Si un error se puede repetir siguiendo las reglas, cambia las reglas. |
 | **v113** — el botón «Volver a sembrar» de la v112 reconstruía el árbol desde el CATÁLOGO. Con el cronograma del dueño ya en la base, pulsarlo lo habría **destruido sin forma de rehacerlo**: los datos del Project no están en el código. Estaba frenado por casualidad, porque un nodo llevaba una nota. | Un botón que puede destruir algo que el app **no sabe reconstruir** no se protege con una condición: se quita. Y cuando una función deja de tener sentido, se borra entera — dejarla «por si acaso» es dejar el gatillo puesto. |
