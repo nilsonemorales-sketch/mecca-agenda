@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v117 — 19 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v118 — 20 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -227,7 +227,11 @@ mismos botones que cualquier otra.
 | **Repartir las 430 sin sitio en el cronograma** | **Partidas → Árbol → «Por ubicar»** — `nodoUbicarAbrir()`, «Llevar a…» |
 | **Poner las operaciones de un elemento** | **Partidas → Árbol → un elemento** — `nodoOperaciones()`, `CAT_OPERACIONES`. Plantilla, no siembra |
 | **Meter actividades que ya existen en un entregable** | **Partidas → un nodo → «Traer actividades»** — `nodoTraerAbrir()`. No cambia la actividad |
-| **Ver lo mismo de otra manera** | **Partidas**, selector `[ Lista ] [ Edificio ] [ Matriz ] [ Árbol ]` — `catVistaSet()`, `_catAmbito()` |
+| **Ver y editar CUALQUIER actividad, con filtros** | **Partidas** — es por donde se entra (v118). `_catTablaHTML()`, `_catTabFilas()`, `catTabFiltro()`. Una fila es una actividad |
+| **Cambiarle a una actividad cualquier cosa** | **Partidas → tocar su fila** — `_catTabPliegueHTML()`. Las once, todas por `Acciones` |
+| **Cambiarle lo mismo a varias** | **Partidas → «Marcar varias»** — `catSelModo()`, `catTandaAbrir()`. Avisa a cuántas y se deshace entera |
+| **Llegar a las otras pantallas del módulo** | **Partidas → la fila de botones del final** — `_catTabOtrasHTML()`. Nueve: Capítulos, Edificio, Matriz, Cronograma, Tiempo, Ubicaciones, Repetidas, Por ubicar y Fuera del plan |
+| **Ver lo mismo de otra manera** | **Partidas → los botones del final** — `catVistaSet()`, `_catAmbito()`. Hasta la v117 era un selector de cinco vistas arriba |
 | **Ordenar las partidas a tu gusto, renombrarlas, juntarlas, quitarlas o agregar** | **Partidas → un capítulo → «Por partida»** — `_catPorPartidaHTML()`, `CAT_ORDENES`, `catPartidaCorrer()`, `catPNuevaAbrir()` (v114) |
 | **Sacar del plan lo que sobra** | **Partidas → Árbol → «Lo que está fuera del plan»** — `catFueraAbrir()`. Descartar **no borra** |
 
@@ -750,6 +754,106 @@ en `obra_cambios` lleva **el valor viejo y el nuevo**.
 (`_catUbicListaHTML`): ahí el contado es de esa ubicación **dentro de ese
 capítulo** y el de a mano es de la ubicación entera. Mezclar dos alcances es lo
 mismo que prohíbe la regla 1.
+
+### UNA TABLA Y YA (v118) — POR AQUÍ SE ENTRA AL MÓDULO
+
+Palabras del dueño: **«Simplifiquemos el módulo de prueba a una tabla sencilla
+con filtros y que yo pueda editar todo.»** Y decidió las dos cosas que faltaban:
+**una fila es una actividad** —las 2.445, abiertas y cerradas— y los filtros son
+**contratista, ubicación, capítulo y estado**.
+
+Después de dieciséis versiones el módulo tenía **cinco vistas al mismo nivel**
+más nueve pantallas de trabajo. Él entraba y no sabía dónde estaba. Esto
+**quita**: ni un dato nuevo, ni una tabla nueva en la base.
+
+**NADA SE BORRÓ.** Las otras vistas y pantallas viven en una fila discreta al
+final de la tabla (`_catTabOtrasHTML`): **Capítulos · Edificio · Matriz ·
+Cronograma · Tiempo · Ubicaciones · Repetidas · Por ubicar · Fuera del plan**.
+Son **nueve, no ocho**: «Capítulos» está ahí porque la portada del módulo —el
+marcador, partidas madre, sueltas, ordenar las partidas— se quedaba sin ninguna
+puerta, y una pantalla a la que no se llega no existe (v116). El cronograma
+sigue entero por dentro, con los arreglos de la v117.
+
+`CAT_VISTAS` se quedó con **la tabla y nada más**; las otras cuatro están en
+`CAT_OTRAS` para que `catVista()` las siga reconociendo. Con una sola vista el
+selector no se pinta —una barra de 44px para decir dónde estás cuando ya lo
+sabes—; desde las otras sí, con `[ Tabla ] [ la de turno ]` para poder volver.
+
+**ENTRAR A UN CAPÍTULO CAMBIA LA VISTA A «Capítulos»** (`catIrCap`). La pantalla
+del capítulo se comprueba DESPUÉS de la vista en `renderCatalogo`, así que sin
+esa línea se ponía `S.catCap` y se seguía pintando la tabla: tocar un capítulo
+no hacía nada visible. **Es la cuarta vez con la misma forma** —`catFuera` en la
+v111, los paneles en la v113/v114, `catCrearAbrir` en la v116—. Con `null` la
+vista NO se toca: «‹ Volver» tiene que devolver a donde estabas.
+
+**Las columnas:** descripción (fija a la izquierda, dos líneas) · ubicación ·
+contratista · capítulo · tarea del cronograma · estado · % · fecha fin con los
+días de atraso en rojo. De 50 en 50 con «Ver 50 más» —2.445 de golpe no las
+pinta ningún teléfono— y arriba **«N de 2.445 · X% · H hechas»**, que cambia con
+los filtros. Medido: **9-13 ms** en pintarse con las 2.445 detrás.
+
+**La descripción se queda fija y el contenedor va SIN
+`-webkit-overflow-scrolling:touch`**, que es lo que rompía la columna fija en el
+iPhone (v117). Ese aprendizaje no se pierde: el montaje es el mismo —botón
+`flex` en columna, `min-width:0`, `-webkit-line-clamp:2`—.
+
+**Los filtros dicen su cuenta y se recuerdan.** «Dimedes Estebez (Niño) (379)»,
+y esa cuenta se calcula con los OTROS tres filtros puestos —la regla de la v87:
+el número de un filtro tiene que ser el que vas a ver al tocarlo— en **una sola
+pasada por dimensión** (`_catTabCuentas`), no volviendo a filtrar por cada
+opción. Viven en `sessionStorage`, al lado de la vista.
+
+**La puesta se sigue ofreciendo aunque su cuenta sea cero**: si desapareciera de
+la lista no se podría quitar y la tabla mentiría en silencio.
+
+#### Editar las once cosas desde la fila
+
+Al tocarla se abre **debajo, pegada a la izquierda y del ancho de la pantalla**
+(el ancho sale de `#c-catalogo`, no de `100vw` — v117): descripción, ubicación,
+contratista, capítulo, tarea del cronograma, fecha de entrega y **nota**; y
+debajo **`revCard`, la MISMA tarjeta** del resto del módulo, con estado,
+porcentaje, foto, Editar, Repetir y Borrar. **No se hizo una segunda tarjeta.**
+
+- **Todo lo que toca la actividad pasa por `Acciones`** —`editar`, `asignar`,
+  `agregarNota`— y cada escritura deja su `obra_cambios` diciendo de dónde vino.
+  Medido: 6 `PATCH obra_actividades` y 6 `POST obra_cambios`.
+- **LA NOTA SE ESCRIBE A TECLADO** (`catTabNota` → `Acciones.agregarNota`). El
+  botón «Nota» de `revCard` es el MICRÓFONO y está apagado desde la v97 con toda
+  la voz: desde la tarjeta no había forma de dejar una nota escrita.
+- **Los chips de 10-90% solo salen con «En proceso» puesto.** Es lo que
+  `revCard` hace desde siempre; una prueba que lea el `innerText` sin dar ese
+  toque dirá que no existen.
+- **El capítulo mueve SOLO esa actividad** (`catTabCap`): el capítulo vive en la
+  partida, así que se le busca una con su misma descripción **en el capítulo
+  destino** y, si no hay, se crea. **`_catAmarrar` no sirve aquí** —busca la
+  partida por nombre en TODOS los capítulos, devolvía la vieja y el capítulo no
+  cambiaba—. La pantalla lo dice: las demás de su partida se quedan donde están.
+- **La tarea del cronograma se MUEVE, no se duplica** (`catTabNodo`): se quita
+  del nodo viejo y se mete en el nuevo, en `obra_nodo_actividad`. Medido antes y
+  después: **2.445 → 2.445**. NO pasa por `Acciones` a propósito —no toca la
+  actividad, y hacerlo pasar por ahí dejaría escrito que se editó, que es
+  mentira (v111)—.
+- **Una sola fila abierta a la vez.** Con once campos dentro, dos abiertas dejan
+  la tabla ilegible y no se sabe cuál se está tocando.
+
+#### La tanda: reúsa la de la v107, con la tarea añadida
+
+«Marcar varias» es `catSelModo` / `S.catSel2` / `catTandaAbrir` de siempre. Lo
+único nuevo es el campo **`nodo`**, la tarea del cronograma. Se cambian
+contratista, estado, fecha fin o tarea: **una llamada a `Acciones` por actividad
+y UN repintado**, y la tanda entera se deshace de golpe. Medido con cinco:
+5 escrituras, 1 repintado, y deshacer las devuelve a su contratista de antes,
+una por una.
+
+`_catTabNodoAplicar` es el motor sin aviso ni repintado, y **lanza si falla**,
+para que la tanda pueda decir CUÁL se cayó en vez de tragárselo.
+
+#### El buscador de la v109 filtra la tabla
+
+No se reescribió: `_catBuscaResultados` es la base de la tabla cuando hay algo
+escrito. Y en la tabla **no salta a la pantalla de búsqueda** —la tabla ya es la
+lista de actividades, y mandar a una segunda lista sería enseñar lo mismo dos
+veces—; desde las otras vistas esa pantalla sigue igual.
 
 ### DOS EJES Y NO UNO (v111) — el capítulo para la plata, el árbol para entregar
 
@@ -2046,6 +2150,23 @@ mismo:**
   `<select>` de Actividades sin haber entrado a Partidas
 - **El selector de vistas se queda pegado arriba** al bajar por una lista larga.
   Si se pierde de vista, el Cronograma vuelve a ser invisible
+- **Al entrar a Partidas sale LA TABLA**, con 50 filas y la línea diciendo
+  **2.445**. Si sale otra cosa, alguien cambió la vista de entrada
+- **Los filtros de la tabla cuadran con la base**: Dimedes Estebez (Niño) da
+  **379** (228 abiertas), y **Dimedes + N6 — Apto 6A + 12.00 Cocina y muebles da
+  17 · 1 hecha · 18%**. Si no da eso, el filtro está mal o el fixture no
+  reproduce la obra
+- **«Quitar los filtros» vuelve a 2.445**, y los cuatro se recuerdan al salir
+  del módulo y volver
+- **La descripción se queda fija al desplazar la tabla a lo ancho**, y el
+  contenedor **sin `-webkit-overflow-scrolling:touch`** (v117)
+- **Las once cosas de una actividad se editan desde su fila**, todas por
+  `Acciones` y cada una con su `obra_cambios`. Los chips de % solo salen con
+  «En proceso» puesto: dale el toque, no leas el `innerText`
+- **Cambiar la tarea del cronograma MUEVE el amarre**: cuéntalos antes y
+  después, **2.445 → 2.445**. Si sube, se duplicó
+- **La tanda son N llamadas y UN repintado**, y se deshace entera
+- **Los nueve botones del final abren lo de siempre**, ninguno roto
 - **A 390px, NINGUNA celda del cronograma enseña un número a medias**, y con
   **16px de holgura** sobre lo que mide Chromium — en el iPhone la mono es más
   ancha. Mide el texto con un `Range`: en una caja con `overflow:hidden` el
@@ -2196,6 +2317,7 @@ pertenece a ningún nivel.
 | **v110** — las tarjetas en rejilla usaban `repeat(auto-fill,minmax(160px,1fr))`. A 390px daban dos y a 1024px **cuatro**: en el iPad seguía siendo una rejilla, que es justo lo que el dueño pidió quitar. | «Dos columnas en pantalla ancha» es una `@media query`, no un `auto-fill`. `auto-fill` mete las que quepan, y en una pantalla grande eso nunca son dos. Y la prueba tiene que **contar cuántas caben por fila a cada ancho**, no mirar el CSS. |
 | **v111→v115** — cuatro versiones seguidas del módulo y el dueño seguía sin acoplarse: «no me convence cómo se ve», «me siento confuso», «no me acoplo». Cada versión añadió funciones buenas —el plan, el cronograma, las vistas, ordenar— y ninguna preguntó **cómo quería trabajar**. Lo desbloqueó una pregunta con opciones: quería el pliegue que ya usa en Actividades, no una pantalla más. | **Es la cuarta vez que pasa lo mismo** (En Obra, el recorrido, Hoy, y ahora Partidas). El aviso está escrito desde la v82 y aun así se construyeron cuatro versiones antes de preguntar. Cuando el usuario diga «no me acoplo», **para y pregunta con opciones concretas**; añadir la quinta versión es repetir el error. Y fíjate si lo que pide **ya existe en otra pantalla del app**: casi siempre sí. |
 | **v116** — el dueño pasó días sin poder llegar al Cronograma: el selector de vistas se pintaba arriba del todo y con 25 filas debajo se iba fuera de la pantalla. No era un fallo de la vista, era que **no se podía llegar a ella**. | Una pantalla a la que no se llega no existe, aunque funcione. Cuando el usuario diga que algo «falta», comprueba primero si está y **no se ve**: es más barato de arreglar y es lo que pasa casi siempre. Un selector de navegación va pegado (`sticky`), no al principio del documento. |
+| **v118** — hay **dos funciones `catSelToggle`** en el archivo y la segunda tapa a la primera: marcar una PARTIDA escribe en `S.catSel2` en vez de en `S.catSel`, así que `_catSelIds()` se queda en cero y Juntar/Quitar no ven nada. Medido en la prueba, no supuesto. **Viene de antes de la v118 y NO se arregló aquí** —es otra cosa, y esta versión hacía una sola—, pero queda dicho. | Es el `else if(k==='c')` de la v97 con otra cara: dos cosas con el mismo nombre y la segunda gana en silencio. Cuando añadas una función, **busca el nombre antes**: `grep -c "function X("` tiene que dar 1. Y cuando encuentres uno viejo, dilo aunque no lo arregles — callarlo es cómo llega a la versión veinte. |
 | **v117** — el nombre del cronograma salía «ANIFICACION MECCA» en el iPhone: `-webkit-overflow-scrolling:touch` rompe `position:sticky` en Safari. **En Chromium sticky agarraba igual con la propiedad puesta**, medido en las dos versiones, así que ninguna prueba de escritorio podía cazarlo. Es la misma forma del `InvalidStateError` de la v27. | Cuando el fallo es del navegador del usuario y no del tuyo, **la prueba no puede ser «se ve bien aquí»**: comprueba la CAUSA sobre el estilo —que la propiedad ya no esté— y dilo claro en el informe. Medir en el navegador equivocado y dar por bueno es cómo se tumbó el app dos veces. |
 | **v117** — el nombre se quedaba en **76px de los 196** que tenía el botón, así que partía muchísimo antes de tiempo, y `width:100%` no lo arreglaba. El contenido de un `<button>` va en una caja anónima que se encoge hasta el texto, y ese 100% es de la caja encogida. Aparte, se salía **por encima de la columna vecina** porque al `flex:1` le faltaba `min-width:0`. | Un `<button>` no es un `<div>`: si dentro va una maqueta, hazlo `display:flex` tú. Y `flex:1` **no encoge** sin `min-width:0` — por eso el texto se desborda en vez de recortarse con «…». Las dos se vieron midiendo el ancho de la caja, no leyendo el CSS. |
 | **v117** — la primera medición de «celdas cortadas» dio **cero en todas**: comparaba `scrollWidth` con `clientWidth`, y en una caja con `overflow:hidden` el `scrollWidth` nunca baja del `clientWidth`. La sonda decía que todo cabía justo, incluidas las que en el teléfono salían recortadas. | Para saber si un texto cabe, mide **el texto** (`Range.getBoundingClientRect`), no la caja. Una comparación que da siempre el mismo resultado no está midiendo: es el `/lock/i` de la v90 con otra cara. |
@@ -2270,7 +2392,7 @@ orden de magnitud.
 | `obra_config` | Configuración compartida, clave/valor. | — |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
-| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**; **con `orden` desde v114** (el orden que el dueño pone a mano en «Por partida»). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
+| `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Desde la v118 `obra_partida_actividad` es además lo que la tabla lee para la columna CAPÍTULO y lo que reescribe al cambiarlo. Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**; **con `orden` desde v114** (el orden que el dueño pone a mano en «Por partida»). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
 | `obra_nodos`, `obra_nodo_actividad`, `obra_plan_fuera` | **EL PLAN (v111→v113)** — el segundo eje. Desde la v113 son **las 189 tareas del MS Project del dueño**, sembradas desde SQL: `costo_plan`, `dias_plan`, `pred_plan`, `inicio_plan`, `fin_plan`, `pct_plan`, `costo_real_plan` y `avance_manual`. **No hay siembra desde el app.** El árbol del dueño: `tipo` (`rama`/`entregable`), `clase` (apartamento/taller/hito), `orden`, `notas` para lo que no es actividad. El amarre es una tabla aparte porque **una actividad puede estar en varios nodos a propósito**. `obra_plan_fuera` son los descartes: **no borra nada**, saca del plan. Se borran las tres y el catálogo queda exactamente igual. | 190 + 2.445 |
 | `obra_ubicaciones` | **Del módulo «Partidas» (v110, v116).** Guarda el porcentaje a mano de una ubicación **y, desde la v116, las ubicaciones que el dueño crea**: `_catUbicsTodas()` devuelve la unión de las que usan las actividades y las filas activas de aquí. El nombre sigue viviendo en `obra_actividades.area`. | 0 al nacer |
 

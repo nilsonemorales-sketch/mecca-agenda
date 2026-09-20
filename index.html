@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260919_117';
+const APP_VERSION='20260920_118';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1861,6 +1861,9 @@ let S={
      mismo que `revHechas` en la v103: el dueño entra DIRECTO a Partidas y una
      variable que no existe revienta la pantalla entera sin decir por qué. */
   catBorrar:null, catRepetir:null, catTandaPick:null, catUndo:null,
+  /* v118 — la tabla, que es por donde se entra al módulo. Nace aquí por lo
+     mismo que todo lo de arriba: el dueño entra DIRECTO a Partidas. */
+  catTabla:null,
   /* v108 — la estructura editable. Nace aquí por lo mismo que lo demás: el
      dueño entra DIRECTO a Partidas y una variable que no existe revienta la
      pantalla entera sin decir por qué (v103). */
@@ -9036,7 +9039,7 @@ var Acciones = (function(){
           }
           if(S.nodoAmarres) S.nodoAmarres=S.nodoAmarres.filter(function(r){ return r.actividad_id!==id; });
           if(S.catAmarres) delete S.catAmarres[id];
-          S._catMapa=null;
+          S._catMapa=null; S._catTabCaps=null;
         }catch(eAm){
           logCambio('editado','actividad',id,(copia&&copia.descripcion)||'',
             'la actividad se borró pero sus amarres no ('+((eAm&&eAm.message)||'sin motivo')+')');
@@ -16736,7 +16739,7 @@ async function cargarCatalogo(){
        es de ahora o de hace cinco días — y eso ya casi cuesta seis actividades
        buenas reabiertas. Ver `_catFrescoHTML`. */
     S.catCargadoEn=Date.now(); S.catViejo=false;
-    S._catMapa=null; S._catPrec=null;
+    S._catMapa=null; S._catTabCaps=null; S._catPrec=null;
     return true;
   }catch(e){
     /* No se deja en null: renderCatalogo volvería a pedirlo en cada repintado
@@ -17613,7 +17616,15 @@ function _catOrdenFaltantes(acts, area){
   return {con:con, sin:sin};
 }
 
-function catIrCap(c){ S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; S.catGrupo=null; S.catUbic=null; S.catCurar=false; S.catGruposEdit=false; S.catMadres=false; S.catRepes=null; S.catExactas=false; S.catUbics=false; S.catSinUbic=false;
+/* ENTRAR A UN CAPÍTULO CAMBIA LA VISTA (v118). Desde que la entrada del módulo
+   es la tabla, la pantalla del capítulo se comprueba DESPUÉS de la vista en
+   `renderCatalogo`: sin esto se ponía `S.catCap` y se seguía pintando la tabla,
+   así que tocar un capítulo no hacía nada visible. Es la misma forma del fallo
+   de `catFuera` en la v111 y de `catCrearAbrir` en la v116 — la cuarta vez.
+   Con `null` NO se toca la vista: «‹ Volver» tiene que devolver a donde estabas. */
+function catIrCap(c){ if(c!==null && c!==undefined && catVista()!=='lista'){ S.catVista='lista';
+    try{ sessionStorage.setItem('mecca_cat_vista','lista'); }catch(e){} }
+  S.catCap=(c===null||c===undefined)?null:String(c); S.catPartida=null; S.catSueltas=false; S.catPick=null; S.catBuscar=null; S.catSel={}; S.catGrupo=null; S.catUbic=null; S.catCurar=false; S.catGruposEdit=false; S.catMadres=false; S.catRepes=null; S.catExactas=false; S.catUbics=false; S.catSinUbic=false;
   /* v111 · cambiar de capítulo suelta el plan y las pantallas del plan: si no,
      al entrar a un capítulo se seguiría pintando el nodo del anterior — el
      mismo fallo de `revAbrir` en la v94. El modo por partida SÍ se recuerda:
@@ -17729,7 +17740,7 @@ async function _catAmarrar(actId, desc, cap, grupo){
     await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
              body:JSON.stringify({id:uid(), actividad_id:actId, partida_id:p.id})});
     (S.catAmarres=S.catAmarres||{})[actId]=p.id;
-    S._catMapa=null; S._catPrec=null;
+    S._catMapa=null; S._catTabCaps=null; S._catPrec=null;
     return p;
   }catch(e){
     /* No se traga: si el amarre falla, la actividad SÍ se creó y hay que
@@ -17914,7 +17925,8 @@ function catTandaValor(v){ if(S.catTandaPick){ S.catTandaPick.valor=v; _catPanel
 function _catTandaPickHTML(){
   var T=S.catTandaPick, n=_catSel2Ids().length;
   var tit={contratista:'¿Qué contratista?', fecha:'¿Para qué fecha?',
-           grupo:'¿A qué grupo?', estado:'¿Qué estado?'}[T.campo];
+           grupo:'¿A qué grupo?', estado:'¿Qué estado?',
+           nodo:'¿A qué tarea del cronograma?'}[T.campo];
   var h=_catPanelCab(tit, 'Se aplica a las <b>'+n+'</b> marcadas, una por una.');
   var opt=function(v,txt){
     var on=(T.valor===v);
@@ -17928,6 +17940,17 @@ function _catTandaPickHTML(){
     nombres.forEach(function(q){ h+=opt(q,q); });
   }else if(T.campo==='grupo'){
     _catGruposDe(String(S.catCap||'')).forEach(function(g){ h+=opt(g,g); });
+  }else if(T.campo==='nodo'){
+    /* Son 190: un `<select>` en vez de 190 botones, que en el teléfono no se
+       bajan. La etiqueta lleva la madre delante porque «PISOS N4» a secas no
+       dice de qué rama cuelga. */
+    h+='<select onchange="catTandaValor(this.value)" style="width:100%;box-sizing:border-box;'+
+      'min-height:48px;border:1.5px solid var(--border2);border-radius:11px;padding:0 10px;'+
+      'font-size:14px;font-family:var(--font);background:var(--bg2);color:var(--text)">'+
+      '<option value="">— escoge una tarea —</option>'+
+      _catTabNodos().map(function(n){
+        return '<option value="'+esc(n.id)+'"'+(T.valor===n.id?' selected':'')+'>'+esc(n.etiqueta)+'</option>';
+      }).join('')+'</select>';
   }else if(T.campo==='estado'){
     /* Solo dos. Un porcentaje a medias en bloque no significa nada: no todas
        las partidas de una tanda van por el mismo sitio. */
@@ -17958,6 +17981,9 @@ async function catTandaAplicar(){
     return {id:id, nombre:a.descripcion||'', personal_nombre:a.personal_nombre||'',
             tipo_personal:a.tipo_personal||'', fecha_fin:a.fecha_fin||'',
             estado:a.estado||'', porcentaje:String(a.porcentaje||'0'),
+            area:a.area||'',
+            /* v118 · el nodo de antes, para poder devolver la tanda entera. */
+            nodo:_catTabNodoId(a),
             grupo:(function(){ var q=_catA()[id]; var p=q?_catPorId(q):null; return p?(p.grupo||null):null; })()};
   })};
   var campo=T.campo, valor=T.valor;
@@ -17980,6 +18006,11 @@ async function catTandaAplicar(){
         if(!p) throw new Error('esa actividad no tiene partida');
         await catMoverGrupo(p.id, valor);
       }
+      /* v118 · la tarea del cronograma. NO pasa por `Acciones` a propósito: no
+         toca la actividad, solo la tabla de amarre — igual que traer y quitar
+         desde la v111. Hacerlo pasar por ahí dejaría escrito en el historial
+         que la actividad se editó, y eso sería mentira. */
+      else if(campo==='nodo')     await _catTabNodoAplicar(id, valor);
       ok++;
     }catch(e){
       /* UNA QUE SE CAIGA NO TUMBA LAS DEMÁS, y se dice CUÁL. El mismo criterio
@@ -18011,6 +18042,7 @@ async function catTandaDeshacer(){
         var q=_catA()[p.id], pp=q?_catPorId(q):null;
         if(pp) await catMoverGrupo(pp.id, p.grupo||'');
       }
+      else if(campo==='nodo')    await _catTabNodoAplicar(p.id, p.nodo||'');
     }catch(e){ fallos++; }
   }
   showToast(fallos?('Se devolvieron todas menos '+fallos):'Tanda deshecha ✓', fallos?'err':'ok', fallos?7000:3000);
@@ -20361,13 +20393,24 @@ async function nodoQuitar(nid, actId){
    (`_catAmbito`) y las cuatro vistas leen de ahí: si cada una resolviera lo
    suyo, cambiar de vista terminaría cambiando también lo que se mira, que es
    justo lo que no puede pasar. */
-var CAT_VISTAS=[['lista','Lista'],['edificio','Edificio'],['matriz','Matriz'],['arbol','Cronograma'],
-                ['tiempo','Tiempo']];
+/* ── v118 · UNA SOLA VISTA AL ENTRAR, Y LAS DEMÁS DETRÁS DE UN BOTÓN ──
+   Palabras del dueño: «simplifiquemos el módulo de prueba a una tabla sencilla
+   con filtros y que yo pueda editar todo». Después de dieciséis versiones había
+   CINCO vistas al mismo nivel más nueve pantallas de trabajo, y él entraba y no
+   sabía dónde estaba.
+
+   NADA SE BORRÓ. Las otras cuatro vistas siguen enteras y se llegan desde la
+   fila de botones del final de la tabla (`_catTabOtrasHTML`). Lo único que
+   cambia es qué es lo primero que se ve. `CAT_OTRAS` existe para que
+   `catVista()` las siga reconociendo como vistas válidas. */
+var CAT_VISTAS=[['tabla','Tabla']];
+var CAT_OTRAS=[['lista','Capítulos'],['edificio','Edificio'],['matriz','Matriz'],
+               ['arbol','Cronograma'],['tiempo','Tiempo']];
 function catVista(){
   var v=S.catVista;
   if(!v){
     try{ v=sessionStorage.getItem('mecca_cat_vista')||''; }catch(e){}
-    S.catVista=v=(CAT_VISTAS.some(function(x){ return x[0]===v; })?v:'lista');
+    S.catVista=v=(CAT_VISTAS.concat(CAT_OTRAS).some(function(x){ return x[0]===v; })?v:'tabla');
   }
   return v;
 }
@@ -20395,9 +20438,14 @@ function catVistaSet(v){
    `var(--bg)` de fondo y un poco de aire abajo: sin fondo, las filas se leen
    por debajo al desplazarse. */
 function _catVistaSelHTML(){
+  /* v118 · con una sola vista no hay nada que escoger, y una barra de un botón
+     ocuparía 44px diciendo dónde estás cuando ya lo sabes. Desde las OTRAS
+     vistas sí se pinta, con la tabla y la vista de turno, para poder volver. */
+  var vs=CAT_VISTAS.concat(catVista()==='tabla'?[]:CAT_OTRAS.filter(function(x){ return x[0]===catVista(); }));
+  if(vs.length<2) return '';
   return '<div style="position:sticky;top:0;z-index:30;background:var(--bg);'+
     'padding:6px 0 7px;margin:-6px 0 4px;display:flex;gap:5px">'+
-    CAT_VISTAS.map(function(v){
+    vs.map(function(v){
       var on=(catVista()===v[0]);
       /* SIN MARCO (v117). Los cinco iban con borde y el puesto lo llevaba en
          morado claro: en el teléfono se lee como un recuadro rosado alrededor
@@ -21418,7 +21466,7 @@ async function catPNuevaCrear(){
   try{
     await sb('obra_partidas',{method:'POST',prefer:'return=minimal',body:JSON.stringify(fila)});
     (S.catPartidas=S.catPartidas||[]).push(fila);
-    S._catMapa=null;
+    S._catMapa=null; S._catTabCaps=null;
     logCambio('creado','partida',fila.id,nom,'partida creada en '+cap+(S.catGrupo?' · '+S.catGrupo:''));
     setSS('ok','✓'); showToast('«'+nom+'» creada ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo crear: '+((e&&e.message)||''),'err',8000); }
@@ -22071,7 +22119,7 @@ async function catSgGuardar(){
       if(g){ g.nombre=nom; g.palabras=pal; }
       logCambio('editado','partida','sg_'+E.id,nom,'palabras del grupo: «'+antes+'» → «'+pal+'»');
     }
-    S._catMapa=null;
+    S._catMapa=null; S._catTabCaps=null;
     showToast('Guardado ✓');
   }catch(e){ showToast('No se pudo guardar: '+((e&&e.message)||''),'err',7000); }
   renderCatalogo();
@@ -22085,7 +22133,7 @@ async function catSgDesactivar(id){
   try{
     await sb('obra_subgrupos?id=eq.'+encodeURIComponent(id),{method:'PATCH',prefer:'return=minimal',
              body:JSON.stringify({activo:false})});
-    g.activo=false; S._catMapa=null;
+    g.activo=false; S._catMapa=null; S._catTabCaps=null;
     logCambio('editado','partida','sg_'+id,g.nombre,'grupo de trabajo quitado');
     showToast('Quitado ✓');
   }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
@@ -22104,7 +22152,7 @@ async function catSgMover(id, dir){
   var b=(S.catSubs||[]).find(function(x){ return String(x.id)===String(L[j].id); });
   if(!a||!b) return;
   var oa=a.orden||0, ob=b.orden||0;
-  a.orden=ob; b.orden=oa; S._catMapa=null; renderCatalogo();
+  a.orden=ob; b.orden=oa; S._catMapa=null; S._catTabCaps=null; renderCatalogo();
   try{
     await sb('obra_subgrupos?id=eq.'+encodeURIComponent(a.id),{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({orden:ob})});
     await sb('obra_subgrupos?id=eq.'+encodeURIComponent(b.id),{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({orden:oa})});
@@ -22145,6 +22193,549 @@ function catSueltasAbrir(){ S.catSueltas=true; S.catCap=null; S.catPartida=null;
 function _catArriba(){ var v=document.getElementById('view-catalogo'); if(v) v.scrollTop=0; }
 function catReintentar(){ S.catError=''; S.catPartidas=undefined; renderCatalogo(); }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v118 · UNA TABLA Y YA
+
+   Palabras del dueño: «simplifiquemos el módulo de prueba a una tabla sencilla
+   con filtros y que yo pueda editar todo». Y decidió las dos cosas que
+   faltaban: UNA FILA ES UNA ACTIVIDAD —las 2.445, abiertas y cerradas— y los
+   filtros son contratista, ubicación, capítulo y estado.
+
+   Esto QUITA, no añade: ni un dato nuevo, ni una tabla nueva en la base. Todo
+   lo que se edita aquí pasa por `Acciones`, y el capítulo y la tarea del
+   cronograma se escriben en las dos tablas de amarre que ya existen
+   (`obra_partida_actividad`, `obra_nodo_actividad`).
+
+   La columna de la descripción va fija a la izquierda con el mismo montaje de
+   la v117 —botón `flex` en columna, `min-width:0` y `-webkit-line-clamp:2`— y
+   el contenedor va SIN `-webkit-overflow-scrolling:touch`, que es lo que
+   rompía la columna fija en el iPhone. Ese aprendizaje no se pierde.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+var CAT_TAB_ESTADOS=[['pendiente','Sin empezar'],['en-progreso','En proceso'],
+                     ['pausada','Pausada'],['completado',PAL_COMPLETADA]];
+var CAT_TAB_COLS=[['ubic','Ubicación',116],['quien','Contratista',118],
+                  ['cap','Capítulo',124],['nodo','Tarea del cronograma',150],
+                  ['est','Estado',100],['pct','%',46],['fin','Fecha fin',118]];
+var CAT_TAB_DESCW=210, CAT_TAB_MARCAW=38;
+
+/* LOS FILTROS SE RECUERDAN MIENTRAS DURE LA SESIÓN. Quien está revisando el 4B
+   no quiere volver a escogerlo cada vez que entra. Van en `sessionStorage`, el
+   mismo sitio donde ya vivía la vista escogida. */
+function _catTab(){
+  if(!S.catTabla){
+    var g={contratista:'', ubicacion:'', capitulo:'', estado:''};
+    try{
+      var s=JSON.parse(sessionStorage.getItem('mecca_cat_tabla')||'null');
+      if(s) Object.keys(g).forEach(function(k){ if(typeof s[k]==='string') g[k]=s[k]; });
+    }catch(e){}
+    S.catTabla={contratista:g.contratista, ubicacion:g.ubicacion, capitulo:g.capitulo,
+                estado:g.estado, abierta:'', tope:50};
+  }
+  return S.catTabla;
+}
+/* ¿Hay alguna pantalla de trabajo abierta por encima de la tabla? Son las que
+   `renderCatalogo` comprueba ANTES de la vista. Se pregunta aquí para que el
+   buscador siga yendo a su propia pantalla cuando el dueño está dentro de una
+   de ellas, y filtre la tabla cuando está en la tabla. */
+function _catTabOtraAbierta(){
+  return !!(S.catGrupoNuevo||S.catMover||S.catBuscar||S.catPick||S.catSueltas||S.catPartida||
+            S.catExactas||S.catRepes||S.catMadres||S.catUbics||S.catCrear||S.catFuera||
+            S.nodoTraer||S.nodoUbicar);
+}
+function _catTabGuardar(){
+  var T=_catTab();
+  try{ sessionStorage.setItem('mecca_cat_tabla', JSON.stringify(
+    {contratista:T.contratista, ubicacion:T.ubicacion, capitulo:T.capitulo, estado:T.estado})); }catch(e){}
+}
+/* De dónde sale cada columna, en UN solo sitio: lo usan la fila, los filtros y
+   sus cuentas. Tres copias del mismo criterio terminan contando distinto. */
+function _catTabUbic(a){ return String(a.area||'').trim()||PAL_SIN_UBIC; }
+function _catTabQuien(a){ return _responsables(a.personal_nombre)[0]||''; }
+/* El capítulo de una partida, por id y SIN recorrer la lista entera. `_catPorId`
+   hace un `find` sobre las ~1.030 partidas, y esto se pregunta una vez por fila
+   y otra vez por cada filtro al contar: son cuatro millones de comparaciones en
+   cada repintado. El sello es el mismo truco de `_catMapa`. */
+function _catTabCaps(){
+  /* El sello es el ARRAY, no su largo: `cargarCatalogo` lo sustituye entero y
+     `catMover` cambia el capítulo sin cambiar cuántas hay. Con el largo solo,
+     mover una partida de capítulo no se habría visto hasta recargar. */
+  var ps=_catP(), sello=ps;
+  if(!S._catTabCaps || S._catTabCapsSello!==sello){
+    var m={};
+    ps.forEach(function(p){ m[p.id]=String(p.capitulo||'0'); });
+    S._catTabCaps=m; S._catTabCapsSello=sello;
+  }
+  return S._catTabCaps;
+}
+function _catTabCapId(a){
+  var q=_catA()[a.id];
+  return q?(_catTabCaps()[q]||''):'';
+}
+function _catTabNodoId(a){ var ns=(S.nodoPorA||{})[a.id]||[]; return ns[0]||''; }
+function _catTabEstado(a){ return String(a.estado||'pendiente'); }
+function _catTabEstadoNom(e){
+  var r=CAT_TAB_ESTADOS.find(function(x){ return x[0]===e; });
+  return r?r[1]:e;
+}
+/* Las tareas del cronograma, en orden de árbol y con su madre delante: hay 190
+   y «PISOS N4» a secas no dice de qué rama cuelga. */
+function _catTabNodos(){
+  var out=[];
+  var baja=function(pid, ruta){
+    _nodoHijos(pid).forEach(function(n){
+      out.push({id:n.id, nombre:n.nombre, etiqueta:(ruta?ruta+' › ':'')+n.nombre});
+      baja(n.id, n.nombre);
+    });
+  };
+  baja(null, '');
+  return out;
+}
+function _catTabNodoNom(id){
+  var n=id?_nodoPorId(id):null;
+  return n?String(n.nombre||''):'';
+}
+/* `salvo` deja fuera UNA dimensión para poder contar sus opciones sobre lo que
+   de verdad se va a ver con los demás filtros puestos. Es la regla de la v87:
+   el número de un filtro tiene que ser el que vas a ver al tocarlo. */
+function _catTabPasa(a, T, salvo){
+  if(salvo!=='contratista' && T.contratista && _catTabQuien(a)!==T.contratista) return false;
+  if(salvo!=='ubicacion'   && T.ubicacion   && _catTabUbic(a)!==T.ubicacion)     return false;
+  if(salvo!=='capitulo'    && T.capitulo    && _catTabCapId(a)!==T.capitulo)     return false;
+  if(salvo!=='estado'      && T.estado      && _catTabEstado(a)!==T.estado)      return false;
+  return true;
+}
+/* La BASE es el buscador de la v109 cuando está escrito, y las 2.445 cuando no.
+   No se reescribió: se reúsa `_catBuscaResultados`, que ya sabe buscar sin
+   acentos por descripción, área y contratista. */
+function _catTabBase(){ return _catBuscaResultados()||_catTodas(); }
+function _catTabFilas(){
+  var T=_catTab();
+  return _catTabBase().filter(function(a){ return _catTabPasa(a,T,null); });
+}
+/* Las cuentas de las cuatro listas en UNA pasada por dimensión, no volviendo a
+   filtrar por cada opción: con 38 contratistas y 2.445 filas eso eran casi cien
+   mil comparaciones en cada repintado. */
+function _catTabCuentas(dim){
+  var T=_catTab(), m={};
+  _catTabBase().forEach(function(a){
+    if(!_catTabPasa(a,T,dim)) return;
+    var k = dim==='contratista' ? _catTabQuien(a)
+          : dim==='ubicacion'   ? _catTabUbic(a)
+          : dim==='capitulo'    ? _catTabCapId(a)
+          :                       _catTabEstado(a);
+    m[k]=(m[k]||0)+1;
+  });
+  return m;
+}
+function catTabFiltro(dim, v){
+  var T=_catTab();
+  T[dim]=v; T.tope=50; T.abierta='';
+  _catTabGuardar(); renderCatalogo(); _catArriba();
+}
+function catTabLimpiar(){
+  var T=_catTab();
+  T.contratista=''; T.ubicacion=''; T.capitulo=''; T.estado=''; T.tope=50; T.abierta='';
+  S.catQ=''; S.catQVivo='';
+  _catTabGuardar(); renderCatalogo(); _catArriba();
+}
+function catTabMas(){ _catTab().tope=(_catTab().tope||50)+50; renderCatalogo(); }
+/* UNA SOLA FILA ABIERTA A LA VEZ. Con el pliegue de once cosas dentro, dos
+   abiertas dejan la tabla ilegible y no se sabe cuál se está tocando. */
+function catTabAbrir(id){
+  var T=_catTab();
+  T.abierta=(T.abierta===String(id)?'':String(id));
+  renderCatalogo();
+}
+
+function _catTabFiltroHTML(dim, etiqueta, opciones){
+  var T=_catTab(), cn=_catTabCuentas(dim), val=T[dim]||'';
+  /* La puesta se enseña aunque su cuenta sea cero: si desapareciera de la
+     lista, el usuario no podría quitarla y la tabla mentiría en silencio. */
+  var hay=opciones.filter(function(o){ return cn[o[0]] || o[0]===val; });
+  var tot=Object.keys(cn).reduce(function(n,k){ return n+cn[k]; },0);
+  return '<label style="flex:1;min-width:150px;display:block">'+
+    '<span style="display:block;font-size:9.5px;font-weight:800;letter-spacing:.4px;'+
+      'color:var(--text3);margin-bottom:3px">'+esc(etiqueta.toUpperCase())+'</span>'+
+    '<select onchange="catTabFiltro('+_catQ(dim)+',this.value)" style="width:100%;min-height:44px;'+
+      'border:1.5px solid '+(val?'var(--accent)':'var(--border2)')+';border-radius:11px;padding:0 8px;'+
+      'font-size:12.5px;font-weight:700;font-family:var(--font);background:'+(val?'var(--accent-soft)':'var(--bg2)')+';'+
+      'color:'+(val?'var(--accent)':'var(--text2)')+'">'+
+      '<option value="">Todas ('+tot+')</option>'+
+      hay.map(function(o){
+        return '<option value="'+esc(o[0])+'"'+(val===o[0]?' selected':'')+'>'+
+          esc(o[1])+' ('+(cn[o[0]]||0)+')</option>';
+      }).join('')+
+    '</select></label>';
+}
+function _catTabFiltrosHTML(){
+  var T=_catTab();
+  var quienes={}; _catTodas().forEach(function(a){ var q=_catTabQuien(a); if(q) quienes[q]=1; });
+  var h='<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px">'+
+    _catTabFiltroHTML('contratista','Contratista',
+      Object.keys(quienes).sort(function(x,y){ return x.localeCompare(y,'es'); })
+        .map(function(q){ return [q,q]; }))+
+    _catTabFiltroHTML('ubicacion','Ubicación',
+      _catUbicsTodas().map(function(u){ return [u.area,u.area]; }))+
+    _catTabFiltroHTML('capitulo','Capítulo',
+      _capsLista().map(function(c){ return [c.n, c.n+' · '+c.t]; }))+
+    _catTabFiltroHTML('estado','Estado', CAT_TAB_ESTADOS)+
+  '</div>';
+  var puestos=['contratista','ubicacion','capitulo','estado'].filter(function(k){ return T[k]; }).length;
+  if(puestos || String(S.catQVivo||'').trim())
+    h+='<button onclick="catTabLimpiar()" style="'+_catBS+';width:100%;margin-bottom:9px;min-height:44px;'+
+      'font-size:12px;border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
+      'Quitar los filtros'+(puestos?' ('+puestos+')':'')+'</button>';
+  return h;
+}
+
+/* ── EL PLIEGUE: TODO LO DE ESA ACTIVIDAD, EDITABLE ──
+   No se hizo una segunda tarjeta: abajo del todo va `revCard`, la MISMA de
+   Revisión y del resto del módulo, que ya trae estado, porcentaje, nota, foto,
+   Editar, Repetir y Borrar. Aquí arriba están solo las seis que `revCard` no
+   tenía —descripción, ubicación, contratista, capítulo, tarea y fecha de
+   entrega—, y todas escriben por `Acciones` o por las tablas de amarre. */
+function _catTabPliegueHTML(a, ancho){
+  var sid=_catQ(a.id);
+  var quienes={}; _catTodas().forEach(function(x){ var q=_catTabQuien(x); if(q) quienes[q]=1; });
+  var fila=function(etq, dentro){
+    return '<div style="margin-bottom:7px">'+
+      '<span style="display:block;font-size:9.5px;font-weight:800;letter-spacing:.4px;'+
+        'color:var(--text3);margin-bottom:3px">'+esc(etq.toUpperCase())+'</span>'+dentro+'</div>';
+  };
+  var selBS='width:100%;box-sizing:border-box;min-height:44px;border:1.5px solid var(--border2);'+
+            'border-radius:11px;padding:0 9px;font-size:13px;font-family:var(--font);'+
+            'background:var(--bg2);color:var(--text)';
+  var cap=_catTabCapId(a), nodo=_catTabNodoId(a), nodos=(S.nodoPorA||{})[a.id]||[];
+  var h='<div style="position:sticky;left:0;width:'+ancho+'px;box-sizing:border-box;'+
+    'padding:9px 10px 12px;background:var(--bg3)">';
+  h+=fila('Descripción',
+      '<textarea id="cattab-desc" rows="2" style="'+selBS+';padding:9px;line-height:1.35;resize:vertical">'+
+        esc(a.descripcion||'')+'</textarea>'+
+      '<button onclick="catTabDesc('+sid+')" style="'+_catBS+';width:100%;margin-top:5px;min-height:44px;'+
+        'font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">'+
+        'Guardar la descripción</button>');
+  h+=fila('Ubicación',
+      '<select onchange="catTabSet('+sid+',\'area\',this.value)" style="'+selBS+'">'+
+        _catUbicsTodas().map(function(u){
+          var v=(u.area===PAL_SIN_UBIC?'':u.area);
+          return '<option value="'+esc(v)+'"'+(_catTabUbic(a)===u.area?' selected':'')+'>'+esc(u.area)+'</option>';
+        }).join('')+'</select>');
+  h+=fila('Contratista',
+      '<select onchange="catTabQuien('+sid+',this.value)" style="'+selBS+'">'+
+        '<option value="">— sin asignar —</option>'+
+        Object.keys(quienes).sort(function(x,y){ return x.localeCompare(y,'es'); }).map(function(q){
+          return '<option value="'+esc(q)+'"'+(_catTabQuien(a)===q?' selected':'')+'>'+esc(q)+'</option>';
+        }).join('')+'</select>');
+  h+=fila('Capítulo',
+      '<select onchange="catTabCap('+sid+',this.value)" style="'+selBS+'">'+
+        _capsLista().map(function(c){
+          return '<option value="'+esc(c.n)+'"'+(cap===c.n?' selected':'')+'>'+esc(c.n+' · '+c.t)+'</option>';
+        }).join('')+'</select>'+
+      /* Mover UNA actividad de capítulo no puede mover a sus hermanas: la
+         partida es del capítulo, así que se le busca (o se le crea) una con el
+         mismo nombre en el capítulo nuevo. Se dice, porque callarlo sería
+         mentir sobre dónde quedó el resto del trabajo. */
+      '<div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:4px">'+
+        'Mueve <b>solo esta actividad</b>. Las demás de su partida se quedan donde están.</div>');
+  h+=fila('Tarea del cronograma',
+      '<select onchange="catTabNodo('+sid+',this.value)" style="'+selBS+'">'+
+        '<option value="">— sin tarea —</option>'+
+        _catTabNodos().map(function(n){
+          return '<option value="'+esc(n.id)+'"'+(nodo===n.id?' selected':'')+'>'+esc(n.etiqueta)+'</option>';
+        }).join('')+'</select>'+
+      (nodos.length>1?'<div style="font-size:10.5px;color:var(--amber);line-height:1.45;margin-top:4px">'+
+        'Está en <b>'+nodos.length+' tareas</b> a propósito. Cambiarla aquí solo mueve la primera.</div>':''));
+  h+=fila('Fecha de entrega',
+      '<input type="date" value="'+esc(a.fecha_fin||'')+'" onchange="catTabSet('+sid+',\'fecha_fin\',this.value)" '+
+        'style="'+selBS+'">');
+  /* LA NOTA SE ESCRIBE AQUÍ, A TECLADO. El botón «Nota» de `revCard` es el
+     MICRÓFONO (`revNota` → `dictarSobre`) y está apagado desde la v97 con toda
+     la voz, así que desde la tarjeta no hay forma de dejar una nota escrita.
+     Va por `Acciones.agregarNota`, que es el camino de siempre. */
+  h+=fila('Nota',
+      '<textarea id="cattab-nota" rows="2" placeholder="Escribe una nota…" style="'+selBS+
+        ';padding:9px;line-height:1.35;resize:vertical"></textarea>'+
+      '<button onclick="catTabNota('+sid+')" style="'+_catBS+';width:100%;margin-top:5px;min-height:44px;'+
+        'font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">'+
+        'Agregar la nota</button>');
+  h+='<div style="height:4px"></div>'+revCard(a);
+  return h+'</div>';
+}
+
+/* ── LAS ESCRITURAS DE LA FILA ── todas por `Acciones`, ni un `PATCH` suelto. */
+async function catTabSet(id, campo, valor){
+  var c={}; c[campo]=valor;
+  try{
+    await Acciones.editar(id, c, campo+' → «'+(valor||'—')+'» (tabla de Partidas)');
+    showToast('Guardado ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
+  _repintarDondeEstoy();
+}
+function catTabDesc(id){
+  var el=document.getElementById('cattab-desc');
+  var v=el?String(el.value||'').trim():'';
+  if(!v){ showToast('La descripción no puede quedar vacía','warn',4000); return; }
+  var a=_findActAny(id)||{};
+  if(v===String(a.descripcion||'')){ showToast('No cambió nada','warn',3000); return; }
+  catTabSet(id,'descripcion',v);
+}
+async function catTabNota(id){
+  var el=document.getElementById('cattab-nota');
+  var v=el?String(el.value||'').trim():'';
+  if(!v){ showToast('Escribe algo primero','warn',3000); return; }
+  try{ await Acciones.agregarNota(id, v); showToast('Nota guardada ✓'); }
+  catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
+  _repintarDondeEstoy();
+}
+async function catTabQuien(id, quien){
+  try{
+    await Acciones.asignar(id, quien, 'responsable → '+(quien||'—')+' (tabla de Partidas)');
+    showToast('Guardado ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
+  _repintarDondeEstoy();
+}
+/* EL CAPÍTULO VIVE EN LA PARTIDA, no en la actividad. Para mover UNA actividad
+   se le busca una partida con su misma descripción EN EL CAPÍTULO DESTINO y,
+   si no la hay, se crea. `_catAmarrar` no sirve aquí: busca la partida por
+   nombre en TODOS los capítulos, así que devolvía la vieja y el capítulo no
+   cambiaba. CERO escrituras a `obra_actividades`. */
+async function catTabCap(id, cap){
+  var a=_findActAny(id); if(!a){ showToast('No encuentro esa actividad','err',5000); return; }
+  var desc=String(a.descripcion||''), viejo=_catTabCapId(a);
+  if(String(cap)===String(viejo)) return;
+  try{
+    var p=_catAgenda().find(function(x){
+      return String(x.nombre)===desc && String(x.capitulo||'0')===String(cap);
+    });
+    if(!p){
+      p={id:uid(), tipo:'agenda', capitulo:String(cap||'0'), numero:'', nombre:desc,
+         oficio:'', unidad:'', aplica:'', codigo_presupuesto:'', activo:true, padre_id:null,
+         precio_unitario:0, valor:null, seccion:'', grupo:null, orden:null};
+      await sb('obra_partidas',{method:'POST',prefer:'return=minimal',body:JSON.stringify(p)});
+      (S.catPartidas=S.catPartidas||[]).push(p);
+    }
+    await sb('obra_partida_actividad',{method:'POST',
+      prefer:'resolution=merge-duplicates,return=minimal',
+      body:JSON.stringify({id:uid(), actividad_id:id, partida_id:p.id})});
+    (S.catAmarres=S.catAmarres||{})[id]=p.id;
+    S._catMapa=null; S._catTabCaps=null; S._catPrec=null;
+    logCambio('editado','actividad',id,desc,
+      'capítulo '+(viejo||'—')+' → '+cap+' (tabla de Partidas)');
+    showToast('Capítulo cambiado ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',8000); }
+  _repintarDondeEstoy();
+}
+/* LA TAREA SE MUEVE, NO SE DUPLICA: se quita del nodo viejo y se mete en el
+   nuevo, en `obra_nodo_actividad`. La actividad no se toca. */
+async function catTabNodo(id, nid){
+  try{ await _catTabNodoAplicar(id, nid); showToast('Tarea cambiada ✓'); }
+  catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',8000); }
+  _repintarDondeEstoy();
+}
+/* El motor, SIN aviso ni repintado: la tanda lo llama una vez por actividad y
+   repinta UNA sola vez al final (v107). Y LANZA si falla, para que la tanda
+   pueda decir CUÁL se cayó en vez de tragárselo. */
+async function _catTabNodoAplicar(id, nid){
+  var a=_findActAny(id)||{}, viejo=_catTabNodoId(a);
+  if(String(nid)===String(viejo)) return;
+  {
+    if(viejo){
+      await sb('obra_nodo_actividad?nodo_id=eq.'+encodeURIComponent(viejo)+
+               '&actividad_id=eq.'+encodeURIComponent(id),{method:'DELETE',prefer:'return=minimal'});
+      S.nodoPorN[viejo]=(S.nodoPorN[viejo]||[]).filter(function(x){ return x!==id; });
+      S.nodoPorA[id]=(S.nodoPorA[id]||[]).filter(function(x){ return x!==viejo; });
+      S.nodoAmarres=(S.nodoAmarres||[]).filter(function(r){
+        return !(r.nodo_id===viejo && r.actividad_id===id);
+      });
+    }
+    if(nid){
+      var f={id:uid(), nodo_id:nid, actividad_id:id};
+      await sb('obra_nodo_actividad',{method:'POST',prefer:'return=minimal',body:JSON.stringify([f])});
+      (S.nodoPorN[nid]=S.nodoPorN[nid]||[]).push(id);
+      (S.nodoPorA[id]=S.nodoPorA[id]||[]).push(nid);
+      (S.nodoAmarres=S.nodoAmarres||[]).push(f);
+    }
+    logCambio('editado','actividad',id,String(a.descripcion||''),
+      'tarea del cronograma: '+(_catTabNodoNom(viejo)||'—')+' → '+(_catTabNodoNom(nid)||'—')+' (tabla de Partidas)');
+  }
+}
+
+/* ── LA FILA ── */
+function _catTabFilaHTML(a, anchoPli){
+  var T=_catTab(), sid=_catQ(a.id), abierta=(T.abierta===String(a.id));
+  var cerrada=_catCerrada(a), venc=isRetrasada(a);
+  var pct=cerrada?100:(parseInt(a.porcentaje,10)||0);
+  var col=cerrada?'var(--green)':(venc?'var(--red)':(pct>0?'var(--accent)':'var(--text3)'));
+  var cel=function(txt, ancho, extra){
+    return '<span style="min-width:'+ancho+'px;max-width:'+ancho+'px;padding:0 6px;'+
+      'font-family:var(--mono);font-size:10.5px;color:var(--text3);overflow:hidden;'+
+      'text-overflow:ellipsis;white-space:nowrap;flex-shrink:0'+(extra||'')+'">'+txt+'</span>';
+  };
+  var capId=_catTabCapId(a);
+  var h='<div style="border-bottom:1px solid var(--border)">'+
+    '<div style="display:flex;align-items:center;min-height:52px;'+(abierta?'background:var(--bg3);':'')+'">'+
+    (S.catSelModo
+      ? '<span style="position:sticky;left:0;z-index:2;width:'+CAT_TAB_MARCAW+'px;min-width:'+CAT_TAB_MARCAW+'px;'+
+        'background:'+(abierta?'var(--bg3)':'var(--bg2)')+';display:flex;align-items:center;justify-content:center">'+
+        '<button onclick="catSelToggle('+sid+')" style="min-width:34px;min-height:44px;border:0;'+
+          'background:none;cursor:pointer;font-size:16px;color:'+((S.catSel2||{})[a.id]?'var(--accent)':'var(--text3)')+'">'+
+          ((S.catSel2||{})[a.id]?'☑':'☐')+'</button></span>'
+      : '')+
+    /* LA DESCRIPCIÓN VA FIJA Y NUNCA SE CORTA POR EL PRINCIPIO (v117): botón
+       `flex` en columna —el contenido de un `<button>` se encoge hasta su texto
+       si no—, `min-width:0` para que encoja de verdad, y dos líneas con el
+       recorte por el FINAL. */
+    '<button onclick="catTabAbrir('+sid+')" style="position:sticky;left:'+(S.catSelModo?CAT_TAB_MARCAW:0)+'px;z-index:1;'+
+      'background:'+(abierta?'var(--bg3)':'var(--bg2)')+';border:0;border-right:1.5px solid var(--border2);'+
+      'width:'+CAT_TAB_DESCW+'px;min-width:'+CAT_TAB_DESCW+'px;min-height:52px;text-align:left;cursor:pointer;'+
+      'display:flex;flex-direction:column;justify-content:center;align-items:stretch;'+
+      'padding:6px 7px;font-family:var(--font);color:var(--text)">'+
+      '<span style="display:flex;align-items:flex-start;gap:4px">'+
+        '<span data-nom style="font-size:11.5px;font-weight:600;line-height:1.25;flex:1;min-width:0;'+
+          'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;'+
+          'overflow-wrap:break-word">'+esc(a.descripcion||'')+'</span>'+
+        '<span style="color:var(--text3);font-size:11px;flex-shrink:0;line-height:1.4;'+
+          (abierta?'transform:rotate(90deg);':'')+'">›</span>'+
+      '</span>'+
+    '</button>'+
+    cel(esc(_catTabUbic(a)), CAT_TAB_COLS[0][2], ';color:var(--text2)')+
+    cel(_catTabQuien(a)?esc(_catTabQuien(a))+((_responsables(a.personal_nombre).length>1)?' +'+(_responsables(a.personal_nombre).length-1):''):'—',
+        CAT_TAB_COLS[1][2], ';color:var(--text2)')+
+    cel(capId?esc(capId+' · '+_catCapNom(capId)):'—', CAT_TAB_COLS[2][2])+
+    cel(_catTabNodoNom(_catTabNodoId(a))?esc(_catTabNodoNom(_catTabNodoId(a))):'—', CAT_TAB_COLS[3][2])+
+    cel(esc(_catTabEstadoNom(_catTabEstado(a))), CAT_TAB_COLS[4][2],
+        cerrada?';color:var(--green);font-weight:700':'')+
+    cel(pct+'%', CAT_TAB_COLS[5][2], ';color:'+col+';font-weight:800')+
+    cel((a.fecha_fin||'').trim()?(_nodoFecha(a.fecha_fin)+(venc?' ▲'+_diasVencida(a)+'d':'')):'—',
+        CAT_TAB_COLS[6][2], venc?';color:var(--red);font-weight:700':'')+
+    '</div>';
+  if(abierta) h+=_catTabPliegueHTML(a, anchoPli);
+  return h+'</div>';
+}
+/* Cuántos días lleva vencida. `fecha_fin` a secas, no `fechaVenc`: desde la v92
+   «vencida» y «sin fecha de entrega» son excluyentes y se cuentan por el campo
+   exacto (`isRetrasada`). */
+function _diasVencida(a){
+  var f=String(a.fecha_fin||'').trim(); if(!f) return 0;
+  var d=Math.round((new Date(today()+'T12:00:00')-new Date(f+'T12:00:00'))/86400000);
+  return d>0?d:0;
+}
+
+/* ── LAS OTRAS PANTALLAS, EN UNA FILA DISCRETA AL FINAL ──
+   NADA SE BORRÓ. Lo que hasta la v117 era una de cinco vistas al mismo nivel
+   —y las cuatro pantallas de trabajo— sigue entero y funcionando igual; solo
+   deja de ser lo primero que se ve. «Capítulos» está aquí porque si no, la
+   portada del módulo (partidas madre, sueltas, el marcador) se quedaría sin
+   ninguna puerta: una pantalla a la que no se llega no existe (v116). */
+function _catTabOtrasHTML(){
+  var b=function(onclick, txt){
+    return '<button onclick="'+onclick+'" style="'+_catBS+';flex:1;min-width:104px;min-height:46px;'+
+      'font-size:11.5px;padding:0 8px;border:1.5px solid var(--border2);background:var(--bg2);'+
+      'color:var(--text3)">'+txt+'</button>';
+  };
+  var pu=_nodoPorUbicar();
+  return '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">'+
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:7px">Las otras pantallas del módulo</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+      CAT_OTRAS.map(function(v){ return b('catVistaSet('+_catQ(v[0])+')', v[1]); }).join('')+
+      b('catUbicsAbrir()','Ubicaciones')+
+      b('catRepesAbrir()','Repetidas')+
+      b('nodoUbicarAbrir()','Por ubicar'+(pu?' ('+_nodoActsDirectas(pu.id).length+')':''))+
+      b('catFueraAbrir()','Fuera del plan')+
+    '</div></div>';
+}
+
+function _catTablaHTML(){
+  var T=_catTab();
+  var filas=_catTabFilas(), todas=_catTodas().length;
+  var av=_catAvance(filas);
+  var hechas=filas.filter(_catCerrada).length;
+  /* El ancho útil sale del contenedor REAL, que es lo que mide la pantalla: el
+     pliegue lo necesita para no repartir sus campos a lo ancho de la tabla
+     (v117). */
+  var _cc=document.getElementById('c-catalogo');
+  var anchoPli=Math.max(240, ((_cc&&_cc.clientWidth)||357)-3);
+  var ancho=CAT_TAB_DESCW+(S.catSelModo?CAT_TAB_MARCAW:0)+
+            CAT_TAB_COLS.reduce(function(n,c){ return n+c[2]; },0);
+
+  var h=_catBuscaBarraHTML()+_catVistaSelHTML();
+  h+='<div style="display:flex;align-items:baseline;gap:9px;margin:2px 0 8px;flex-wrap:wrap">'+
+      '<div style="font-size:19px;font-weight:800;letter-spacing:-.3px">Actividades</div>'+
+      '<div style="font-size:11px;color:var(--amber);font-weight:800;font-family:var(--mono)">PRUEBA</div>'+
+    '</div>';
+  h+=_catTabFiltrosHTML();
+  h+='<div style="font-size:12.5px;font-weight:800;font-family:var(--mono);margin:0 0 8px">'+
+      filas.length+' de '+todas+
+      (av?' · <span style="color:var(--accent)">'+av.pct+'%</span> · '+hechas+' hechas':'')+
+    '</div>';
+  /* MARCAR VARIAS reúsa el modo de la v107 (`catSelModo`, `S.catSel2`) y la
+     tanda de siempre: una llamada a `Acciones` por actividad, UN repintado, y
+     se deshace entera. No se abrió un segundo camino para lo mismo. */
+  if(isAdmin()){
+    var n=_catSel2Ids().length;
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">'+
+      '<button onclick="catSelModo()" style="'+_catBS+';flex:1;min-width:130px;min-height:44px;font-size:11.5px;'+
+        'border:1.5px solid '+(S.catSelModo?'var(--accent)':'var(--border2)')+';'+
+        'background:'+(S.catSelModo?'var(--accent-fill)':'var(--bg2)')+';'+
+        'color:'+(S.catSelModo?'var(--accent-on)':'var(--text2)')+'">'+
+        (S.catSelModo?'Dejar de marcar':'Marcar varias')+'</button>'+
+      (S.catUndo && S.catUndo.previas && S.catUndo.previas.length
+        ? '<button onclick="catTandaDeshacer()" style="'+_catBS+';flex:1;min-width:130px;min-height:44px;'+
+          'font-size:11.5px;border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
+          'Deshacer ('+S.catUndo.previas.length+')</button>' : '')+
+    '</div>';
+    if(S.catSelModo){
+      var bt=function(campo,txt){
+        return '<button onclick="catTandaAbrir('+_catQ(campo)+')" style="'+_catBS+';flex:1;min-width:104px;'+
+          'min-height:44px;font-size:11px;padding:0 6px;border:1.5px solid '+(n?'var(--accent)':'var(--border2)')+';'+
+          'background:var(--bg2);color:'+(n?'var(--accent)':'var(--text3)')+'">'+txt+'</button>';
+      };
+      h+='<div style="padding:9px 11px;border-radius:12px;background:var(--bg2);'+
+          'border:1.5px solid var(--border2);margin-bottom:9px">'+
+        '<div style="font-size:12px;font-weight:800;margin-bottom:7px">'+n+' marcada'+(n!==1?'s':'')+
+          ' — cambiarles de una vez</div>'+
+        '<div style="display:flex;gap:5px;flex-wrap:wrap">'+
+          bt('contratista','Contratista')+bt('estado','Estado')+
+          bt('fecha','Fecha fin')+bt('nodo','Tarea')+
+        '</div></div>';
+    }
+  }
+  if(!filas.length){
+    h+='<div class="empty" style="padding:30px 16px;color:var(--text3);font-size:13px;line-height:1.5">'+
+      'No hay ninguna actividad con esos filtros.</div>'+_catTabOtrasHTML();
+    return h+'<div style="height:110px"></div>';
+  }
+  var tope=Math.min(T.tope||50, filas.length);
+  h+='<div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-family:var(--mono)">'+
+     'se desplaza a lo ancho →</div>';
+  /* SIN `-webkit-overflow-scrolling:touch`: en Safari de iPhone rompe
+     `position:sticky` y la descripción dejaría de quedarse fija (v117). */
+  h+='<div style="overflow-x:auto;border:1.5px solid var(--border2);border-radius:12px;'+
+     'background:var(--bg2)"><div style="min-width:'+ancho+'px">';
+  h+='<div style="display:flex;align-items:center;min-height:30px;background:var(--bg4,var(--bg3));'+
+     'border-bottom:1.5px solid var(--border2)">'+
+     (S.catSelModo?'<span style="min-width:'+CAT_TAB_MARCAW+'px;flex-shrink:0"></span>':'')+
+     '<span style="position:sticky;left:'+(S.catSelModo?CAT_TAB_MARCAW:0)+'px;z-index:2;'+
+       'background:var(--bg4,var(--bg3));width:'+CAT_TAB_DESCW+'px;min-width:'+CAT_TAB_DESCW+'px;padding:0 7px;'+
+       'font-size:9.5px;font-weight:800;color:var(--text3);letter-spacing:.5px;'+
+       'border-right:1.5px solid var(--border2);line-height:30px">DESCRIPCIÓN</span>'+
+     CAT_TAB_COLS.map(function(c){
+       return '<span style="min-width:'+c[2]+'px;max-width:'+c[2]+'px;padding:0 6px;font-size:9.5px;'+
+         'font-weight:800;color:var(--text3);letter-spacing:.4px;flex-shrink:0;overflow:hidden;'+
+         'text-overflow:ellipsis;white-space:nowrap">'+esc(c[1].toUpperCase())+'</span>';
+     }).join('')+
+     '</div>';
+  for(var i=0;i<tope;i++) h+=_catTabFilaHTML(filas[i], anchoPli);
+  h+='</div></div>';
+  if(filas.length>tope)
+    h+='<button onclick="catTabMas()" style="'+_catBS+';width:100%;margin-top:9px;min-height:48px;'+
+      'font-size:12px;border:1.5px dashed var(--border2);background:none;color:var(--text2)">'+
+      'Ver 50 más ('+(filas.length-tope)+' sin enseñar)</button>';
+  h+=_catTabOtrasHTML();
+  return h+'<div style="height:110px"></div>';
+}
+
 function renderCatalogo(){
   var el=document.getElementById('c-catalogo'); if(!el) return;
   if(!isAdmin()){
@@ -22179,7 +22770,12 @@ function renderCatalogo(){
   try{
     /* La búsqueda manda sobre todo lo demás: está arriba y siempre visible, y
        lo que se escribe ahí es lo que se quiere ver ahora. */
-    var _res=_catBuscaResultados();
+    /* v118 · EN LA TABLA, LO QUE SE BUSCA FILTRA LA TABLA. Es la misma función
+       de la v109 (`_catBuscaResultados`), pero sin saltar a otra pantalla: la
+       tabla ya es la lista de actividades, y mandar a una segunda lista sería
+       enseñar lo mismo dos veces. En las otras vistas la pantalla de búsqueda
+       sigue igual. */
+    var _res=(catVista()==='tabla' && !_catTabOtraAbierta()) ? null : _catBuscaResultados();
     if(_res)                  el.innerHTML=_catBuscaHTML(_res);
     else if(S.catGrupoNuevo)  el.innerHTML=_catGrupoNuevoHTML();
     else if(S.catMover)       el.innerHTML=_catMoverHTML();
@@ -22206,6 +22802,9 @@ function renderCatalogo(){
        sin esto se ponía `S.nodoSel` y se seguía pintando el Gantt, así que el
        toque no hacía nada visible. */
     else if(S.nodoSel && (catVista()==='lista'||catVista()==='tiempo')) el.innerHTML=_catArbolHTML();
+    /* v118 · LA TABLA ES LA ENTRADA. Va después de las pantallas de trabajo
+       —que son algo que se está haciendo— y antes de los capítulos. */
+    else if(catVista()==='tabla')    el.innerHTML=_catTablaHTML();
     else if(catVista()==='edificio') el.innerHTML=_catEdificioHTML();
     else if(catVista()==='matriz')   el.innerHTML=_catMatrizHTML();
     else if(catVista()==='tiempo')   el.innerHTML=_catTiempoHTML();
