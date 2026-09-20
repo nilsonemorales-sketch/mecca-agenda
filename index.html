@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260920_119';
+const APP_VERSION='20260920_120';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -915,6 +915,11 @@ var PAL_SIN_CAMBIOS='Sin cambios';
    en todo el app. Son 17 hoy, y con dos nombres distintos —«Sin ubicación» en
    una pantalla y «(sin ubicación)» en otra— parecerían dos cosas. */
 var PAL_SIN_UBIC='Sin ubicación';
+/* El personal en planilla se llama así en las once pantallas que lo nombran
+   —el agrupador de la lista, el alta, los selectores— y por eso Clasificar lo
+   lee de aquí en vez de escribirlo otra vez (v120). Es la regla del §9.5: una
+   cosa, una palabra. */
+var PAL_PROPIO='Personal x la casa';
 
 /* ══ LA VOZ, ESCONDIDA — NO RETIRADA ══════════════════════════════════
    Decisión del dueño en v97. El motivo: la voz se comporta DISTINTO según
@@ -1864,6 +1869,8 @@ let S={
   /* v118 — la tabla, que es por donde se entra al módulo. Nace aquí por lo
      mismo que todo lo de arriba: el dueño entra DIRECTO a Partidas. */
   catTabla:null,
+  /* v120 — la pantalla de clasificar y el retrato para deshacer su tanda. */
+  catClas:null, clasUndo:null,
   /* v108 — la estructura editable. Nace aquí por lo mismo que lo demás: el
      dueño entra DIRECTO a Partidas y una variable que no existe revienta la
      pantalla entera sin decir por qué (v103). */
@@ -20422,8 +20429,11 @@ async function nodoQuitar(nid, actId){
    cambia es qué es lo primero que se ve. `CAT_OTRAS` existe para que
    `catVista()` las siga reconociendo como vistas válidas. */
 var CAT_VISTAS=[['tabla','Tabla']];
-var CAT_OTRAS=[['lista','Capítulos'],['edificio','Edificio'],['matriz','Matriz'],
-               ['arbol','Cronograma'],['tiempo','Tiempo']];
+/* `clasificar` (v120) va la PRIMERA de la fila mientras queden actividades por
+   ubicar — lo ordena `_catTabOtrasHTML`, no este array, que solo dice cuáles
+   son vistas válidas. */
+var CAT_OTRAS=[['clasificar','Clasificar'],['lista','Capítulos'],['edificio','Edificio'],
+               ['matriz','Matriz'],['arbol','Cronograma'],['tiempo','Tiempo']];
 function catVista(){
   var v=S.catVista;
   if(!v){
@@ -22653,10 +22663,22 @@ function _catTabOtrasHTML(){
       'color:var(--text3)">'+txt+'</button>';
   };
   var pu=_nodoPorUbicar();
+  /* CLASIFICAR VA PRIMERO MIENTRAS QUEDE TRABAJO (v120). Con 2.445 por repartir
+     es lo único que importa del módulo; cuando no quede ninguna deja de ser lo
+     primero y se va al final, con las demás. */
+  var pend=_clasPendientes().length;
+  var otras=CAT_OTRAS.slice().sort(function(x,y){
+    if(x[0]==='clasificar') return pend?-1:1;
+    if(y[0]==='clasificar') return pend?1:-1;
+    return 0;
+  });
   return '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">'+
     '<div style="font-size:11px;color:var(--text3);margin-bottom:7px">Las otras pantallas del módulo</div>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
-      CAT_OTRAS.map(function(v){ return b('catVistaSet('+_catQ(v[0])+')', v[1]); }).join('')+
+      otras.map(function(v){
+        return b('catVistaSet('+_catQ(v[0])+')',
+                 v[1]+(v[0]==='clasificar'&&pend?' ('+pend+')':''));
+      }).join('')+
       b('catUbicsAbrir()','Ubicaciones')+
       b('catRepesAbrir()','Repetidas')+
       b('nodoUbicarAbrir()','Por ubicar'+(pu?' ('+_nodoActsDirectas(pu.id).length+')':''))+
@@ -22754,6 +22776,501 @@ function _catTablaHTML(){
   return h+'<div style="height:110px"></div>';
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v120 · CLASIFICAR — repartir las 2.445 en las 93 subpartidas
+
+   El árbol del plan YA NO ES EL CRONOGRAMA DE PROJECT: el dueño armó su propio
+   esquema y está sembrado desde SQL. Son **8 grupos · 28 partidas madre · 93
+   subpartidas**, y **el sitio NO es un nodo** — es el `area` de la actividad.
+   Las 2.445 entraron todas en «POR UBICAR».
+
+   Lo vio en el árbol y dijo: «La forma de presentarlo para trabajar sobre él
+   siento que no es la mejor.» Tenía razón: arrastrar de una en una por cuatro
+   escalones son 2.445 viajes. Por eso esto es una PANTALLA, no un botón más
+   dentro del árbol.
+
+   SE TRABAJA DE DOS MANERAS y las dos hacen falta: **por subpartida** («voy a
+   llenar Porcelanato») y **por contratista** («voy a repartir lo de Yelson»),
+   porque el dueño planifica por contratista, no por taller.
+
+   EL PARECIDO SOLO ORDENA. Nunca marca nada. Confiar en una coincidencia de
+   texto ya costó dos veces en este proyecto —`mueble de ba` que no cogía
+   «muebles de baño» mandó 22 actividades al sitio equivocado—, así que la
+   sugerencia es el ORDEN y la casilla la pone el dueño.
+
+   NADA DE ESTO TOCA LA ACTIVIDAD: ni estado, ni contratista, ni fecha, ni
+   porcentaje. Solo `obra_nodo_actividad`, igual que traer y quitar desde la
+   v111 — y por eso tampoco pasa por `Acciones`: dejaría escrito en el
+   historial que la actividad se editó, y sería mentira.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function _clasEstado(){
+  if(!S.catClas) S.catClas={modo:'sub', sub:'', cont:'', q:'', ubic:'', cap:'',
+                            sel:{}, tope:50, destino:''};
+  return S.catClas;
+}
+/* Las 93, con su partida madre y su grupo. `origen` lo puso la siembra: no se
+   adivina del nombre, que es lo que pedía la v111. */
+function _clasSubs(){
+  return _nodos().filter(function(n){ return n.origen==='subpartida'; })
+    .slice().sort(function(a,b){ return (a.orden||0)-(b.orden||0); });
+}
+function _clasPendientes(){
+  var pu=_nodoPorUbicar();
+  return pu?_nodoActsDirectas(pu.id):[];
+}
+function _clasUbicadas(){
+  var n=0;
+  _clasSubs().forEach(function(s){ n+=_nodoActsDirectas(s.id).length; });
+  return n;
+}
+/* LAS PALABRAS DE UNA SUBPARTIDA: las de su nombre, más la columna `palabras`
+   que el dueño llenó desde SQL (73 de 93 la tienen). Hacía falta porque hay
+   nombres que no bastan solos —«Adicionales», «Débiles», «Primer»—.
+   Del NOMBRE se tiran las de tres letras o menos; de `palabras` NO, porque ahí
+   hay frases puestas a mano («de gas», «3 way», «a/c») y tirarlas sería
+   deshacer el trabajo del dueño. */
+function _clasPalabras(n){
+  var out=[];
+  _catNorm(String(n&&n.nombre||'')).split(/[^a-z0-9]+/).forEach(function(w){
+    if(w.length>3) out.push(w);
+  });
+  String(n&&n.palabras||'').split(',').forEach(function(p){
+    var w=_catNorm(p.trim()); if(w) out.push(w);
+  });
+  return [...new Set(out)];
+}
+/* «gas» dentro de «fugas» NO es una coincidencia: es el tropiezo de la v108,
+   que allí se esquivó sembrando «de gas». Aquí el matcher es nuestro, así que
+   se comprueba que la palabra vaya SUELTA — con borde de palabra a los dos
+   lados. Las frases de varias palabras se buscan enteras. */
+function _clasCasa(txt, pal){
+  var i=txt.indexOf(pal);
+  while(i>=0){
+    var a=i===0?' ':txt.charAt(i-1);
+    var b=(i+pal.length>=txt.length)?' ':txt.charAt(i+pal.length);
+    if(!/[a-z0-9]/.test(a) && !/[a-z0-9]/.test(b)) return i;
+    i=txt.indexOf(pal, i+1);
+  }
+  return -1;
+}
+/* LA PALABRA LARGA PESA MÁS, y no es un detalle de estilo. «Porcelanato» y
+   «piso» son las dos palabras de la misma subpartida, pero contándolas por
+   igual una excavación que dice «piso» salía por delante de «Bajar 4 cajas de
+   porcelanato». Se suma el LARGO de lo que casa, así que lo específico sube y
+   lo genérico acompaña. Medido: de las diez primeras de Porcelanato, cinco lo
+   decían; con el largo, las diez. */
+function _clasPuntos(a, pal){
+  var t=_catNorm(String(a.descripcion||''));
+  var n=0, peso=0, donde=-1, cual='';
+  for(var i=0;i<pal.length;i++){
+    var p=_clasCasa(t, pal[i]);
+    if(p>=0){
+      n++; peso+=pal[i].length;
+      if(donde<0 || pal[i].length>cual.length){ donde=p; cual=pal[i]; }
+    }
+  }
+  return {n:n, peso:peso, donde:donde, cual:cual};
+}
+/* Lo que coincide se resalta, para que se vea POR QUÉ está arriba. */
+function _clasResaltaHTML(desc, cual){
+  var d=String(desc||'');
+  if(!cual) return esc(d);
+  var i=_clasCasa(_catNorm(d), cual);
+  if(i<0) return esc(d);
+  return esc(d.slice(0,i))+
+    '<mark style="background:var(--accent-soft);color:var(--accent);border-radius:4px;'+
+      'padding:0 2px">'+esc(d.slice(i,i+cual.length))+'</mark>'+
+    esc(d.slice(i+cual.length));
+}
+/* Las candidatas: lo que está en POR UBICAR, pasado por los filtros, y
+   ORDENADO por parecido. El orden es una sugerencia; nada se marca solo. */
+function _clasCandidatas(){
+  var C=_clasEstado();
+  var sub=C.sub?_nodoPorId(C.sub):null;
+  var pal=sub?_clasPalabras(sub):[];
+  var q=_catNorm(String(C.q||'').trim());
+  var out=_clasPendientes().filter(function(a){
+    if(C.ubic && (String(a.area||'').trim()||PAL_SIN_UBIC)!==C.ubic) return false;
+    if(C.cont && _clasQuienes(a).indexOf(C.cont)<0) return false;
+    if(C.cap && _catTabCapId(a)!==C.cap) return false;
+    if(q && _catNorm(String(a.descripcion||'')+' '+String(a.area||'')+' '+
+                     String(a.personal_nombre||'')).indexOf(q)<0) return false;
+    return true;
+  }).map(function(a){
+    var p=pal.length?_clasPuntos(a,pal):{n:0,peso:0,donde:-1,cual:''};
+    return {a:a, n:p.n, peso:p.peso, cual:p.cual};
+  });
+  out.sort(function(x,y){
+    return y.peso-x.peso || y.n-x.n ||
+           String(x.a.descripcion||'').localeCompare(String(y.a.descripcion||''),'es');
+  });
+  return out;
+}
+/* QUIÉN, en plural: `personal_nombre` trae varios nombres separados por coma
+   —hoy 78 cadenas distintas para 38 nombres sueltos— así que se usa
+   `_responsables()`, que ya existe. Y el personal propio se agrupa en uno solo,
+   con la MISMA palabra que el resto del app: «Personal x la casa». Escribir
+   aquí una segunda forma de decirlo es el defecto que el §9.5 prohíbe. */
+function _clasQuienes(a){
+  if(String(a.tipo_personal||'')==='propio') return [PAL_PROPIO];
+  var r=_responsables(a.personal_nombre);
+  return r.length?r:['Sin asignar'];
+}
+function _clasContratistas(){
+  var m={};
+  _clasPendientes().forEach(function(a){
+    _clasQuienes(a).forEach(function(q){ m[q]=(m[q]||0)+1; });
+  });
+  return Object.keys(m).sort(function(x,y){ return m[y]-m[x]; })
+    .map(function(k){ return {nombre:k, n:m[k]}; });
+}
+
+function clasModo(m){ var C=_clasEstado(); C.modo=m; C.sub=''; C.cont=''; C.sel={}; C.tope=50; renderCatalogo(); _catArriba(); }
+function clasAbrirSub(id){ var C=_clasEstado(); C.sub=id||''; C.sel={}; C.tope=50; C.q=''; renderCatalogo(); _catArriba(); }
+function clasAbrirCont(nm){ var C=_clasEstado(); C.cont=nm||''; C.sel={}; C.tope=50; C.q=''; C.destino=''; renderCatalogo(); _catArriba(); }
+function clasFiltro(k,v){ var C=_clasEstado(); C[k]=v; C.tope=50; renderCatalogo(); }
+function clasTeclea(v){
+  var C=_clasEstado(); C.q=v; C.tope=50; S._clasFoco=true;
+  clearTimeout(S._clasT);
+  S._clasT=setTimeout(function(){ renderCatalogo(); }, 260);
+}
+function clasToggle(id){
+  var C=_clasEstado();
+  if(C.sel[id]) delete C.sel[id]; else C.sel[id]=1;
+  renderCatalogo();
+}
+/* «Marcar las N visibles» es la palanca de verdad: de una en una no se reparten
+   2.445. Marca SOLO las que se están viendo, nunca la lista entera. */
+function clasMarcarVisibles(){
+  var C=_clasEstado(), res=_clasCandidatas().slice(0, C.tope||50);
+  var todas=res.every(function(r){ return C.sel[r.a.id]; });
+  res.forEach(function(r){ if(todas) delete C.sel[r.a.id]; else C.sel[r.a.id]=1; });
+  renderCatalogo();
+}
+function clasMas(){ var C=_clasEstado(); C.tope=(C.tope||50)+50; renderCatalogo(); }
+function clasDestino(id){ var C=_clasEstado(); C.destino=id||''; renderCatalogo(); }
+
+/* ── LA ESCRITURA ──
+   UNA ACTIVIDAD VIVE EN UNA SOLA SUBPARTIDA. Se mete en la de destino y se
+   saca de TODAS las demás, así que los amarres se quedan en 2.445 y mandar la
+   misma dos veces la mueve en vez de duplicarla. El POST va primero y el
+   DELETE después —con `nodo_id=neq.destino`—: al revés, si la red se cae en
+   medio, la actividad se queda sin ningún nodo. */
+async function _clasMover(ids, destino, detalle){
+  if(!ids.length || !destino) return {ok:0};
+  var filas=ids.map(function(a){ return {id:uid(), nodo_id:destino, actividad_id:a}; });
+  await sb('obra_nodo_actividad',{method:'POST',
+    prefer:'resolution=merge-duplicates,return=minimal', body:JSON.stringify(filas)});
+  for(var i=0;i<ids.length;i+=50){
+    var trozo=ids.slice(i,i+50).map(encodeURIComponent).join(',');
+    await sb('obra_nodo_actividad?actividad_id=in.('+trozo+')&nodo_id=neq.'+
+             encodeURIComponent(destino),{method:'DELETE',prefer:'return=minimal'});
+  }
+  /* El estado en memoria, para que la pantalla no mienta hasta la próxima
+     recarga: la actividad sale de donde estaba y entra en la de destino. */
+  ids.forEach(function(a){
+    (S.nodoPorA[a]||[]).forEach(function(nid){
+      if(nid!==destino) S.nodoPorN[nid]=(S.nodoPorN[nid]||[]).filter(function(x){ return x!==a; });
+    });
+    S.nodoPorA[a]=[destino];
+    S.nodoPorN[destino]=S.nodoPorN[destino]||[];
+    if(S.nodoPorN[destino].indexOf(a)<0) S.nodoPorN[destino].push(a);
+  });
+  S.nodoAmarres=(S.nodoAmarres||[]).filter(function(r){
+    return ids.indexOf(r.actividad_id)<0;
+  }).concat(filas);
+  var d=_nodoPorId(destino)||{};
+  logCambio('editado','plan',destino,d.nombre||'',
+    (detalle||(ids.length+' actividades clasificadas'))+' (no se tocó ninguna actividad)');
+  return {ok:ids.length};
+}
+async function clasLlevar(){
+  var C=_clasEstado();
+  var ids=Object.keys(C.sel);
+  var destino=(C.modo==='sub')?C.sub:C.destino;
+  if(!ids.length){ showToast('No hay ninguna marcada','warn',3000); return; }
+  if(!destino){ showToast('Escoge a qué subpartida van','warn',3500); return; }
+  var d=_nodoPorId(destino)||{};
+  /* EL RETRATO DE ANTES, para deshacer la tanda entera — el patrón de la v107.
+     Se guarda ANTES de escribir: después ya no se sabe de dónde venían. */
+  S.clasUndo={destino:destino, previas:ids.map(function(a){
+    return {id:a, nodos:((S.nodoPorA||{})[a]||[]).slice()};
+  })};
+  setSS('syncing','Clasificando…');
+  try{
+    await _clasMover(ids, destino, ids.length+' actividades a «'+(d.nombre||'')+'»');
+    C.sel={};
+    setSS('ok','✓');
+    showToast(ids.length+' actividad'+(ids.length!==1?'es':'')+' en «'+(d.nombre||'')+'» ✓');
+  }catch(e){
+    S.clasUndo=null;
+    setSS('err','Error'); showToast('No se pudo: '+((e&&e.message)||''),'err',8000);
+  }
+  renderCatalogo();
+}
+/* EQUIVOCARSE CUESTA UN TOQUE: devuelve la actividad a POR UBICAR. */
+async function clasSacar(id){
+  var pu=_nodoPorUbicar(); if(!pu) return;
+  var a=_findActAny(id)||{};
+  setSS('syncing','Sacando…');
+  try{
+    S.clasUndo={destino:pu.id, previas:[{id:id, nodos:((S.nodoPorA||{})[id]||[]).slice()}]};
+    await _clasMover([id], pu.id, 'devuelta a por ubicar: «'+String(a.descripcion||id).slice(0,50)+'»');
+    setSS('ok','✓'); showToast('De vuelta en POR UBICAR ✓');
+  }catch(e){
+    S.clasUndo=null;
+    setSS('err','Error'); showToast('No se pudo: '+((e&&e.message)||''),'err',8000);
+  }
+  renderCatalogo();
+}
+async function clasDeshacer(){
+  var U=S.clasUndo; if(!U || !U.previas.length) return;
+  var previas=U.previas; S.clasUndo=null;
+  setSS('syncing','Deshaciendo…');
+  var fallos=0;
+  /* Se agrupan por el nodo al que vuelven: una llamada por nodo, no una por
+     actividad. Con 2.445 de golpe eso es la diferencia entre un viaje y mil. */
+  var porNodo={};
+  previas.forEach(function(p){
+    var vuelve=(p.nodos&&p.nodos[0])||'';
+    if(!vuelve) return;
+    (porNodo[vuelve]=porNodo[vuelve]||[]).push(p.id);
+  });
+  for(var nid in porNodo){
+    try{ await _clasMover(porNodo[nid], nid, 'deshecha la tanda de clasificar'); }
+    catch(e){ fallos++; }
+  }
+  setSS(fallos?'err':'ok', fallos?'Error':'✓');
+  showToast(fallos?('No se pudo deshacer todo ('+fallos+')'):'Tanda deshecha ✓',
+            fallos?'err':'ok', fallos?7000:3000);
+  renderCatalogo();
+}
+
+/* ── LA CABECERA: el marcador del trabajo ──
+   El número baja según trabaja, y es lo que le dice si vale la pena seguir. */
+function _clasCabeceraHTML(){
+  var pend=_clasPendientes().length, ub=_clasUbicadas(), subs=_clasSubs().length;
+  var tot=pend+ub, pct=tot?Math.round(ub/tot*100):0;
+  return '<div style="display:flex;align-items:baseline;gap:9px;margin:2px 0 6px;flex-wrap:wrap">'+
+      '<div style="font-size:19px;font-weight:800;letter-spacing:-.3px">Clasificar</div>'+
+      '<div style="font-size:11px;color:var(--amber);font-weight:800;font-family:var(--mono)">PRUEBA</div>'+
+    '</div>'+
+    '<div style="font-size:12.5px;font-weight:800;font-family:var(--mono);margin-bottom:6px">'+
+      '<span style="color:'+(pend?'var(--amber)':'var(--green)')+'">'+pend+' por ubicar</span>'+
+      ' · '+ub+' ubicadas · '+subs+' subpartidas</div>'+
+    '<div style="height:9px;border-radius:99px;background:var(--bg3);overflow:hidden;margin-bottom:4px">'+
+      '<div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'var(--green)':'var(--accent)')+'"></div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:10px">'+pct+'%</div>'+
+    (S.clasUndo && S.clasUndo.previas && S.clasUndo.previas.length
+      ? '<button onclick="clasDeshacer()" style="'+_catBS+';width:100%;margin-bottom:9px;min-height:46px;'+
+        'font-size:12px;border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
+        'Deshacer lo último ('+S.clasUndo.previas.length+')</button>' : '');
+}
+function _clasModoHTML(){
+  var C=_clasEstado();
+  var b=function(m,txt){
+    var on=(C.modo===m);
+    return '<button onclick="clasModo('+_catQ(m)+')" style="'+_catBS+';flex:1;min-height:46px;'+
+      'font-size:12px;padding:0 8px;border:0;background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
+      'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+txt+'</button>';
+  };
+  return '<div style="display:flex;gap:5px;margin-bottom:10px">'+
+    b('sub','Por subpartida')+b('cont','Por contratista')+'</div>';
+}
+
+/* ── a) LA LISTA DE LAS 93, agrupadas por grupo y partida madre ── */
+function _clasListaSubsHTML(){
+  var h='', grupo='', partida='';
+  _clasSubs().forEach(function(s){
+    var p=_nodoPorId(s.padre_id)||{}, g=_nodoPorId(p.padre_id)||{};
+    if(g.nombre!==grupo){
+      grupo=g.nombre||'';
+      h+='<div style="font-size:11px;font-weight:800;letter-spacing:.5px;color:var(--accent);'+
+        'margin:14px 0 4px">'+esc(grupo)+'</div>';
+      partida='';
+    }
+    if(p.nombre!==partida){
+      partida=p.nombre||'';
+      h+='<div style="font-size:11.5px;font-weight:700;color:var(--text3);margin:8px 0 4px">'+
+        esc(partida)+'</div>';
+    }
+    var n=_nodoActsDirectas(s.id).length;
+    h+='<button onclick="clasAbrirSub('+_catQ(s.id)+')" style="'+_catBS+';width:100%;min-height:46px;'+
+      'margin-bottom:5px;text-align:left;display:flex;align-items:center;gap:9px;'+
+      'border:1.5px solid '+(n?'var(--accent)':'var(--border2)')+';background:var(--bg2);color:var(--text)">'+
+      '<span style="flex:1;min-width:0;font-size:12.5px;font-weight:700;overflow:hidden;'+
+        'text-overflow:ellipsis;white-space:nowrap">'+esc(s.nombre||'')+'</span>'+
+      '<span style="font-family:var(--mono);font-size:11px;flex-shrink:0;'+
+        'color:'+(n?'var(--accent)':'var(--text3)')+'">'+n+'</span>'+
+      '<span style="color:var(--text3);font-size:11px;flex-shrink:0">›</span>'+
+    '</button>';
+  });
+  return h;
+}
+/* ── b) LA LISTA DE CONTRATISTAS, con lo que le queda a cada uno ── */
+function _clasListaContsHTML(){
+  var cs=_clasContratistas();
+  if(!cs.length) return '<div class="empty" style="padding:26px 16px;color:var(--text3);'+
+    'font-size:13px">No queda ninguna por ubicar.</div>';
+  return cs.map(function(c){
+    return '<button onclick="clasAbrirCont('+_catQ(c.nombre)+')" style="'+_catBS+';width:100%;'+
+      'min-height:48px;margin-bottom:6px;text-align:left;display:flex;align-items:center;gap:9px;'+
+      'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text)">'+
+      '<span style="flex:1;min-width:0;font-size:13px;font-weight:700;overflow:hidden;'+
+        'text-overflow:ellipsis;white-space:nowrap">'+esc(c.nombre)+'</span>'+
+      '<span style="font-family:var(--mono);font-size:11.5px;color:var(--accent);'+
+        'font-weight:800;flex-shrink:0">'+c.n+'</span>'+
+      '<span style="color:var(--text3);font-size:11px;flex-shrink:0">›</span></button>';
+  }).join('');
+}
+
+/* ── LAS CANDIDATAS, con sus filtros y sus casillas ── */
+function _clasFiltrosHTML(){
+  var C=_clasEstado(), base=_clasPendientes();
+  var us={}, cs={}, cps={};
+  base.forEach(function(a){
+    us[String(a.area||'').trim()||PAL_SIN_UBIC]=1;
+    _clasQuienes(a).forEach(function(q){ cs[q]=1; });
+    var c=_catTabCapId(a); if(c) cps[c]=1;
+  });
+  var sel=function(k, etq, ops){
+    return '<label style="flex:1;min-width:140px;display:block">'+
+      '<span style="display:block;font-size:9.5px;font-weight:800;letter-spacing:.4px;'+
+        'color:var(--text3);margin-bottom:3px">'+esc(etq)+'</span>'+
+      '<select onchange="clasFiltro('+_catQ(k)+',this.value)" style="width:100%;min-height:44px;'+
+        'border:1.5px solid '+(C[k]?'var(--accent)':'var(--border2)')+';border-radius:11px;'+
+        'padding:0 8px;font-size:12.5px;font-weight:700;font-family:var(--font);'+
+        'background:'+(C[k]?'var(--accent-soft)':'var(--bg2)')+';color:'+(C[k]?'var(--accent)':'var(--text2)')+'">'+
+        '<option value="">Todas</option>'+
+        ops.map(function(o){
+          return '<option value="'+esc(o[0])+'"'+(C[k]===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';
+        }).join('')+
+      '</select></label>';
+  };
+  var h='<div style="display:flex;align-items:center;gap:9px;background:var(--bg2);'+
+      'border:1.5px solid var(--border2);border-radius:var(--r2);padding:10px 13px;margin-bottom:8px">'+
+      '<input id="clas-q" type="search" value="'+esc(C.q||'')+'" oninput="clasTeclea(this.value)" '+
+        'placeholder="Buscar entre las '+base.length+' por ubicar" '+
+        'style="flex:1;border:none;outline:none;font-size:14px;font-family:var(--font);'+
+        'background:transparent;color:var(--text);min-height:24px"></div>';
+  h+='<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px">'+
+    sel('ubic','UBICACIÓN', Object.keys(us).sort(function(x,y){
+      return _revOrdenArea(x)-_revOrdenArea(y)||x.localeCompare(y,'es'); }).map(function(u){ return [u,u]; }))+
+    (C.modo==='sub'
+      ? sel('cont','CONTRATISTA', Object.keys(cs).sort(function(x,y){ return x.localeCompare(y,'es'); })
+          .map(function(c){ return [c,c]; }))
+      : '')+
+    sel('cap','CAPÍTULO', _capsLista().filter(function(c){ return cps[c.n]; })
+      .map(function(c){ return [c.n, c.n+' · '+c.t]; }))+
+  '</div>';
+  return h;
+}
+function _clasCandidatasHTML(){
+  var C=_clasEstado();
+  var destino=(C.modo==='sub')?C.sub:C.destino;
+  var d=destino?(_nodoPorId(destino)||{}):{};
+  var res=_clasCandidatas();
+  var tope=Math.min(C.tope||50, res.length);
+  var marcadas=Object.keys(C.sel).length;
+  var titulo, volver;
+  if(C.modo==='sub'){
+    var p=_nodoPorId(d.padre_id)||{}, g=_nodoPorId(p.padre_id)||{};
+    titulo=String(d.nombre||'');
+    volver='<button onclick="clasAbrirSub(\'\')" style="'+_catVolverBS+'">‹ Las 93 subpartidas</button>'+
+      '<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:2px">'+
+      esc(String(g.nombre||''))+' › '+esc(String(p.nombre||''))+'</div>';
+  }else{
+    titulo=String(C.cont||'');
+    volver='<button onclick="clasAbrirCont(\'\')" style="'+_catVolverBS+'">‹ Los contratistas</button>';
+  }
+  var h=volver+
+    '<div style="font-size:18px;font-weight:800;margin:2px 0 4px;line-height:1.25">'+esc(titulo)+'</div>';
+  if(C.modo==='sub'){
+    var pal=_clasPalabras(d);
+    h+='<div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:9px">'+
+      'Ya tiene <b>'+_nodoActsDirectas(destino).length+'</b>. Abajo van las que quedan por ubicar, '+
+      '<b>ordenadas por parecido</b> — el orden es una sugerencia, no marca nada. '+
+      (pal.length?'Busca: <span style="font-family:var(--mono)">'+esc(pal.slice(0,8).join(' · '))+
+        (pal.length>8?' …':'')+'</span>':'Esta subpartida no tiene palabras: el orden es alfabético.')+
+    '</div>';
+  }else{
+    h+='<div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:9px">'+
+      '<b>'+res.length+'</b> sin ubicar. Escoge abajo a qué subpartida van y márcalas.</div>'+
+      '<div style="margin-bottom:9px">'+
+      '<span style="display:block;font-size:9.5px;font-weight:800;letter-spacing:.4px;'+
+        'color:var(--text3);margin-bottom:3px">LLEVARLAS A</span>'+
+      '<select onchange="clasDestino(this.value)" style="width:100%;min-height:46px;'+
+        'border:1.5px solid '+(C.destino?'var(--accent)':'var(--border2)')+';border-radius:11px;'+
+        'padding:0 9px;font-size:13px;font-family:var(--font);background:var(--bg2);color:var(--text)">'+
+        '<option value="">— escoge una subpartida —</option>'+
+        _clasSubs().map(function(s){
+          var pp=_nodoPorId(s.padre_id)||{};
+          return '<option value="'+esc(s.id)+'"'+(C.destino===s.id?' selected':'')+'>'+
+            esc(String(pp.nombre||'')+' › '+String(s.nombre||''))+'</option>';
+        }).join('')+
+      '</select></div>';
+  }
+  h+=_clasFiltrosHTML();
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">'+
+    '<button onclick="clasMarcarVisibles()" style="'+_catBS+';flex:1;min-width:150px;min-height:44px;'+
+      'font-size:11.5px;border:1.5px solid var(--accent);background:var(--bg2);color:var(--accent)">'+
+      'Marcar las '+tope+' visibles</button>'+
+    (marcadas?'<button onclick="clasLimpiar()" style="'+_catBS+';flex:1;min-width:120px;min-height:44px;'+
+      'font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text3)">'+
+      'Quitar las marcas</button>':'')+
+  '</div>';
+  if(!res.length){
+    h+='<div class="empty" style="padding:26px 16px;color:var(--text3);font-size:13px;line-height:1.5">'+
+      'No queda ninguna por ubicar con esos filtros.</div>';
+    return h+'<div style="height:120px"></div>';
+  }
+  h+='<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:6px">'+
+     res.length+' candidatas</div>';
+  for(var i=0;i<tope;i++){
+    var r=res[i], a=r.a, on=!!C.sel[a.id];
+    h+='<button onclick="clasToggle('+_catQ(a.id)+')" style="'+_catBS+';width:100%;min-height:52px;'+
+      'margin-bottom:5px;text-align:left;display:flex;align-items:flex-start;gap:9px;padding:9px 11px;'+
+      'border:1.5px solid '+(on?'var(--accent)':'var(--border)')+';'+
+      'background:'+(on?'var(--accent-soft)':'var(--bg2)')+';color:var(--text)">'+
+      '<span style="font-size:15px;flex-shrink:0;line-height:1.2;'+
+        'color:'+(on?'var(--accent)':'var(--text3)')+'">'+(on?'☑':'☐')+'</span>'+
+      '<span style="flex:1;min-width:0">'+
+        '<span style="display:block;font-size:12.5px;font-weight:600;line-height:1.35">'+
+          _clasResaltaHTML(a.descripcion, r.cual)+'</span>'+
+        '<span style="display:block;font-size:10px;color:var(--text3);font-family:var(--mono);'+
+          'margin-top:3px">'+esc(String(a.area||'').trim()||PAL_SIN_UBIC)+' · '+
+          esc(_clasQuienes(a).join(', '))+(r.n?' · coincide en '+r.n:'')+'</span>'+
+      '</span></button>';
+  }
+  if(res.length>tope)
+    h+='<button onclick="clasMas()" style="'+_catBS+';width:100%;margin-top:4px;min-height:48px;'+
+      'font-size:12px;border:1.5px dashed var(--border2);background:none;color:var(--text2)">'+
+      'Ver 50 más ('+(res.length-tope)+' sin enseñar)</button>';
+  /* LA BARRA DE LLEVAR VA FIJA ABAJO: el pulgar vive abajo (v78), y con
+     cincuenta filas por delante un botón al final del documento no se alcanza. */
+  if(marcadas)
+    h+='<div style="position:sticky;bottom:0;padding:9px 0 calc(9px + var(--sb,0px));'+
+      'background:linear-gradient(transparent,var(--bg) 22%)">'+
+      '<button onclick="clasLlevar()" style="'+_catBS+';width:100%;min-height:52px;font-size:13px;'+
+        'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)">'+
+        'Llevar las '+marcadas+' marcadas'+(destino?' a «'+esc(String(d.nombre||''))+'»':' — escoge destino')+
+      '</button></div>';
+  return h+'<div style="height:60px"></div>';
+}
+function clasLimpiar(){ var C=_clasEstado(); C.sel={}; renderCatalogo(); }
+
+function _catClasHTML(){
+  var C=_clasEstado();
+  var h=_catBuscaBarraHTML()+_catVistaSelHTML()+_clasCabeceraHTML();
+  if(C.modo==='sub' && C.sub) return h+_clasCandidatasHTML();
+  if(C.modo==='cont' && C.cont) return h+_clasCandidatasHTML();
+  h+=_clasModoHTML();
+  h+=(C.modo==='sub')?_clasListaSubsHTML():_clasListaContsHTML();
+  return h+'<div style="height:110px"></div>';
+}
+
 function renderCatalogo(){
   var el=document.getElementById('c-catalogo'); if(!el) return;
   if(!isAdmin()){
@@ -22823,6 +23340,7 @@ function renderCatalogo(){
     /* v118 · LA TABLA ES LA ENTRADA. Va después de las pantallas de trabajo
        —que son algo que se está haciendo— y antes de los capítulos. */
     else if(catVista()==='tabla')    el.innerHTML=_catTablaHTML();
+    else if(catVista()==='clasificar') el.innerHTML=_catClasHTML();
     else if(catVista()==='edificio') el.innerHTML=_catEdificioHTML();
     else if(catVista()==='matriz')   el.innerHTML=_catMatrizHTML();
     else if(catVista()==='tiempo')   el.innerHTML=_catTiempoHTML();
@@ -22856,6 +23374,11 @@ function renderCatalogo(){
     if(_uq && S.nodoUbicar && S._nodoUbicarFoco && document.activeElement!==_uq){
       _uq.focus(); try{ _uq.setSelectionRange(_uq.value.length,_uq.value.length); }catch(e4){}
       S._nodoUbicarFoco=false;
+    }
+    var _cq=document.getElementById('clas-q');
+    if(_cq && S._clasFoco && document.activeElement!==_cq){
+      _cq.focus(); try{ _cq.setSelectionRange(_cq.value.length,_cq.value.length); }catch(e5){}
+      S._clasFoco=false;
     }
     var _q=document.getElementById('cat-q');
     if(_q && S.catQ && document.activeElement!==_q && S._catQFoco){

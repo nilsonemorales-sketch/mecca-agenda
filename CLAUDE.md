@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v119 — 20 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v120 — 20 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v119 (20 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v120 (20 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -230,7 +230,8 @@ mismos botones que cualquier otra.
 | **Ver y editar CUALQUIER actividad, con filtros** | **Partidas** — es por donde se entra (v118). `_catTablaHTML()`, `_catTabFilas()`, `catTabFiltro()`. Una fila es una actividad |
 | **Cambiarle a una actividad cualquier cosa** | **Partidas → tocar su fila** — `_catTabPliegueHTML()`. Las once, todas por `Acciones` |
 | **Cambiarle lo mismo a varias** | **Partidas → «Marcar varias»** — `catSelModo()`, `catTandaAbrir()`. Avisa a cuántas y se deshace entera |
-| **Llegar a las otras pantallas del módulo** | **Partidas → la fila de botones del final** — `_catTabOtrasHTML()`. Nueve: Capítulos, Edificio, Matriz, Cronograma, Tiempo, Ubicaciones, Repetidas, Por ubicar y Fuera del plan |
+| **REPARTIR las 2.445 en las 93 subpartidas del plan** | **Partidas → Clasificar** — `_catClasHTML()`, `clasAbrirSub()`, `clasAbrirCont()`, `_clasMover()` (v120). Por subpartida o por contratista. No toca la actividad |
+| **Llegar a las otras pantallas del módulo** | **Partidas → la fila de botones del final** — `_catTabOtrasHTML()`. Diez, con **Clasificar la primera**: Clasificar, Capítulos, Edificio, Matriz, Cronograma, Tiempo, Ubicaciones, Repetidas, Por ubicar y Fuera del plan |
 | **Ver lo mismo de otra manera** | **Partidas → los botones del final** — `catVistaSet()`, `_catAmbito()`. Hasta la v117 era un selector de cinco vistas arriba |
 | **Ordenar las partidas a tu gusto, renombrarlas, juntarlas, quitarlas o agregar** | **Partidas → un capítulo → «Por partida»** — `_catPorPartidaHTML()`, `CAT_ORDENES`, `catPartidaCorrer()`, `catPNuevaAbrir()` (v114) |
 | **Sacar del plan lo que sobra** | **Partidas → Árbol → «Lo que está fuera del plan»** — `catFueraAbrir()`. Descartar **no borra** |
@@ -773,6 +774,8 @@ Son **nueve, no ocho**: «Capítulos» está ahí porque la portada del módulo 
 marcador, partidas madre, sueltas, ordenar las partidas— se quedaba sin ninguna
 puerta, y una pantalla a la que no se llega no existe (v116). El cronograma
 sigue entero por dentro, con los arreglos de la v117.
+**Desde la v120 son DIEZ**, con **Clasificar la primera** mientras queden
+actividades por repartir.
 
 `CAT_VISTAS` se quedó con **la tabla y nada más**; las otras cuatro están en
 `CAT_OTRAS` para que `catVista()` las siga reconociendo. Con una sola vista el
@@ -896,6 +899,122 @@ No se reescribió: `_catBuscaResultados` es la base de la tabla cuando hay algo
 escrito. Y en la tabla **no salta a la pantalla de búsqueda** —la tabla ya es la
 lista de actividades, y mandar a una segunda lista sería enseñar lo mismo dos
 veces—; desde las otras vistas esa pantalla sigue igual.
+
+### CLASIFICAR (v120) — repartir las 2.445 en las 93 subpartidas
+
+**El árbol dejó de ser el cronograma del MS Project.** El 20 de septiembre el
+dueño rehízo `obra_nodos` desde SQL con **su propio esquema**, y lo que hay
+ahora son **131 nodos**:
+
+```
+raíz  es_raiz                                          1
+  grupo        es_g1 … es_g8                           8   PRELIMINARES Y BAJO NIVEL, ESTRUCTURA, ACABADOS…
+    partida madre  es_p1 … es_p28                     28   Movimiento de tierra, Hormigón armado, Pisos…
+      subpartida   es_s001 … es_s093                  93   Corte, Excavaciones, Porcelanato, Zócalos…
+  POR UBICAR   es_porubicar                            1
+```
+
+`origen` vale ahora `raiz · grupo · partida · subpartida · porubicar`. **Las
+189 tareas del Project, los `cr_*`, `costo_plan`, `pred_plan` y compañía ya no
+están en la base.** El código que los lee —el cronograma, la línea de tiempo,
+`nodoPlanAbrir`— **se queda entero y funciona**: lee de las columnas, y las
+columnas siguen ahí, vacías. No lo borres para «limpiar»: si el dueño vuelve a
+cargar un Project, es lo que lo va a pintar.
+
+**EL SITIO NO ES UN NODO.** En el esquema del dueño la subpartida es el trabajo
+—«Porcelanato»— y **dónde se hace sale del `area` de la actividad**. Por eso no
+hay 93 × 29 nodos, y por eso la pantalla enseña la ubicación en cada renglón en
+vez de pedir que se escoja antes.
+
+**Columna nueva: `obra_nodos.palabras`** (text, separadas por coma). El dueño la
+llenó desde SQL en **73 de las 93** subpartidas — «Porcelanato» trae
+`porcelanato, piso, ceramica de piso`—. Es el mismo formato llano de
+`obra_subgrupos.palabras` de la v108, **a propósito**: dos formatos para lo
+mismo terminan leyéndose distinto.
+
+#### Por qué hizo falta una pantalla nueva
+
+Palabras del dueño sobre el árbol: **«La forma de presentarlo para trabajar
+sobre él siento que no es la mejor.»** Y tenía razón medida: con el esquema
+nuevo sembrado, **las 2.445 actividades quedaron TODAS en `es_porubicar`** y la
+única forma de sacarlas era `nodoTraerAbrir`, de nodo en nodo, buscando a mano
+entre 2.445 cada vez. 93 subpartidas × abrir, buscar, marcar, guardar no lo
+termina nadie.
+
+Clasificar **no añade un dato ni una tabla**: escribe en `obra_nodo_actividad`,
+la misma de siempre. Es la pantalla que faltaba para usar lo que ya existía.
+
+#### Dos modos, porque el dueño reparte de dos maneras
+
+**Por subpartida** — se entra a «Porcelanato» y salen las candidatas de toda la
+obra. **Por contratista** — se entra a «Yelson Jimenez (305)» y se reparte lo
+suyo. Son la misma lista con otra pregunta delante, y las dos acaban en
+`_clasMover`.
+
+**Los contratistas salen de `_clasQuienes`**, que mira `tipo_personal==='propio'`
+primero y devuelve **`PAL_PROPIO`** — los 391 del personal propio van en **una
+sola entrada**, no en 37 nombres sueltos. Si no es propio, `_responsables()`
+parte el `personal_nombre` por comas. Medido contra la base: **Yelson 305**,
+Dimedes 379, 34 contratistas más `Personal x la casa` y `Sin asignar`.
+
+#### EL PARECIDO ORDENA, NUNCA MARCA
+
+Es la regla de la v102 —«**NADA SE MARCA SOLO**», el dueño la rechazó
+expresamente— traída aquí. `_clasPuntos` da un orden y **pinta la palabra que
+coincidió**; las casillas nacen **todas vacías**. Comprobado al abrir
+Porcelanato: **0 marcadas**, y las **diez primeras dicen «porcelanato»**.
+
+**LA PALABRA LARGA PESA MÁS, y esa es la decisión que hace que el orden sirva.**
+Contando solo cuántas coinciden, una excavación que dice «piso» empataba con
+«Bajar 4 cajas de porcelanato» y salía encima. Pesando por la longitud de lo que
+casó: de las diez primeras, **cinco lo decían → las diez**.
+
+**`_clasCasa` exige que la palabra esté entera**, con no-letra a los dos lados.
+Es el tropiezo de la v108 con otra cara: sin eso `gas` casa dentro de `fugas`.
+Comprobado: `gas` en «fugas» da **-1**, y en «registro de gas» da **24**.
+
+**«Marcar las N visibles»** es el atajo que hace que esto se termine: marca lo
+que está en pantalla, no lo que la máquina cree. De 50 en 50 con «Ver 50 más» —
+2.445 renglones no los pinta ningún teléfono.
+
+#### UNA ACTIVIDAD VIVE EN UNA SOLA SUBPARTIDA
+
+Aquí **sí** es excluyente, al revés que en el plan de la v111 —donde una
+actividad podía estar en varios nodos a propósito—. Motivo: esto es un reparto,
+y una actividad contada en dos subpartidas hace que los dos avances mientan.
+`_clasMover` inserta y **después** borra los demás amarres de esa actividad:
+
+- El `POST` va con **`resolution=merge-duplicates`** (la tabla tiene
+  `UNIQUE (nodo_id, actividad_id)`), así que llevar dos veces al mismo sitio no
+  duplica.
+- El `DELETE` lleva **`nodo_id=neq.<destino>`** y va **después**. Al revés, si
+  la red se cae en medio, la actividad se queda **sin ningún nodo** — perdida
+  para las dos pantallas.
+- De 50 en 50, y **un solo `logCambio`** por tanda.
+
+Medido mandando 50: amarres **2.445 → 2.445**, por ubicar **2.445 → 2.395**,
+cada una en exactamente un nodo, y **cero escrituras a `obra_actividades`**.
+
+**NO pasa por `Acciones`, y es correcto** — es la regla de la v111: no toca la
+actividad, y hacerlo pasar por ahí dejaría escrito en el historial que se editó,
+que es mentira.
+
+**«Sacar de aquí»** la devuelve a `es_porubicar`, no la borra. Y **deshacer**
+(`clasDeshacer`, `S.clasUndo`) devuelve la tanda entera de golpe, como
+`catTandaDeshacer` desde la v107.
+
+#### La cabecera es el marcador del trabajo
+
+«**2445 por ubicar · 0 ubicadas · 93 subpartidas**» con su barra, arriba de los
+dos modos. Es lo que dice cuándo se puede parar — igual que `_catMarcadorHTML`
+en la portada del módulo. Una partida madre vacía **no se esconde**: de las 28,
+**4 no tienen ni una subpartida con trabajo** (Reconocimiento del solar,
+Cisterna, Hormigón armado BNP, Misceláneos) y salen igual, porque esconderlas
+haría creer que el plan tiene 24.
+
+**Clasificar va la PRIMERA de los botones del final** y dice cuántas faltan
+—«Clasificar (2445)»— mientras quede alguna. Cuando no quede ninguna, se queda
+en su sitio sin número: la pantalla sigue sirviendo para mover lo mal puesto.
 
 ### DOS EJES Y NO UNO (v111) — el capítulo para la plata, el árbol para entregar
 
@@ -1123,6 +1242,14 @@ cuál ya existe**: dos partidas iguales es lo que la pantalla de repetidas viene
 a limpiar.
 
 #### EL PLAN ES EL CRONOGRAMA DEL DUEÑO, Y VIVE SOLO EN LA BASE (v113)
+
+> **⚠️ SUPERADO EN LA v120, y se queda escrito a propósito.** El 20-sep el
+> dueño rehízo `obra_nodos` desde SQL con su propio esquema —131 nodos,
+> `es_*`— y **las 189 tareas del Project ya no están en la base**. Lo de abajo
+> sigue siendo verdad sobre **el código**: las columnas existen, el cronograma
+> y la línea de tiempo las leen, y la regla de que **no hay botón de sembrar**
+> es lo que impidió que esto se pudiera destruir de un toque. Léelo como el
+> manual de una pieza que está cargada y vacía, no como el estado de hoy.
 
 El dueño pasó su MS Project completo —«PLANIFICACION MECCA 2-12-24», **189
 tareas, $94.905.422,35, 463 días, del 14-oct-2024 al 22-jul-2026**— y dijo:
@@ -2208,7 +2335,8 @@ mismo:**
 - **Cambiar la tarea del cronograma MUEVE el amarre**: cuéntalos antes y
   después, **2.445 → 2.445**. Si sube, se duplicó
 - **La tanda son N llamadas y UN repintado**, y se deshace entera
-- **Los nueve botones del final abren lo de siempre**, ninguno roto
+- **Los diez botones del final abren lo de siempre**, ninguno roto, y
+  **Clasificar va el primero** mientras queden por repartir
 - **`grep -c "function catSelToggle" index.html` da 1.** Marcar tres partidas en
   «Ordenar las partidas de este capítulo» deja `S.catSel`=3 y `S.catSel2`=**0**,
   el contador dice «3 MARCADAS» —en mayúsculas, por el `text-transform`— y
@@ -2216,7 +2344,8 @@ mismo:**
   puesta, la tanda sigue diciendo **1**, no 4
 - **Ninguna función global se declara dos veces.** `_avisarNombresRepetidos()`
   devuelve `[]`; mete una repetida a propósito y tiene que nombrarla. Hoy son
-  **1.031 funciones y cero repetidas**
+  **1.058 funciones y cero repetidas** (eran 1.031 en la v119; Clasificar
+  añadió 27)
 - **A 390px, NINGUNA celda del cronograma enseña un número a medias**, y con
   **16px de holgura** sobre lo que mide Chromium — en el iPhone la mono es más
   ancha. Mide el texto con un `Range`: en una caja con `overflow:hidden` el
@@ -2273,6 +2402,25 @@ mismo:**
 - **3.00 «Por partida» da 25 partidas y 30 actividades**, y desde la fila se
   llega a la ficha que renombra y cambia de capítulo. **«Por ubicación» sigue
   dando** 4A 1/1 · 4B 3/3 · PH 5/5 · Áreas Comunes N7 6/7 · Parqueo 4/8
+- **El árbol son 131 nodos y CINCO orígenes**: 1 raíz · 8 grupo · 28 partida ·
+  93 subpartida · 1 porubicar. Si aparece un `cr_*`, el arnés está sembrando el
+  Project viejo y todo lo que mida del plan es de otra obra
+- **Clasificar ORDENA, NO MARCA.** Abre «Porcelanato» y cuenta las casillas
+  puestas: **cero**. Y de las diez primeras, **las diez dicen «porcelanato»** —
+  si solo cinco lo dicen, alguien quitó el peso por longitud y volvió a contar
+  coincidencias a secas
+- **`gas` no casa dentro de «fugas»** (`_clasCasa` da −1) y sí en «registro de
+  gas». Es el tropiezo de la v108: si casa en «fugas», la palabra ya no se está
+  buscando entera
+- **Mandar 50 a una subpartida deja los amarres en 2.445**, las por ubicar en
+  2.395 exactas, cada actividad en **un solo nodo**, y **cero escrituras a
+  `obra_actividades`**. Si los amarres suben, el DELETE de los otros nodos no
+  corrió — o corrió antes del POST, que es peor
+- **Deshacer devuelve la tanda entera**, y «Sacar de aquí» devuelve la actividad
+  a POR UBICAR sin borrarla
+- **Por contratista, `Personal x la casa` es UNA entrada de 391**, no 37 nombres
+  sueltos, y **Yelson da 305** contra la base
+- **Un ingeniero sigue sin ver la pestaña** ni poder clasificar
 - **El catálogo se comprueba contra INVARIANTES, no contra cifras.** La obra se
   mueve mientras programas —un día se cerraron 13 partidas en una tarde y el
   reparto dejó de cuadrar contra una tabla congelada—. Lo que tiene que dar
@@ -2384,6 +2532,9 @@ pertenece a ningún nivel.
 | **v111** — la sonda de «crear en cuatro ubicaciones» dio cero ubicaciones en el formulario: `showAddAct` abre PRIMERO el menú de tipo (propio / contratista / administrativa) y el formulario no existe hasta que se escoge. La prueba estaba midiendo el menú. | Si una pantalla tiene un paso intermedio, la prueba **lo tiene que dar**, como lo da el usuario. Medir el primer modal que aparece y llamarlo «el formulario» es el mismo error de v58: tocar lo que no se toca. |
 | **v105** — la prueba esperaba con `window.S && S.acts.length`, y `S` se declara con `let`: **no está en `window`**. La guarda daba siempre falso y la prueba se quedó 60 s dando por hecho que el app no había cargado. Antes de eso, buscaba el agrupador entre los `<button>` y el visible es un `<select>` —las pastillas con esas etiquetas viven en el panel de Filtros, plegado. | Un `let` de nivel superior es un global, pero **no una propiedad de `window`**: preguntar por `window.X` miente sin error. Y antes de dar por rota una pantalla, comprueba que estás tocando el control que el usuario ve — es otra vez el v58. |
 
+| **v120** — para armar el arnés transcribí a mano la columna `tipo_personal` de las 2.445 y salió **corrupta**: 2.446 caracteres con **83 guiones donde la base tiene 9**. Se cazó contando contra Supabase antes de usarla, no después. Al rehacerla desde listas de posiciones, mi propio `assert` de `2445−391−9==1971` **falló**, y eso destapó un **cuarto valor de `tipo_personal`** —`ingeniero`, 74 filas— que este documento llevaba versiones sin listar. | Un fixture largo transcrito a mano es un dato inventado hasta que se cuenta contra la base. **Ponle un `assert` que sume**: aquí el assert no protegió el fixture, **descubrió un hecho de la obra** que nadie sabía. Cuando una cuenta no cuadre por un resto grande, no la ajustes — pregúntale a la base qué es ese resto. |
+| **v120** — el primer orden de las candidatas contaba **cuántas palabras coinciden**, y una excavación que dice «piso» empataba con «Bajar 4 cajas de porcelanato». De las diez primeras de Porcelanato, **cinco** hablaban de porcelanato. Pesando por la **longitud** de lo que casó: **diez de diez**. | «Coincide en 2» no dice lo mismo según en qué coincidió: `porcelanato` es un hecho y `piso` es ruido. Y esto **solo se ve leyendo las diez primeras con datos reales** — un contador de aciertos habría dicho que las dos versiones «encuentran» lo mismo. |
+
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
 real** — o el usuario, parado en la obra.
@@ -2443,7 +2594,7 @@ orden de magnitud.
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
 | `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Desde la v118 `obra_partida_actividad` es además lo que la tabla lee para la columna CAPÍTULO y lo que reescribe al cambiarlo. Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**; **con `orden` desde v114** (el orden que el dueño pone a mano en «Por partida»). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
-| `obra_nodos`, `obra_nodo_actividad`, `obra_plan_fuera` | **EL PLAN (v111→v113)** — el segundo eje. Desde la v113 son **las 189 tareas del MS Project del dueño**, sembradas desde SQL: `costo_plan`, `dias_plan`, `pred_plan`, `inicio_plan`, `fin_plan`, `pct_plan`, `costo_real_plan` y `avance_manual`. **No hay siembra desde el app.** El árbol del dueño: `tipo` (`rama`/`entregable`), `clase` (apartamento/taller/hito), `orden`, `notas` para lo que no es actividad. El amarre es una tabla aparte porque **una actividad puede estar en varios nodos a propósito**. `obra_plan_fuera` son los descartes: **no borra nada**, saca del plan. Se borran las tres y el catálogo queda exactamente igual. | 190 + 2.445 |
+| `obra_nodos`, `obra_nodo_actividad`, `obra_plan_fuera` | **EL PLAN (v111→v113, rehecho en v120)** — el segundo eje. **Desde el 20-sep es el esquema del dueño, no el MS Project**: 131 nodos = 1 raíz + **8 grupos** + **28 partidas madre** + **93 subpartidas** + POR UBICAR, ids `es_raiz`, `es_g*`, `es_p*`, `es_s***`, `es_porubicar`, y `origen` vale `raiz · grupo · partida · subpartida · porubicar`. **Los `cr_*` del Project ya no están**, pero sus columnas sí (`costo_plan`, `dias_plan`, `pred_plan`, `inicio_plan`, `fin_plan`, `pct_plan`, `costo_real_plan`) y el cronograma las sigue leyendo — vacías. **Columna nueva `palabras` (v120)**, texto separado por coma, llena en 73 de las 93, que es lo que ordena las candidatas de Clasificar. Más `tipo` (`rama`/`entregable`), `clase`, `orden`, `notas` y `avance_manual`. **No hay siembra desde el app.** `obra_nodo_actividad` lleva `UNIQUE (nodo_id, actividad_id)`, así que el POST va con `resolution=merge-duplicates`. **El sitio NO es un nodo**: sale del `area` de la actividad. `obra_plan_fuera` son los descartes: **no borra nada**. Se borran las tres y el catálogo queda exactamente igual. | 131 + 2.445 |
 | `obra_ubicaciones` | **Del módulo «Partidas» (v110, v116).** Guarda el porcentaje a mano de una ubicación **y, desde la v116, las ubicaciones que el dueño crea**: `_catUbicsTodas()` devuelve la unión de las que usan las actividades y las filas activas de aquí. El nombre sigue viviendo en `obra_actividades.area`. | 0 al nacer |
 
 ### Cosas de los datos que hay que saber
@@ -2456,9 +2607,14 @@ orden de magnitud.
   Frontal`, `Fachada Posterior`, `Escalera Principal`, `Escalera de
   Emergencia`, `Terraza`, `General`, `Toda la obra`, y las áreas comunes
   de cada nivel (`N7 — Áreas Comunes N7`).
-- **`tipo_personal`** no es de fiar. Vale `contratista`, `propio`, o está
-  vacío. Un filtro que exija `'contratista'` va a dejar fuera trabajo
-  real.
+- **`tipo_personal`** no es de fiar. Vale `contratista`, `propio`,
+  **`ingeniero`** o está vacío. Un filtro que exija `'contratista'` va a
+  dejar fuera trabajo real.
+  **Son CUATRO valores, no tres.** Hasta la v120 aquí decía tres, y el cuarto
+  —`ingeniero`, **74 filas**— apareció porque un arnés de prueba armaba las
+  suyas con `2445 − propios − sin tipo` y la cuenta no cuadró. Medido hoy:
+  **1.971 contratista · 391 propio · 74 ingeniero · 9 vacío**. Si cuentas por
+  este campo, cuenta los cuatro o di explícitamente cuál dejas fuera.
 - **`personal_nombre`** puede traer **varios nombres separados por coma**
   («Antonio, Gregory, Maison…»). Hay helpers: `_responsables()`,
   `_ingenieros()`, y `_personaEn(actividad, nombre)` para preguntar si
