@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260920_118';
+const APP_VERSION='20260920_119';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -17087,6 +17087,11 @@ function _catSelIds(){
     var p=_catPorId(k); return m[k] && p && !_catEsSub(p);
   });
 }
+/* MARCAR UNA PARTIDA. Escribe en `S.catSel`, y la leen Juntar, Bajar y Quitar.
+   NO CONFUNDIR con `catTabSelToggle`, que marca ACTIVIDADES en `S.catSel2`:
+   las dos se llamaban `catSelToggle` desde la v107 y la segunda tapaba a ésta,
+   así que marcar una partida metía su id en la lista de la tanda de
+   actividades — y la tanda trata cada id como una actividad. Ver la v119. */
 function catSelToggle(id){
   var p=_catPorId(id); if(!p || _catEsSub(p)) return;
   (S.catSel=S.catSel||{})[id]=!S.catSel[id]; renderCatalogo();
@@ -17911,19 +17916,32 @@ async function catRepetirHacer(){
    sobre decenas de tarjetas es lo que hacía que cada toque fuera un tirón
    (v86). */
 function catSelModo(){ S.catSelModo=!S.catSelModo; S.catSel2={}; renderCatalogo(); }
-function catSelToggle(id){
+/* MARCAR UNA ACTIVIDAD para la tanda. Escribe en `S.catSel2`.
+   SE LLAMABA `catSelToggle`, igual que la de las PARTIDAS de la línea ~17090,
+   y como iba después la tapaba: los tres botones de marcar del módulo —los dos
+   de actividades y el de partidas— escribían todos aquí. La tanda
+   (`catTandaAplicar`) trata cada id como una actividad y llama a
+   `Acciones.asignar` / `completar` / `editar`, así que marcar partidas en
+   «Ordenar las partidas de este capítulo» las dejaba metidas en la lista sin
+   que nada se viera —la fila de la partida lee `S.catSel`, que seguía vacío— y
+   el siguiente cambio en bloque las habría tocado con el panel diciendo un
+   número mayor que lo marcado.
+   NUNCA DISPARÓ: medido contra `obra_cambios`, 0 de 5.665 registros con
+   `entidad='actividad'` sobre un id de `obra_partidas`. No había nada que
+   reparar en los datos; lo que se quita es el filo. */
+function catTabSelToggle(id){
   S.catSel2=S.catSel2||{};
   if(S.catSel2[id]) delete S.catSel2[id]; else S.catSel2[id]=1;
   renderCatalogo();
 }
-function _catSel2Ids(){ return Object.keys(S.catSel2||{}); }
+function _catTabSelIds(){ return Object.keys(S.catSel2||{}); }
 function catTandaAbrir(campo){
-  if(!_catSel2Ids().length){ showToast('No hay ninguna marcada','warn',3000); return; }
+  if(!_catTabSelIds().length){ showToast('No hay ninguna marcada','warn',3000); return; }
   S.catTandaPick={campo:campo, valor:''}; S.catBorrar=null; S.catRepetir=null; _catPanel();
 }
 function catTandaValor(v){ if(S.catTandaPick){ S.catTandaPick.valor=v; _catPanel(); } }
 function _catTandaPickHTML(){
-  var T=S.catTandaPick, n=_catSel2Ids().length;
+  var T=S.catTandaPick, n=_catTabSelIds().length;
   var tit={contratista:'¿Qué contratista?', fecha:'¿Para qué fecha?',
            grupo:'¿A qué grupo?', estado:'¿Qué estado?',
            nodo:'¿A qué tarea del cronograma?'}[T.campo];
@@ -17972,7 +17990,7 @@ function _catTandaPickHTML(){
 }
 async function catTandaAplicar(){
   var T=S.catTandaPick; if(!T || !T.valor) { showToast('Escoge un valor','warn',3000); return; }
-  var ids=_catSel2Ids(); if(!ids.length) return;
+  var ids=_catTabSelIds(); if(!ids.length) return;
   /* EL RETRATO DE ANTES, para poder deshacer la tanda entera de golpe — la
      misma idea que `cadDeshacerTanda` en la v104. Se guarda antes de escribir
      nada: después ya no se sabe de dónde venían. */
@@ -22578,7 +22596,7 @@ function _catTabFilaHTML(a, anchoPli){
     (S.catSelModo
       ? '<span style="position:sticky;left:0;z-index:2;width:'+CAT_TAB_MARCAW+'px;min-width:'+CAT_TAB_MARCAW+'px;'+
         'background:'+(abierta?'var(--bg3)':'var(--bg2)')+';display:flex;align-items:center;justify-content:center">'+
-        '<button onclick="catSelToggle('+sid+')" style="min-width:34px;min-height:44px;border:0;'+
+        '<button onclick="catTabSelToggle('+sid+')" style="min-width:34px;min-height:44px;border:0;'+
           'background:none;cursor:pointer;font-size:16px;color:'+((S.catSel2||{})[a.id]?'var(--accent)':'var(--text3)')+'">'+
           ((S.catSel2||{})[a.id]?'☑':'☐')+'</button></span>'
       : '')+
@@ -22673,7 +22691,7 @@ function _catTablaHTML(){
      tanda de siempre: una llamada a `Acciones` por actividad, UN repintado, y
      se deshace entera. No se abrió un segundo camino para lo mismo. */
   if(isAdmin()){
-    var n=_catSel2Ids().length;
+    var n=_catTabSelIds().length;
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">'+
       '<button onclick="catSelModo()" style="'+_catBS+';flex:1;min-width:130px;min-height:44px;font-size:11.5px;'+
         'border:1.5px solid '+(S.catSelModo?'var(--accent)':'var(--border2)')+';'+
@@ -23131,7 +23149,7 @@ function _catUnidadHTML(){
 /* La barra de la unidad: crear aquí mismo, marcar varias, y deshacer la última
    tanda. «+ Actividad» va PRIMERO porque es lo que se hace de pie en la obra. */
 function _catAccionesHTML(todas){
-  var n=_catSel2Ids().length;
+  var n=_catTabSelIds().length;
   var h='<div style="display:flex;gap:6px;margin-bottom:10px">'+
     '<button onclick="catNueva()" style="'+_catBS+';flex:1;min-height:46px;'+
       'border:1.5px solid var(--green);background:var(--green-light);color:var(--green)">+ Actividad</button>'+
@@ -23168,7 +23186,7 @@ function _catAccionesHTML(todas){
 }
 function catSelTodas(ids){
   var l=String(ids||'').split('|').filter(Boolean);
-  if(_catSel2Ids().length){ S.catSel2={}; }
+  if(_catTabSelIds().length){ S.catSel2={}; }
   else { S.catSel2={}; l.forEach(function(id){ S.catSel2[id]=1; }); }
   renderCatalogo();
 }
@@ -23178,7 +23196,7 @@ function catSelTodas(ids){
 function _catCasillaHTML(a){
   if(!S.catSelModo) return '';
   var on=!!(S.catSel2||{})[a.id];
-  return '<button onclick="catSelToggle('+_catQ(a.id)+')" style="'+_catBS+';width:100%;margin-bottom:-4px;'+
+  return '<button onclick="catTabSelToggle('+_catQ(a.id)+')" style="'+_catBS+';width:100%;margin-bottom:-4px;'+
     'min-height:44px;text-align:left;display:flex;align-items:center;gap:9px;'+
     'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
     'background:'+(on?'var(--accent-soft)':'var(--bg3)')+';color:var(--text2);font-size:11.5px">'+
@@ -28614,6 +28632,37 @@ setInterval(function(){
 /* Se entra por Obra. Va por goTab y no por la clase del HTML para que la barra
    de abajo marque el botón que toca: updateBNav solo lo hace desde aquí. */
 try{ goTab('terreno'); }catch(e){ console.warn('arranque:',e); }
+/* ── DOS FUNCIONES CON EL MISMO NOMBRE, QUE AVISE (v119) ──
+   Había dos `catSelToggle` desde la v107 y la segunda tapaba a la primera:
+   once versiones sin que nadie lo viera, porque en 30.000 líneas eso no se
+   lee. No hay forma de notarlo en tiempo de ejecución —la segunda ES la que
+   quedó en `window`—, así que se mira el TEXTO del propio script, que ya está
+   en el DOM: ni una petición más.
+   Solo las declaradas al principio de línea, que son las globales: una función
+   interna repetida dentro de un IIFE no es el mismo problema.
+   Va en consola y solo en consola: es una red para quien programa, no un aviso
+   para el ingeniero, y se lanza en diferido para no retrasar el arranque. */
+function _avisarNombresRepetidos(){
+  try{
+    var src='';
+    [].forEach.call(document.querySelectorAll('script:not([src])'), function(s){
+      src+='\n'+(s.textContent||'');
+    });
+    if(src.length<50000) return [];         // no cargó el bloque grande: no se opina
+    var re=/^function\s+([A-Za-z_$][\w$]*)\s*\(/gm, m, vistas={}, repes={};
+    while((m=re.exec(src))){
+      var n=m[1];
+      if(vistas[n]) repes[n]=(repes[n]||1)+1;
+      vistas[n]=1;
+    }
+    var nombres=Object.keys(repes);
+    if(nombres.length)
+      console.warn('[mecca] FUNCIONES REPETIDAS — gana la última y la primera no se '+
+        'llama nunca: '+nombres.map(function(n){ return n+' ×'+repes[n]; }).join(', '));
+    return nombres;
+  }catch(e){ return []; }
+}
+try{ setTimeout(_avisarNombresRepetidos, 4000); }catch(e){}
 /* La voz escondida (v97): el botón de la cabecera es HTML fijo, así que se
    apaga aquí. No se borra del HTML — encender la bandera lo devuelve. */
 try{ if(!vozActiva()){ var _bc=document.getElementById('btn-cmd'); if(_bc) _bc.style.display='none'; } }catch(e){}

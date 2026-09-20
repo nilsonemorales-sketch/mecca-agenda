@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v118 — 20 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v119 — 20 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v117 (19 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v119 (20 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -835,6 +835,48 @@ porcentaje, foto, Editar, Repetir y Borrar. **No se hizo una segunda tarjeta.**
   mentira (v111)—.
 - **Una sola fila abierta a la vez.** Con once campos dentro, dos abiertas dejan
   la tabla ilegible y no se sabe cuál se está tocando.
+
+#### DOS FUNCIONES CON EL MISMO NOMBRE (v119) — marcar partidas y marcar actividades
+
+**Había dos `catSelToggle` desde la v107**, las dos declaradas al principio de
+línea, y **la segunda tapaba a la primera**. Once versiones así.
+
+| | escribía en | la leen |
+|---|---|---|
+| la 1ª — marcar **PARTIDAS** | `S.catSel` | Juntar, Bajar, Quitar y la fila de la partida |
+| la 2ª — marcar **ACTIVIDADES** | `S.catSel2` | `catTandaAbrir` y `catTandaAplicar` |
+
+Ganaba la segunda, así que **los tres botones de marcar del módulo escribían
+todos en `S.catSel2`** — incluido el de las partidas. Y la tanda trata cada id
+como una actividad: `Acciones.asignar(id,…)`, `completar(id)`, `editar(id,
+{fecha_fin:…})`. Marcar partidas en «Ordenar las partidas de este capítulo» no
+se veía —la fila lee `S.catSel`, que seguía vacío— y sus ids se quedaban dentro.
+
+Ahora la de las actividades se llama **`catTabSelToggle`**, con su pareja
+**`_catTabSelIds`**. La de las partidas se queda como estaba. **No cambió lo que
+hace ninguna de las dos**: es un choque de nombres.
+
+**NUNCA DISPARÓ**, medido contra `obra_cambios`: de **5.665** registros, **0**
+con `entidad='actividad'` sobre un id de `obra_partidas`. (Hay 3 sobre ids de
+partida, pero son `entidad='partida'` y salen de `catJuntarEn`: legítimos.) No
+había nada que reparar en los datos.
+
+**Y la ventana era más estrecha de lo que parecía**, porque `catSelModo()` vacía
+`S.catSel2` cada vez que se enciende: entrar a marcar en la tabla borraba de
+paso los ids de partida. El camino que sí disparaba es con el **modo marcar YA
+ENCENDIDO** — se deja puesto en la tabla, se va a ordenar las partidas de un
+capítulo, se marcan tres y se vuelve. Medido en las dos versiones: en la v118 el
+panel decía **«Aplicar a las 4»** (1 actividad + 3 partidas); en la v119 dice
+**1**, y las tres partidas se quedan en su lista. La tabla de la v118 acercaba
+el filo, porque la tanda pasó a ser la pantalla principal.
+
+**HAY UN AVISO AL ARRANCAR** (`_avisarNombresRepetidos`): recorre el TEXTO del
+propio script —que ya está en el DOM, ni una petición más— y saca por consola
+las funciones globales declaradas dos veces. En tiempo de ejecución esto **no se
+puede ver**: la segunda ES la que quedó en `window`. Solo mira las declaradas al
+principio de línea, que son las globales; una función interna repetida dentro de
+un IIFE no es el mismo problema. Va en diferido para no retrasar el arranque y
+tarda **4 ms**. Hoy: **1.031 funciones globales, cero repetidas.**
 
 #### La tanda: reúsa la de la v107, con la tarea añadida
 
@@ -2167,6 +2209,14 @@ mismo:**
   después, **2.445 → 2.445**. Si sube, se duplicó
 - **La tanda son N llamadas y UN repintado**, y se deshace entera
 - **Los nueve botones del final abren lo de siempre**, ninguno roto
+- **`grep -c "function catSelToggle" index.html` da 1.** Marcar tres partidas en
+  «Ordenar las partidas de este capítulo» deja `S.catSel`=3 y `S.catSel2`=**0**,
+  el contador dice «3 MARCADAS» —en mayúsculas, por el `text-transform`— y
+  Juntar y Quitar las ven. Con el modo marcar YA encendido y una actividad
+  puesta, la tanda sigue diciendo **1**, no 4
+- **Ninguna función global se declara dos veces.** `_avisarNombresRepetidos()`
+  devuelve `[]`; mete una repetida a propósito y tiene que nombrarla. Hoy son
+  **1.031 funciones y cero repetidas**
 - **A 390px, NINGUNA celda del cronograma enseña un número a medias**, y con
   **16px de holgura** sobre lo que mide Chromium — en el iPhone la mono es más
   ancha. Mide el texto con un `Range`: en una caja con `overflow:hidden` el
@@ -2317,7 +2367,7 @@ pertenece a ningún nivel.
 | **v110** — las tarjetas en rejilla usaban `repeat(auto-fill,minmax(160px,1fr))`. A 390px daban dos y a 1024px **cuatro**: en el iPad seguía siendo una rejilla, que es justo lo que el dueño pidió quitar. | «Dos columnas en pantalla ancha» es una `@media query`, no un `auto-fill`. `auto-fill` mete las que quepan, y en una pantalla grande eso nunca son dos. Y la prueba tiene que **contar cuántas caben por fila a cada ancho**, no mirar el CSS. |
 | **v111→v115** — cuatro versiones seguidas del módulo y el dueño seguía sin acoplarse: «no me convence cómo se ve», «me siento confuso», «no me acoplo». Cada versión añadió funciones buenas —el plan, el cronograma, las vistas, ordenar— y ninguna preguntó **cómo quería trabajar**. Lo desbloqueó una pregunta con opciones: quería el pliegue que ya usa en Actividades, no una pantalla más. | **Es la cuarta vez que pasa lo mismo** (En Obra, el recorrido, Hoy, y ahora Partidas). El aviso está escrito desde la v82 y aun así se construyeron cuatro versiones antes de preguntar. Cuando el usuario diga «no me acoplo», **para y pregunta con opciones concretas**; añadir la quinta versión es repetir el error. Y fíjate si lo que pide **ya existe en otra pantalla del app**: casi siempre sí. |
 | **v116** — el dueño pasó días sin poder llegar al Cronograma: el selector de vistas se pintaba arriba del todo y con 25 filas debajo se iba fuera de la pantalla. No era un fallo de la vista, era que **no se podía llegar a ella**. | Una pantalla a la que no se llega no existe, aunque funcione. Cuando el usuario diga que algo «falta», comprueba primero si está y **no se ve**: es más barato de arreglar y es lo que pasa casi siempre. Un selector de navegación va pegado (`sticky`), no al principio del documento. |
-| **v118** — hay **dos funciones `catSelToggle`** en el archivo y la segunda tapa a la primera: marcar una PARTIDA escribe en `S.catSel2` en vez de en `S.catSel`, así que `_catSelIds()` se queda en cero y Juntar/Quitar no ven nada. Medido en la prueba, no supuesto. **Viene de antes de la v118 y NO se arregló aquí** —es otra cosa, y esta versión hacía una sola—, pero queda dicho. | Es el `else if(k==='c')` de la v97 con otra cara: dos cosas con el mismo nombre y la segunda gana en silencio. Cuando añadas una función, **busca el nombre antes**: `grep -c "function X("` tiene que dar 1. Y cuando encuentres uno viejo, dilo aunque no lo arregles — callarlo es cómo llega a la versión veinte. |
+| **v107→v119** — **dos funciones `catSelToggle`** y la segunda tapaba a la primera durante **once versiones**: marcar una PARTIDA escribía en `S.catSel2`, la lista de la tanda de ACTIVIDADES, que trata cada id como una actividad. Nunca disparó (0 de 5.665 registros), y `catSelModo()` lo tapaba a medias al vaciar la lista cada vez que se enciende — pero con el modo ya encendido el panel llegaba a decir **«Aplicar a las 4»** con una sola actividad marcada. | Es el `else if(k==='c')` de la v97 con otra cara: dos cosas con el mismo nombre y la segunda gana **en silencio**. Cuando añadas una función, **busca el nombre antes**: `grep -c "function X("` tiene que dar 1. Y no lo dejes a la disciplina: desde la v119 hay un aviso al arrancar que lo dice solo, porque en 30.000 líneas esto no se ve. Que el fallo estuviera *tapado* por otra cosa no lo hace inofensivo — lo hace invisible. |
 | **v117** — el nombre del cronograma salía «ANIFICACION MECCA» en el iPhone: `-webkit-overflow-scrolling:touch` rompe `position:sticky` en Safari. **En Chromium sticky agarraba igual con la propiedad puesta**, medido en las dos versiones, así que ninguna prueba de escritorio podía cazarlo. Es la misma forma del `InvalidStateError` de la v27. | Cuando el fallo es del navegador del usuario y no del tuyo, **la prueba no puede ser «se ve bien aquí»**: comprueba la CAUSA sobre el estilo —que la propiedad ya no esté— y dilo claro en el informe. Medir en el navegador equivocado y dar por bueno es cómo se tumbó el app dos veces. |
 | **v117** — el nombre se quedaba en **76px de los 196** que tenía el botón, así que partía muchísimo antes de tiempo, y `width:100%` no lo arreglaba. El contenido de un `<button>` va en una caja anónima que se encoge hasta el texto, y ese 100% es de la caja encogida. Aparte, se salía **por encima de la columna vecina** porque al `flex:1` le faltaba `min-width:0`. | Un `<button>` no es un `<div>`: si dentro va una maqueta, hazlo `display:flex` tú. Y `flex:1` **no encoge** sin `min-width:0` — por eso el texto se desborda en vez de recortarse con «…». Las dos se vieron midiendo el ancho de la caja, no leyendo el CSS. |
 | **v117** — la primera medición de «celdas cortadas» dio **cero en todas**: comparaba `scrollWidth` con `clientWidth`, y en una caja con `overflow:hidden` el `scrollWidth` nunca baja del `clientWidth`. La sonda decía que todo cabía justo, incluidas las que en el teléfono salían recortadas. | Para saber si un texto cabe, mide **el texto** (`Range.getBoundingClientRect`), no la caja. Una comparación que da siempre el mismo resultado no está midiendo: es el `/lock/i` de la v90 con otra cara. |
