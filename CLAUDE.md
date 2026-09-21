@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v120 — 20 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v121 — 21 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v120 (20 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v121 (21 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -231,7 +231,11 @@ mismos botones que cualquier otra.
 | **Cambiarle a una actividad cualquier cosa** | **Partidas → tocar su fila** — `_catTabPliegueHTML()`. Las once, todas por `Acciones` |
 | **Cambiarle lo mismo a varias** | **Partidas → «Marcar varias»** — `catSelModo()`, `catTandaAbrir()`. Avisa a cuántas y se deshace entera |
 | **REPARTIR las 2.445 en las 93 subpartidas del plan** | **Partidas → Clasificar** — `_catClasHTML()`, `clasAbrirSub()`, `clasAbrirCont()`, `_clasMover()` (v120). Por subpartida o por contratista. No toca la actividad |
-| **Llegar a las otras pantallas del módulo** | **Partidas → la fila de botones del final** — `_catTabOtrasHTML()`. Diez, con **Clasificar la primera**: Clasificar, Capítulos, Edificio, Matriz, Cronograma, Tiempo, Ubicaciones, Repetidas, Por ubicar y Fuera del plan |
+| **Entrar al módulo y saber por dónde empezar** | **Partidas** — la portada de tres tarjetas, `_catPortadaHTML()` (v121). VER · TRABAJAR · ORDENAR, con los números vivos |
+| **Bajar por el esquema hasta las actividades de un sitio** | **Partidas → VER** — `_verPantallaHTML()`, `verAbrir()`, `verSitio()`, `_verSitios()` (v121). Un escalón por pantalla, con miga de pan |
+| **Ver lo que falta poner: sin ubicar, sin fecha, sin contratista** | **Partidas → ORDENAR** — `_catOrdenarHTML()`, `catOrdenarIr()` (v121). Cada pila abre la pantalla que ya existía |
+| **Filtrar la tabla por subpartida del esquema** | **Partidas → TRABAJAR → filtro SUBPARTIDA** — `_catTabNodoPasa()` (v121). Vale un grupo entero, no solo la hoja |
+| **Llegar a las otras pantallas del módulo** | **Partidas → «Más»** — `_catMasHTML()` (v121), y el botón desde la tabla es `_catMasBotonHTML()`. Diez, cada una con una línea que dice para qué sirve: Clasificar, Capítulos, Edificio, Matriz, Cronograma, Tiempo, Ubicaciones, Repetidas, Por ubicar y Fuera del plan |
 | **Ver lo mismo de otra manera** | **Partidas → los botones del final** — `catVistaSet()`, `_catAmbito()`. Hasta la v117 era un selector de cinco vistas arriba |
 | **Ordenar las partidas a tu gusto, renombrarlas, juntarlas, quitarlas o agregar** | **Partidas → un capítulo → «Por partida»** — `_catPorPartidaHTML()`, `CAT_ORDENES`, `catPartidaCorrer()`, `catPNuevaAbrir()` (v114) |
 | **Sacar del plan lo que sobra** | **Partidas → Árbol → «Lo que está fuera del plan»** — `catFueraAbrir()`. Descartar **no borra** |
@@ -899,6 +903,138 @@ No se reescribió: `_catBuscaResultados` es la base de la tabla cuando hay algo
 escrito. Y en la tabla **no salta a la pantalla de búsqueda** —la tabla ya es la
 lista de actividades, y mandar a una segunda lista sería enseñar lo mismo dos
 veces—; desde las otras vistas esa pantalla sigue igual.
+
+### EL MÓDULO DE PLANIFICACIÓN (v121) — un esqueleto y tres puertas
+
+Veinte versiones metieron piezas en Partidas. Cada una funciona sola; juntas,
+no. El dueño, después de todas ellas:
+
+> **«Lo siento complicado todavía. Organiza todo y que sea funcional el módulo
+> para yo trabajar.»**
+
+**NO PIDIÓ OTRA FUNCIÓN. Pidió orden.** Por eso la v121 **no añade ni una
+capacidad, ni un dato, ni una tabla, ni una siembra**: pone en su sitio lo que
+ya existe. Si vas a «mejorar» este módulo, empieza por ahí — es la quinta vez
+que una pantalla de aquí se rescata, y las cuatro anteriores se rescataron
+añadiendo.
+
+**UN SOLO ESQUELETO: el esquema del dueño de la v120.**
+
+```
+grupo → partida madre → subpartida → SITIO → actividades
+  8          28             93        el `area`
+```
+
+**EL SITIO NO ES UN NODO y no lo va a ser.** Es el `area` de la actividad, así
+que `_verSitios(nodoId)` lo saca de las actividades del nodo y **solo enseña
+los que tienen algo**. Ponerlo como nodo serían 93 × 29 filas que nadie pidió y
+que habría que mantener a mano cada vez que nace un sitio. Se ordena con
+`_revOrdenArea` —el del edificio—: alfabético mete «Escalera de Emergencia»
+antes del 2A y la pantalla abriría por la escalera.
+
+**Y TRES PUERTAS**, que son las tres cosas que se hacen sobre él:
+
+| | qué es | de dónde sale |
+|---|---|---|
+| **VER** · cómo va la obra | bajar por el esquema, un escalón por pantalla | `_verPantallaHTML`, `verAbrir`, `verSitio` |
+| **TRABAJAR** · las actividades | **la tabla de la v118, tal cual** | `_catTablaHTML` |
+| **ORDENAR** · lo que falta poner | las pilas, cada una con su pantalla de siempre | `_catOrdenarHTML`, `catOrdenarIr` |
+
+**La portada son tres tarjetas y un «Más», y sus números son VIVOS**
+(`_catNumerosHTML`, de `S.catActs` y del árbol). Medido contra la base el
+20-sep: **60% · 1.392 de 2.445 · 1.053 abiertas · 119 trancadas · 513 vencidas
+· 796 por ubicar · 58 sin fecha · 24 sin contratista**. Una portada que dice un
+número congelado es el fallo de los datos viejos de la v109 con otra cara.
+
+**«Trancadas» son 119, no 21.** El prompt de la v121 decía 21; medido contra
+`obra_cambios` y contra `isBlocked` —el criterio que ya vive en un solo sitio y
+que pinta el candado 🔒— son **119**: de 174 abiertas con predecesora legible,
+119 tienen al menos una que existe y sigue abierta (41 la tienen ya cerrada, 25
+apuntan a una borrada). **La portada llama a `isBlocked`**, no a una segunda
+definición: si usara otra, diría algo distinto que la lista y el dueño dejaría
+de creerle a las dos.
+
+#### POR QUÉ SON VISTAS Y NO BANDERAS NUEVAS
+
+`renderCatalogo` despacha por una cadena de `else if`, y este proyecto ya se
+tropezó **cuatro veces** con lo mismo: se pone una bandera que se comprueba
+DESPUÉS de otra ya encendida y la pantalla no cambia (`catFuera` v111, los
+paneles v113/v114, `catCrearAbrir` v116, `catIrCap` v118). CLAUDE.md lo dejó
+escrito: «si esto vuelve a pasar, la cadena tiene que dejar de ser una cadena:
+una sola variable "qué estoy mirando"». **`catVista()` YA ES esa variable**, así
+que `portada`, `ver`, `ordenar` y `mas` entran en `CAT_OTRAS` y no como cuatro
+banderas más. **La vista de entrada es `portada` y se decide en `catVista()`, en
+un solo sitio.**
+
+#### LA MIGA DE PAN VA EN `_catBuscaBarraHTML`, Y AHÍ ESTÁ EL PORQUÉ
+
+Primero se puso en `_catVistaSelHTML`, y **cuatro pantallas se quedaron sin
+ella** —Ubicaciones, Posibles repetidas, Por ubicar y Fuera del plan—, que son
+pantallas de trabajo y se comprueban ANTES que la vista. Lo cazó el arnés
+abriendo las diez de «Más» una a una, no leyendo el código.
+
+Ahora vive en **`_catBuscaBarraHTML`**, que es la única pieza que se pinta en
+todos los niveles del módulo (lo dice el comentario de la v109), y el nombre lo
+da **`_catDondeEstoy()`**, que mira el estado **en el mismo orden que
+`renderCatalogo`**. **Si añades una pantalla, añádela también ahí**: es lo que
+hace que la miga valga para TODAS y no solo para las que alguien recordó.
+VER pinta la suya, que es la ruta entera del esquema y dice más — y **sin la
+raíz**, porque «PLANIFICACIÓN MECCA» es lo mismo que el «Planificación» que ya
+va delante.
+
+**La miga es un BOTÓN y mide 44px.** Nació con 28 y lo cazó el arnés de la
+v107, que mide lo VISIBLE — no la prueba que venía a buscar eso. El mínimo del
+proyecto son 40 (§1), pero todo el módulo va a 44 y dos medidas para lo mismo
+terminan discutiéndose solas.
+
+#### El quinto filtro, y las pilas
+
+**`nodo`** es la subpartida, con su rama delante («Acabados › Pisos ›
+Porcelanato»), y una actividad pasa si está en ese nodo **o en cualquiera de sus
+hijos** — así filtrar por un grupo entero funciona igual que por una subpartida.
+Se resuelve contra `S.nodoPorA`, el índice que ya existe, con los descendientes
+cacheados por el mismo sello que `_catMapa`: sin eso, filtrar por un grupo
+recorría el árbol 2.445 veces. En las cuentas del selector **una actividad suma
+una sola vez por nodo**, aunque esté en dos subpartidas del mismo grupo (se
+puede, a propósito desde la v111): si no, el filtro prometería más filas de las
+que va a enseñar.
+
+**`hueco`** es a lo que llevan las pilas de ORDENAR, y **no inventa criterio**:
+`vencidas` es `isRetrasada` —el de la v92— y los otros dos son el campo vacío.
+Sale con un aviso ámbar que se puede quitar; un filtro que no se ve no se puede
+soltar y la tabla mentiría en silencio (v81).
+
+**Los dos se recuerdan** en `sessionStorage`, al lado de los cuatro de la v118.
+
+#### «+ Actividad» y «Ver las N» — los dos botones fijos de abajo
+
+Dos como máximo y de 52px: en 390px tres ya no se leen. `catCrearAbrir(nodoId,
+area)` ganó el **sitio** como segundo argumento —en VER se entra parado en
+«Porcelanato › 4B» y lo que nazca tiene que nacer ahí— y los dos que llamaban
+antes con un solo argumento siguen igual. **`PAL_SIN_UBIC` no se premarca**: no
+es un sitio, es la falta de uno.
+
+Medido creando desde Porcelanato › 4B y borrando después: actividades **2.445 →
+2.446 → 2.445**, amarres **2.445 → 2.446 → 2.445**, el nodo 70 → 71 → 70, el
+sitio 6 → 7 → 6, y **cero amarres huérfanos** — `Acciones.eliminar` limpia
+`obra_nodo_actividad` y `obra_partida_actividad`, y el rastro va antes del
+borrado (v107, v112).
+
+#### Lo que se quitó DE LA VISTA, no del código
+
+La fila de diez botones del final de la tabla (`_catTabOtrasHTML`) es ahora
+**`_catMasBotonHTML`**, un solo botón, y las diez pantallas viven en
+**`_catMasHTML`**, cada una **con una línea diciendo para qué sirve** — sin eso
+sería la misma fila en otro sitio, y el dueño no sabía qué hacían «Matriz» ni
+«Tiempo». Comprobado: las diez abren, ninguna rota, cero errores de consola.
+
+#### AVISADO: Cronograma y Tiempo están vacíos de fechas, y no es de esta versión
+
+Con el esquema del dueño sembrado, **0 de los 131 nodos tienen `inicio_plan` o
+`fin_plan`**: las fechas eran del MS Project y se fueron con el árbol el 20-sep.
+Tiempo lo dice —«Ninguna tarea con fechas aquí»— en vez de romperse, que es lo
+correcto, pero **las dos pantallas están vacías hasta que alguien feche el plan
+nuevo**. No las «arregles» inventando fechas: es un dato que no existe todavía.
 
 ### CLASIFICAR (v120) — repartir las 2.445 en las 93 subpartidas
 
@@ -2319,8 +2455,26 @@ mismo:**
   `<select>` de Actividades sin haber entrado a Partidas
 - **El selector de vistas se queda pegado arriba** al bajar por una lista larga.
   Si se pierde de vista, el Cronograma vuelve a ser invisible
-- **Al entrar a Partidas sale LA TABLA**, con 50 filas y la línea diciendo
-  **2.445**. Si sale otra cosa, alguien cambió la vista de entrada
+- **Al entrar a Partidas sale LA PORTADA** (v121): tres tarjetas —VER, TRABAJAR,
+  ORDENAR— y un «Más». Hasta la v120 era la tabla; ahora la tabla es TRABAJAR y
+  está a un toque. Si sale otra cosa, alguien cambió `catVista()`
+- **Los números de la portada cuadran con la base**: 60% · 1.392/2.445 · 1.053
+  abiertas · **119 trancadas** · 513 vencidas · 796 por ubicar · 58 sin fecha ·
+  24 sin contratista (20-sep). Las trancadas salen de **`isBlocked`**: si un día
+  dicen 21, alguien escribió una segunda definición
+- **VER baja por el esquema y los SITIOS salen del `area`**. En Porcelanato son
+  13, todos con actividades, y en orden del edificio. Si sale uno vacío o la
+  escalera antes del 2A, alguien dejó de usar `_revOrdenArea`
+- **«+ Actividad» desde un sitio crea ahí**: amarres 2.445 → 2.446 y, al
+  borrarla, 2.445 otra vez, sin amarres huérfanos
+- **La tabla tiene CINCO filtros** —contratista, ubicación, capítulo, estado y
+  subpartida— y los cuatro de antes siguen dando lo mismo: Dimedes **379**, y
+  Dimedes + N6 — Apto 6A + 12.00 da **17 · 1 hecha · 18%**
+- **TODAS las pantallas del módulo llevan miga de pan**, incluidas Ubicaciones,
+  Repetidas, Por ubicar y Fuera del plan — que son las cuatro que se quedaron
+  sin ella al primer intento. Ábrelas una a una desde «Más» y compruébalo
+- **Las diez de «Más» abren y ninguna revienta**, con cero errores de consola
+- **La miga de pan mide 44px.** Es un botón y se toca con el dedo
 - **Los filtros de la tabla cuadran con la base**: Dimedes Estebez (Niño) da
   **379** (228 abiertas), y **Dimedes + N6 — Apto 6A + 12.00 Cocina y muebles da
   17 · 1 hecha · 18%**. Si no da eso, el filtro está mal o el fixture no
@@ -2344,8 +2498,8 @@ mismo:**
   puesta, la tanda sigue diciendo **1**, no 4
 - **Ninguna función global se declara dos veces.** `_avisarNombresRepetidos()`
   devuelve `[]`; mete una repetida a propósito y tiene que nombrarla. Hoy son
-  **1.058 funciones y cero repetidas** (eran 1.031 en la v119; Clasificar
-  añadió 27)
+  **1.081 funciones y cero repetidas** (1.031 en la v119, 1.058 con Clasificar,
+  y la v121 añadió 23)
 - **A 390px, NINGUNA celda del cronograma enseña un número a medias**, y con
   **16px de holgura** sobre lo que mide Chromium — en el iPhone la mono es más
   ancha. Mide el texto con un `Range`: en una caja con `overflow:hidden` el
@@ -2534,6 +2688,11 @@ pertenece a ningún nivel.
 
 | **v120** — para armar el arnés transcribí a mano la columna `tipo_personal` de las 2.445 y salió **corrupta**: 2.446 caracteres con **83 guiones donde la base tiene 9**. Se cazó contando contra Supabase antes de usarla, no después. Al rehacerla desde listas de posiciones, mi propio `assert` de `2445−391−9==1971` **falló**, y eso destapó un **cuarto valor de `tipo_personal`** —`ingeniero`, 74 filas— que este documento llevaba versiones sin listar. | Un fixture largo transcrito a mano es un dato inventado hasta que se cuenta contra la base. **Ponle un `assert` que sume**: aquí el assert no protegió el fixture, **descubrió un hecho de la obra** que nadie sabía. Cuando una cuenta no cuadre por un resto grande, no la ajustes — pregúntale a la base qué es ese resto. |
 | **v120** — el primer orden de las candidatas contaba **cuántas palabras coinciden**, y una excavación que dice «piso» empataba con «Bajar 4 cajas de porcelanato». De las diez primeras de Porcelanato, **cinco** hablaban de porcelanato. Pesando por la **longitud** de lo que casó: **diez de diez**. | «Coincide en 2» no dice lo mismo según en qué coincidió: `porcelanato` es un hecho y `piso` es ruido. Y esto **solo se ve leyendo las diez primeras con datos reales** — un contador de aciertos habría dicho que las dos versiones «encuentran» lo mismo. |
+
+| **v121** — la miga de pan se puso en `_catVistaSelHTML`, que parecía el sitio obvio, y **cuatro pantallas se quedaron sin ella**: Ubicaciones, Repetidas, Por ubicar y Fuera del plan son pantallas de TRABAJO y `renderCatalogo` las comprueba **antes** que la vista, así que ese selector no existe para ellas. Lo cazó el arnés abriendo las diez de «Más» una a una. | Es la quinta cara del mismo problema de la cadena de `else if` (v111, v113/v114, v116, v118). Cuando algo tenga que salir en TODAS las pantallas de un módulo, ponlo en la pieza que se pinta en todas —aquí `_catBuscaBarraHTML`— y no en una que solo ven algunas. Y **compruébalo abriéndolas una a una**, no leyendo el despachador. |
+| **v121** — el prompt pedía «21 trancadas» en la portada. Medido contra la base y contra `isBlocked`: son **119**. Poner 21 habría hecho que la portada dijera un número y el candado 🔒 de la lista otro, sobre los mismos datos. | Un número en un prompt es un dato que hay que comprobar, no una instrucción. **Cuando el criterio ya vive en el código, llámalo en vez de escribir la cifra** — es lo único que garantiza que dos pantallas cuenten igual. |
+| **v121** — el botón de la miga nació con **28px** y lo cazó una sonda de la v107 que mide la altura de TODO lo que se toca, no la que venía a probar la miga. | Las sondas que miden lo visible pagan aunque el fallo no sea el que buscabas — ya pasó en la v107 con un botón de 34px colado una versión entera. **No las quites cuando estorben:** son las que ven lo que nadie fue a mirar. |
+| **v121** — la sonda que pone un avance corría **en medio** de la prueba, y como tocó una actividad CERRADA, las de más abajo pasaron a decir 1.391 cerradas en vez de 1.392 y 514 vencidas en vez de 513. Parecía un fallo del app. | Es el aviso de la v111, otra vez: **una sonda que escribe contamina a las de abajo**. Va la última, o mides contra el estado que tú misma dejaste. Y si un conteo se separa **en uno**, repasa primero qué hizo la prueba antes. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base

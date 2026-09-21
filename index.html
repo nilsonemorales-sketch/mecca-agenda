@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260920_120';
+const APP_VERSION='20260921_121';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1871,6 +1871,10 @@ let S={
   catTabla:null,
   /* v120 — la pantalla de clasificar y el retrato para deshacer su tanda. */
   catClas:null, clasUndo:null,
+  /* v121 — dónde está parado el dueño dentro del esquema en la puerta VER.
+     Nace aquí por lo mismo que todo lo de arriba: el dueño entra DIRECTO a
+     Partidas y una variable que no existe revienta la pantalla entera (v103). */
+  catVer:null,
   /* v108 — la estructura editable. Nace aquí por lo mismo que lo demás: el
      dueño entra DIRECTO a Partidas y una variable que no existe revienta la
      pantalla entera sin decir por qué (v103). */
@@ -20424,21 +20428,30 @@ async function nodoQuitar(nid, actId){
    CINCO vistas al mismo nivel más nueve pantallas de trabajo, y él entraba y no
    sabía dónde estaba.
 
-   NADA SE BORRÓ. Las otras cuatro vistas siguen enteras y se llegan desde la
-   fila de botones del final de la tabla (`_catTabOtrasHTML`). Lo único que
-   cambia es qué es lo primero que se ve. `CAT_OTRAS` existe para que
-   `catVista()` las siga reconociendo como vistas válidas. */
+   NADA SE BORRÓ. Las otras cuatro vistas siguen enteras. Hasta la v120 se
+   llegaba a ellas desde una fila de botones al final de la tabla; desde la
+   v121 están en «Más» (`_catMasHTML`), cada una con una línea diciendo para
+   qué sirve. Lo único que cambia es qué es lo primero que se ve. `CAT_OTRAS`
+   existe para que `catVista()` las siga reconociendo como vistas válidas. */
 var CAT_VISTAS=[['tabla','Tabla']];
-/* `clasificar` (v120) va la PRIMERA de la fila mientras queden actividades por
-   ubicar — lo ordena `_catTabOtrasHTML`, no este array, que solo dice cuáles
-   son vistas válidas. */
+/* `clasificar` (v120) va la primera de «Más» mientras queden actividades por
+   ubicar — lo deciden `_catMasHTML` y `_catMasBotonHTML`, no este array, que
+   solo dice cuáles son vistas válidas.
+   v121 · `portada`, `ver`, `ordenar` y `mas` entran AQUÍ y no como cuatro
+   banderas nuevas en la cadena de `else if` de `renderCatalogo`. Ver el porqué
+   en el bloque de la v121: la cadena ya se tropezó cuatro veces. */
 var CAT_OTRAS=[['clasificar','Clasificar'],['lista','Capítulos'],['edificio','Edificio'],
-               ['matriz','Matriz'],['arbol','Cronograma'],['tiempo','Tiempo']];
+               ['matriz','Matriz'],['arbol','Cronograma'],['tiempo','Tiempo'],
+               ['portada','Planificación'],['ver','Ver'],['ordenar','Ordenar'],['mas','Más']];
+/* LA PORTADA ES LA ENTRADA (v121). Hasta la v120 lo era la tabla; ahora la
+   tabla es una de las tres puertas y se llega en un toque. Si esto vuelve a
+   cambiar, acuérdate de que la vista de entrada se decide AQUÍ y en ningún
+   otro sitio. */
 function catVista(){
   var v=S.catVista;
   if(!v){
     try{ v=sessionStorage.getItem('mecca_cat_vista')||''; }catch(e){}
-    S.catVista=v=(CAT_VISTAS.concat(CAT_OTRAS).some(function(x){ return x[0]===v; })?v:'tabla');
+    S.catVista=v=(CAT_VISTAS.concat(CAT_OTRAS).some(function(x){ return x[0]===v; })?v:'portada');
   }
   return v;
 }
@@ -21152,9 +21165,14 @@ function _catNodoHTML(){
    Y NO ES «Repetir en…» de la v107: aquella parte de una actividad que YA
    existe y ofrece los apartamentos que no la tienen. Ésta es al crearla de
    cero. Dos momentos distintos, dos pantallas. */
-function catCrearAbrir(nodoId){
+/* `area` (v121) es el sitio desde el que se llamó: en VER se entra parado en
+   «Porcelanato › Apto 4B» y lo que nazca tiene que nacer ahí, sin volver a
+   escogerlo. Los dos que llamaban antes pasan un solo argumento y siguen
+   igual. `PAL_SIN_UBIC` no se premarca: no es un sitio, es la falta de uno. */
+function catCrearAbrir(nodoId, area){
   var pre={};
   if(S.catUbic) pre[S.catUbic]=1;
+  if(area && area!==PAL_SIN_UBIC) pre[area]=1;
   S.catCrear={nodo:nodoId||null, sel:pre};
   /* Se sueltan las pantallas que `renderCatalogo` comprueba ANTES que ésta: si
      no, llamando desde Ubicaciones se ponía `S.catCrear` y se seguía pintando
@@ -22252,13 +22270,16 @@ var CAT_TAB_DESCW=210, CAT_TAB_MARCAW=38;
    mismo sitio donde ya vivía la vista escogida. */
 function _catTab(){
   if(!S.catTabla){
-    var g={contratista:'', ubicacion:'', capitulo:'', estado:''};
+    /* `nodo` es el quinto filtro de la v121 —la subpartida del esquema— y
+       `hueco` es a lo que llevan las pilas de ORDENAR. Los dos se recuerdan
+       igual que los cuatro de la v118: el dueño sale del módulo y vuelve. */
+    var g={contratista:'', ubicacion:'', capitulo:'', estado:'', nodo:'', hueco:''};
     try{
       var s=JSON.parse(sessionStorage.getItem('mecca_cat_tabla')||'null');
       if(s) Object.keys(g).forEach(function(k){ if(typeof s[k]==='string') g[k]=s[k]; });
     }catch(e){}
     S.catTabla={contratista:g.contratista, ubicacion:g.ubicacion, capitulo:g.capitulo,
-                estado:g.estado, abierta:'', tope:50};
+                estado:g.estado, nodo:g.nodo, hueco:g.hueco, abierta:'', tope:50};
   }
   return S.catTabla;
 }
@@ -22274,7 +22295,8 @@ function _catTabOtraAbierta(){
 function _catTabGuardar(){
   var T=_catTab();
   try{ sessionStorage.setItem('mecca_cat_tabla', JSON.stringify(
-    {contratista:T.contratista, ubicacion:T.ubicacion, capitulo:T.capitulo, estado:T.estado})); }catch(e){}
+    {contratista:T.contratista, ubicacion:T.ubicacion, capitulo:T.capitulo, estado:T.estado,
+     nodo:T.nodo||'', hueco:T.hueco||''})); }catch(e){}
 }
 /* De dónde sale cada columna, en UN solo sitio: lo usan la fila, los filtros y
    sus cuentas. Tres copias del mismo criterio terminan contando distinto. */
@@ -22326,11 +22348,43 @@ function _catTabNodoNom(id){
 /* `salvo` deja fuera UNA dimensión para poder contar sus opciones sobre lo que
    de verdad se va a ver con los demás filtros puestos. Es la regla de la v87:
    el número de un filtro tiene que ser el que vas a ver al tocarlo. */
+/* v121 · LA SUBPARTIDA DEL ESQUEMA, que es el quinto filtro. Una actividad
+   pasa si está en ESE nodo o en cualquiera de sus hijos —lo mismo que
+   `_nodoActsTodas`—, para que filtrar por un grupo entero funcione igual que
+   filtrar por una subpartida. Se resuelve contra `S.nodoPorA`, el índice que ya
+   existe, y no recorriendo el árbol por cada fila. */
+function _catTabNodoPasa(a, id){
+  var ns=(S.nodoPorA||{})[a.id]||[];
+  if(!ns.length) return false;
+  if(ns.indexOf(id)>=0) return true;
+  var dentro=_catTabNodoSub(id);
+  return ns.some(function(x){ return !!dentro[x]; });
+}
+/* Los descendientes de un nodo, cacheados por el mismo sello que `_catMapa`:
+   sin esto, filtrar por un grupo recorría el árbol 2.445 veces. */
+function _catTabNodoSub(id){
+  var sello=(_nodos().length)+'|'+Object.keys(S.nodoPorA||{}).length;
+  if(!S._catTabSubC || S._catTabSubC.sello!==sello) S._catTabSubC={sello:sello, m:{}};
+  var c=S._catTabSubC.m;
+  if(!c[id]){ var m={}; _nodoDesc(id).forEach(function(n){ m[n.id]=1; }); c[id]=m; }
+  return c[id];
+}
+/* v121 · LOS HUECOS a los que llevan las pilas de ORDENAR. No se inventa el
+   criterio: `isRetrasada` es el de las vencidas en todo el app desde la v92, y
+   los otros dos son el campo vacío. Dos copias terminan contando distinto. */
+function _catTabHuecoPasa(a, k){
+  if(k==='vencidas')  return isRetrasada(a);
+  if(k==='sinfecha')  return !_catCerrada(a) && !String(a.fecha_fin||'').trim();
+  if(k==='sinquien')  return !_catCerrada(a) && !String(a.personal_nombre||'').trim();
+  return true;
+}
 function _catTabPasa(a, T, salvo){
   if(salvo!=='contratista' && T.contratista && _catTabQuien(a)!==T.contratista) return false;
   if(salvo!=='ubicacion'   && T.ubicacion   && _catTabUbic(a)!==T.ubicacion)     return false;
   if(salvo!=='capitulo'    && T.capitulo    && _catTabCapId(a)!==T.capitulo)     return false;
   if(salvo!=='estado'      && T.estado      && _catTabEstado(a)!==T.estado)      return false;
+  if(salvo!=='nodo'        && T.nodo        && !_catTabNodoPasa(a, T.nodo))      return false;
+  if(T.hueco && !_catTabHuecoPasa(a, T.hueco)) return false;
   return true;
 }
 /* La BASE es el buscador de la v109 cuando está escrito, y las 2.445 cuando no.
@@ -22348,6 +22402,21 @@ function _catTabCuentas(dim){
   var T=_catTab(), m={};
   _catTabBase().forEach(function(a){
     if(!_catTabPasa(a,T,dim)) return;
+    if(dim==='nodo'){
+      /* Una actividad cuenta en su subpartida Y en las madres de arriba: si
+         solo contara en la hoja, el grupo diría 0 y el filtro parecería roto.
+         Y UNA SOLA VEZ POR NODO: si está en dos subpartidas del mismo grupo
+         —que se puede, a propósito desde la v111— el grupo la contaría dos
+         veces y el filtro prometería más filas de las que va a enseñar. */
+      var vis={};
+      ((S.nodoPorA||{})[a.id]||[]).forEach(function(nid){
+        _nodoRuta(nid).forEach(function(r){
+          if(vis[r.id]) return;
+          vis[r.id]=1; m[r.id]=(m[r.id]||0)+1;
+        });
+      });
+      return;
+    }
     var k = dim==='contratista' ? _catTabQuien(a)
           : dim==='ubicacion'   ? _catTabUbic(a)
           : dim==='capitulo'    ? _catTabCapId(a)
@@ -22361,9 +22430,13 @@ function catTabFiltro(dim, v){
   T[dim]=v; T.tope=50; T.abierta='';
   _catTabGuardar(); renderCatalogo(); _catArriba();
 }
+var CAT_TAB_HUECOS={vencidas:'Solo las vencidas — ya pasaron su fecha de entrega',
+                    sinfecha:'Solo las abiertas sin fecha de entrega',
+                    sinquien:'Solo las abiertas sin contratista'};
 function catTabLimpiar(){
   var T=_catTab();
-  T.contratista=''; T.ubicacion=''; T.capitulo=''; T.estado=''; T.tope=50; T.abierta='';
+  T.contratista=''; T.ubicacion=''; T.capitulo=''; T.estado=''; T.nodo=''; T.hueco='';
+  T.tope=50; T.abierta='';
   S.catQ=''; S.catQVivo='';
   _catTabGuardar(); renderCatalogo(); _catArriba();
 }
@@ -22408,8 +22481,22 @@ function _catTabFiltrosHTML(){
     _catTabFiltroHTML('capitulo','Capítulo',
       _capsLista().map(function(c){ return [c.n, c.n+' · '+c.t]; }))+
     _catTabFiltroHTML('estado','Estado', CAT_TAB_ESTADOS)+
+    /* v121 · EL QUINTO: la subpartida del esquema, con su rama delante
+       —«Acabados › Pisos › Porcelanato»— porque «Porcelanato» a secas no dice
+       de dónde cuelga. Es la misma lista de `_catTabNodos`, que ya existía
+       para la columna TAREA. */
+    _catTabFiltroHTML('nodo','Subpartida',
+      _catTabNodos().map(function(n){ return [n.id, n.etiqueta]; }))+
   '</div>';
-  var puestos=['contratista','ubicacion','capitulo','estado'].filter(function(k){ return T[k]; }).length;
+  var puestos=['contratista','ubicacion','capitulo','estado','nodo','hueco']
+    .filter(function(k){ return T[k]; }).length;
+  if(T.hueco)
+    h+='<div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;padding:10px 12px;'+
+      'border-radius:11px;background:var(--amber-light);border:1.5px solid var(--amber)">'+
+      '<span style="flex:1;font-size:12px;color:var(--amber);font-weight:700;line-height:1.4">'+
+        esc(CAT_TAB_HUECOS[T.hueco]||T.hueco)+'</span>'+
+      '<button onclick="catTabFiltro(\'hueco\',\'\')" style="'+_catBS+';min-height:40px;font-size:11.5px;'+
+        'border:1.5px solid var(--amber);background:none;color:var(--amber)">Quitar</button></div>';
   if(puestos || String(S.catQVivo||'').trim())
     h+='<button onclick="catTabLimpiar()" style="'+_catBS+';width:100%;margin-bottom:9px;min-height:44px;'+
       'font-size:12px;border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber)">'+
@@ -22650,40 +22737,24 @@ function _diasVencida(a){
   return d>0?d:0;
 }
 
-/* ── LAS OTRAS PANTALLAS, EN UNA FILA DISCRETA AL FINAL ──
-   NADA SE BORRÓ. Lo que hasta la v117 era una de cinco vistas al mismo nivel
-   —y las cuatro pantallas de trabajo— sigue entero y funcionando igual; solo
-   deja de ser lo primero que se ve. «Capítulos» está aquí porque si no, la
-   portada del módulo (partidas madre, sueltas, el marcador) se quedaría sin
-   ninguna puerta: una pantalla a la que no se llega no existe (v116). */
-function _catTabOtrasHTML(){
-  var b=function(onclick, txt){
-    return '<button onclick="'+onclick+'" style="'+_catBS+';flex:1;min-width:104px;min-height:46px;'+
-      'font-size:11.5px;padding:0 8px;border:1.5px solid var(--border2);background:var(--bg2);'+
-      'color:var(--text3)">'+txt+'</button>';
-  };
-  var pu=_nodoPorUbicar();
-  /* CLASIFICAR VA PRIMERO MIENTRAS QUEDE TRABAJO (v120). Con 2.445 por repartir
-     es lo único que importa del módulo; cuando no quede ninguna deja de ser lo
-     primero y se va al final, con las demás. */
+/* ── LA PUERTA A «MÁS», AL FINAL DE LA TABLA ──
+   Hasta la v120 aquí iba una fila de DIEZ botones —las otras vistas y las
+   pantallas de trabajo—. Ninguna se borró: se mudaron a `_catMasHTML`, donde
+   cada una lleva además una línea diciendo para qué sirve. Diez botones de
+   104px sin explicación en el pie de la pantalla principal son exactamente lo
+   que el dueño llamó «complicado» en la v121. */
+function _catMasBotonHTML(){
   var pend=_clasPendientes().length;
-  var otras=CAT_OTRAS.slice().sort(function(x,y){
-    if(x[0]==='clasificar') return pend?-1:1;
-    if(y[0]==='clasificar') return pend?1:-1;
-    return 0;
-  });
   return '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">'+
-    '<div style="font-size:11px;color:var(--text3);margin-bottom:7px">Las otras pantallas del módulo</div>'+
-    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
-      otras.map(function(v){
-        return b('catVistaSet('+_catQ(v[0])+')',
-                 v[1]+(v[0]==='clasificar'&&pend?' ('+pend+')':''));
-      }).join('')+
-      b('catUbicsAbrir()','Ubicaciones')+
-      b('catRepesAbrir()','Repetidas')+
-      b('nodoUbicarAbrir()','Por ubicar'+(pu?' ('+_nodoActsDirectas(pu.id).length+')':''))+
-      b('catFueraAbrir()','Fuera del plan')+
-    '</div></div>';
+    '<button onclick="catVistaSet(\'mas\')" style="'+_catBS+';width:100%;min-height:48px;'+
+      'font-size:12.5px;border:1.5px dashed var(--border2);background:none;color:var(--text2)">'+
+      'Más ▾ — las otras pantallas del módulo</button>'+
+    (pend
+      ? '<button onclick="catVistaSet(\'clasificar\')" style="'+_catBS+';width:100%;margin-top:6px;'+
+        'min-height:46px;font-size:11.5px;border:1.5px solid var(--amber);'+
+        'background:var(--amber-light);color:var(--amber)">Clasificar ('+pend+' por ubicar)</button>'
+      : '')+
+    '</div>';
 }
 
 function _catTablaHTML(){
@@ -22743,7 +22814,7 @@ function _catTablaHTML(){
   }
   if(!filas.length){
     h+='<div class="empty" style="padding:30px 16px;color:var(--text3);font-size:13px;line-height:1.5">'+
-      'No hay ninguna actividad con esos filtros.</div>'+_catTabOtrasHTML();
+      'No hay ninguna actividad con esos filtros.</div>'+_catMasBotonHTML();
     return h+'<div style="height:110px"></div>';
   }
   var tope=Math.min(T.tope||50, filas.length);
@@ -22772,7 +22843,7 @@ function _catTablaHTML(){
     h+='<button onclick="catTabMas()" style="'+_catBS+';width:100%;margin-top:9px;min-height:48px;'+
       'font-size:12px;border:1.5px dashed var(--border2);background:none;color:var(--text2)">'+
       'Ver 50 más ('+(filas.length-tope)+' sin enseñar)</button>';
-  h+=_catTabOtrasHTML();
+  h+=_catMasBotonHTML();
   return h+'<div style="height:110px"></div>';
 }
 
@@ -23261,6 +23332,406 @@ function _clasCandidatasHTML(){
 }
 function clasLimpiar(){ var C=_clasEstado(); C.sel={}; renderCatalogo(); }
 
+/* ══ v121 · EL MÓDULO DE PLANIFICACIÓN — VER · TRABAJAR · ORDENAR ═════════
+   Palabras del dueño después de veinte versiones de piezas sueltas:
+
+     «Lo siento complicado todavía. Organiza todo y que sea funcional el
+      módulo para yo trabajar.»
+
+   NO PIDIÓ OTRA FUNCIÓN. Pidió orden. Por eso esta versión no añade ni una
+   capacidad, ni un dato, ni una tabla, ni una siembra: pone en su sitio lo
+   que ya existe. Todo lo de antes sigue llegándose desde «Más».
+
+   EL MÓDULO TIENE UN SOLO ESQUELETO: el esquema del dueño, de la v120.
+
+       grupo → partida madre → subpartida → SITIO → actividades
+         8          28             93        el `area`
+
+   EL SITIO NO ES UN NODO y no lo va a ser: es el `area` de la actividad. Por
+   eso `_verSitios` lo saca de las actividades del nodo en vez de buscarlo en
+   `obra_nodos`. Ponerlo como nodo serían 93 × 29 filas que nadie pidió y que
+   habría que mantener a mano cada vez que nace un sitio.
+
+   Y TRES PUERTAS, que son las tres cosas que se hacen sobre él:
+
+     VER      · cómo va la obra      → bajar por el esquema
+     TRABAJAR · las actividades      → la tabla de la v118, tal cual
+     ORDENAR  · lo que falta poner   → las pilas, con su pantalla de siempre
+
+   POR QUÉ SON VISTAS Y NO BANDERAS NUEVAS. `renderCatalogo` despacha por una
+   cadena de `else if`, y este proyecto ya se tropezó CUATRO veces con lo
+   mismo: se ponía una bandera que se comprueba DESPUÉS de otra ya encendida y
+   la pantalla no cambiaba (`catFuera` v111, los paneles v113/v114,
+   `catCrearAbrir` v116, `catIrCap` v118). CLAUDE.md lo deja escrito: «si esto
+   vuelve a pasar, la cadena tiene que dejar de ser una cadena: una sola
+   variable "qué estoy mirando"». `catVista()` YA ES esa variable. Así que
+   portada, ver, ordenar y más entran ahí y no como cuatro banderas más.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function _verEstado(){
+  if(!S.catVer) S.catVer={nodo:'', sitio:''};
+  return S.catVer;
+}
+/* Los 8 grupos son la entrada de VER. Salen por `origen`, que lo puso la
+   siembra: no se adivinan del nombre. */
+function _verGrupos(){
+  return _nodos().filter(function(n){ return n.origen==='grupo'; })
+    .slice().sort(function(a,b){ return (a.orden||0)-(b.orden||0); });
+}
+/* LOS SITIOS DE UN NODO salen de las actividades que cuelgan de él, no de una
+   lista escrita a mano: si mañana nace un sitio, aparece solo. Se ordenan con
+   `_revOrdenArea` —el orden del edificio— porque alfabético mete «Escalera de
+   Emergencia» y «Fachada» ANTES del 2A y la pantalla abriría por la escalera.
+   Y se listan SOLO los que tienen algo: un sitio vacío dentro de una
+   subpartida no es información, es ruido. */
+function _verSitios(nodoId){
+  var m={};
+  _nodoActsTodas(nodoId).forEach(function(a){
+    var k=String(a.area||'')||PAL_SIN_UBIC;
+    (m[k]=m[k]||[]).push(a);
+  });
+  return Object.keys(m).sort(function(x,y){
+    return _revOrdenArea(x)-_revOrdenArea(y) || x.localeCompare(y,'es');
+  }).map(function(k){ return {area:k, acts:m[k]}; });
+}
+function _verActsDeSitio(nodoId, sitio){
+  return _nodoActsTodas(nodoId).filter(function(a){
+    return (String(a.area||'')||PAL_SIN_UBIC)===sitio;
+  });
+}
+function verAbrir(id){
+  var V=_verEstado();
+  V.nodo=String(id||''); V.sitio='';
+  S.catVista='ver'; try{ sessionStorage.setItem('mecca_cat_vista','ver'); }catch(e){}
+  renderCatalogo(); _catArriba();
+}
+function verSitio(s){ var V=_verEstado(); V.sitio=String(s||''); renderCatalogo(); _catArriba(); }
+/* Subir un escalón: si hay sitio abierto se suelta el sitio, si no se sube al
+   padre. Sin esto, «‹ Volver» desde un sitio saltaba dos escalones de golpe. */
+function verSubir(){
+  var V=_verEstado();
+  if(V.sitio){ V.sitio=''; renderCatalogo(); _catArriba(); return; }
+  var n=V.nodo?_nodoPorId(V.nodo):null;
+  V.nodo=(n&&n.padre_id&&_nodoPorId(n.padre_id))?String(n.padre_id):'';
+  renderCatalogo(); _catArriba();
+}
+
+/* LA MIGA DE PAN, EN TODAS LAS PANTALLAS DEL MÓDULO. Es la regla dura de esta
+   versión: se usa desde VER, desde TRABAJAR, desde ORDENAR y desde Más. Un
+   módulo con veinte pantallas donde no se sabe dónde estás es exactamente lo
+   que el dueño llamó «complicado». */
+function _catMigaHTML(partes){
+  if(!partes || !partes.length) return '';
+  return '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;'+
+    'margin:0 0 8px;font-size:11.5px;font-family:var(--mono);line-height:1.5">'+
+    partes.map(function(p,i){
+      var sep=i?'<span style="color:var(--text3)">›</span>':'';
+      if(!p.onclick) return sep+'<span style="color:var(--text2);font-weight:800">'+esc(p.txt)+'</span>';
+      /* 44px DE ALTO, aunque sea una miga de pan: es un botón y se toca con el
+         dedo, parado en la obra. El mínimo del proyecto son 40px (§1) pero
+         todo lo demás del módulo va a 44, y dos medidas distintas para lo
+         mismo terminan discutiéndose sola. Nació con 28px y lo cazó el arnés
+         de la v107, que mide lo VISIBLE — no la prueba que venía a buscar
+         esto, que es justo por lo que se mide todo lo que se toca. */
+      return sep+'<button onclick="'+p.onclick+'" style="background:none;border:0;padding:2px 6px;'+
+        'cursor:pointer;font-family:var(--mono);font-size:11.5px;color:var(--accent);'+
+        'font-weight:700;min-height:44px">'+esc(p.txt)+'</button>';
+    }).join('')+'</div>';
+}
+function _verMigaHTML(){
+  var V=_verEstado();
+  var partes=[{txt:'Planificación', onclick:'catVistaSet(\'portada\')'},
+              {txt:'Ver', onclick:V.nodo?'verAbrir(\'\')':''}];
+  if(V.nodo){
+    /* SIN LA RAÍZ. `_nodoRuta` la devuelve, y «PLANIFICACIÓN MECCA» es lo mismo
+       que el «Planificación» que ya va delante: repetirlo gasta una línea de un
+       teléfono de 390px para no decir nada. */
+    _nodoRuta(V.nodo).filter(function(n){ return n.origen!=='raiz'; })
+      .forEach(function(n,i,arr){
+        var ultimo=(i===arr.length-1) && !V.sitio;
+        partes.push({txt:String(n.nombre||''), onclick:ultimo?'':'verAbrir('+_catQ(n.id)+')'});
+      });
+  }
+  if(V.sitio) partes.push({txt:_catUbicCorto(V.sitio), onclick:''});
+  return _catMigaHTML(partes);
+}
+
+/* LOS DOS BOTONES FIJOS ABAJO. Dos como máximo y de 52px: en un teléfono de
+   390px tres ya no se leen, y son los dos que el dueño va a tocar desde
+   cualquier escalón — crear una actividad donde está parado, y ver las que
+   hay. «Ver las N» lleva a la tabla YA FILTRADA a ese nodo: es la misma tabla
+   de la v118, no una segunda lista. */
+function _verAccionesHTML(nodoId, sitio, n){
+  var acts=sitio?_verActsDeSitio(nodoId,sitio):_nodoActsTodas(nodoId);
+  return '<div style="position:sticky;bottom:0;z-index:20;display:flex;gap:7px;'+
+    'padding:10px 0 calc(10px + var(--sb));margin-top:12px;'+
+    'background:linear-gradient(transparent,var(--bg) 24%)">'+
+    '<button onclick="catCrearAbrir('+_catQ(nodoId)+(sitio?','+_catQ(sitio):'')+')" style="'+_catBS+';flex:1;'+
+      'min-height:52px;font-size:13px;border:1.5px solid var(--green);'+
+      'background:var(--green-light);color:var(--green)">+ Actividad</button>'+
+    (acts.length
+      ? '<button onclick="verALaTabla('+_catQ(nodoId)+(sitio?','+_catQ(sitio):'')+')" style="'+_catBS+';flex:1;'+
+        'min-height:52px;font-size:13px;border:1.5px solid var(--accent);'+
+        'background:var(--accent-fill);color:var(--accent-on)">Ver las '+acts.length+'</button>'
+      : '')+
+    '</div>';
+}
+/* De VER a TRABAJAR con el filtro puesto. No se inventa un filtro nuevo: se
+   usa el quinto (`nodo`) y el de ubicación, que ya existen. */
+function verALaTabla(nodoId, sitio){
+  var T=_catTab();
+  T.nodo=String(nodoId||''); T.hueco=''; T.tope=50; T.abierta='';
+  if(sitio) T.ubicacion=(sitio===PAL_SIN_UBIC?'':String(sitio));
+  _catTabGuardar();
+  S.catVista='tabla'; try{ sessionStorage.setItem('mecca_cat_vista','tabla'); }catch(e){}
+  renderCatalogo(); _catArriba();
+}
+
+function _verPantallaHTML(){
+  var V=_verEstado();
+  var h=_catBuscaBarraHTML()+_verMigaHTML();
+  /* Escalón 0 — los 8 grupos. */
+  if(!V.nodo){
+    h+='<div style="font-size:19px;font-weight:800;letter-spacing:-.3px;margin:2px 0 3px">Ver cómo va la obra</div>'+
+      '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
+      'Baja tocando: grupo › partida › subpartida › sitio.</div>';
+    var gs=_verGrupos();
+    if(!gs.length)
+      return h+'<div class="empty" style="padding:30px 16px;color:var(--text3);font-size:13px;line-height:1.5">'+
+        'El esquema no tiene grupos. Si acaba de cargar, toca <b>Actualizar</b> arriba.</div>'+
+        '<div style="height:110px"></div>';
+    h+='<div class="cat-filas">';
+    gs.forEach(function(g){
+      h+=_catFilaHTML({onclick:'verAbrir('+_catQ(g.id)+')', nombre:String(g.nombre||''),
+        que:'grupo', av:_nodoAvance(g.id)});
+    });
+    return h+'</div><div style="height:110px"></div>';
+  }
+  var n=_nodoPorId(V.nodo);
+  if(!n){
+    V.nodo='';
+    return h+'<div class="empty" style="padding:30px 16px;color:var(--text3);font-size:13px">'+
+      'Esa parte del esquema ya no existe.</div>';
+  }
+  var r=_nodoReal(n.id);
+  h+='<button onclick="verSubir()" style="'+_catVolverBS+'">‹ Volver</button>'+
+    '<div style="font-size:19px;font-weight:800;letter-spacing:-.3px;margin:2px 0 3px">'+
+      esc(String(n.nombre||''))+(V.sitio?' <span style="color:var(--text3);font-weight:700">· '+
+      esc(_catUbicCorto(V.sitio))+'</span>':'')+'</div>';
+  /* EL AVANCE ES `_nodoReal`: contado si hay actividades, a mano si no, «—» si
+     no hay ninguno de los dos. No se inventa un tercer número. */
+  if(!V.sitio){
+    h+='<div style="font-size:13px;margin-bottom:12px">'+
+      (r.fuente==='contado' ? _catAvanceHTML(r.av)
+       : r.fuente==='mano'  ? _catManualHTML(r.man)
+       : '<span style="color:var(--text3)">— sin actividades</span>')+
+      (r.av?_catBarraHTML(r.av):'')+'</div>';
+  }
+  /* Escalón 4 — las actividades de ese sitio, con `revCard`, la MISMA tarjeta
+     del resto del módulo: ya trae estado, porcentaje, nota, foto, Editar,
+     Repetir y Borrar, y escribe por `Acciones`. */
+  if(V.sitio){
+    var acts=_verActsDeSitio(n.id, V.sitio);
+    var avs=_catAvance(acts);
+    h+='<div style="font-size:13px;margin-bottom:12px">'+_catAvanceHTML(avs)+
+       (avs?_catBarraHTML(avs):'')+'</div>';
+    acts.forEach(function(a){ h+=revCard(a); });
+    if(!acts.length)
+      h+='<div class="empty" style="padding:26px 16px;color:var(--text3);font-size:13px">'+
+         'Aquí no queda nada registrado.</div>';
+    return h+_verEditHTML(n)+_verAccionesHTML(n.id, V.sitio, n)+'<div style="height:20px"></div>';
+  }
+  var hijos=_nodoHijos(n.id);
+  if(hijos.length){
+    h+='<div class="cat-filas">';
+    hijos.forEach(function(x){
+      h+=_catFilaHTML({onclick:'verAbrir('+_catQ(x.id)+')', nombre:String(x.nombre||''),
+        que:(x.origen==='partida'?'partida madre':x.origen==='subpartida'?'subpartida':''),
+        av:_nodoAvance(x.id)});
+    });
+    h+='</div>';
+  }else{
+    /* Escalón 3 — los sitios. No son nodos: salen del `area`. */
+    var ss=_verSitios(n.id);
+    if(ss.length){
+      h+='<div class="cat-filas">';
+      ss.forEach(function(s){
+        h+=_catFilaHTML({onclick:'verSitio('+_catQ(s.area)+')', nombre:_catUbicCorto(s.area),
+          que:'sitio', av:_catAvance(s.acts)});
+      });
+      h+='</div>';
+    }else{
+      h+='<div class="empty" style="padding:26px 16px;color:var(--text3);font-size:13px;line-height:1.5">'+
+         'Todavía no hay ninguna actividad aquí. Créala con <b>+ Actividad</b>, o tráela desde '+
+         '<b>Clasificar</b>.</div>';
+    }
+  }
+  return h+_verEditHTML(n)+_verAccionesHTML(n.id, '', n)+'<div style="height:20px"></div>';
+}
+/* EDITAR NO CONSTRUYE NADA: son los paneles que ya existen desde la v111 y la
+   v113 —renombrar y mover, el % a mano, las fechas y el costo—. Aquí solo se
+   llega a ellos, que es lo que faltaba. */
+function _verEditHTML(n){
+  if(!isAdmin()) return '';
+  var b=function(onclick,txt){
+    return '<button onclick="'+onclick+'" style="'+_catBS+';flex:1;min-width:104px;min-height:44px;'+
+      'font-size:11.5px;padding:0 8px;border:1.5px solid var(--border2);background:var(--bg2);'+
+      'color:var(--text3)">'+txt+'</button>';
+  };
+  return '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">'+
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:7px">Editar «'+esc(String(n.nombre||''))+'»</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+      b('nodoEditAbrir('+_catQ(n.id)+')','Nombre y sitio')+
+      b('nodoManualAbrir('+_catQ(n.id)+')','Avance a mano')+
+      b('nodoPlanAbrir('+_catQ(n.id)+')','Fechas y costo')+
+    '</div></div>';
+}
+
+/* ── LA PORTADA: TRES TARJETAS Y UN «MÁS» ──
+   Los números son VIVOS y salen de `S.catActs` y del árbol, no de constantes:
+   una portada que dice 2.445 cuando hay 2.460 es peor que no decir nada (es el
+   fallo de los datos viejos de la v109 con otra cara). */
+function _catNumerosHTML(){
+  var todas=_catTodas();
+  var abiertas=todas.filter(function(a){ return !_catCerrada(a); });
+  return {
+    av:_catAvance(todas),
+    cerradas:todas.filter(_catCerrada).length,
+    total:todas.length,
+    abiertas:abiertas.length,
+    /* TRANCADA = `isBlocked`, el criterio que ya vive en un solo sitio y que
+       usa el candado 🔒 de la lista. Una segunda definición aquí haría que la
+       portada y la lista cantaran números distintos, que es el error de Hoy. */
+    trancadas:abiertas.filter(function(a){ try{ return isBlocked(a); }catch(e){ return false; } }).length,
+    vencidas:abiertas.filter(isRetrasada).length,
+    sinFecha:abiertas.filter(function(a){ return !String(a.fecha_fin||'').trim(); }).length,
+    sinQuien:abiertas.filter(function(a){ return !String(a.personal_nombre||'').trim(); }).length,
+    porUbicar:_clasPendientes().length
+  };
+}
+function _catTarjetaHTML(o){
+  return '<button onclick="'+o.onclick+'" style="'+_catBS+';width:100%;text-align:left;'+
+    'margin-bottom:9px;padding:15px 16px;min-height:78px;display:block;'+
+    'border:1.5px solid '+o.color+';background:'+o.fondo+'">'+
+    '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">'+
+      '<span style="font-size:15px;font-weight:800;letter-spacing:-.2px;color:'+o.color+'">'+esc(o.titulo)+'</span>'+
+      '<span style="font-size:12px;color:var(--text3);font-weight:600">'+esc(o.sub)+'</span>'+
+      '<span style="margin-left:auto;color:'+o.color+';font-size:17px;line-height:1">›</span>'+
+    '</div>'+
+    '<div style="font-size:12.5px;font-family:var(--mono);color:var(--text2);line-height:1.5">'+o.datos+'</div>'+
+    '</button>';
+}
+function _catPortadaHTML(){
+  var N=_catNumerosHTML();
+  var h=_catBuscaBarraHTML();
+  h+='<div style="display:flex;align-items:baseline;gap:9px;margin:2px 0 12px;flex-wrap:wrap">'+
+      '<div style="font-size:21px;font-weight:800;letter-spacing:-.4px">Planificación</div>'+
+      '<div style="font-size:11px;color:var(--amber);font-weight:800;font-family:var(--mono)">PRUEBA</div>'+
+    '</div>';
+  h+=_catTarjetaHTML({onclick:'catVistaSet(\'ver\')', titulo:'VER', sub:'cómo va la obra',
+    color:'var(--accent)', fondo:'var(--accent-soft)',
+    datos:(N.av?'<b style="font-size:15px">'+N.av.pct+'%</b> · ':'')+N.cerradas+' de '+N.total});
+  h+=_catTarjetaHTML({onclick:'catVistaSet(\'tabla\')', titulo:'TRABAJAR', sub:'las actividades',
+    color:'var(--green)', fondo:'var(--green-light)',
+    datos:'<b style="font-size:15px">'+N.abiertas+'</b> abiertas · '+N.trancadas+' trancadas · '+
+          N.vencidas+' vencidas'});
+  h+=_catTarjetaHTML({onclick:'catVistaSet(\'ordenar\')', titulo:'ORDENAR', sub:'lo que falta poner',
+    color:'var(--amber)', fondo:'var(--amber-light)',
+    datos:'<b style="font-size:15px">'+N.porUbicar+'</b> por ubicar · '+N.sinFecha+' sin fecha'});
+  h+='<button onclick="catVistaSet(\'mas\')" style="'+_catBS+';width:100%;margin-top:6px;min-height:48px;'+
+    'font-size:12.5px;border:1.5px dashed var(--border2);background:none;color:var(--text2)">Más ▾</button>';
+  return h+'<div style="height:110px"></div>';
+}
+
+/* ── ORDENAR: las pilas, con la pantalla que cada una YA tiene ──
+   Ninguna es nueva. «Por ubicar» es Clasificar de la v120; las otras tres son
+   la tabla con un filtro puesto. Lo que faltaba era que el dueño supiera que
+   están ahí y cuántas hay. */
+function _catOrdenarHTML(){
+  var N=_catNumerosHTML();
+  /* La miga la pinta `_catBuscaBarraHTML`, que se ve en todas las pantallas. */
+  var h=_catBuscaBarraHTML();
+  h+='<button onclick="catVistaSet(\'portada\')" style="'+_catVolverBS+'">‹ Volver</button>'+
+    '<div style="font-size:19px;font-weight:800;letter-spacing:-.3px;margin:2px 0 3px">Lo que falta poner</div>'+
+    '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
+    'Cada pila abre la pantalla donde se resuelve.</div>';
+  var pila=function(onclick, nom, n, expl, color){
+    return '<button onclick="'+onclick+'" style="'+_catBS+';width:100%;text-align:left;margin-bottom:7px;'+
+      'padding:13px 14px;min-height:62px;display:flex;align-items:center;gap:11px;'+
+      'border:1.5px solid '+(n?color:'var(--border2)')+';background:var(--bg2)">'+
+      '<span style="font-size:19px;font-weight:800;font-family:var(--mono);min-width:52px;'+
+        'color:'+(n?color:'var(--text3)')+'">'+n+'</span>'+
+      '<span style="flex:1;min-width:0"><span style="display:block;font-size:13.5px;font-weight:800">'+
+        esc(nom)+'</span><span style="display:block;font-size:11px;color:var(--text3);'+
+        'line-height:1.4;margin-top:2px">'+esc(expl)+'</span></span>'+
+      '<span style="color:var(--text3);font-size:16px">›</span></button>';
+  };
+  h+=pila('catVistaSet(\'clasificar\')','Por ubicar en el esquema',N.porUbicar,
+          'No están en ninguna subpartida.','var(--amber)');
+  h+=pila('catOrdenarIr(\'sinfecha\')','Sin fecha de entrega',N.sinFecha,
+          'Abiertas y sin fecha_fin.','var(--amber)');
+  h+=pila('catOrdenarIr(\'sinquien\')','Sin contratista',N.sinQuien,
+          'Abiertas y sin nadie asignado.','var(--amber)');
+  /* La cuarta NO es una pila: es información. No hay nada que «poner» — el
+     cronograma venció y eso se arregla refechando, no rellenando un hueco. */
+  h+='<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">'+
+    pila('catOrdenarIr(\'vencidas\')','Cronograma vencido',N.vencidas,
+         'Abiertas que ya pasaron su fecha de entrega.','var(--red)')+'</div>';
+  return h+'<div style="height:110px"></div>';
+}
+/* Las tres llevan a la tabla con un filtro, y por eso NO se inventa un filtro
+   nuevo: «sin fecha» y «sin contratista» son opciones del quinto selector
+   (`hueco`), y vencidas es el chip que ya tenía el buscador. */
+function catOrdenarIr(k){
+  var T=_catTab();
+  T.contratista=''; T.ubicacion=''; T.capitulo=''; T.estado=''; T.nodo='';
+  T.hueco=k; T.tope=50; T.abierta='';
+  _catTabGuardar();
+  S.catVista='tabla'; try{ sessionStorage.setItem('mecca_cat_vista','tabla'); }catch(e){}
+  renderCatalogo(); _catArriba();
+}
+
+/* ── MÁS: las ocho de antes, con una línea que diga para qué sirve cada una ──
+   NINGUNA SE BORRA. Dejan de ser lo primero que se ve, que es distinto. Sin la
+   línea explicativa esto sería la misma fila de botones de la v118 en otro
+   sitio: el dueño no sabía qué hacía «Matriz» ni «Tiempo». */
+var CAT_MAS=[
+  ['clasificar','Clasificar','Repartir en el esquema lo que está por ubicar.'],
+  ['lista','Capítulos del presupuesto','Los 48 capítulos, sus partidas y el avance a mano.'],
+  ['edificio','Edificio','El alzado de la torre, con el avance de cada apartamento.'],
+  ['matriz','Matriz','Ubicaciones × capítulos, para ver huecos de un golpe.'],
+  ['arbol','Cronograma','La tabla de tareas con fechas, costo y quién.'],
+  ['tiempo','Tiempo','Las barras en el calendario y el atraso.']
+];
+function _catMasHTML(){
+  /* La miga la pinta `_catBuscaBarraHTML`, que se ve en todas las pantallas. */
+  var h=_catBuscaBarraHTML();
+  h+='<button onclick="catVistaSet(\'portada\')" style="'+_catVolverBS+'">‹ Volver</button>'+
+    '<div style="font-size:19px;font-weight:800;letter-spacing:-.3px;margin:2px 0 3px">Las otras pantallas</div>'+
+    '<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px">'+
+    'Siguen enteras. Dejaron de ser lo primero que se ve.</div>';
+  var linea=function(onclick, nom, expl){
+    return '<button onclick="'+onclick+'" style="'+_catBS+';width:100%;text-align:left;margin-bottom:6px;'+
+      'padding:12px 14px;min-height:58px;display:flex;align-items:center;gap:10px;'+
+      'border:1.5px solid var(--border2);background:var(--bg2)">'+
+      '<span style="flex:1;min-width:0"><span style="display:block;font-size:13.5px;font-weight:800">'+
+        esc(nom)+'</span><span style="display:block;font-size:11px;color:var(--text3);'+
+        'line-height:1.4;margin-top:2px">'+esc(expl)+'</span></span>'+
+      '<span style="color:var(--text3);font-size:16px">›</span></button>';
+  };
+  var pend=_clasPendientes().length;
+  CAT_MAS.forEach(function(v){
+    h+=linea('catVistaSet('+_catQ(v[0])+')',
+             v[1]+(v[0]==='clasificar'&&pend?' ('+pend+')':''), v[2]);
+  });
+  h+=linea('catUbicsAbrir()','Ubicaciones','Renombrar, juntar, y crear un sitio nuevo.');
+  h+=linea('catRepesAbrir()','Posibles repetidas','Partidas que dicen casi lo mismo.');
+  h+=linea('nodoUbicarAbrir()','Por ubicar en el cronograma',
+           'La pantalla de reparto con casillas y «Llevar a…».');
+  h+=linea('catFueraAbrir()','Fuera del plan','Lo descartado. Descartar no borra.');
+  return h+'<div style="height:110px"></div>';
+}
+
 function _catClasHTML(){
   var C=_clasEstado();
   var h=_catBuscaBarraHTML()+_catVistaSelHTML()+_clasCabeceraHTML();
@@ -23340,6 +23811,12 @@ function renderCatalogo(){
     /* v118 · LA TABLA ES LA ENTRADA. Va después de las pantallas de trabajo
        —que son algo que se está haciendo— y antes de los capítulos. */
     else if(catVista()==='tabla')    el.innerHTML=_catTablaHTML();
+    /* v121 · las tres puertas y el Más. Van aquí, al lado de las otras vistas,
+       porque `catVista()` es la única variable de «qué estoy mirando». */
+    else if(catVista()==='portada')  el.innerHTML=_catPortadaHTML();
+    else if(catVista()==='ver')      el.innerHTML=_verPantallaHTML();
+    else if(catVista()==='ordenar')  el.innerHTML=_catOrdenarHTML();
+    else if(catVista()==='mas')      el.innerHTML=_catMasHTML();
     else if(catVista()==='clasificar') el.innerHTML=_catClasHTML();
     else if(catVista()==='edificio') el.innerHTML=_catEdificioHTML();
     else if(catVista()==='matriz')   el.innerHTML=_catMatrizHTML();
@@ -23486,9 +23963,51 @@ function _catCapitulosHTML(){
 /* La caja de buscar va ARRIBA Y SIEMPRE VISIBLE, en los cuatro niveles: la
    queja del dueño fue «todavía se dificulta registrar», y registrar empieza
    por encontrar. */
+/* ── DÓNDE ESTOY, EN UNA SOLA FUNCIÓN (v121) ──
+   Mira el estado EN EL MISMO ORDEN que `renderCatalogo`, porque es la única
+   forma de que el nombre que se lee arriba sea el de la pantalla que de verdad
+   se está pintando. Si añades una pantalla, añádela aquí también: es lo que
+   hace que la miga de pan valga para TODAS y no solo para las que me acordé.
+   (Lo ideal sería que la cadena de `else if` dejara de ser una cadena —lo dice
+   CLAUDE.md desde la v116—; mientras tanto, esto la refleja en un sitio.) */
+function _catDondeEstoy(){
+  if(S.catGrupoNuevo) return 'Grupo nuevo';
+  if(S.catMover)      return 'Mover partidas';
+  if(S.catBuscar)     return 'Buscar partidas';
+  if(S.catPick)       return 'Escoger';
+  if(S.catSueltas)    return 'Partidas sueltas';
+  if(S.catPartida)    return 'Ficha de la partida';
+  if(S.catExactas)    return 'Repetidas exactas';
+  if(S.catRepes)      return 'Posibles repetidas';
+  if(S.catMadres)     return 'Partidas madre';
+  if(S.catUbics)      return 'Ubicaciones';
+  if(S.catCrear)      return 'Crear actividad';
+  if(S.catFuera)      return 'Fuera del plan';
+  if(S.nodoTraer)     return 'Traer actividades';
+  if(S.nodoUbicar)    return 'Por ubicar en el cronograma';
+  var v=catVista();
+  if(v==='tabla')  return 'Trabajar';
+  /* VER pinta la suya, que es la ruta entera del esquema —«Ver › ACABADOS ›
+     Pisos › Porcelanato»— y dice mucho más que esta. Dos migas seguidas sería
+     ruido. */
+  if(v==='ver')    return '';
+  if(v==='mas')    return 'Más';
+  if(v==='portada')return '';
+  var r=CAT_VISTAS.concat(CAT_OTRAS).find(function(x){ return x[0]===v; });
+  return r?r[1]:'';
+}
 function _catBuscaBarraHTML(){
   var q=String(S.catQ||'');
   var fresco=_catFrescoHTML();
+  /* LA MIGA DE PAN EN TODAS LAS PANTALLAS (v121), y va AQUÍ porque
+     `_catBuscaBarraHTML` es la única pieza que se pinta en todos los niveles
+     del módulo —lo dice el comentario de la v109—. Puesta en el selector de
+     vistas se quedaban sin ella Ubicaciones, Repetidas, Por ubicar y Fuera del
+     plan, que son pantallas de trabajo y se comprueban antes que la vista.
+     En la portada no se pinta: «Planificación › Planificación» no dice nada. */
+  var donde=_catDondeEstoy();
+  var miga=donde?_catMigaHTML([{txt:'Planificación', onclick:'catVistaSet(\'portada\')'},
+                               {txt:donde}]):'';
   var ch=S.catQChips||{};
   var chip=function(k,t){
     var on=!!ch[k];
@@ -23496,7 +24015,7 @@ function _catBuscaBarraHTML(){
       'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
       'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+t+'</button>';
   };
-  return fresco+
+  return fresco+miga+
     '<div style="display:flex;align-items:center;gap:9px;background:var(--bg2);'+
       'border:1.5px solid var(--border2);border-radius:var(--r2);padding:10px 13px;margin-bottom:8px">'+
       '<input id="cat-q" type="search" value="'+esc(q)+'" oninput="catBuscaTeclea(this.value)" '+
