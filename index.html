@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260921_121';
+const APP_VERSION='20260921_122';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -22278,8 +22278,14 @@ function _catTab(){
       var s=JSON.parse(sessionStorage.getItem('mecca_cat_tabla')||'null');
       if(s) Object.keys(g).forEach(function(k){ if(typeof s[k]==='string') g[k]=s[k]; });
     }catch(e){}
+    /* `campo` y `ficha` son de la ficha abierta (v122): qué escogedor está
+       desplegado y si «Cambiar la ficha» está abierto. NO se guardan en
+       `sessionStorage` —son de la fila que estás tocando ahora, no un filtro—
+       pero nacen aquí por lo mismo que todo lo demás: el dueño entra DIRECTO a
+       Partidas y una variable que no existe revienta la pantalla (v103). */
     S.catTabla={contratista:g.contratista, ubicacion:g.ubicacion, capitulo:g.capitulo,
-                estado:g.estado, nodo:g.nodo, hueco:g.hueco, abierta:'', tope:50};
+                estado:g.estado, nodo:g.nodo, hueco:g.hueco, abierta:'', tope:50,
+                campo:'', ficha:false};
   }
   return S.catTabla;
 }
@@ -22446,6 +22452,12 @@ function catTabMas(){ _catTab().tope=(_catTab().tope||50)+50; renderCatalogo(); 
 function catTabAbrir(id){
   var T=_catTab();
   T.abierta=(T.abierta===String(id)?'':String(id));
+  /* La ficha nace cerrada y sin ningún escogedor desplegado CADA VEZ que se
+     abre una fila (v122): si se quedaran puestos, la siguiente actividad
+     abriría con el escogedor de la anterior desplegado y con «Cambiar la
+     ficha» abierto, que es justo el primer pantallazo que esta versión vino a
+     quitar. */
+  T.campo=''; T.ficha=false;
   renderCatalogo();
 }
 
@@ -22510,50 +22522,166 @@ function _catTabFiltrosHTML(){
    Editar, Repetir y Borrar. Aquí arriba están solo las seis que `revCard` no
    tenía —descripción, ubicación, contratista, capítulo, tarea y fecha de
    entrega—, y todas escriben por `Acciones` o por las tablas de amarre. */
+/* ══ v122 · LA FICHA EN UN TOQUE ═════════════════════════════════════════
+   El dueño abrió una actividad en el teléfono y dijo: «Eficientiza esto.»
+
+   LA PANTALLA ESTABA ORDENADA AL REVÉS DE COMO SE USA. Contado en
+   `obra_cambios` sobre las 5.800 escrituras de actividad:
+
+     completar 1.496 · avance 263 · plan del día 318 · fechas 466 ·
+     contratista 41 · nota 30 · ubicación 21 · prioridad 10 · CAPÍTULO 0
+
+   Y el pliegue abría con Descripción, Ubicación, Contratista y CAPÍTULO
+   —cuatro bloques de etiqueta + control a todo lo ancho— mientras el avance,
+   que es lo único que se toca miles de veces, quedaba debajo de todo dentro
+   de `revCard`. El primer pantallazo entero era lo que se ha tocado 0 veces.
+
+   Ahora: arriba lo que se toca, en medio los cuatro datos en líneas de una
+   sola altura, y abajo plegado lo que casi nunca se usa.
+
+   NO SE INVENTA UN SEGUNDO CAMINO DE ESCRITURA. Los botones de avance llaman
+   a **`revEstado`**, que es exactamente lo que llama `revCard`, y que por
+   dentro va a `Acciones.completar` / `setAvance` / `editar`. Dos caminos para
+   cerrar una partida es el error de la v79 y de la v80.
+
+   `revCard` NO SE MODIFICA: solo deja de pintarse aquí dentro. Sigue igual en
+   Revisión, en VER y donde ya estaba. */
+
+/* Qué campo tiene el escogedor abierto, para que sobreviva al repintado.
+   `catTabSet` y compañía repintan al guardar (v107), así que un `display`
+   suelto en el DOM se perdería en cuanto se toca algo. */
+function catTabCampo(id, campo){
+  var T=_catTab();
+  T.campo=(T.campo===campo?'':campo);
+  renderCatalogo();
+}
+/* «Cambiar la ficha»: lo de 7, 0 y 10 usos. Cerrado al abrir la fila. */
+function catTabFicha(){ var T=_catTab(); T.ficha=!T.ficha; renderCatalogo(); }
+/* 📅 HOY — 318 usos entre poner y quitar el plan del día, el tercero más
+   tocado de toda la ficha y hasta la v121 no tenía botón aquí. Conmuta: si ya
+   está en hoy, lo quita, porque si no habría que irse a otra pantalla para
+   deshacerlo. */
+async function catTabHoy(id){
+  var a=_findActAny(id); if(!a){ showToast('No encuentro esa actividad','err',5000); return; }
+  var hoy=today(), puesto=(String(a.fecha_plan||'')===hoy);
+  try{
+    await Acciones.planificar(id, puesto?null:hoy,
+      puesto?'quitada del plan de hoy (ficha de Partidas)':'planificada para hoy (ficha de Partidas)');
+    showToast(puesto?'Fuera del plan de hoy ✓':'En el plan de hoy ✓');
+  }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
+  _repintarDondeEstoy();
+}
+/* LA ENTREGA, EN EL FORMATO DEL APP Y DICIENDO SI ESTÁ VENCIDA. Antes salía
+   «sept 19, 2026» —el formato del `<input type=date>` del sistema— y no decía
+   nada más. Los días se cuentan con `_diasLabEntre`, que salta domingos y
+   feriados: es el mismo criterio del arrastre de la v104, y para quien paga
+   jornales «3 días» y «3 días de trabajo» no son lo mismo. */
+function _catTabEntregaHTML(a){
+  var f=String(a.fecha_fin||'').trim();
+  if(!f) return '<span style="color:var(--text3)">sin fecha</span>';
+  var txt=_nodoFecha(f);
+  if(_catCerrada(a)) return esc(txt);
+  var hoy=today();
+  if(f<hoy){
+    var d=_diasLabEntre(f,hoy);
+    return esc(txt)+'<span style="color:var(--red)"> · vencida hace '+d+(d===1?' día':' días')+'</span>';
+  }
+  if(f===hoy) return esc(txt)+'<span style="color:var(--amber)"> · vence hoy</span>';
+  return esc(txt);
+}
 function _catTabPliegueHTML(a, ancho){
   var sid=_catQ(a.id);
+  var T=_catTab();
   var quienes={}; _catTodas().forEach(function(x){ var q=_catTabQuien(x); if(q) quienes[q]=1; });
-  var fila=function(etq, dentro){
-    return '<div style="margin-bottom:7px">'+
-      '<span style="display:block;font-size:9.5px;font-weight:800;letter-spacing:.4px;'+
-        'color:var(--text3);margin-bottom:3px">'+esc(etq.toUpperCase())+'</span>'+dentro+'</div>';
-  };
   var selBS='width:100%;box-sizing:border-box;min-height:44px;border:1.5px solid var(--border2);'+
             'border-radius:11px;padding:0 9px;font-size:13px;font-family:var(--font);'+
             'background:var(--bg2);color:var(--text)';
   var cap=_catTabCapId(a), nodo=_catTabNodoId(a), nodos=(S.nodoPorA||{})[a.id]||[];
+  var pct=parseInt(a.porcentaje,10)||0, cerrada=_catCerrada(a);
   var h='<div style="position:sticky;left:0;width:'+ancho+'px;box-sizing:border-box;'+
     'padding:9px 10px 12px;background:var(--bg3)">';
-  h+=fila('Descripción',
-      '<textarea id="cattab-desc" rows="2" style="'+selBS+';padding:9px;line-height:1.35;resize:vertical">'+
-        esc(a.descripcion||'')+'</textarea>'+
-      '<button onclick="catTabDesc('+sid+')" style="'+_catBS+';width:100%;margin-top:5px;min-height:44px;'+
-        'font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">'+
-        'Guardar la descripción</button>');
-  h+=fila('Ubicación',
+
+  /* ── 1 · EL AVANCE, ARRIBA Y EN UN TOQUE (52px) ── */
+  /* LOS CUATRO PORCENTAJES A ANCHO FIJO Y «Completada» SE QUEDA CON EL RESTO.
+     Con `flex:1` en los cinco, los cuatro cortos sobraban de ancho y al largo
+     le faltaba: «✓ Completada» partía en dos líneas y se salía del botón a
+     390px. `nowrap` para que si algún día no cabe se vea recortado y no
+     reventando la fila. */
+  var bAv=function(txt, onclick, on, col, ancho){
+    return '<button onclick="'+onclick+'" style="'+ancho+';min-width:0;min-height:52px;'+
+      'border-radius:11px;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:800;'+
+      'padding:0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+
+      'border:1.5px solid '+(on?col:'var(--border2)')+';'+
+      'background:'+(on?col:'var(--bg2)')+';color:'+(on?'#fff':'var(--text2)')+'">'+txt+'</button>';
+  };
+  var pctW='flex:0 1 44px';
+  h+='<div style="display:flex;gap:5px;margin-bottom:6px">'+
+    bAv('0%',  'revEstado('+sid+',\'nil\')',  !cerrada&&pct===0, 'var(--text3)', pctW)+
+    bAv('25%', 'revEstado('+sid+',\'prog\',25)', !cerrada&&pct===25, 'var(--accent)', pctW)+
+    bAv('50%', 'revEstado('+sid+',\'prog\',50)', !cerrada&&pct===50, 'var(--accent)', pctW)+
+    bAv('75%', 'revEstado('+sid+',\'prog\',75)', !cerrada&&pct===75, 'var(--accent)', pctW)+
+    bAv('✓ '+PAL_COMPLETADA, 'revEstado('+sid+',\'done\')', cerrada, 'var(--green)', 'flex:1 1 auto')+
+  '</div>';
+
+  /* ── 2 · LAS TRES ACCIONES (48px) ── */
+  var enHoy=(String(a.fecha_plan||'')===today());
+  var bAc=function(txt, onclick, on){
+    return '<button onclick="'+onclick+'" style="flex:1;min-width:0;min-height:48px;border-radius:11px;'+
+      'cursor:pointer;font-family:var(--font);font-size:12px;font-weight:700;padding:0 4px;'+
+      'border:1.5px solid '+(on?'var(--accent)':'var(--border2)')+';'+
+      'background:'+(on?'var(--accent-fill)':'var(--bg2)')+';'+
+      'color:'+(on?'var(--accent-on)':'var(--text2)')+'">'+txt+'</button>';
+  };
+  h+='<div style="display:flex;gap:5px;margin-bottom:10px">'+
+    bAc('📅 Hoy','catTabHoy('+sid+')',enHoy)+
+    bAc('Nota','catTabCampo('+sid+',\'nota\')',T.campo==='nota')+
+    bAc('Foto','abrirFotoUpload('+sid+')',false)+
+  '</div>';
+  /* LA NOTA SE GUARDA AL SALIR DEL CAMPO, sin botón propio — es la regla de
+     esta versión y la razón de que el textarea no tenga uno. */
+  if(T.campo==='nota')
+    h+='<textarea id="cattab-nota" rows="2" placeholder="Escribe la nota y toca fuera…" '+
+       'onblur="catTabNota('+sid+')" style="'+selBS+';padding:9px;line-height:1.35;resize:vertical;'+
+       'margin-bottom:10px"></textarea>';
+
+  /* ── 3 · LOS CUATRO DATOS, UNA LÍNEA CADA UNO (44px) ──
+     Etiqueta gris a la izquierda, valor a la derecha y un chevron. NO un
+     bloque de etiqueta + control a todo lo ancho, que es lo que hacía que
+     cuatro campos ocuparan el primer pantallazo entero. El escogedor es el
+     `<select>` de siempre y sale DENTRO de la línea, no fuera: un toggle que
+     solo cambia el `display` no repinta, y fuera no aparecería nunca (v79). */
+  var linea=function(campo, etq, valorHTML, control){
+    var abierto=(T.campo===campo);
+    return '<div style="border-bottom:1px solid var(--border)">'+
+      '<button onclick="catTabCampo('+sid+','+_catQ(campo)+')" style="width:100%;min-height:44px;'+
+        'display:flex;align-items:center;gap:9px;background:none;border:0;cursor:pointer;'+
+        'padding:6px 2px;text-align:left;font-family:var(--font)">'+
+        '<span style="font-size:11px;color:var(--text3);font-weight:700;min-width:82px;flex-shrink:0">'+
+          esc(etq)+'</span>'+
+        '<span style="flex:1;min-width:0;font-size:12.5px;color:var(--text);font-weight:600;'+
+          'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+valorHTML+'</span>'+
+        '<span style="color:var(--text3);font-size:15px;flex-shrink:0">'+(abierto?'▾':'›')+'</span>'+
+      '</button>'+
+      (abierto?'<div style="padding:0 0 9px">'+control+'</div>':'')+
+    '</div>';
+  };
+  h+='<div style="margin-bottom:10px">';
+  h+=linea('area','Ubicación', esc(_catTabUbic(a)),
       '<select onchange="catTabSet('+sid+',\'area\',this.value)" style="'+selBS+'">'+
         _catUbicsTodas().map(function(u){
           var v=(u.area===PAL_SIN_UBIC?'':u.area);
           return '<option value="'+esc(v)+'"'+(_catTabUbic(a)===u.area?' selected':'')+'>'+esc(u.area)+'</option>';
         }).join('')+'</select>');
-  h+=fila('Contratista',
+  h+=linea('quien','Contratista', esc(_catTabQuien(a)||'— sin asignar —'),
       '<select onchange="catTabQuien('+sid+',this.value)" style="'+selBS+'">'+
         '<option value="">— sin asignar —</option>'+
         Object.keys(quienes).sort(function(x,y){ return x.localeCompare(y,'es'); }).map(function(q){
           return '<option value="'+esc(q)+'"'+(_catTabQuien(a)===q?' selected':'')+'>'+esc(q)+'</option>';
         }).join('')+'</select>');
-  h+=fila('Capítulo',
-      '<select onchange="catTabCap('+sid+',this.value)" style="'+selBS+'">'+
-        _capsLista().map(function(c){
-          return '<option value="'+esc(c.n)+'"'+(cap===c.n?' selected':'')+'>'+esc(c.n+' · '+c.t)+'</option>';
-        }).join('')+'</select>'+
-      /* Mover UNA actividad de capítulo no puede mover a sus hermanas: la
-         partida es del capítulo, así que se le busca (o se le crea) una con el
-         mismo nombre en el capítulo nuevo. Se dice, porque callarlo sería
-         mentir sobre dónde quedó el resto del trabajo. */
-      '<div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:4px">'+
-        'Mueve <b>solo esta actividad</b>. Las demás de su partida se quedan donde están.</div>');
-  h+=fila('Tarea del cronograma',
+  h+=linea('fecha','Entrega', _catTabEntregaHTML(a),
+      '<input type="date" value="'+esc(a.fecha_fin||'')+'" onchange="catTabSet('+sid+',\'fecha_fin\',this.value)" '+
+        'style="'+selBS+'">');
+  h+=linea('nodo','Tarea', esc(_catTabNodoNom(nodo)||'— sin tarea —'),
       '<select onchange="catTabNodo('+sid+',this.value)" style="'+selBS+'">'+
         '<option value="">— sin tarea —</option>'+
         _catTabNodos().map(function(n){
@@ -22561,20 +22689,60 @@ function _catTabPliegueHTML(a, ancho){
         }).join('')+'</select>'+
       (nodos.length>1?'<div style="font-size:10.5px;color:var(--amber);line-height:1.45;margin-top:4px">'+
         'Está en <b>'+nodos.length+' tareas</b> a propósito. Cambiarla aquí solo mueve la primera.</div>':''));
-  h+=fila('Fecha de entrega',
-      '<input type="date" value="'+esc(a.fecha_fin||'')+'" onchange="catTabSet('+sid+',\'fecha_fin\',this.value)" '+
-        'style="'+selBS+'">');
-  /* LA NOTA SE ESCRIBE AQUÍ, A TECLADO. El botón «Nota» de `revCard` es el
-     MICRÓFONO (`revNota` → `dictarSobre`) y está apagado desde la v97 con toda
-     la voz, así que desde la tarjeta no hay forma de dejar una nota escrita.
-     Va por `Acciones.agregarNota`, que es el camino de siempre. */
-  h+=fila('Nota',
-      '<textarea id="cattab-nota" rows="2" placeholder="Escribe una nota…" style="'+selBS+
-        ';padding:9px;line-height:1.35;resize:vertical"></textarea>'+
-      '<button onclick="catTabNota('+sid+')" style="'+_catBS+';width:100%;margin-top:5px;min-height:44px;'+
-        'font-size:11.5px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)">'+
-        'Agregar la nota</button>');
-  h+='<div style="height:4px"></div>'+revCard(a);
+  h+='</div>';
+
+  /* ── 4 · LO QUE CASI NUNCA SE TOCA, PLEGADO ──
+     Descripción (49 usos), Capítulo (CERO), Prioridad (10), Repetir y Borrar.
+     Nada se pierde: los siete campos de la v121 siguen todos editables. */
+  h+='<button onclick="catTabFicha()" style="'+_catBS+';width:100%;min-height:44px;font-size:12px;'+
+    'border:1.5px dashed var(--border2);background:none;color:var(--text2)">'+
+    'Cambiar la ficha '+(T.ficha?'▴':'▾')+'</button>';
+  if(T.ficha){
+    var etq=function(t){ return '<span style="display:block;font-size:9.5px;font-weight:800;'+
+      'letter-spacing:.4px;color:var(--text3);margin:9px 0 3px">'+esc(t.toUpperCase())+'</span>'; };
+    h+='<div style="padding-top:2px">';
+    /* SIN BOTÓN DE GUARDAR: al salir del campo, como todo lo demás. Era el
+       único campo del app con botón propio. */
+    h+=etq('Descripción')+
+       '<textarea id="cattab-desc" rows="2" onblur="catTabDesc('+sid+')" style="'+selBS+
+       ';padding:9px;line-height:1.35;resize:vertical">'+esc(a.descripcion||'')+'</textarea>';
+    h+=etq('Capítulo')+
+       '<select onchange="catTabCap('+sid+',this.value)" style="'+selBS+'">'+
+        _capsLista().map(function(c){
+          return '<option value="'+esc(c.n)+'"'+(cap===c.n?' selected':'')+'>'+esc(c.n+' · '+c.t)+'</option>';
+        }).join('')+'</select>'+
+      /* El aviso SE QUEDA: mover UNA actividad de capítulo no mueve a sus
+         hermanas —la partida es del capítulo— y callarlo sería mentir sobre
+         dónde quedó el resto del trabajo. */
+      '<div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:4px">'+
+        'Mueve <b>solo esta actividad</b>. Las demás de su partida se quedan donde están.</div>';
+    h+=etq('Prioridad')+
+       '<select onchange="catTabSet('+sid+',\'prioridad\',this.value)" style="'+selBS+'">'+
+        [['normal','Normal'],['urgente','Urgente']].map(function(p){
+          return '<option value="'+p[0]+'"'+(String(a.prioridad||'normal')===p[0]?' selected':'')+'>'+p[1]+'</option>';
+        }).join('')+'</select>';
+    var bf='flex:1;min-width:104px;min-height:44px;border-radius:11px;cursor:pointer;'+
+           'font-family:var(--font);font-size:11.5px;font-weight:700;'+
+           'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2)';
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'+
+      '<button onclick="editAct('+sid+')" style="'+bf+'">Editar todo</button>'+
+      '<button onclick="catRepetirAbrir('+sid+')" style="'+bf+'">Repetir en…</button>'+
+      (isAdmin()?'<button onclick="catBorrarAbrir('+sid+')" style="'+bf+';color:var(--red);'+
+        'border-color:var(--red-light)">Borrar</button>':'')+
+    '</div></div>';
+  }
+
+  /* Las notas y las fotos que YA tiene se siguen viendo: las pintaba `revCard`
+     y sin esto se perderían de vista al dejar de pintarlo aquí. */
+  if(a.notas)
+    h+='<div style="margin-top:10px;font-size:12px;color:var(--text2);background:var(--bg2);'+
+       'padding:8px 10px;border-radius:9px;border-left:3px solid var(--accent);'+
+       'white-space:pre-wrap">'+esc(a.notas)+'</div>';
+  var fotos=fotoUrls(a.fotos||'');
+  if(fotos.length)
+    h+='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px">'+
+       fotos.map(function(u){ return '<img src="'+esc(u)+'" style="width:52px;height:52px;'+
+         'object-fit:cover;border-radius:8px;border:1px solid var(--border)">'; }).join('')+'</div>';
   return h+'</div>';
 }
 
@@ -22587,18 +22755,23 @@ async function catTabSet(id, campo, valor){
   }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
   _repintarDondeEstoy();
 }
+/* SE GUARDA AL SALIR DEL CAMPO (v122), no con un botón propio. Por eso los dos
+   se callan cuando no hay nada que guardar: al salir de un campo que no se
+   tocó, un aviso de «no cambió nada» saldría cada vez que el dedo roza la
+   pantalla. Solo se avisa de lo que sí es un problema —dejar la descripción
+   vacía— y solo si de verdad la borró. */
 function catTabDesc(id){
   var el=document.getElementById('cattab-desc');
   var v=el?String(el.value||'').trim():'';
-  if(!v){ showToast('La descripción no puede quedar vacía','warn',4000); return; }
   var a=_findActAny(id)||{};
-  if(v===String(a.descripcion||'')){ showToast('No cambió nada','warn',3000); return; }
+  if(v===String(a.descripcion||'').trim()) return;
+  if(!v){ showToast('La descripción no puede quedar vacía','warn',4000); return; }
   catTabSet(id,'descripcion',v);
 }
 async function catTabNota(id){
   var el=document.getElementById('cattab-nota');
   var v=el?String(el.value||'').trim():'';
-  if(!v){ showToast('Escribe algo primero','warn',3000); return; }
+  if(!v) return;
   try{ await Acciones.agregarNota(id, v); showToast('Nota guardada ✓'); }
   catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
   _repintarDondeEstoy();

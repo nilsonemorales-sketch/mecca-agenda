@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v121 — 21 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v122 — 21 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v121 (21 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v122 (21 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -228,7 +228,7 @@ mismos botones que cualquier otra.
 | **Poner las operaciones de un elemento** | **Partidas → Árbol → un elemento** — `nodoOperaciones()`, `CAT_OPERACIONES`. Plantilla, no siembra |
 | **Meter actividades que ya existen en un entregable** | **Partidas → un nodo → «Traer actividades»** — `nodoTraerAbrir()`. No cambia la actividad |
 | **Ver y editar CUALQUIER actividad, con filtros** | **Partidas** — es por donde se entra (v118). `_catTablaHTML()`, `_catTabFilas()`, `catTabFiltro()`. Una fila es una actividad |
-| **Cambiarle a una actividad cualquier cosa** | **Partidas → tocar su fila** — `_catTabPliegueHTML()`. Las once, todas por `Acciones` |
+| **Cambiarle a una actividad cualquier cosa** | **Partidas → tocar su fila** — `_catTabPliegueHTML()`. Las once, todas por `Acciones`. Ordenada por uso desde la v122: el avance arriba en un toque, la ficha plegada |
 | **Cambiarle lo mismo a varias** | **Partidas → «Marcar varias»** — `catSelModo()`, `catTandaAbrir()`. Avisa a cuántas y se deshace entera |
 | **REPARTIR las 2.445 en las 93 subpartidas del plan** | **Partidas → Clasificar** — `_catClasHTML()`, `clasAbrirSub()`, `clasAbrirCont()`, `_clasMover()` (v120). Por subpartida o por contratista. No toca la actividad |
 | **Entrar al módulo y saber por dónde empezar** | **Partidas** — la portada de tres tarjetas, `_catPortadaHTML()` (v121). VER · TRABAJAR · ORDENAR, con los números vivos |
@@ -813,7 +813,84 @@ opción. Viven en `sessionStorage`, al lado de la vista.
 **La puesta se sigue ofreciendo aunque su cuenta sea cero**: si desapareciera de
 la lista no se podría quitar y la tabla mentiría en silencio.
 
-#### Editar las once cosas desde la fila
+#### LA FICHA EN UN TOQUE (v122) — ordenada por uso medido, no por criterio
+
+El dueño abrió una actividad en el teléfono y dijo: **«Eficientiza esto.»**
+
+**LA PANTALLA ESTABA ORDENADA AL REVÉS DE COMO SE USA.** Contado en
+`obra_cambios` sobre las escrituras de actividad:
+
+| | veces |
+|---|---|
+| **Completar** | **1.496** |
+| **Fechas** (entrega e inicio) | 466 |
+| **Plan del día** (poner y quitar) | 318 |
+| **Avance / %** | 263 |
+| Contratista | 41 |
+| Nota | 30 |
+| Ubicación | 21 |
+| Prioridad | 10 |
+| **Capítulo** | **0** |
+
+Y el pliegue abría con **Descripción, Ubicación, Contratista y Capítulo**
+—cuatro bloques de etiqueta + control a todo lo ancho— mientras el avance
+quedaba debajo de todo, dentro de `revCard`. **El primer pantallazo entero era
+lo que se ha tocado cero veces.**
+
+Medido con la misma actividad en las dos versiones, a 390×844:
+**el pliegue pasó de 972px a 371px** — de 1,15 pantallazos a 0,44. Cabe entero.
+
+**El orden de la pantalla es el orden de esa tabla, y no se reordena «por que
+se ve mejor»:** si cambias algo aquí, vuelve a contar en `obra_cambios`.
+
+- **Arriba, el avance en una fila de 52px**: `0% · 25% · 50% · 75% · ✓
+  Completada`, con el valor actual marcado.
+- **Debajo, tres acciones de 48px**: `📅 Hoy · Nota · Foto`.
+- **En medio, cuatro líneas de 44px** —Ubicación · Contratista · Entrega ·
+  Tarea— con **etiqueta gris, valor y chevron**. Se toca la línea y el
+  escogedor —el `<select>` de siempre— se despliega **dentro** de ella.
+- **Abajo, plegado y cerrado al abrir**, «Cambiar la ficha»: Descripción,
+  Capítulo, Prioridad, Editar todo, Repetir en… y Borrar.
+
+**NO SE INVENTÓ UN SEGUNDO CAMINO DE ESCRITURA.** Los cinco botones de avance
+llaman a **`revEstado`**, que es literalmente lo que llama `revCard`, y que por
+dentro va a `Acciones.completar` / `setAvance` / `editar`. Dos caminos para
+cerrar una partida es el error de la v79 y de la v80, y aquí habría sido el
+tercero. Medido: poner 50% y completar son **1 `PATCH` + 1 `POST obra_cambios`**
+cada uno.
+
+**NINGÚN CAMPO TIENE BOTÓN PROPIO DE GUARDAR.** La descripción y la nota
+guardan **al salir del campo** (`onblur`). «Guardar la descripción» era el único
+botón así en todo el app y **ya no existe** — compruébalo con un `grep`. Los dos
+se **callan cuando no hay nada que guardar**: al salir de un campo que no se
+tocó, un aviso de «no cambió nada» saldría cada vez que el dedo roza la
+pantalla.
+
+**LA ENTREGA DICE SI ESTÁ VENCIDA Y DE CUÁNTOS DÍAS** (`_catTabEntregaHTML`),
+en el formato del app —`15-sep-26`, con `_nodoFecha`— y contando con
+**`_diasLabEntre`**, que salta domingos y feriados: es el criterio del arrastre
+de la v104, y para quien paga jornales «3 días» y «3 días de trabajo» no son lo
+mismo. Antes salía «sept 19, 2026», el formato del `<input type=date>` del
+sistema, y no decía nada más.
+
+**`revCard` YA NO SE PINTA DENTRO DEL PLIEGUE, pero NO SE MODIFICÓ.** Sigue
+igual —mismo tamaño de fuente, byte a byte— en Revisión, en VER y donde ya
+estaba. Lo que sí se conserva aquí es lo que `revCard` pintaba y no era un
+botón: **las notas y las fotos que la actividad ya tiene**. Sin eso se habrían
+perdido de vista.
+
+**`T.campo` y `T.ficha` se resetean en `catTabAbrir`.** Si se quedaran puestos,
+la siguiente actividad abriría con el escogedor de la anterior desplegado y con
+«Cambiar la ficha» abierto — justo el primer pantallazo que esta versión vino a
+quitar. No se guardan en `sessionStorage`: son de la fila que estás tocando
+ahora, no un filtro.
+
+**Los cuatro porcentajes van a ancho fijo (`flex:0 1 44px`) y «✓ Completada» se
+queda con el resto.** Con `flex:1` en los cinco, los cortos sobraban de ancho y
+al largo le faltaba: el texto partía en dos líneas y se salía del botón a 390px.
+Se vio en la captura, no leyendo el CSS.
+
+#### Editar las once cosas desde la fila (v118, reordenado en la v122)
 
 Al tocarla se abre **debajo, pegada a la izquierda y del ancho de la pantalla**
 (el ancho sale de `#c-catalogo`, no de `100vw` — v117): descripción, ubicación,
@@ -2475,6 +2552,23 @@ mismo:**
   sin ella al primer intento. Ábrelas una a una desde «Más» y compruébalo
 - **Las diez de «Más» abren y ninguna revienta**, con cero errores de consola
 - **La miga de pan mide 44px.** Es un botón y se toca con el dedo
+- **El pliegue de una actividad CABE EN UNA PANTALLA** (v122): 371px a 390×844,
+  contra los 972px de la v121. Ábrelo y mídelo; si vuelve a pasar de 844,
+  alguien devolvió un bloque arriba
+- **El avance está ARRIBA y en un toque.** Cinco botones de 52px, tres acciones
+  de 48px y cuatro líneas de 44px. Poner 50% y completar son **1 `PATCH` + 1
+  `POST obra_cambios`** cada uno, por `revEstado` — el MISMO camino que
+  `revCard`, no un segundo
+- **Ningún campo tiene botón propio de guardar.** `grep "Guardar la descripción"`
+  tiene que dar **0**; la descripción y la nota guardan al salir del campo
+- **La entrega dice «15-sep-26 · vencida hace 5 días»**, con días laborables. Si
+  sale «sept 15, 2026» alguien quitó `_nodoFecha`; si los días no saltan el
+  domingo, alguien quitó `_diasLabEntre`
+- **«Cambiar la ficha» abre cerrado**, y dentro están descripción, capítulo,
+  prioridad, editar, repetir y borrar. Al abrir OTRA fila vuelve a nacer cerrado
+- **Los siete campos de la v121 siguen todos editables** desde el pliegue
+- **`revCard` no se pinta dentro del pliegue y NO cambió**: sigue igual en
+  Revisión y en VER — cuenta las tarjetas en un sitio de VER, son 5
 - **Los filtros de la tabla cuadran con la base**: Dimedes Estebez (Niño) da
   **379** (228 abiertas), y **Dimedes + N6 — Apto 6A + 12.00 Cocina y muebles da
   17 · 1 hecha · 18%**. Si no da eso, el filtro está mal o el fixture no
@@ -2498,8 +2592,8 @@ mismo:**
   puesta, la tanda sigue diciendo **1**, no 4
 - **Ninguna función global se declara dos veces.** `_avisarNombresRepetidos()`
   devuelve `[]`; mete una repetida a propósito y tiene que nombrarla. Hoy son
-  **1.081 funciones y cero repetidas** (1.031 en la v119, 1.058 con Clasificar,
-  y la v121 añadió 23)
+  **1.084 funciones y cero repetidas** (1.031 en la v119, 1.058 con Clasificar,
+  1.081 con la v121 y 1.084 con la v122)
 - **A 390px, NINGUNA celda del cronograma enseña un número a medias**, y con
   **16px de holgura** sobre lo que mide Chromium — en el iPhone la mono es más
   ancha. Mide el texto con un `Range`: en una caja con `overflow:hidden` el
@@ -2693,6 +2787,10 @@ pertenece a ningún nivel.
 | **v121** — el prompt pedía «21 trancadas» en la portada. Medido contra la base y contra `isBlocked`: son **119**. Poner 21 habría hecho que la portada dijera un número y el candado 🔒 de la lista otro, sobre los mismos datos. | Un número en un prompt es un dato que hay que comprobar, no una instrucción. **Cuando el criterio ya vive en el código, llámalo en vez de escribir la cifra** — es lo único que garantiza que dos pantallas cuenten igual. |
 | **v121** — el botón de la miga nació con **28px** y lo cazó una sonda de la v107 que mide la altura de TODO lo que se toca, no la que venía a probar la miga. | Las sondas que miden lo visible pagan aunque el fallo no sea el que buscabas — ya pasó en la v107 con un botón de 34px colado una versión entera. **No las quites cuando estorben:** son las que ven lo que nadie fue a mirar. |
 | **v121** — la sonda que pone un avance corría **en medio** de la prueba, y como tocó una actividad CERRADA, las de más abajo pasaron a decir 1.391 cerradas en vez de 1.392 y 514 vencidas en vez de 513. Parecía un fallo del app. | Es el aviso de la v111, otra vez: **una sonda que escribe contamina a las de abajo**. Va la última, o mides contra el estado que tú misma dejaste. Y si un conteo se separa **en uno**, repasa primero qué hizo la prueba antes. |
+
+| **v122** — «✓ Completada» partía en dos líneas y se salía del botón a 390px: los cinco botones de avance iban con `flex:1`, así que los cuatro cortos («0%», «25%») sobraban de ancho y al largo le faltaba. | `flex:1` reparte IGUAL, y cinco cosas de ancho distinto no quieren un reparto igual. Los cortos a ancho fijo y el largo con el resto. **Se vio en la captura, no leyendo el CSS** — es el `width:100%` del `<button>` de la v117 con otra cara. |
+| **v122** — cuatro comprobaciones de la prueba salieron vacías y parecían un fallo del app: la sonda llamaba a `catTabAbrir` para abrir la fila, y `catTabAbrir` **conmuta**. Sobre una fila ya abierta la cerraba, así que las medidas de abajo iban contra un pliegue que no existía — y como cada vuelta del bucle la volvía a conmutar, los resultados salían alternados, uno sí y uno no. | Un ayudante de prueba que se llama «abrir» tiene que **abrir**, no conmutar: `if(abierta!==id) catTabAbrir(id)`. Es el tropiezo de la v117 con la primera fila del cronograma. Y el patrón alternado —uno sí, uno no— es la firma de un toggle: si lo ves, sospecha del ayudante antes que del app. |
+| **v122** — se editó `index.html` **con la regresión corriendo**, lo que la invalida: los arneses leen el archivo servido, y a media tanda unos midieron la versión vieja y otros la nueva. Se abortó y se relanzó limpia. | **Tercera vez en esta sesión** (dos en la v118). Mientras una tanda esté corriendo, el archivo no se toca. Si hay que arreglar algo, se para la tanda primero — una regresión a medio camino entre dos versiones no dice nada y se tarda más en descubrirlo que en repetirla. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
