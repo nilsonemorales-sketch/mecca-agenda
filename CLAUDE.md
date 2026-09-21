@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v122 — 21 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v123 — 21 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v122 (21 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v123 (21 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -283,6 +283,32 @@ de fiar.
 El resto de la explicación: `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`, todo
 por `Acciones`. **Cerrar NO está ahí**: lo hace el ✓ verde de la fila, que
 está siempre a la vista y a un toque. Una sola forma de cerrar por tarjeta.
+
+**LA CABECERA DEL GRUPO LLEVA BARRA, Y SU % SALE DE `_catAvance` (v123).**
+Captura del dueño y cuatro palabras: *«Quiero que se vea una barra con el
+avance.»* La barra **ya existía** desde hacía versiones, pero con dos candados
+que la hacían inalcanzable:
+
+1. Solo se pintaba con **`pct>0`**; en 0% y en 100% salía un chip pelado.
+2. El `pct` era **`cerradas / total`**, y la lista de entrada **no trae ni una
+   cerrada**: `S.acts` se pide con `estado=neq.completado` (§3.5). Un grupo de
+   actividades abiertas no tiene cerradas **por definición**, así que el número
+   era **cero estructural** y caía siempre en la rama sin barra.
+
+Medido contra la base: **los 21 grupos decían 0%** y **15 tenían avance de
+verdad**, hasta el 24%. Dimedes salía en 0% con **16 actividades empezadas**.
+
+Ahora usa **`_catAvance`** —la misma cuenta del catálogo y del plan: 100 si está
+cerrada, si no su porcentaje— y **la barra se ve siempre que haya actividades**,
+también en 0% y en 100%. Comprobado: 20 grupos, 20 barras, y 14 con avance
+donde antes todos decían cero. **Sin actividades sigue sin haber barra**: es la
+regla de la v103 —una barra en cero y una vacía se ven igual y no son lo
+mismo—, pero «0% de 84» sí es un dato.
+
+*Es la tercera vez que la misma grieta corta:* una pantalla que cuenta cerradas
+sobre `S.acts`, que nunca las trae (v102, v107, y ahora la cabecera del grupo).
+**Antes de escribir `filter(a=>a.estado==='completado')`, pregúntate de qué
+array lee.**
 
 **Los grupos de la lista se separan POR CONTRATISTA, no en un montón (v105).**
 `getActGroupsFromActs` agrupa según `S.actFiltro`, y de sus ocho modos hay tres
@@ -2552,6 +2578,11 @@ mismo:**
   sin ella al primer intento. Ábrelas una a una desde «Más» y compruébalo
 - **Las diez de «Más» abren y ninguna revienta**, con cero errores de consola
 - **La miga de pan mide 44px.** Es un botón y se toca con el dedo
+- **Cada cabecera de grupo de la lista lleva BARRA** (v123), también en 0% y en
+  100%. En la vista **Lista** son 20 grupos y 20 barras, y **14 con avance** —
+  si vuelven a decir todos 0%, alguien devolvió `cerradas/total` sobre `S.acts`,
+  que nunca trae las cerradas. Mídelo con la vista en `lista`: en Edificio no
+  hay cabeceras y la prueba dirá 0 barras sin que nada esté roto
 - **El pliegue de una actividad CABE EN UNA PANTALLA** (v122): 371px a 390×844,
   contra los 972px de la v121. Ábrelo y mídelo; si vuelve a pasar de 844,
   alguien devolvió un bloque arriba
@@ -2791,6 +2822,9 @@ pertenece a ningún nivel.
 | **v122** — «✓ Completada» partía en dos líneas y se salía del botón a 390px: los cinco botones de avance iban con `flex:1`, así que los cuatro cortos («0%», «25%») sobraban de ancho y al largo le faltaba. | `flex:1` reparte IGUAL, y cinco cosas de ancho distinto no quieren un reparto igual. Los cortos a ancho fijo y el largo con el resto. **Se vio en la captura, no leyendo el CSS** — es el `width:100%` del `<button>` de la v117 con otra cara. |
 | **v122** — cuatro comprobaciones de la prueba salieron vacías y parecían un fallo del app: la sonda llamaba a `catTabAbrir` para abrir la fila, y `catTabAbrir` **conmuta**. Sobre una fila ya abierta la cerraba, así que las medidas de abajo iban contra un pliegue que no existía — y como cada vuelta del bucle la volvía a conmutar, los resultados salían alternados, uno sí y uno no. | Un ayudante de prueba que se llama «abrir» tiene que **abrir**, no conmutar: `if(abierta!==id) catTabAbrir(id)`. Es el tropiezo de la v117 con la primera fila del cronograma. Y el patrón alternado —uno sí, uno no— es la firma de un toggle: si lo ves, sospecha del ayudante antes que del app. |
 | **v122** — se editó `index.html` **con la regresión corriendo**, lo que la invalida: los arneses leen el archivo servido, y a media tanda unos midieron la versión vieja y otros la nueva. Se abortó y se relanzó limpia. | **Tercera vez en esta sesión** (dos en la v118). Mientras una tanda esté corriendo, el archivo no se toca. Si hay que arreglar algo, se para la tanda primero — una regresión a medio camino entre dos versiones no dice nada y se tarda más en descubrirlo que en repetirla. |
+
+| **v123** — el dueño pidió «una barra con el avance» en la cabecera del grupo. La barra **llevaba versiones ahí**: no se pintaba porque el `pct` era `cerradas/total` sobre `S.acts`, que **nunca trae las cerradas**, así que daba **cero estructural** y caía en la rama del chip sin barra. Los 21 grupos decían 0% y 15 tenían avance real, hasta el 24%. | **Tercera vez con la misma grieta** (v102, v107, v123): contar cerradas sobre el array que las excluye. Un número que no puede ser distinto de cero **no es un número**, es una constante disfrazada — si un porcentaje sale siempre igual, sospecha del denominador antes que del diseño. Y cuando alguien pida algo que «no está», comprueba primero si está y no se puede ver (v116). |
+| **v123** — la sonda dijo «0 barras» y parecía que el cambio no se había aplicado: medía con `S.actVista` en **Edificio**, que no tiene cabeceras de grupo. El selector de vista se recuerda, y la vista de entrada no es la Lista. | Ponte donde está el usuario de la captura **antes** de medir, y déjalo escrito en la sonda. Es el v58 otra vez: medir una pantalla que no es la que se está mirando da un cero que no significa nada. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base

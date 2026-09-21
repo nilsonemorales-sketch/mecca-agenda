@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260921_122';
+const APP_VERSION='20260921_123';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -6879,8 +6879,21 @@ function renderActs(){
     ${groups.length===0
       ?`<div class="empty">Sin actividades para los filtros seleccionados</div>`
       :groups.map(g=>{
-        const done=g.items.filter(a=>a.estado==='completado').length;
-        const pct=g.items.length?Math.round(done/g.items.length*100):0;
+        /* v123 · EL AVANCE DEL GRUPO SALE DE `_catAvance`, la misma cuenta del
+           resto del app: 100 si está cerrada, si no su porcentaje.
+
+           Antes era `cerradas / total`, y eso **daba cero SIEMPRE** en la lista
+           de entrada: `S.acts` se pide con `estado=neq.completado`, así que un
+           grupo de actividades abiertas no tiene ni una cerrada por
+           definición. Medido contra la base: los **21 grupos** decían 0% y
+           **15 tenían avance de verdad**, hasta el 24% — Dimedes salía en 0%
+           con **16 actividades empezadas**.
+
+           Y como la barra solo se pintaba con `pct>0`, el 0% estructural la
+           dejaba fuera de la pantalla: el dueño no podía verla nunca. */
+        const _av=_catAvance(g.items);
+        const pct=_av?_av.pct:0;
+        const done=_av?_av.cerradas:0;
         const retrasadas=g.items.filter(a=>isRetrasada(a)).length;
         return `
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:10px 12px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between">
@@ -6898,11 +6911,26 @@ function renderActs(){
               : ''}
           </div>
           <div style="display:flex;align-items:center;gap:8px">
-            ${pct===100
-              ?'<span style="background:var(--green-light);color:var(--green);padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700">✓ 100%</span>'
-              :pct>0
-                ?`<div style="text-align:right"><span style="font-size:13px;font-weight:700;color:var(--accent)">${pct}%</span><div style="width:48px;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-top:2px"><div style="height:100%;width:${pct}%;background:var(--accent-fill);border-radius:2px"></div></div></div>`
-                :'<span style="background:var(--bg3);color:var(--text3);padding:3px 10px;border-radius:12px;font-size:11px">0%</span>'
+            ${/* LA BARRA SE VE SIEMPRE QUE HAYA ACTIVIDADES, también en 0% y en
+                  100%. Antes esos dos casos caían en un chip pelado y eran
+                  justo los únicos que se daban en la lista de entrada.
+
+                  SIN actividades no hay barra —es la regla de la v103: una
+                  barra en cero y una barra vacía se ven igual y no son lo
+                  mismo—, pero «0% de 18» sí es un dato: dice que hay trabajo y
+                  que no ha arrancado.
+
+                  Y el número y el `cerradas/total` siguen escritos al lado: el
+                  color no es la única señal. */
+              !_av
+              ? '<span style="font-size:11px;color:var(--text3)">— sin tareas</span>'
+              : `<div style="text-align:right;min-width:62px">
+                   <span style="font-size:13px;font-weight:800;color:${pct>=100?'var(--green)':pct>0?'var(--accent)':'var(--text3)'}">${pct}%</span>
+                   <div style="width:56px;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:3px 0 2px">
+                     <div style="height:100%;width:${Math.max(0,Math.min(100,pct))}%;background:${pct>=100?'var(--green)':'var(--accent-fill)'};border-radius:3px"></div>
+                   </div>
+                   <span style="font-size:10px;color:var(--text3);font-family:var(--mono)">${done}/${g.items.length}</span>
+                 </div>`
             }
           </div>
         </div>
