@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260922_124';
+const APP_VERSION='20260922_125';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -10054,14 +10054,14 @@ async function refrescarApp(){
   }
   try{
     await loadAll();
-    /* EL ↺ TIENE QUE RECARGAR EL CATALOGO TAMBIEN (v109). `loadAll` refresca
-       `S.acts`, que NO trae las cerradas; el modulo Partidas trabaja sobre
-       `S.catActs`, que se cargaba UNA sola vez por sesion. Resultado: la barra
-       verde decia «sincronizado 8:56 p.m.» mientras la tarjeta enseñaba un
-       estado de hacia cinco dias, y las dos cosas eran ciertas a la vez. El
-       dueño estuvo a punto de reabrir seis actividades buenas por creerle.
-       Solo si ya estaba cargado: no se paga la carga a quien no ha entrado. */
-    if(S.catPartidas!==undefined){ try{ await cargarCatalogo(); }catch(e2){} }
+    /* v125 · EL ↺ YA NO RECARGA EL CATALOGO. Lo hacia desde la v109 para que
+       Partidas no sirviera datos viejos —el fallo que casi cuesta seis
+       actividades buenas reabiertas—, pero eso son ≈3,8 MB en cada toque del
+       ↺, lo toque quien lo toque y haya entrado a Partidas o no.
+       La garantia de la v109 NO se pierde: se marca el catalogo como viejo, la
+       barra del modulo lo dice en ambar —«hay cambios de otra pantalla»— y el
+       «Actualizar» de ahi lo recarga. Lo que cambia es QUIEN decide pagarlo. */
+    if(S.catPartidas!==undefined) catMarcarViejo();
     showToast('Ya estás en la última versión · datos al día','ok',3000);
   }
   catch(e){ showToast('No se pudieron traer los datos','err',4000); }
@@ -16674,17 +16674,62 @@ function _catMoneda(v){
   return 'RD$ '+n.toLocaleString('es-DO',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
-async function cargarCatalogo(){
+/* ══ v125 · SE RECARGA SOLO LO QUE CAMBIÓ ═════════════════════════════════
+   `cargarCatalogo()` baja NUEVE cosas y pesa **≈3,8 MB**, de las cuales 2,6 MB
+   son las 2.496 actividades. Estaba llamado **veinte veces**, y casi todas
+   **después de una escritura del módulo**: mover una actividad de subpartida
+   bajaba la obra entera. Veinte movimientos, 76 MB. Eso, sumado al refresco de
+   90 s, es lo que se comió los 14 GB del 21-sep y tumbó el app para todos.
+
+   Ahora lleva un argumento: **qué partes recargar**. Sin argumento las trae
+   todas, que es lo correcto al entrar al módulo, al tocar «Actualizar» y a los
+   30 minutos. Después de escribir se nombra SOLO lo que se tocó:
+
+     cargarCatalogo(['partidas'])   →  0,58 + 0,19 MB, no 3,8
+     cargarCatalogo(['nodos'])      →  0,25 MB
+     cargarCatalogo(['config'])     →  unos bytes
+
+   **`acts` casi nunca hace falta**: `Acciones` ya parchea `S.catActs` en sitio
+   (`COLECCIONES`, v103), así que lo que pasa por la capa ya está al día en
+   memoria. Pedirlo otra vez es pagar 2,6 MB por algo que ya tienes.
+
+   Si añades una parte, añádela aquí Y en la lista de abajo: una parte que no
+   esté en `CAT_PARTES` no se carga nunca y la pantalla sale vacía sin decir
+   por qué. */
+var CAT_PARTES=['acts','partidas','cierres','config','estructura','ubics','nodos','fuera'];
+
+/* LA LISTA COMPLETA —abiertas y cerradas— EN UN SOLO SITIO (v125).
+   Había tres cargas distintas de lo mismo: `cargarCatalogo` para `S.catActs` y
+   dos más en los reportes por apartamento (`obra_actividades?order=fecha.asc`),
+   2,6 MB cada una. Quien la necesite la pide por aquí: si la copia del
+   catálogo está fresca se reusa, y si no, se carga UNA vez y se queda para
+   los demás. La frescura es la misma de la v109 — no se inventa una segunda,
+   que es como se llega a dos relojes que no se miran. */
+async function _actsCompletas(){
+  if(Array.isArray(S.catActs) && S.catActs.length && !_catDatosViejos()) return S.catActs;
+  S.catActs=await sbTodo('obra_actividades?order=id.asc')||[];
+  if(!S.catCargadoEn) S.catCargadoEn=Date.now();
+  S._catMapa=null;
+  return S.catActs;
+}
+async function cargarCatalogo(partes){
+  var todo=!partes || !partes.length;
+  var q=function(k){ return todo || partes.indexOf(k)>=0; };
   try{
     /* Las actividades del catálogo, TODAS, sin filtro de estado. Va primero:
        si esto falla, el módulo no debe pintar números a medias. */
-    var acts=await sbTodo('obra_actividades?order=id.asc');
-    S.catActs=acts||[];
-    var ps=await sbTodo('obra_partidas?order=capitulo.asc,numero.asc');
-    var as=await sbTodo('obra_partida_actividad?select=actividad_id,partida_id');
-    S.catPartidas=ps||[];
-    var m={}; (as||[]).forEach(function(r){ m[r.actividad_id]=r.partida_id; });
-    S.catAmarres=m;
+    if(q('acts')){
+      var acts=await sbTodo('obra_actividades?order=id.asc');
+      S.catActs=acts||[];
+    }
+    if(q('partidas')){
+      var ps=await sbTodo('obra_partidas?order=capitulo.asc,numero.asc');
+      var as=await sbTodo('obra_partida_actividad?select=actividad_id,partida_id');
+      S.catPartidas=ps||[];
+      var m={}; (as||[]).forEach(function(r){ m[r.actividad_id]=r.partida_id; });
+      S.catAmarres=m;
+    }
+    if(q('cierres')){
     /* LAS FECHAS DE CIERRE, para el orden que la obra ya demostró (v106).
        No hay columna «fecha_completado» en obra_actividades: el único sitio
        donde consta CUÁNDO se cerró algo es el historial. Se pide filtrado y
@@ -16698,6 +16743,8 @@ async function cargarCatalogo(){
       (cs||[]).forEach(function(r){ if(r.entidad_id&&r.fecha&&!cm[r.entidad_id]) cm[r.entidad_id]=String(r.fecha).slice(0,10); });
       S.catCierres=cm; S.catCierresErr='';
     }catch(e2){ S.catCierres={}; S.catCierresErr=(e2&&e2.message)||'no se pudo leer el historial'; }
+    }
+    if(q('config')){
     /* Los grupos que el dueño abrió a mano. Una clave, un JSON. */
     try{
       var cf=await sb('obra_config?key=eq.cat_grupos&limit=1');
@@ -16712,6 +16759,8 @@ async function cargarCatalogo(){
       S.catNoIguales=mno;
     }catch(e5){ S.catNoIguales={}; }
     S._catRepes=null;
+    }
+    if(q('estructura')){
     /* LA ESTRUCTURA (v108). Si esto falla o viene vacío, `_capsLista` y
        `_sgLista` caen en las constantes del código y el módulo sigue entero:
        nunca una pantalla en blanco por una tabla que no contestó. */
@@ -16723,15 +16772,19 @@ async function cargarCatalogo(){
       S.catCaps=[]; S.catSubs=[];
       S.catEstructuraErr=(e4&&e4.message)||'no se pudo leer la estructura';
     }
+    }
+    if(q('ubics')){
     /* LAS UBICACIONES CON PORCENTAJE A MANO (v110). La tabla NO manda sobre
        las actividades: el nombre de la ubicación sigue viviendo en `area`, y
        aquí solo hay fila para las que llevan algo escrito a mano. Si no carga,
        el módulo sigue entero — se queda sin ese número, no sin pantalla. */
     try{ S.catUbicRows=await sb('obra_ubicaciones?order=id.asc')||[]; }
     catch(e6){ S.catUbicRows=[]; }
+    }
+    if(q('nodos')){
     /* EL PLAN (v111). Va dentro de `cargarCatalogo` a propósito: así hereda la
-       política de frescura de la v109 —el ↺ lo recarga, entrar con datos de más
-       de 5 minutos los refresca, y la hora se ve— sin inventar una segunda.
+       política de frescura de la v109 —la hora se ve y «Actualizar» lo
+       recarga— sin inventar una segunda.
        Si falla, el módulo sigue entero: se queda sin árbol, no sin pantalla. */
     try{
       S.nodos=await sbTodo('obra_nodos?order=orden.asc')||[];
@@ -16747,17 +16800,25 @@ async function cargarCatalogo(){
       S.nodos=[]; S.nodoPorN={}; S.nodoPorA={}; S.nodoAmarres=[];
       S.nodosErr=(e7&&e7.message)||'no se pudo leer el plan';
     }
+    }
+    if(q('fuera')){
     try{
       var fu=await sbTodo('obra_plan_fuera?select=actividad_id,por,fecha&order=actividad_id.asc')||[];
       var mf={}; fu.forEach(function(r){ mf[r.actividad_id]={por:r.por||'', fecha:r.fecha||''}; });
       S.planFuera=mf;
     }catch(e8){ S.planFuera={}; }
+    }
     S._nodoMapa=null;
     S.catError='';
     /* LA HORA DE ESTOS DATOS. Sin esto no hay forma de saber si lo que se ve
        es de ahora o de hace cinco días — y eso ya casi cuesta seis actividades
-       buenas reabiertas. Ver `_catFrescoHTML`. */
-    S.catCargadoEn=Date.now(); S.catViejo=false;
+       buenas reabiertas. Ver `_catFrescoHTML`.
+
+       v125 · SOLO LA CARGA COMPLETA MUEVE EL RELOJ. Si una recarga parcial lo
+       pusiera a cero, la barra diría «datos de las 3:05» con las actividades
+       de las 2:30 — que es exactamente la mentira de la v109, con otra cara:
+       dos cosas ciertas a la vez y el dueño creyéndole a la equivocada. */
+    if(todo){ S.catCargadoEn=Date.now(); S.catViejo=false; }
     S._catMapa=null; S._catTabCaps=null; S._catPrec=null;
     return true;
   }catch(e){
@@ -16766,6 +16827,47 @@ async function cargarCatalogo(){
     S.catError=(e&&e.message)||'no se pudo cargar';
     return false;
   }
+}
+
+/* ══ v125 · DESPUÉS DE ESCRIBIR SE PARCHEA, NO SE RECARGA ═════════════════
+   Es lo que `Acciones._sincronizar` hace con una actividad desde la v103:
+   **quien mandó la escritura sabe con certeza qué cambió**, así que la aplica
+   a la copia local en vez de volver a bajar la obra. Aquí es lo mismo para
+   partidas y amarres.
+
+   Medido: `catFichaSet` pasaba de **3,8 MB** (un `cargarCatalogo()` entero)
+   a **1 PATCH y nada de vuelta**.
+
+   LOS ÍNDICES DERIVADOS HAY QUE TIRARLOS. `_catMapa` (partida→actividades),
+   `_catTabCaps`, `_catPrec`, `_catRepes` y `_nodoMapa` se recalculan solos
+   cuando están en null, y `cargarCatalogo` los ponía a null al final. Si se
+   parchea sin tirarlos, la pantalla enseña el nombre nuevo con los conteos
+   viejos — que es peor que no cambiar nada, porque parece que funcionó. */
+function _catInvalidar(){
+  S._catMapa=null; S._catTabCaps=null; S._catPrec=null;
+  S._catRepes=null; S._nodoMapa=null;
+}
+/* `cambios` es el MISMO objeto que se acaba de mandar en el PATCH. Pasarle
+   otra cosa es dejar la pantalla diciendo algo distinto de lo que hay en la
+   base, y no se nota hasta la siguiente recarga. */
+function _catParche(pid, cambios){
+  var p=_catPorId(pid);
+  if(p) Object.assign(p, cambios);
+  _catInvalidar();
+  return !!p;
+}
+/* Una partida que se va (desactivar, quitar, juntar) — no se borra del array:
+   se marca `activo:false`, que es lo que la base guarda y lo que `catDeshacer`
+   sabe devolver. */
+function _catParcheBaja(ids){
+  (ids||[]).forEach(function(id){ _catParche(id,{activo:false}); });
+}
+/* El amarre actividad→partida. `S.catAmarres` es un mapa plano, así que mover
+   una actividad de partida es una asignación. */
+function _catParcheAmarres(pares){
+  var m=S.catAmarres||(S.catAmarres={});
+  (pares||[]).forEach(function(r){ m[r.actividad_id]=r.partida_id; });
+  _catInvalidar();
 }
 
 // ══ LA SIEMBRA ══════════════════════════════════════════════
@@ -16893,7 +16995,13 @@ async function catSembrar(){
     logCambio('sembrado','partida','catalogo','Catálogo de partidas',
               plan.subpartidas.length+' subpartidas del presupuesto, '+plan.partidas.length+
               ' partidas de la agenda y '+plan.amarres.length+' amarres');
-    await cargarCatalogo();
+    /* AQUÍ SÍ SE RECARGA, y es la excepción. Sembrar crea ~1.300 partidas y
+       ~2.400 amarres de una vez: reconstruir eso en memoria sería escribir por
+       segunda vez la lógica de la siembra, y si las dos versiones se separan
+       la pantalla enseña un catálogo que no es el que quedó en la base. Se
+       hace UNA vez en la vida del proyecto. Las actividades no se piden: la
+       siembra no las toca. */
+    await cargarCatalogo(['partidas']);
     S.catUndo=null; S.catSel={};
     setSS('ok','✓ Catálogo sembrado');
     showToast(total+' filas creadas ✓');
@@ -16934,7 +17042,14 @@ async function catDeshacer(){
       await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
                body:JSON.stringify(cambiados.slice(i,i+200))});
     logCambio('deshecho','partida','catalogo','Catálogo de partidas','Deshecho: '+u.que);
-    await cargarCatalogo();
+    /* El retrato de antes YA está en memoria (`u.partidas`), así que deshacer
+       es reponerlo, no volver a bajarlo. */
+    u.partidas.forEach(function(p){
+      _catParche(p.id,{capitulo:p.capitulo,numero:p.numero,nombre:p.nombre,
+        oficio:p.oficio,unidad:p.unidad,aplica:p.aplica,padre_id:p.padre_id,
+        codigo_presupuesto:p.codigo_presupuesto,activo:p.activo});
+    });
+    _catParcheAmarres(cambiados);
     S.catUndo=null; S.catSel={};
     setSS('ok','✓ Deshecho');
     showToast('Deshecho ✓');
@@ -16956,7 +17071,7 @@ async function catColgar(pid, subId){
              body:JSON.stringify({padre_id:subId||null})});
     logCambio(subId?'colgada':'descolgada','partida',pid,p.nombre,
               subId?('colgada de «'+sub.nombre+'» ('+sub.numero+')'):'quitada de su subpartida');
-    await cargarCatalogo();
+    _catParche(pid,{padre_id:subId||null});
     showToast(subId?'Colgada ✓':'Quitada de la subpartida ✓');
   }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
@@ -17065,7 +17180,7 @@ async function catColgarVarias(ids, subId){
       logCambio('colgada','partida',p.id,p.nombre,
                 'colgada de «'+sub.nombre+'» ('+sub.numero+' · '+sub.seccion+')');
     });
-    await cargarCatalogo();
+    ids.forEach(function(id){ _catParche(id,{padre_id:subId}); });
     S.catBuscar=null;
     setSS('ok','✓'); showToast(ids.length+' colgadas ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo colgar: '+((e&&e.message)||''),'err',6000); }
@@ -17269,7 +17384,8 @@ async function catJuntarEn(quedaId){
                body:JSON.stringify({activo:false})});
     logCambio('juntadas','partida',queda.id,queda.nombre,
               otras.length+' partidas juntadas en esta ('+mover.length+' actividades)');
-    await cargarCatalogo();
+    _catParcheAmarres(mover);
+    _catParcheBaja(otras.map(function(o){ return o.id; }));
     S.catSel={}; setSS('ok','✓'); showToast('Juntadas ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo juntar: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
@@ -17301,7 +17417,8 @@ async function catBajarEn(destinoId){
     await sb('obra_partidas?id=eq.'+encodeURIComponent(baja.id),{method:'PATCH',prefer:'return=minimal',
              body:JSON.stringify({activo:false})});
     logCambio('bajada','partida',baja.id,baja.nombre,'bajada dentro de «'+destino.nombre+'»');
-    await cargarCatalogo();
+    _catParcheAmarres(mover);
+    _catParcheBaja([baja.id]);
     S.catSel={}; setSS('ok','✓'); showToast('Bajada ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo bajar: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
@@ -17320,7 +17437,7 @@ async function catMover(cap){
                body:JSON.stringify({capitulo:String(cap), padre_id:null})});
     logCambio('movidas','partida',ids[0],_catCapNom(cap),
               ids.length+' partidas movidas al capítulo '+cap+' — '+_catCapNom(cap));
-    await cargarCatalogo();
+    ids.forEach(function(id){ _catParche(id,{capitulo:String(cap), padre_id:null}); });
     S.catSel={}; setSS('ok','✓');
     /* QUE LO AVISE, no que lo haga callado: al cambiar de capítulo la partida
        se suelta de su línea del presupuesto, porque la que tenía es de otro
@@ -17352,7 +17469,7 @@ async function catFichaSet(pid, campo, valor){
        lo que dice la actividad son dos cosas distintas. */
     logCambio(campo==='nombre'?'renombrada':'editada','partida',pid,
               campo==='nombre'?v:p.nombre, campo+': «'+(antes||'—')+'» → «'+(v||'—')+'»');
-    await cargarCatalogo();
+    _catParche(pid, body);   // el MISMO objeto que se acaba de mandar
     showToast('Guardado ✓');
   }catch(e){ showToast('No se pudo guardar: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
@@ -17367,7 +17484,7 @@ async function catDesactivarSub(pid){
     await sb('obra_partidas?id=eq.'+encodeURIComponent(pid),{method:'PATCH',prefer:'return=minimal',
              body:JSON.stringify({activo:false})});
     logCambio('desactivada','partida',pid,p.nombre,'subpartida del presupuesto desactivada');
-    await cargarCatalogo();
+    _catParcheBaja([pid]);
     S.catPartida=null;
     showToast('Desactivada ✓');
   }catch(e){ showToast('No se pudo: '+((e&&e.message)||''),'err',6000); }
@@ -17385,20 +17502,26 @@ async function catAsignarEn(pid){
   S.catPick=null;
   setSS('syncing','Amarrando...');
   try{
+    var nueva=null;
     if(pid==='__nueva__'){
       pid='p'+uid();
       var of=_catOficioDe(a);
-      await sb('obra_partidas',{method:'POST',prefer:'return=minimal',body:JSON.stringify([{
+      nueva={
         id:pid, tipo:'agenda', capitulo:_catCapDe(of,(a&&a.descripcion)||''), numero:'',
         nombre:(a&&a.descripcion)||'Nueva partida', oficio:of,
         unidad:'', aplica:REC_ORDEN.indexOf(String((a&&a.area)||'').trim())>=0?'apartamento':'general',
         codigo_presupuesto:'', seccion:null, padre_id:null,
-        precio_unitario:null, valor:null, activo:true}])});
+        precio_unitario:null, valor:null, activo:true};
+      await sb('obra_partidas',{method:'POST',prefer:'return=minimal',body:JSON.stringify([nueva])});
     }
     await sb('obra_partida_actividad',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
              body:JSON.stringify([{actividad_id:actId, partida_id:pid}])});
     logCambio('asignada','partida',pid,(a&&a.descripcion)||'','actividad amarrada desde la bandeja de sueltas');
-    await cargarCatalogo();
+    /* Si la partida acaba de nacer hay que meterla en la lista local, no solo
+       el amarre: si no, la actividad apunta a una partida que la pantalla no
+       conoce y cae en la bandeja de sueltas otra vez. */
+    if(nueva) (S.catPartidas=S.catPartidas||[]).push(nueva);
+    _catParcheAmarres([{actividad_id:actId, partida_id:pid}]);
     setSS('ok','✓'); showToast('Amarrada ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo amarrar: '+((e&&e.message)||''),'err',6000); }
   renderCatalogo();
@@ -18107,22 +18230,33 @@ async function catTandaDeshacer(){
    Cuatro piezas, y ninguna es opcional: el ↺ recarga el catálogo, entrar con
    datos viejos los recarga solos, LA HORA SE VE, y lo que se escribe desde
    otra pantalla marca el catálogo como viejo. */
-var CAT_FRESCO_MS  = 5*60*1000;    // a partir de aquí se recarga al entrar
+/* v125 · DE 5 MINUTOS A 30. Una carga completa son ≈3,8 MB, y a 5 minutos
+   bastaba con entrar y salir del módulo un par de veces para bajar la obra
+   entera otra vez. La recarga completa ocurre en TRES casos y nada más:
+   la primera vez que se entra en la sesión, al tocar «Actualizar», y con la
+   copia de más de 30 minutos. */
+var CAT_FRESCO_MS  = 30*60*1000;   // a partir de aquí se recarga al entrar
 var CAT_AMBAR_MS   = 15*60*1000;   // a partir de aquí el aviso se pone en ámbar
 function _catDatosViejos(){
-  if(S.catViejo) return true;                       // alguien escribió por fuera
   if(!S.catCargadoEn) return true;
   return (Date.now()-S.catCargadoEn) > CAT_FRESCO_MS;
 }
 /* Lo marca quien escribe FUERA del módulo. `Acciones` ya parchea las copias
    locales de una actividad que pasa por él; esto es para lo que entra por otro
-   camino —otra sesión, otro ingeniero, la cola que sale sola— y para que al
-   volver a Partidas se vuelva a preguntar en vez de creerse lo de antes. */
+   camino —otra sesión, otro ingeniero, la cola que sale sola—.
+
+   v125 · YA NO DISPARA LA RECARGA, solo pinta el aviso. Antes `S.catViejo`
+   entraba en `_catDatosViejos` y cualquier escritura desde otra pantalla
+   costaba 3,8 MB al volver a Partidas. Ahora la pantalla dice «hay cambios de
+   otra pantalla · Actualizar» y **decide el dueño**: es el mismo criterio de
+   la v109 —la hora de los datos SE VE— sin pagarla sola. */
 function catMarcarViejo(){ S.catViejo=true; }
 function _catEdad(){ return S.catCargadoEn ? (Date.now()-S.catCargadoEn) : Infinity; }
 function _catFrescoHTML(){
   if(!S.catCargadoEn) return '';
-  var ms=_catEdad(), viejo=ms>CAT_AMBAR_MS;
+  /* Ámbar también cuando alguien escribió desde otra pantalla: desde la v125
+     eso ya no recarga solo, así que el aviso es lo único que lo dice. */
+  var ms=_catEdad(), viejo=(ms>CAT_AMBAR_MS)||!!S.catViejo;
   var d=new Date(S.catCargadoEn);
   var h=d.getHours(), m=String(d.getMinutes()).padStart(2,'0');
   var ampm=h>=12?'p.m.':'a.m.'; var h12=h%12||12;
@@ -18131,7 +18265,12 @@ function _catFrescoHTML(){
       'background:'+(viejo?'var(--amber-light)':'var(--bg3)')+';'+
       'border:1px solid '+(viejo?'var(--amber)':'var(--border)')+';'+
       'color:'+(viejo?'var(--amber)':'var(--text3)')+'">'+
-      '<span style="font-family:var(--mono)">'+(S._catCargando?'trayendo datos…':'datos de las '+h12+':'+m+' '+ampm)+'</span>'+
+      /* LA HORA SE VE SIEMPRE (v109). El aviso de «hay cambios» se AÑADE, no
+         sustituye: si tapara la hora, el dueño perdería lo único que le dice
+         de cuándo son los datos que está mirando — que es el fallo que casi
+         cuesta seis actividades buenas reabiertas. */
+      '<span style="font-family:var(--mono)">'+(S._catCargando?'trayendo datos…'
+        :('datos de las '+h12+':'+m+' '+ampm+(S.catViejo?' · hay cambios de otra pantalla':'')))+'</span>'+
       '<button onclick="catRecargarAhora()" style="background:none;border:0;cursor:pointer;padding:0 6px;'+
         'min-height:44px;font-size:11px;font-weight:800;color:inherit;text-decoration:underline">Actualizar</button>'+
     '</div>';
@@ -18373,7 +18512,20 @@ async function catExactasQuitar(){
   }
   if(fallos.length) showToast('Se quitaron '+ok+'. NO se pudo con '+fallos.length+': '+fallos.join(' · '),'err',9000);
   else showToast(ok+' quitada'+(ok!==1?'s':'')+' ✓');
-  try{ await cargarCatalogo(); }catch(e2){}
+  /* `Acciones.eliminar` ya sacó la actividad de `S.catActs` (COLECCIONES) y
+     limpió sus amarres EN LA BASE (v112). Aquí se limpian los locales, que es
+     lo que hacía la recarga: un amarre huérfano no miente en los conteos por
+     actividad, pero sí en los que suman filas de la tabla de amarres. */
+  quitar.forEach(function(a){
+    if(S.catAmarres) delete S.catAmarres[a.id];
+    if(S.nodoPorA) delete S.nodoPorA[a.id];
+  });
+  if(S.nodoPorN) Object.keys(S.nodoPorN).forEach(function(n){
+    S.nodoPorN[n]=S.nodoPorN[n].filter(function(id){ return !quitar.some(function(a){ return a.id===id; }); });
+  });
+  if(Array.isArray(S.nodoAmarres))
+    S.nodoAmarres=S.nodoAmarres.filter(function(r){ return !quitar.some(function(a){ return a.id===r.actividad_id; }); });
+  _catInvalidar();
   renderCatalogo();
 }
 
@@ -18425,7 +18577,7 @@ async function catQuitarVacias(){
                body:JSON.stringify({activo:false})});
       logCambio('editado','partida',v[i].id,v[i].nombre,'partida vacía quitada de '+cap);
     }
-    await cargarCatalogo();
+    _catParcheBaja(v.map(function(p){ return p.id; }));
     setSS('ok','✓'); showToast(v.length+' vacía'+(v.length!==1?'s':'')+' quitada'+(v.length!==1?'s':'')+' ✓');
   }catch(e){ setSS('err','Error'); showToast('No se pudo: '+((e&&e.message)||''),'err',7000); }
   renderCatalogo();
@@ -21453,7 +21605,7 @@ async function catPQuitar(){
   if(!confirm(msg)) return;
   _catGuardarUndo('quitar partidas', ids);
   setSS('syncing','Quitando…');
-  var ok=0, fallos=[];
+  var ok=0, fallos=[], hechas=[];
   for(var i=0;i<ids.length;i++){
     try{
       var p=_catPorId(ids[i]);
@@ -21462,11 +21614,14 @@ async function catPQuitar(){
       logCambio('editado','partida',ids[i],(p&&p.nombre)||'',
         'partida quitada de '+String(S.catCap||'')+
         (_catActsDe(ids[i]).length?' ('+_catActsDe(ids[i]).length+' actividades quedaron sueltas)':''));
-      ok++;
+      ok++; hechas.push(ids[i]);
     }catch(e){ fallos.push(((_catPorId(ids[i])||{}).nombre||ids[i]).slice(0,40)); }
   }
   S.catPSel=null;
-  try{ await cargarCatalogo(); }catch(e){}
+  /* SOLO las que cuajaron. Una que falló sigue activa en la base, y marcarla
+     de baja en pantalla sería enseñar algo que no es — el dueño creería que
+     la quitó y no está quitada. */
+  _catParcheBaja(hechas);
   setSS(fallos.length?'err':'ok', fallos.length?'Error':'✓');
   if(fallos.length) showToast('Se quitaron '+ok+'. NO se pudo con: '+fallos.join(' · '),'err',9000);
   else showToast(ok+' quitada'+(ok!==1?'s':'')+' ✓ — se puede deshacer');
@@ -28034,7 +28189,11 @@ function generarPDFUrgentesPend(){
 async function abrirSelectorUbicaciones(){
   setSS('syncing','Cargando ubicaciones...');
   var allActs=[];
-  try{ allActs=await sbTodo('obra_actividades?order=fecha.asc'); }
+  /* v125 · UNA SOLA COPIA DE LA LISTA COMPLETA. Esto bajaba las 2.496 filas
+     enteras (2,6 MB) cada vez que se abría el reporte por apartamento, y el
+     catálogo ya tiene exactamente eso en `S.catActs`. Si está fresco se usa;
+     si no, se carga UNA vez y se deja ahí para los demás. */
+  try{ allActs=await _actsCompletas(); }
   catch(e){ setSS('err','Error al cargar actividades'); return; }
   setSS('ok','');
 
@@ -28123,7 +28282,11 @@ async function generarPDFPorApto(selectedAreas){
 
   setSS('syncing','Cargando actividades...');
   var allActs=[];
-  try{ allActs=await sbTodo('obra_actividades?order=fecha.asc'); }
+  /* v125 · UNA SOLA COPIA DE LA LISTA COMPLETA. Esto bajaba las 2.496 filas
+     enteras (2,6 MB) cada vez que se abría el reporte por apartamento, y el
+     catálogo ya tiene exactamente eso en `S.catActs`. Si está fresco se usa;
+     si no, se carga UNA vez y se deja ahí para los demás. */
+  try{ allActs=await _actsCompletas(); }
   catch(e){ setSS('err','Error al cargar actividades'); return; }
 
   var hoy=today();
@@ -29816,18 +29979,104 @@ try{
 }catch(e){ showLockScreen(); }
 try{ if(typeof debeAbrirCampo==='function' && debeAbrirCampo()) iniciarModoCampo(); }catch(e){}
 
-setInterval(async function(){
-  if(_actSaving) return; // skip auto-refresh while a save is in flight to avoid overwriting optimistic state
+/* ══ v125 · EL REFRESCO PREGUNTA QUÉ CAMBIÓ, NO SE BAJA LA OBRA ═══════════
+   Hasta la v124 esto bajaba **las 1.094 actividades abiertas enteras, 1,1 MB,
+   cada 90 segundos**, con el app abierta o escondida, hubiera cambiado algo o
+   no. Un iPad abierto un día de obra bajaba cerca de **350 MB**. El 21-sep la
+   organización gastó 14 GB contra los 5 GB del plan, Supabase empezó a
+   contestar 402 y **el app dejó de cargar para todos**, en obra.
+
+   Ahora son tres reglas:
+   1. Escondida (`document.hidden`) no hace NADA. Al volver, un chequeo.
+   2. Pregunta primero a `obra_cambios` qué se movió —unos pocos bytes— y solo
+      si hay algo baja ESAS actividades por `id=in.(…)`.
+   3. Una vez cada 30 minutos sí baja la lista completa, por si algo escribió
+      sin anotar en `obra_cambios`.
+
+   EL MARGEN DE 15 MINUTOS NO ES PARANOIA. `logCambio` llena `created_at` con
+   el reloj DEL TELÉFONO que escribe, no con el del servidor, y lo que sale
+   tarde de la cola (v91) llega con una hora vieja. Sin margen, un teléfono
+   atrasado escribe «en el pasado» y su cambio no lo ve nadie. Se piden 15
+   minutos hacia atrás y se descartan los ids que ya están al día; lo que se
+   escape igual lo recoge la carga completa de cada 30. */
+var REFRESCO_MS      = 90000;
+var REFRESCO_MARGEN  = 15*60*1000;  // el reloj del que escribe no es de fiar
+var REFRESCO_ENTERO  = 30*60*1000;  // cada tanto, la lista completa
+var _refUltimo=0, _refEntero=0, _refCorriendo=false;
+
+/* Trae SOLO las actividades que cambiaron y las mete o las saca de `S.acts`.
+   Una completada o eliminada SALE: la lista es de abiertas. */
+async function _refrescoDelta(desde){
+  var q='obra_cambios?entidad=eq.actividad&created_at=gt.'+encodeURIComponent(desde)+
+        '&select=entidad_id,accion&limit=400';
+  var filas=await sb(q)||[];
+  if(!filas.length) return 0;
+  var ids={}; filas.forEach(function(r){ if(r.entidad_id) ids[r.entidad_id]=1; });
+  var lista=Object.keys(ids);
+  if(!lista.length) return 0;
+  var vivas=[];
+  /* De 100 en 100: una URL con 400 ids no la acepta ni PostgREST ni el proxy. */
+  for(var i=0;i<lista.length;i+=100){
+    var trozo=lista.slice(i,i+100).map(function(x){ return '"'+x+'"'; }).join(',');
+    var r=await sb('obra_actividades?id=in.('+trozo+')')||[];
+    vivas=vivas.concat(r);
+  }
+  var porId={}; vivas.forEach(function(a){ porId[a.id]=a; });
+  var arr=S.acts||[], n=0;
+  /* Primero las que ya estaban: se parchean EN SITIO (`Object.assign`), como
+     hace `Acciones._sincronizar`, para no romper las referencias que guardan
+     las pantallas abiertas. */
+  for(var j=arr.length-1;j>=0;j--){
+    var a=arr[j], nueva=porId[a.id];
+    if(!nueva){
+      /* Cambió y ya no la devuelve la base: la borraron. Fuera. */
+      if(ids[a.id]){ arr.splice(j,1); n++; }
+      continue;
+    }
+    delete porId[a.id];
+    if(nueva.estado==='completado'){ arr.splice(j,1); n++; }
+    else { Object.assign(a,nueva); n++; }
+  }
+  /* Y las que no estaban: nacieron o las reabrieron. */
+  Object.keys(porId).forEach(function(id){
+    var a=porId[id];
+    if(a.estado!=='completado'){ arr.push(a); n++; }
+  });
+  S.acts=arr;
+  return n;
+}
+
+async function _refrescoTick(forzar){
+  if(_actSaving) return;          // hay una escritura en vuelo: no la pises
+  if(_refCorriendo) return;
+  if(!forzar && document.hidden) return;   // nadie está mirando: cero bytes
+  _refCorriendo=true;
   try{
-    var asist=await sb('obra_asistencia?fecha=eq.'+S.fecha);
-    var acts=await sbTodo('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc');
-    S.asist=asist; S.acts=acts;
+    var ahora=Date.now();
+    var asist=await sb('obra_asistencia?fecha=eq.'+S.fecha);  // de un día, es chica
+    S.asist=asist;
+    if(!_refEntero || (ahora-_refEntero)>REFRESCO_ENTERO){
+      S.acts=await sbTodo('obra_actividades?estado=neq.completado&order=fecha.desc,created_at.desc');
+      _refEntero=ahora;
+    }else{
+      var desde=new Date(Math.max(0,(_refUltimo||ahora)-REFRESCO_MARGEN)).toISOString();
+      await _refrescoDelta(desde);
+    }
+    _refUltimo=ahora;
+    S.estancadas=undefined; S.abiertas=undefined;
     revisarConsistencia();
     setSS('ok',''+hhmm()); renderAsist(); renderActs(); renderReportes();
     if(S.currentTab==='plan') renderPlan();
     updateAsistPct(); checkInactividadIngenieros();
   }catch(e){}
-}, 90000);
+  _refCorriendo=false;
+}
+_refUltimo=Date.now(); _refEntero=Date.now();   // `loadAll` acaba de traerlo todo
+setInterval(function(){ _refrescoTick(false); }, REFRESCO_MS);
+/* Al volver al app, un solo chequeo — no se acumulan los que no corrieron. */
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden) _refrescoTick(false);
+});
 
 // ── INACTIVIDAD: cerrar sesión tras 3 horas ───────────────────
 var _lastActivity=Date.now();

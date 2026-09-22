@@ -2433,16 +2433,111 @@ Ese archivo dejó el app inservible **dos veces**:
 Si la tarea obliga a tocarlo: cambia el nombre de la caché (`CACHE`),
 prueba en Safari, y no toques nada más en ese archivo.
 
+### LO QUE BAJA EL APP CUESTA DINERO — y ya tumbó la obra una vez (v125)
+
+**El 21 de septiembre de 2026 el app dejó de cargar para todos.** Supabase
+contestaba **402** a todo porque la organización gastó **14 GB de egress contra
+los 5 GB** del plan gratis — el **281%**. El dueño pagó el plan Pro para poder
+trabajar ese día. **Esto no se puede repetir.**
+
+Las dos causas, medidas:
+
+1. **El refresco de 90 segundos bajaba la lista entera**: 1.094 actividades
+   abiertas, **1,1 MB**, cada 90 s, en cada teléfono, iPad o PC con el app
+   abierta —**escondida o no, y hubiera cambiado algo o no**—. Un iPad abierto
+   un día de obra bajaba cerca de **350 MB**.
+2. **`cargarCatalogo()` (≈3,8 MB) después de CADA escritura** del módulo
+   Partidas. Estaba llamado veinte veces. Mover veinte actividades de
+   subpartida eran **76 MB**.
+
+Más las pruebas de aquí contra la base real, que es lo que corrigió §7.
+
+**Cómo quedó:**
+
+- **El refresco pregunta primero qué cambió.** Pide a `obra_cambios` los
+  `entidad_id` movidos desde el último chequeo —unos pocos bytes— y solo si hay
+  algo baja **esas** actividades con `id=in.(…)`, de 100 en 100. Con la pantalla
+  escondida (`document.hidden`) **no hace nada**; al volver, un chequeo.
+- **CON 15 MINUTOS DE MARGEN HACIA ATRÁS, y no es paranoia.** `logCambio` llena
+  `created_at` con **el reloj del teléfono que escribe**, no con el del
+  servidor, y lo que sale tarde de la cola (v91) llega con una hora vieja. Sin
+  margen, un teléfono atrasado escribe «en el pasado» y su cambio no lo ve
+  nadie. Lo que se escape igual lo recoge la carga completa.
+- **Una vez cada 30 minutos sí baja la lista completa** (`REFRESCO_ENTERO`), por
+  si algo escribió sin anotar en `obra_cambios`.
+- **Después de escribir NO se recarga: se parchea en memoria** (`_catParche`,
+  `_catParcheAmarres`, `_catParcheBaja`). Es lo que `Acciones._sincronizar` hace
+  con una actividad desde la v103: **quien mandó la escritura sabe qué cambió**.
+  De las 14 llamadas a `cargarCatalogo()` que iban tras una escritura quedan
+  **una**: la siembra, porque crea ~1.300 partidas y ~2.400 amarres de una vez y
+  reconstruir eso en memoria sería escribir la siembra por segunda vez.
+- **`cargarCatalogo(partes)` recarga solo lo que se le nombre** (`CAT_PARTES`).
+  Sin argumento las trae todas. **`acts` casi nunca hace falta**: `Acciones` ya
+  parchea `S.catActs`, así que pedirlo es pagar 2,6 MB por algo que ya tienes.
+- **La recarga completa ocurre en TRES casos y nada más**: la primera vez que se
+  entra al módulo en la sesión, al tocar «Actualizar», y con la copia de más de
+  **30 minutos** (`CAT_FRESCO_MS`, que eran 5).
+- **`catMarcarViejo()` ya no dispara la recarga**: pinta el aviso en ámbar «hay
+  cambios de otra pantalla · Actualizar» y **decide el dueño**. La garantía de la
+  v109 no se pierde —la hora de los datos se sigue viendo—; lo que cambia es
+  quién decide pagar los 3,8 MB.
+- **El ↺ de arriba no recarga el catálogo**, por lo mismo. Solo lo recarga el
+  «Actualizar» del módulo.
+- **Una sola copia de la lista completa** (`_actsCompletas`). Había tres cargas
+  de lo mismo: `cargarCatalogo` y dos en los reportes por apartamento, 2,6 MB
+  cada una.
+
+**UNA RECARGA PARCIAL NO MUEVE EL RELOJ.** Si `cargarCatalogo(['partidas'])`
+pusiera `catCargadoEn` a ahora, la barra diría «datos de las 3:05» con las
+actividades de las 2:30 — **la mentira de la v109 con otra cara**: dos cosas
+ciertas a la vez y el dueño creyéndole a la equivocada.
+
+**TODA CARGA NUEVA DE UNA TABLA COMPLETA HAY QUE MEDIRLA Y JUSTIFICARLA.** No es
+una recomendación: es lo que se saltó la primera versión de la v124 —0,56 MB por
+sesión para pintar una barra— y lo que costó el corte del 21-sep. Si añades una,
+di cuántos bytes son y por qué no se puede hacer con lo que ya está cargado.
+
 ### NO escribas en Supabase durante las pruebas
 
 Es la base de producción de una obra real. Intercepta `window.sb` y deja
 las escrituras en memoria. Al terminar, reporta cuántas interceptaste.
 
-### NO cambies la consulta de arranque ni sus columnas
+### La consulta de arranque pide solo las columnas que se usan
 
-`obra_actividades` tiene 39 columnas y casi todas se usan en alguna
-pantalla. Quitar columnas del arranque para «adelgazar» rompe features que
-no vas a ver hasta que alguien abra esa pantalla en obra.
+**La consulta de arranque pide solo las columnas que se usan. Antes de quitar
+una, búscala en todo el código. Si una pantalla necesita una columna que no
+viene, la pide ella para esa actividad sola. Quitar columnas a ciegas rompe
+pantallas que no se ven hasta que alguien las abre en obra.**
+
+*Esto cambió en la v125.* Hasta la v124 aquí decía «NO cambies la consulta de
+arranque ni sus columnas», y con buen motivo —las 40 columnas de
+`obra_actividades` se usan casi todas en alguna pantalla—, pero el 21-sep el
+app se cayó para todos por egress y **lo que baja en cada carga pasó a ser un
+problema de verdad**, no una optimización.
+
+**Medido sobre las 2.496 filas, cuánto pesa cada columna en el JSON:**
+`notas` 179 KB · `registro_tiempo` 176 KB · `descripcion` 168 KB ·
+`created_at` 114 KB · `ingeniero_nombre` 95 KB · `personal_nombre` 91 KB ·
+`fotos` 89 KB. La fila entera son **2,37 MB**.
+
+**Y midiendo QUIÉN LAS LEE, el atajo fácil no existe:** de las candidatas,
+solo **`responsable_id` y `actividad_padre_id` no aparecen en ninguna parte**
+(~102 KB). `notas` sale en **57 sitios** y `fotos` en **53** — las dos las
+pinta la ficha y `revCard`. Así que adelgazar no es quitar lo que sobra: es
+**cargar en diferido lo que la LISTA no necesita pintar** y que la ficha lo
+pida para esa actividad sola al abrirla.
+
+> **PENDIENTE, a propósito.** En la v125 se dejó fuera por decisión del dueño:
+> **ahorra poco y es lo más arriesgado** de los seis puntos de esa versión. Lo
+> que sí se hizo —el refresco por delta y el parche en memoria— quitó el 95%
+> del gasto sin tocar ni una columna. Si alguien lo retoma:
+>
+> - el techo real son los **485 KB** de `notas` + `registro_tiempo` + `fotos` +
+>   `pendientes` sobre las 2.5xx filas, no los 2,37 MB de la fila entera;
+> - hay que escribir el `_actCompletar(id)` que las pida para UNA actividad;
+> - y la comprobación que decide si vale: **la nota y la foto de una actividad
+>   siguen saliendo al abrir la ficha**. Si no salen, se perdió trabajo del
+>   dueño de vista, que cuesta más que los KB que ahorra.
 
 ### NO rompas lo que ya está verificado
 
