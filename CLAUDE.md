@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v124 — 22 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v126 — 22 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -214,6 +214,7 @@ mismos botones que cualquier otra.
 | **Lo que nadie ha mirado hace semanas** | **Obra**, atajo «Sin mirar» — `FILTRO_HUECO.congeladas`, `_ordenCongeladas()`, `_diasQuieta()` |
 | **Mover TODAS las fechas de un sitio o un contratista** | **Obra**, barra «Todas a…» — `trTodas()` |
 | **REGISTRAR con todo el detalle** | **Actividades**, al abrir la fila — `_actFilaRapidaHTML()`, `_actFilaAvanceHTML()` |
+| **Cambiar el %, la entrega o la descripción SIN abrir la fila** | **Actividades → Lista**, en el renglón (v126) — el % abre la tira (`_actPctTiraHTML`, `actFilaPct`), el 📅 abre el calendario del sistema (`_actFilaCalHTML`, `actFilaFecha`) y el texto se corrige manteniendo el dedo o con el lápiz (`actDescEditar`, `actDescGuardar`) |
 | **Agrupar la obra en capítulos, subpartidas y partidas (PRUEBA)** | **Partidas** — `renderCatalogo()`, solo admin. Ver «El Catálogo de partidas» en §3.5 |
 | **Renombrar o juntar una ubicación, o ponérsela a las que no tienen** | **Partidas → Ubicaciones** — `catUbicsAbrir()`, `_catUbicMover()`. Toca el `area` de todas sus actividades, avisando a cuántas |
 | **Crear una ubicación que no existe todavía** | **Partidas → Ubicaciones → «+ Nueva ubicación»** — `catUbicNuevaAbrir()` (v116). Vive en `obra_ubicaciones` y nace vacía |
@@ -275,14 +276,103 @@ ordenado: ordenar 2.465 filas cinco veces por repintado costaba ~58 ms de
 cada toque.
 
 **Contratista y apartamento son pastillas de un toque**
-(`_actPillsRapidasHTML`), fuera del panel de Filtros: los seis que más
-deben y los apartamentos con trabajo abierto, en `REC_ORDEN`. Filtran por
-`personas`, **no** por `contratistas` — ese exige `tipo_personal` y no es
-de fiar.
+(`_actPillsRapidasHTML`), fuera del panel de Filtros. Los apartamentos salen
+con trabajo abierto, en `REC_ORDEN`. Filtran por `personas`, **no** por
+`contratistas` — ese exige `tipo_personal` y no es de fiar.
+
+**LAS PASTILLAS DE CONTRATISTA SE ORDENAN POR MOVIMIENTO, NO POR DEUDA
+(v126).** Hasta la v125 salían **los seis que más abiertas tienen**
+(`.slice(0,6)`), y el dueño echaba en falta a los que se están moviendo ahora:
+medido contra la base el 21-sep, **Milo llevaba 44 cambios sobre 44 abiertas,
+Laura Gonel 11 de 11 y Alejandro 10 de 10** y no aparecía ninguno, tapados por
+gente con muchas abiertas y quietas.
+
+- **El orden es cuántas de sus abiertas se tocaron en 15 días**, de
+  **`S.tocadasRecientes`** — el MISMO Set que ya se carga para las congeladas,
+  **ni una consulta nueva** (`_actTocada` es lo contrario de `_esCongelada`, y
+  sale del mismo sitio para que las dos pantallas no cuenten distinto). A igual
+  movimiento manda quien más abiertas tiene.
+- **Salen TODOS los que se han movido**, no seis; la fila se desliza de lado
+  como la de apartamentos. Hoy son **16** contra las 6 de antes.
+- **El número sigue siendo sus ABIERTAS**, que es lo que vas a ver al tocarla
+  (la regla de la v87), y por eso se cuenta **igual que filtra
+  `applyActFilters`** — por nombre y sin exigir tipo.
+- **El personal propio es UNA pastilla, «Personal x la casa»** (`PAL_PROPIO`),
+  que filtra por `tipo_personal='propio'` — hay una rama para eso dentro de
+  `applyActFilters`, porque «Personal x la casa» no es el nombre de nadie y sin
+  ella la pastilla no casaba con nada. **Nunca 37 pastillas con los nombres.**
+- **Las tareas de ingeniero no llevan pastilla** (siguen en el filtro
+  «Contratista» de Filtros), y **un nombre del personal propio tampoco**. Quién
+  es propio lo decide **la MAYORÍA de sus abiertas**, no una fila suelta: hay un
+  «Antonio» con 59 abiertas de propio y **una** marcada contratista, y con «al
+  menos una» se le pintaba pastilla propia diciendo **60**, que es justo lo que
+  el dueño no quiere ver. `tipo_personal` no es de fiar (§8) — por eso se
+  pregunta por la mayoría, como `_catCapMayoria`.
+- **La etiqueta es el primer nombre saltando «Ing.»** —«Ing. Uriel» se lee
+  «Uriel»— y si dos quedaran iguales, las dos primeras palabras: dos pastillas
+  con el mismo nombre no se distinguen.
+- **Si no se movió nada en 15 días, o el historial todavía no ha llegado**,
+  vuelven los seis de siempre. Una fila de filtros vacía parece un app roto, y
+  el historial llega aparte (`loadTocadasRecientes` es asíncrono y `renderActs`
+  repinta cuando entra).
+
+**CON UN CONTRATISTA ESCOGIDO, LA LISTA SE AGRUPA POR UBICACIÓN (v126).** Se
+toca su pastilla y los grupos pasan a ser los sitios **en orden del edificio**:
+2A, 2B, 3A… Penthouse B y después las áreas comunes. Así se le recorre piso por
+piso, que es como se camina la torre. Se guarda la agrupación que había
+(`S._actGrupoAntes`) y **al quitar la pastilla se devuelve** — quitar el filtro
+y dejarte en otra agrupación es dejar al dueño perdido (la lección del «volver»
+de la v83). **Si él cambia «Agrupar» a mano con la pastilla puesta manda lo
+suyo**: `setActAgrup` borra el recuerdo. El chip de la cinta y la pastilla
+quitan por el mismo sitio (`_actGrupoPorPastilla`), o según por dónde lo
+quitaras te quedabas en una u otra.
 
 El resto de la explicación: `_actFilaAvanceHTML()`, `actFilaPct()`, `actFilaFecha()`, todo
 por `Acciones`. **Cerrar NO está ahí**: lo hace el ✓ verde de la fila, que
 está siempre a la vista y a un toque. Una sola forma de cerrar por tarjeta.
+
+### LA FILA SE EDITA AFUERA (v126) — %, entrega y descripción sin abrirla
+
+Tres cosas se cambian **en el renglón**, y las tres por las rutas que ya
+existían. No se abrió ninguna vía de escritura nueva: eso es el error de la
+v79 y de la v80.
+
+- **El %** es un botón. Al tocarlo sale **debajo de ese renglón** la tira
+  `0 · 25 · 50 · 75 · ✓ Completada` con el valor actual marcado, y un toque
+  guarda y la cierra. Guarda por **`actFilaPct`**, que ya mandaba el 100 a
+  `marcarActCompletada` —la puerta que pide la foto— y el resto a
+  `Acciones.setAvance`. **Una tira abierta a la vez** (`S._actPctAbierto`).
+- **La entrega** es un `<input type="date">` transparente encima de la caja de
+  la fecha: así el iPad abre **su** calendario, el del sistema, sin que el app
+  dibuje uno. Guarda por **`actFilaFecha`** → `Acciones.editar`, con su
+  `obra_cambios` y la oferta de correr la cadena.
+- **La descripción** se corrige manteniendo el dedo sobre el texto (550 ms) o
+  con el lápiz de al lado. Guarda **al salir del campo**, sin botón —la regla de
+  la v122—; **vacía no se guarda** y Escape deshace. **El toque simple sigue
+  abriendo la fila**, que es lo que el dueño tiene aprendido.
+
+**NINGUNA DE LAS TRES BAJA UN BYTE.** Se repinta esa fila sola con
+`_repintarFila` y el objeto ya está parcheado en memoria (regla de la v125).
+Medido: poner 50%, cambiar la entrega y corregir la descripción son **1 `PATCH`
++ 1 `POST obra_cambios` y CERO `GET`** cada una.
+
+**Y esto vale en las DOS listas, que son dos.** A más de 600px de ancho
+—o sea, en el iPad— `renderActs` pinta **`actsDesktopTable`**, una tabla; por
+debajo, las tarjetas de `actHTML`. Por eso la fila de la tabla salió a su
+propia función, **`_actTablaFilaHTML`**, y lleva `id="act-<id>"`: sin eso
+`_repintarFila` no la encontraba y cada toque repintaba las 1.053 (~1,1 s, el
+tirón de la v86). La tira del % va ahí en **una fila aparte** (`pctirafila-…`)
+a todo el ancho, y `_repintarFila` la quita antes de repintar o quedarían dos.
+
+**LO QUE ESTO COSTÓ, MEDIDO, PARA QUE NADIE LO DÉ POR GRATIS:** a 390px la
+descripción pasó de **221px a 170px** y en la tabla de **268 a 212** —son dos
+columnas nuevas en un renglón que ya iba lleno—. Lo que **no** cambió: la fila
+mide **71px** (eran 70) y la de la tabla **64px**, iguales. Eso último costó
+trabajo: el CSS le pone `min-height:44px` a **todo** `<button>` (línea ~450, sin
+exención) y el lápiz hacía la fila **31px más alta** — con 1.053 filas, un
+tercio más de lista que bajar en obra. Lleva `min-height:0` en el estilo y
+margen negativo. **Si añades un botón a la fila, mídele el alto a la fila
+antes y después.**
 
 **LA CABECERA DEL GRUPO NO LLEVA PORCENTAJE (v124), y es una decisión del
 dueño.** Dice **el nombre, cuántas actividades y cuántas retrasadas.** Nada
@@ -2678,6 +2768,34 @@ mismo:**
   sin ella al primer intento. Ábrelas una a una desde «Más» y compruébalo
 - **Las diez de «Más» abren y ninguna revienta**, con cero errores de consola
 - **La miga de pan mide 44px.** Es un botón y se toca con el dedo
+- **El % se cambia DESDE LA FILA, sin abrirla** (v126). Tócalo: sale la tira
+  `0 · 25 · 50 · 75 · ✓ Completada` con el valor actual marcado y botones de
+  44px. Poner 50% son **1 `PATCH` + 1 `POST obra_cambios` y CERO `GET`**, el
+  100 pasa por `marcarActCompletada`, y solo hay **una tira abierta a la vez**.
+  Compruébalo **a 390 y a 1024**: son dos listas distintas —tarjetas y tabla—
+  y la de la tabla va en su propia fila con `colspan`
+- **📅 y la descripción, también en la fila** (v126). Cambiar la entrega deja
+  `fecha_fin` puesta, 1 `PATCH` + 1 `POST`, cero `GET`, y la marca de vencida
+  se recalcula en el momento. La descripción se abre manteniendo el dedo o con
+  el lápiz, guarda al salir del campo, **vacía no se guarda**, Escape deshace,
+  y **el toque simple sigue abriendo la fila** — esa última es la que se rompió
+  al primer intento
+- **La fila no crece.** Mide su alto a 390 y a 1024: **71px** y **64px**. Si se
+  va a 100, alguien metió un `<button>` sin `min-height:0` y la lista tiene un
+  tercio más que bajar
+- **Las pastillas de contratista van por MOVIMIENTO de 15 días** (v126) y salen
+  todas las que se han movido, no seis. Tienen que salir **Milo, Felix y
+  Jefrey, Personal x la casa, Jose Lantigua y Alejandro**, y **Uriel** con ese
+  nombre y no «Ing.». **Karina, Moisés y Nilson NO salen** (tareas de
+  ingeniero) y **ningún nombre del personal propio suelto** — si aparece
+  «Antonio», alguien cambió la mayoría por «al menos una». Con
+  `S.tocadasRecientes` vacío vuelven los seis de siempre
+- **Tocar una pastilla de contratista agrupa por UBICACIÓN, en orden del
+  edificio**, y quitarla devuelve la agrupación que había. Si con la pastilla
+  puesta cambias «Agrupar» a mano, **al quitarla se queda lo que escogiste**
+- **«Agrupar: Apartamento» empieza por el 2A, no por la escalera** (v126), con
+  y sin pastilla. Si sale «Escalera Principal» primero, alguien quitó
+  `_revOrdenArea` de `getActGroupsFromActs`
 - **NINGUNA cabecera de grupo de la lista enseña un %** (v124), en ninguna de
   las ocho agrupaciones: nombre, `N actividades` y `X retrasadas`, y nada más.
   Recórrelas todas y cuenta los `%`: tiene que dar **cero**. Los dos conteos
@@ -2807,6 +2925,12 @@ mismo:**
   distinta** y **un amarre por actividad abierta**, contra lo que diga la base
   en ese momento
 
+**La agrupación «Apartamento» de la lista iba alfabética hasta la v126**, así
+que la lista abría por «Escalera Principal» — salía así en la captura del
+dueño. Ahora usa `_revOrdenArea` como todo lo demás. El cambio está **solo en
+`getActGroupsFromActs`**, que no la llama nadie más que `renderActs`: la vista
+«Por Apto» (`renderActsPorApto`) es otra función y ya ordenaba bien.
+
 Sobre el orden de las áreas: **alfabético no sirve.** Para los once
 apartamentos suena igual — `N2 — Apto 2A` … `N7 — Penthouse B` ya ordenan
 bien por texto — pero «Escalera de Emergencia», «Fachada» y «General»
@@ -2926,6 +3050,11 @@ pertenece a ningún nivel.
 | **v123** — el dueño pidió «una barra con el avance» en la cabecera del grupo. La barra **llevaba versiones ahí**: no se pintaba porque el `pct` era `cerradas/total` sobre `S.acts`, que **nunca trae las cerradas**, así que daba **cero estructural** y caía en la rama del chip sin barra. Los 21 grupos decían 0% y 15 tenían avance real, hasta el 24%. | **Tercera vez con la misma grieta** (v102, v107, v123): contar cerradas sobre el array que las excluye. Un número que no puede ser distinto de cero **no es un número**, es una constante disfrazada — si un porcentaje sale siempre igual, sospecha del denominador antes que del diseño. Y cuando alguien pida algo que «no está», comprueba primero si está y no se puede ver (v116). |
 | **v123** — la sonda dijo «0 barras» y parecía que el cambio no se había aplicado: medía con `S.actVista` en **Edificio**, que no tiene cabeceras de grupo. El selector de vista se recuerda, y la vista de entrada no es la Lista. | Ponte donde está el usuario de la captura **antes** de medir, y déjalo escrito en la sonda. Es el v58 otra vez: medir una pantalla que no es la que se está mirando da un cero que no significa nada. |
 | **v122→v124** — **tres versiones seguidas persiguiendo un porcentaje que esa pantalla no puede calcular.** El chip decía 0% siempre (denominador sin cerradas); la v123 lo cambió por `_catAvance(g.items)` y entonces decía **1% sobre el 59% hecho**, porque el numerador tampoco las tiene; la v124 trajo las cerradas y costaba **0,56 MB por sesión**, el día después de que el app se cayera por egress. El dueño cortó: fuera el porcentaje. | Cuando un número haya que rescatarlo dos veces, **el problema no es la fórmula: es que los datos para calcularlo no están en esa pantalla.** Es el patrón de «Hoy» y del recorrido (v81, v84) aplicado a un dato en vez de a una pantalla — arreglarlo otra vez es la tercera versión. Y **quitar es una respuesta**: una cabecera sin % dice menos, pero no dice nada falso. |
+
+| **v126** — el lápiz de corregir la descripción hacía la fila **31px más alta**, y con 1.053 filas eso es un tercio más de lista que bajar. No era el lápiz: el CSS le pone `min-height:44px` a **todo** `<button>` (línea ~450) y esa regla **no exime a nadie** —la de la línea ~100 sí, con `data-mini`, pero llega después—. Puesto `data-mini` el botón seguía midiendo 44. | Cuando un elemento mide lo que no le pusiste, **lee el estilo computado antes de discutir con el CSS**: `getComputedStyle(b).minHeight` lo dijo en un segundo, y dos reglas distintas decían lo mismo con distinta exención. Y mide **el alto de la fila** antes y después de meter cualquier cosa en la lista: es la v86 con otra cara. |
+| **v126** — el «mantener presionado» se marcaba con una bandera de sí/no para que el click de después no abriera la fila. Como al abrir el campo se repinta el renglón, ese click cae sobre un nodo que ya no existe y **nunca llega a `toggleActDet`**: la bandera se quedaba puesta y **el siguiente toque simple —minutos después— no abría la fila**. | Una marca de «acabo de hacer otra cosa con este dedo» **tiene que caducar sola** (`Date.now()`, 900 ms), no esperar a que alguien la consuma. Si el consumidor puede no llegar a ejecutarse, la bandera es una trampa que se arma sola. Lo cazó la sonda del toque simple, que estaba ahí para comprobar justo lo que NO debía cambiar. |
+| **v126** — la primera versión de las pastillas ofrecía una por cualquier nombre con **al menos una** abierta que no fuera de propio. «Antonio» tiene 59 abiertas de propio y **una** marcada contratista: le salía pastilla propia diciendo **60**, que es exactamente lo que el dueño pidió no ver. | `tipo_personal` no es de fiar (§8) y un caso suelto no define a nadie. Cuando tengas que decidir de quién es algo a partir de un campo sucio, **pregúntale a la mayoría** —`_catCapMayoria` lo hace desde la v102— en vez de a la primera fila que coincida. |
+| **v126** — el arnés dio «el mantener presionado no funciona» y era el arnés: la fila estaba a **22.000px** de alto en la lista, así que el ratón tocaba el vacío. Un `scrollIntoView` antes de apuntar y pasó a la primera. | Para tocar de verdad hay que **traer la fila a la pantalla**, como hace el dedo. Es el v58 otra vez: medir o tocar lo que el usuario no tiene delante da un resultado que no significa nada. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
