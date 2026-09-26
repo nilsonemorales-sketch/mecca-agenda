@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v127 — 26 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v128 — 26 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -240,8 +240,9 @@ mismos botones que cualquier otra.
 | **Ver lo mismo de otra manera** | **Partidas → los botones del final** — `catVistaSet()`, `_catAmbito()`. Hasta la v117 era un selector de cinco vistas arriba |
 | **Ordenar las partidas a tu gusto, renombrarlas, juntarlas, quitarlas o agregar** | **Partidas → un capítulo → «Por partida»** — `_catPorPartidaHTML()`, `CAT_ORDENES`, `catPartidaCorrer()`, `catPNuevaAbrir()` (v114) |
 | **Sacar del plan lo que sobra** | **Partidas → Árbol → «Lo que está fuera del plan»** — `catFueraAbrir()`. Descartar **no borra** |
-| **Decir de qué partida y para qué contratista es cada material** | **Compras → la orden → cada renglón** (v127) — dos escogedores, `PARTIDAS_MADRE` y `S.personal`. Se guardan dentro de `items_json` |
-| **Saber cuánto se compró de cada taller** | **Compras → Agrupar: Partida / Contratista** (v127) — `_ocGruposHTML()`. La cabecera suma **los renglones**, no el total de la orden |
+| **Decir de qué partida es cada material** | **Compras → la orden → cada renglón** (v127, podado en la v128) — un escogedor, `PARTIDAS_MADRE`. Se guarda dentro de `items_json` |
+| **Poner los renglones en el orden que se compran** | **Compras → la orden → las flechas ↑↓ del renglón** (v128) — `_ocMoverRow()`. Ese es el orden del PDF |
+| **Marcar un material como urgente** | **Compras → la orden → el punto del renglón** (v128) — `_ocUrgenteRow()`. Rojo o gris, y sale en el PDF y en la tarjeta |
 | **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
 
 
@@ -433,6 +434,70 @@ clickee está tocando lo que el usuario no puede tocar.
 «Contratista» faltaban además las 9 de ingeniero. Ahora hay bloque **«Sin tipo
 de personal»** y los tres modos suman 1.059 y 347 vencidas. Si un modo suma
 menos que la cabecera, alguien volvió a dejar un `tipo_personal` fuera.
+
+### LO QUE LA v128 PODÓ DE LA v127 — dos días después, y es la lección
+
+El dueño probó la v127 en la obra y cortó dos cosas de las que acababa de
+recibir. **Lo que sigue no es un arrepentimiento, es el método funcionando:**
+se construyó, la usó, dijo qué sobra. Lo que se queda es lo que pasó esa
+prueba.
+
+- **«Lo de poner el contratista no es necesario.»** Fuera el escogedor de cada
+  renglón, fuera el de «Clasificar de una vez» y fuera la sección **PARA QUIÉN**
+  del PDF. Con ellos se fueron `_ocContratistasOpts`, `_ocSelContratistaHTML` y
+  `_ocFilaCont`: **una función que no llama nadie es el gatillo puesto de la
+  v113**, no se esconde, se borra.
+- **PERO EL DATO GUARDADO NO SE BORRA.** Lo que ya se escribió en `items_json`
+  se carga y se vuelve a guardar igual —`_ocReadRows` lo arrastra del array de
+  trabajo, no de un `<select>` que ya no existe—. Si se leyera del DOM, **el
+  primer guardado de una orden clasificada se lo llevaría por delante**: tirar
+  trabajo del dueño para ahorrar una clave. Comprobado sobre una orden con dos
+  contratistas escritos: se guarda, se recarga de la base y siguen ahí.
+- **«Tampoco es necesario el filtro que pusiste donde veo todas las órdenes.»**
+  Fuera «Agrupar: Ninguno · Partida · Contratista», fuera los dos filtros y
+  fuera el «filtrado: RD$ …». `_ocBarraClasifHTML` y `_ocGruposHTML` se
+  quitaron enteras. **La pantalla de Compras es otra vez la de la v126: el
+  sub-nav de estados y nada más.**
+- **«Sin clasificar (N)» sobrevivió como un estado más del sub-nav**, que es
+  donde el dueño ya mira para escoger qué lista ve. Cuenta las órdenes con
+  ALGÚN renglón sin partida — por renglón, porque una compra mezclada tiene lo
+  suyo clasificado y lo suyo no.
+- **Lo que se quedó de la v127:** el escogedor de partida por renglón, la
+  herencia del renglón anterior, «Clasificar de una vez», las pastillas de la
+  tarjeta, la segunda línea del PDF y el resumen POR PARTIDA.
+
+### EL DUEÑO ORDENA LOS RENGLONES Y MARCA LO URGENTE (v128)
+
+Sus palabras: *«quiero poder organizar los items en el reporte»* y *«poner
+punto de prioridad»*. Las dos son del RENGLÓN y las dos viven en `items_json`:
+ni una tabla, ni una columna, ni una consulta nueva.
+
+- **Dos flechas ↑↓ de 44px** por renglón (`_ocMoverRow`). Intercambian el
+  objeto entero con su vecino, así que **mover no toca nada**: ni descripción,
+  ni cantidad, ni precio, ni partida, ni recibido. Se lee el DOM antes de
+  mover, o se pierde lo que se esté escribiendo en ese momento.
+- **La primera fila no sube y la última no baja**, y los botones se quedan en
+  su sitio apagados: si desaparecieran, la fila bailaría al ordenar. La función
+  también se niega si la llaman en el borde.
+- **ESE ES EL ORDEN DEL PDF.** `saveOrden` renumera el `no` de cada renglón al
+  guardar, así que el papel y la pantalla dicen lo mismo. Comprobado: subir el
+  tercero, guardar, recargar de la base y sacar el PDF — el mismo orden en los
+  tres sitios.
+- **El punto de urgente son DOS estados, no tres** (`_ocUrgenteRow`): rojo o
+  gris, 44px. Tres colores obligan a acordarse de cuál es cuál, y esto se toca
+  parado en la ferretería. Se guarda como **`urgente: true`**, y **un renglón
+  normal se guarda SIN la clave** — igual que las 373 de siempre, que por eso
+  son normales sin que nadie las migre.
+- **El renglón nuevo hereda la partida pero NO la urgencia**: lo urgente es de
+  un renglón concreto, y heredarlo pintaría de rojo la compra entera sin que
+  nadie lo pidiera.
+- **Dónde se ve:** el número del renglón en rojo y el punto encendido en el
+  formulario; un **●** delante de la descripción y el número en rojo en el PDF,
+  con **«● N renglones urgentes»** encima de la tabla; y una pastilla roja **«●
+  N urgentes»** en la tarjeta de la lista. **Si no hay ninguno, el papel no
+  menciona la urgencia**: comprobado línea por línea contra la v127, las
+  órdenes sin clasificar imprimen **exactamente** lo mismo (75, 60 y 59 líneas,
+  idénticas).
 
 ### LAS COMPRAS SE CLASIFICAN POR RENGLÓN (v127)
 
@@ -2871,21 +2936,38 @@ mismo:**
 - **Guardar una orden clasificada son 1 escritura y CERO `GET`**, y al volver a
   pedirla a la base los renglones conservan lo suyo. Compruébalo **recargando**,
   no mirando `S.compras`: el app parchea en memoria y la pantalla mentiría igual
-- **Entrar a Compras, agrupar, filtrar y guardar cuesta lo mismo que en la
-  v126**: cero `GET` nuevos. Si aparece uno, alguien fue a buscar las partidas
-  al catálogo — son 3,75 MB y están en `PARTIDAS_MADRE`
-- **Agrupar por partida suma los RENGLONES.** Una orden con renglones de dos
-  partidas sale en los dos bloques, con el monto que le toca a cada uno; si un
-  bloque enseña el total de la orden, se está contando dos veces
+- **Entrar a Compras, mover renglones, marcar un urgente y guardar cuesta CERO
+  `GET` y UNA escritura.** Si aparece un `GET`, alguien fue a buscar las
+  partidas al catálogo — son 3,75 MB y están en `PARTIDAS_MADRE`
 - **«Clasificar de una vez» no pisa nada.** Clasifica un renglón a mano, aplica
   otra cosa a todos y comprueba que ese renglón **no cambió**
-- **El renglón nuevo hereda** la partida y el contratista del anterior
+- **El renglón nuevo hereda la partida del anterior, y NO la urgencia**
+- **LA PANTALLA DE COMPRAS ES SOLO ESTADOS** (v128). Cuenta los controles: el
+  sub-nav —Todas, Pendientes, Aprobadas, Recibidas, Borradores y «Sin
+  clasificar (N)»— y **cero `<select>`**. Si aparece «AGRUPAR» o «filtrado:
+  RD$», alguien volvió a meter la barra de la v127 que el dueño mandó a quitar
+- **NO QUEDA NI UN ESCOGEDOR DE CONTRATISTA EN COMPRAS**, ni en el renglón, ni
+  en «Clasificar de una vez», ni la sección PARA QUIÉN del PDF. `grep` de
+  `_ocSelContratistaHTML` y de `PARA QUIÉN` fuera de los comentarios: **cero**
+- **PERO EL CONTRATISTA GUARDADO SIGUE AHÍ.** Abre una orden que lo tenía
+  escrito, guárdala, **recarga de la base** y compruébalo: si desapareció,
+  alguien volvió a leerlo de un `<select>` que ya no existe
+- **Las flechas ordenan y ese es el orden del PDF** (v128). Sube el tercero de
+  cuatro: queda de segundo, se renumera 1-4, y su cantidad y su precio viajan
+  con él. Guarda, recarga y saca el PDF: el mismo orden en los tres sitios.
+  **La primera no sube y la última no baja**, y llamar a `_ocMoverRow` en el
+  borde no mueve nada
+- **El punto de urgente son dos estados y 44px.** Marca dos renglones: quedan
+  `urgente:true` esos dos y **los demás SIN la clave**; el PDF dice «● 2
+  renglones urgentes» y los marca con ●; la tarjeta enseña la pastilla roja.
+  **Una orden sin urgentes no menciona la urgencia en el papel**
 - **EL PDF SALE CLASIFICADO** (v127): en una orden clasificada, cada renglón
-  lleva «Partida · Contratista» debajo de la descripción y al final van POR
-  PARTIDA y PARA QUIÉN con sus montos. En una orden vieja, **ninguna de las dos
-  secciones aparece** y el papel es el de siempre. Compruébalo con un jsPDF de
-  mentira que conteste a cualquier método: si le faltan métodos, el `catch` de
-  `generarPDFOrden` se traga el fallo y la prueba miente
+  lleva su partida debajo de la descripción y al final va POR PARTIDA con sus
+  montos. En una orden vieja **no aparece ninguna de las dos cosas** y el papel
+  es el de siempre — compáralo **línea por línea contra la versión anterior**,
+  no a ojo. Y hazlo con un jsPDF de mentira que conteste a cualquier método: si
+  le faltan métodos, el `catch` de `generarPDFOrden` se traga el fallo y la
+  prueba miente
 - **El % se cambia DESDE LA FILA, sin abrirla** (v126). Tócalo: sale la tira
   `0 · 25 · 50 · 75 · ✓ Completada` con el valor actual marcado y botones de
   44px. Poner 50% son **1 `PATCH` + 1 `POST obra_cambios` y CERO `GET`**, el
@@ -3178,6 +3260,8 @@ pertenece a ningún nivel.
 | **v127** — la sonda del PDF montó un jsPDF de mentira con la lista de métodos escrita a mano. Al primero que faltaba, el `catch` de `generarPDFOrden` se tragó la excepción y la prueba informó «los renglones no salen en el PDF» sobre un PDF que estaba bien. | Para doblar una librería, contesta a **cualquier** método (un `Proxy` que devuelva una función vacía), no a los que recuerdes. Si el código que pruebas tiene un `catch` que traga, tu doble incompleto se convierte en un fallo inventado — es la v108 otra vez: cuando una medición da un número raro, sospecha primero de lo que mide. |
 | **v127** — «itemsIgualesTrasGuardar: false» sobre dos objetos con **los mismos siete campos y los mismos valores**: `JSON.stringify` compara el ORDEN de las claves, y al guardar se reescriben en otro orden. | Dos objetos iguales pueden dar cadenas distintas. Para decir «esto no cambió», compara **clave por clave** (o con las claves ordenadas), no el texto del `stringify` — si no, una prueba que vigila una regresión real grita por nada y se termina ignorando. |
 
+| **v127→v128** — el escogedor de contratista y los filtros de la lista duraron **dos días**: el dueño los usó en obra y dijo que no le hacen falta. Al quitarlos, el primer borrador leía el contratista del `<select>` recién borrado, así que `_ocReadRows` lo devolvía vacío y **el primer guardado de una orden clasificada habría borrado el dato**. | Quitar un control **no puede borrar lo que ya está guardado**: lo que se deja de preguntar se arrastra del array de trabajo a la escritura, sin pasar por el DOM. Y la comprobación no es mirar la pantalla — es **guardar y recargar de la base**. Lo otro que enseña esto: el dueño corta funciones dos días después de recibirlas, y eso es el método trabajando; lo que aguanta esa prueba es lo que se queda. |
+
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
 real** — o el usuario, parado en la obra.
@@ -3242,7 +3326,7 @@ orden de magnitud.
 | `obra_cambios` | Historial de todo lo que se escribe. Quién, cuándo, qué. | **4,833 filas** |
 | `obra_personal` | Contratistas y personal propio. | 37 |
 | `obra_asistencia` | Asistencia diaria. | ~1,400 |
-| `obra_ordenes_compra` | Órdenes a proveedores. `items_json` es `jsonb` y desde la **v127** cada renglón puede llevar `partida_id`, `partida` y `contratista` — **opcionales**, sin columna ni tabla nueva. Medido el 26-sep: **96 órdenes · 373 renglones · 0 clasificados**, y las claves de un renglón son `no`, `descripcion`, `cantidad`, `unidad`, `precio`, `total`, `verificado`. | 96 · 373 renglones |
+| `obra_ordenes_compra` | Órdenes a proveedores. `items_json` es `jsonb` y desde la **v127** cada renglón puede llevar `partida_id` y `partida`, y desde la **v128** `urgente:true` — **todas opcionales**, sin columna ni tabla nueva. La clave `contratista` de la v127 **ya no se escribe** (el dueño la mandó a quitar a los dos días) pero **la que quedó escrita se conserva**: se carga y se vuelve a guardar tal cual. Medido el 26-sep: **96 órdenes · 373 renglones · 0 clasificados**, y las claves de un renglón son `no`, `descripcion`, `cantidad`, `unidad`, `precio`, `total`, `verificado`. | 96 · 373 renglones |
 | `obra_config` | Configuración compartida, clave/valor. | — |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
