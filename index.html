@@ -890,7 +890,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260922_126';
+const APP_VERSION='20260926_127';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -30550,16 +30550,139 @@ const OC_UNIDADES=['Ud','Saco','Funda','Caja','Galón','Lata','m','m²','m³','q
 function ocNum(n){ return Number(n||0).toLocaleString('es-DO',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function ocMoney(n){ return 'RD$ '+ocNum(n); }
 
+/* ══ v127 · LA CLASIFICACIÓN DE UNA COMPRA VIVE EN EL RENGLÓN ═══════════════
+   Palabras del dueño: «dentro de las órdenes de compra quiero poder organizar
+   y clasificar materiales por contratistas o por partidas — Plomería,
+   Electricidad, Ebanistería…». Una compra en la ferretería trae plomería,
+   ebanistería y pintura en la MISMA factura, así que la clasificación no puede
+   ser de la orden: es de cada renglón. Si fuera de la orden, no habría forma de
+   saber cuánto se gastó en cada taller ni qué se le entregó a quién.
+
+   NO SE TOCÓ LA BASE. `items_json` ya es `jsonb`, así que cada renglón gana
+   tres claves —`partida_id`, `partida` y `contratista`— y **las tres son
+   OPCIONALES**: las 96 órdenes y sus 373 renglones de hoy no las tienen, se
+   abren, se guardan y se imprimen igual, y sin partida se leen «Sin
+   clasificar». Ni una tabla nueva, ni una columna nueva, ni una migración.
+
+   Se guarda EL ID Y EL NOMBRE: el id para agrupar y sumar, el nombre para que
+   una orden vieja se siga leyendo aunque mañana el esquema cambie de nombre o
+   la partida deje de existir. */
+var OC_SIN_PARTIDA='Sin clasificar';
+var OC_SIN_CONTRATISTA='Sin asignar';
+
+/* LAS 28 PARTIDAS MADRE, EN EL CÓDIGO Y NO EN LA BASE. Son las mismas del
+   esquema del dueño (`obra_nodos` con `origen='partida'`, v120), pero traerlas
+   de allá obliga a `cargarCatalogo()`, que baja **3,75 MB** — y esta pantalla
+   no necesita ni una fila más del catálogo. Es la regla de la v125: toda carga
+   nueva de una tabla completa hay que medirla y justificarla, y aquí no se
+   justifica.
+   ⚠️ SI EN `obra_nodos` SE AGREGA O SE RENOMBRA UNA PARTIDA MADRE, HAY QUE
+   AÑADIRLA AQUÍ A MANO. Son 28 y cambian una vez al año; lo otro costaba
+   megabytes en cada compra. El orden y los grupos son los del esquema, porque
+   es como el dueño piensa la obra. */
+var PARTIDAS_MADRE=[
+  {grupo:'PRELIMINARES Y BAJO NIVEL', items:[
+    ['es_p1','Reconocimiento del solar'],['es_p2','Movimiento de tierra'],
+    ['es_p3','Hormigón armado BNP'],['es_p4','Cisterna']]},
+  {grupo:'ESTRUCTURA', items:[['es_p5','Hormigón armado']]},
+  {grupo:'ALBAÑILERÍA Y SUPERFICIE', items:[
+    ['es_p6','Muros no estructurales'],['es_p7','Terminación de superficie'],
+    ['es_p8','Terminación exterior']]},
+  {grupo:'INSTALACIONES', items:[
+    ['es_p9','Plomería'],['es_p10','Instalación eléctrica'],
+    ['es_p11','Aires acondicionados'],['es_p12','Equipos de seguridad']]},
+  {grupo:'MEDIA TENSIÓN', items:[['es_p13','Media tensión']]},
+  {grupo:'ENVOLVENTE', items:[['es_p14','Fachada'],['es_p15','Ventanas']]},
+  {grupo:'ACABADOS', items:[
+    ['es_p16','Pisos'],['es_p17','Revestimientos'],['es_p18','Pintura interior'],
+    ['es_p19','Portaje'],['es_p20','Cocina, pantry y muebles de baño'],
+    ['es_p21','Herrería y barandas'],['es_p22','Escalera principal']]},
+  {grupo:'EQUIPAMIENTO Y ENTREGA', items:[
+    ['es_p23','Ascensor'],['es_p24','Línea blanca'],
+    ['es_p25','Medidores y tanques — gas'],['es_p26','Jardinería'],
+    ['es_p27','Mobiliario'],['es_p28','Misceláneos']]},
+];
+function _ocPartidaNombre(id){
+  if(!id) return '';
+  for(var i=0;i<PARTIDAS_MADRE.length;i++){
+    var g=PARTIDAS_MADRE[i].items;
+    for(var j=0;j<g.length;j++) if(g[j][0]===id) return g[j][1];
+  }
+  return '';
+}
+/* Los contratistas salen de `S.personal`, que YA se carga al arrancar —ni una
+   consulta nueva—, y se reusa `getContratistasOpts()` en vez de escribir un
+   segundo criterio de quién es contratista. El personal propio es UNA opción,
+   `PAL_PROPIO`, igual que en las pastillas de la lista (v126) y en Clasificar
+   (v120): 37 nombres sueltos aquí no sirven para nada. */
+function _ocContratistasOpts(){
+  var out=[PAL_PROPIO];
+  try{
+    getContratistasOpts().forEach(function(o){ if(out.indexOf(o.val)<0) out.push(o.val); });
+  }catch(e){}
+  return out;
+}
+/* Los dos escogedores. Si el valor guardado ya no está en la lista —una
+   partida que se renombró, un contratista que se dio de baja— se añade su
+   opción al final para NO perderlo en silencio: la orden diría otra cosa de la
+   que se escribió, que es peor que no decir nada. */
+function _ocSelPartidaHTML(cls, val, nombreGuardado, extra){
+  var suelta=(val && !_ocPartidaNombre(val)) ? val : '';
+  return '<select class="'+cls+'" '+(extra||'')+' style="width:100%;min-height:44px;font-size:12.5px">'+
+    '<option value="">'+OC_SIN_PARTIDA+'</option>'+
+    PARTIDAS_MADRE.map(function(g){
+      return '<optgroup label="'+esc(g.grupo)+'">'+g.items.map(function(p){
+        return '<option value="'+p[0]+'"'+(val===p[0]?' selected':'')+'>'+esc(p[1])+'</option>';
+      }).join('')+'</optgroup>';
+    }).join('')+
+    (suelta?'<option value="'+esc(suelta)+'" selected>'+esc(nombreGuardado||suelta)+' (ya no está en el esquema)</option>':'')+
+    '</select>';
+}
+function _ocSelContratistaHTML(cls, val, extra){
+  var ops=_ocContratistasOpts();
+  if(val && ops.indexOf(val)<0) ops=ops.concat([val]);
+  return '<select class="'+cls+'" '+(extra||'')+' style="width:100%;min-height:44px;font-size:12.5px">'+
+    '<option value="">'+OC_SIN_CONTRATISTA+'</option>'+
+    ops.map(function(n){
+      return '<option value="'+esc(n)+'"'+(val===n?' selected':'')+'>'+esc(n)+'</option>';
+    }).join('')+
+    '</select>';
+}
+// Lo que cuesta un renglón. `total` viene guardado desde la v?? pero una orden
+// vieja puede no traerlo: se recalcula, no se da por cero.
+function _ocFilaMonto(r){
+  return Number(r&&r.total!=null?r.total:((Number(r&&r.cantidad)||0)*(Number(r&&r.precio)||0)))||0;
+}
+function _ocFilas(o){ return Array.isArray(o&&o.items_json)?o.items_json:[]; }
+function _ocFilaPartida(r){ return (r&&r.partida_id)||''; }
+function _ocFilaPartidaNom(r){
+  if(!r) return OC_SIN_PARTIDA;
+  return _ocPartidaNombre(r.partida_id)||r.partida||OC_SIN_PARTIDA;
+}
+function _ocFilaCont(r){ return (r&&r.contratista)||''; }
+
 // Lee los renglones del DOM al array de trabajo S.ocItems
 function _ocReadRows(){
   const rows=document.querySelectorAll('#oc-rows [data-ocrow]');
-  S.ocItems=Array.from(rows).map(row=>({
-    descripcion: row.querySelector('.oc-desc').value,
-    cantidad:    parseFloat(row.querySelector('.oc-cant').value)||0,
-    unidad:      row.querySelector('.oc-unid').value,
-    precio:      parseFloat(row.querySelector('.oc-prec').value)||0,
-    verificado:  row.querySelector('.oc-verif').checked,
-  }));
+  S.ocItems=Array.from(rows).map(row=>{
+    /* v127 · La partida y el contratista se leen AQUÍ, con lo demás. Guardar
+       por otro camino era abrir una segunda vía de escritura sobre la misma
+       orden — el error de la v79 y de la v80. */
+    var sp=row.querySelector('.oc-part'), sc=row.querySelector('.oc-cont');
+    var pid=sp?sp.value:'';
+    return {
+      descripcion: row.querySelector('.oc-desc').value,
+      cantidad:    parseFloat(row.querySelector('.oc-cant').value)||0,
+      unidad:      row.querySelector('.oc-unid').value,
+      precio:      parseFloat(row.querySelector('.oc-prec').value)||0,
+      verificado:  row.querySelector('.oc-verif').checked,
+      partida_id:  pid,
+      // El nombre sale del texto que se está viendo, no de la constante: si la
+      // partida guardada ya no está en el esquema, así se conserva tal cual.
+      partida:     pid?(_ocPartidaNombre(pid)||(sp.selectedOptions[0]?sp.selectedOptions[0].text:'')):'',
+      contratista: sc?sc.value:'',
+    };
+  });
 }
 
 // Calcula subtotal/itbis/total leyendo inputs de totales
@@ -30615,6 +30738,14 @@ function _ocRenderRows(){
         <div><label class="fl" style="font-size:10px">Precio/u (RD$)</label>
           <input class="oc-prec" type="number" min="0" step="any" value="${r.precio??0}" oninput="_ocRecalc()"></div>
       </div>
+      <!-- v127: para qué partida es y para quién. Dos escogedores de 44px, el
+           de partida agrupado por grupo del esquema. -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        <div><label class="fl" style="font-size:10px">Partida</label>
+          ${_ocSelPartidaHTML('oc-part', r.partida_id||'', r.partida||'', 'onchange="_ocReadRows()"')}</div>
+        <div><label class="fl" style="font-size:10px">Para</label>
+          ${_ocSelContratistaHTML('oc-cont', r.contratista||'', 'onchange="_ocReadRows()"')}</div>
+      </div>
       <div style="display:flex;justify-content:space-between;align-items:center">
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer">
           <input class="oc-verif" type="checkbox" ${r.verificado?'checked':''} onchange="_ocRecalc()"> ✓ Recibido
@@ -30627,13 +30758,139 @@ function _ocRenderRows(){
 function _ocAddRow(){
   _ocReadRows();
   S.ocItems=S.ocItems||[];
-  S.ocItems.push({descripcion:'',cantidad:1,unidad:'Ud',precio:0,verificado:false});
+  /* v127 · EL RENGLÓN NUEVO HEREDA LA PARTIDA Y EL CONTRATISTA DEL ANTERIOR.
+     Una compra de plomería son ocho renglones de plomería: escogerlo ocho
+     veces en el teléfono, parado en la ferretería, es como se deja de usar una
+     función. Se hereda, y se cambia el que no toque. */
+  var ult=S.ocItems[S.ocItems.length-1]||{};
+  S.ocItems.push({descripcion:'',cantidad:1,unidad:'Ud',precio:0,verificado:false,
+    partida_id:ult.partida_id||'', partida:ult.partida||'', contratista:ult.contratista||''});
   _ocRenderRows(); _ocRecalc();
+}
+
+/* «Ponerle a todos» — y SOLO a los que están en blanco. Sirve para las dos
+   cosas que pidió el dueño: llenar de golpe una compra nueva que es toda del
+   mismo taller, y clasificar una de las 96 órdenes viejas sin abrir renglón
+   por renglón. Es la misma operación, así que es un solo botón: dos caminos
+   para lo mismo obligan a elegir y no añaden nada (v80).
+   NUNCA PISA LO QUE YA ESTÁ PUESTO. Si el dueño ya clasificó tres renglones a
+   mano, un toque no se los puede llevar por delante. */
+function _ocAplicarATodos(){
+  _ocReadRows();
+  var sp=document.getElementById('oc-todos-part'), sc=document.getElementById('oc-todos-cont');
+  var pid=sp?sp.value:'', cont=sc?sc.value:'';
+  if(!pid && !cont){ showToast('Escoge una partida o un contratista primero','warn'); return; }
+  var nP=0, nC=0;
+  (S.ocItems||[]).forEach(function(r){
+    if(pid && !r.partida_id){ r.partida_id=pid; r.partida=_ocPartidaNombre(pid); nP++; }
+    if(cont && !r.contratista){ r.contratista=cont; nC++; }
+  });
+  _ocRenderRows(); _ocRecalc();
+  var partes=[];
+  if(pid)  partes.push(nP+' sin partida');
+  if(cont) partes.push(nC+' sin contratista');
+  showToast(nP+nC?('Se llenaron '+partes.join(' y ')):'Todos tenían el dato puesto; no se tocó ninguno');
+}
+/* La barra va ARRIBA de los renglones, que es donde se mira al abrir una orden
+   vieja. Dice lo que hace —solo los que están en blanco— porque si no, nadie
+   la toca por miedo a perder lo que ya clasificó. */
+function _ocAplicarBarraHTML(){
+  return '<div style="border:1.5px dashed var(--accent);border-radius:10px;padding:9px 10px;margin-bottom:8px;background:var(--accent-soft)">'+
+    '<div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:6px">'+
+      'Clasificar de una vez <span style="font-weight:600;color:var(--text3)">· solo llena los renglones en blanco</span></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">'+
+      _ocSelPartidaHTML('oc-todos-part','','','id="oc-todos-part"')+
+      _ocSelContratistaHTML('oc-todos-cont','','id="oc-todos-cont"')+
+    '</div>'+
+    '<button onclick="_ocAplicarATodos()" style="width:100%;min-height:44px;border-radius:10px;'+
+      'border:none;background:var(--accent-fill);color:var(--accent-on);font-size:12.5px;'+
+      'font-weight:800;cursor:pointer;font-family:var(--font)">Aplicar a todos</button>'+
+  '</div>';
 }
 function _ocDelRow(i){
   _ocReadRows();
   (S.ocItems||[]).splice(i,1);
   _ocRenderRows(); _ocRecalc();
+}
+
+/* v127 · EL RESUMEN DE LA TARJETA: de qué es esta compra, sin abrirla.
+   «8 renglones · Plomería 5 · Electricidad 2 · Sin clasificar 1». Si todos son
+   de la misma partida, una sola pastilla. Es lo que contesta de un vistazo la
+   pregunta del dueño —cuánto de esto es de cada taller— sobre una lista de 96
+   órdenes. */
+/* El resumen de UNA orden: cuántos renglones y cuánto dinero lleva cada
+   partida —o cada contratista—. Lo usan la tarjeta Y el PDF: si cada uno
+   contara lo suyo, el papel y la pantalla dirían números distintos sobre la
+   misma orden, que es como se deja de creerle a las dos. */
+function _ocResumen(filas, modo){
+  var m={}, orden=[];
+  (filas||[]).forEach(function(r){
+    var k = modo==='contratista' ? (_ocFilaCont(r)||OC_SIN_CONTRATISTA) : _ocFilaPartidaNom(r);
+    if(m[k]===undefined){ m[k]={titulo:k, n:0, monto:0}; orden.push(k); }
+    m[k].n++; m[k].monto+=_ocFilaMonto(r);
+  });
+  return orden.map(function(k){ return m[k]; });
+}
+function _ocResumenHTML(o){
+  var filas=_ocFilas(o); if(!filas.length) return '';
+  return _ocResumen(filas,'partida').map(function(g){
+    var sin=(g.titulo===OC_SIN_PARTIDA);
+    return '<span style="font-size:10.5px;font-weight:700;white-space:nowrap;border-radius:6px;'+
+      'padding:2px 7px;border:1px solid '+(sin?'var(--border2)':'var(--accent)')+';'+
+      'background:'+(sin?'var(--bg3)':'var(--accent-soft)')+';color:'+(sin?'var(--text3)':'var(--accent)')+'">'+
+      esc(g.titulo)+' '+g.n+'</span>';
+  }).join('');
+}
+/* La línea que va debajo de la descripción en el PDF. Vacía si el renglón no
+   tiene nada puesto: en una orden vieja no se imprime ni un carácter de más. */
+function _ocPdfClasif(r){
+  var p=(r&&r.partida_id)?_ocFilaPartidaNom(r):'';
+  var c=_ocFilaCont(r);
+  if(!p && !c) return '';
+  return (p||OC_SIN_PARTIDA)+'  ·  '+(c||OC_SIN_CONTRATISTA);
+}
+/* Los renglones, con lo suyo debajo de la descripción. Van PLEGADOS: son 373
+   en 96 órdenes y la lista es para escoger cuál abrir, no para leerlas todas
+   (la lección de la v86). Con un filtro puesto se abre sola la orden que pasa
+   y sus renglones van resaltados — si no, el dueño ve la orden en la lista y
+   no sabe POR CUÁL de sus renglones entró. */
+function _ocFilaPasaFiltro(r){
+  var fp=S.comprasPartida||'', fc=S.comprasContratista||'';
+  if(fp){ if(fp==='__sin__'){ if(_ocFilaPartida(r)) return false; } else if(_ocFilaPartida(r)!==fp) return false; }
+  if(fc){ if(fc==='__sin__'){ if(_ocFilaCont(r)) return false; } else if(_ocFilaCont(r)!==fc) return false; }
+  return true;
+}
+function _ocHayFiltroFila(){ return !!(S.comprasPartida||S.comprasContratista); }
+function _ocFilasHTML(o){
+  var filas=_ocFilas(o); if(!filas.length) return '';
+  var abierta = (S._ocFilasAbiertas&&S._ocFilasAbiertas[o.id]) || _ocHayFiltroFila();
+  var cuerpo=filas.map(function(r,i){
+    var pasa=_ocFilaPasaFiltro(r);
+    var marca=_ocHayFiltroFila()&&pasa;
+    return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border-radius:8px;'+
+      'margin-bottom:4px;background:'+(marca?'var(--accent-soft)':'var(--bg3)')+';'+
+      (marca?'border-left:3px solid var(--accent);':'border-left:3px solid transparent;')+
+      (_ocHayFiltroFila()&&!pasa?'opacity:.45;':'')+'">'+
+      '<span style="font-family:var(--mono);font-size:10px;color:var(--text3);flex-shrink:0;padding-top:2px">'+(r.no||i+1)+'</span>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:12px;color:var(--text);line-height:1.3">'+esc(r.descripcion||'—')+'</div>'+
+        '<div style="font-size:10.5px;color:var(--text3);margin-top:2px">'+
+          esc(_ocFilaPartidaNom(r))+' · '+esc(_ocFilaCont(r)||OC_SIN_CONTRATISTA)+
+          ' · <span style="font-family:var(--mono)">'+ocMoney(_ocFilaMonto(r))+'</span></div>'+
+      '</div></div>';
+  }).join('');
+  return '<div style="margin-top:8px">'+
+    '<button onclick="event.stopPropagation();ocVerFilas(\''+o.id+'\')" style="min-height:40px;'+
+      'padding:6px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--bg2);'+
+      'color:var(--text2);font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--font)">'+
+      (abierta?'Ocultar los renglones':'Ver los '+filas.length+' renglones')+'</button>'+
+    '<div style="display:'+(abierta?'block':'none')+';margin-top:6px">'+cuerpo+'</div>'+
+  '</div>';
+}
+function ocVerFilas(id){
+  if(!S._ocFilasAbiertas) S._ocFilasAbiertas={};
+  if(S._ocFilasAbiertas[id]) delete S._ocFilasAbiertas[id]; else S._ocFilasAbiertas[id]=1;
+  renderCompras();
 }
 
 function ordenHTML(o){
@@ -30672,6 +30929,9 @@ function ordenHTML(o){
         </div>`:''}
         ${nItems?`<span style="font-size:11px;font-weight:600;color:var(--text3)">${nItems} ${nItems===1?'renglón':'renglones'}${nRecib?` · ${nRecib} recibido${nRecib===1?'':'s'}`:''}</span>`:''}
       </div>
+      <!-- v127: de qué taller es esta compra, sin abrirla -->
+      ${nItems?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${_ocResumenHTML(o)}</div>`:''}
+      ${nItems?_ocFilasHTML(o):''}
       ${(!nItems&&o.items)?`<div style="margin-top:8px;padding:8px 10px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text2);white-space:pre-line;line-height:1.5">${esc(o.items)}</div>`:''}
       ${o.notas?`<div style="margin-top:6px;font-size:12px;color:var(--text3);font-style:italic">${esc(o.notas)}</div>`:''}
     </div>
@@ -30702,10 +30962,22 @@ function renderCompras(){
   }
 
   const all=S.compras||[];
-  const filtered=S.comprasEstadoFiltro?all.filter(o=>o.estado===S.comprasEstadoFiltro):all;
+  const porEstado=S.comprasEstadoFiltro?all.filter(o=>o.estado===S.comprasEstadoFiltro):all;
+  /* v127 · Los dos filtros nuevos son POR RENGLÓN: una orden pasa si tiene al
+     menos un renglón de esa partida o de ese contratista. Filtrar por «tiene
+     algo de plomería» es la pregunta que se hace en la obra; filtrar la orden
+     entera dejaría fuera justo las compras mezcladas, que son las que hay. */
+  const filtered=porEstado.filter(o=>!_ocHayFiltroFila()||_ocFilas(o).some(_ocFilaPasaFiltro));
 
   // Summary stats — usa total nuevo, con fallback a monto_estimado (órdenes viejas)
   const totalAll=all.reduce((s,o)=>s+(Number(o.total)||Number(o.monto_estimado)||0),0);
+  /* El monto de arriba sigue siendo el de TODAS: es el número que el dueño
+     tiene aprendido y no puede cambiar de significado porque haya un filtro
+     puesto. Lo filtrado se dice al lado, y suma RENGLONES, no órdenes —una
+     orden mezclada no es «de plomería», solo una parte suya lo es. */
+  let totalFiltrado=0;
+  if(_ocHayFiltroFila()) filtered.forEach(o=>_ocFilas(o).forEach(r=>{ if(_ocFilaPasaFiltro(r)) totalFiltrado+=_ocFilaMonto(r); }));
+  const nSinClasificar=all.filter(o=>_ocFilas(o).some(r=>!_ocFilaPartida(r))).length;
   const counts={borrador:0,pendiente:0,aprobada:0,recibida:0,cancelada:0};
   all.forEach(o=>{if(counts[o.estado]!==undefined) counts[o.estado]++;});
 
@@ -30731,13 +31003,130 @@ function renderCompras(){
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px 14px;box-shadow:var(--shadow-xs)">
         <div style="font-size:16px;font-weight:800;color:var(--text)">${fmtMonto(totalAll)}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Monto total</div>
+        ${_ocHayFiltroFila()?`<div style="font-size:11.5px;font-weight:800;color:var(--accent);margin-top:4px">filtrado: ${ocMoney(totalFiltrado)}</div>`:''}
       </div>
     </div>
+    ${_ocBarraClasifHTML(nSinClasificar)}
     ${setupMsg}
     ${filtered.length===0
-      ?`<div class="empty">${S.comprasEstadoFiltro?'No hay órdenes con ese estado':'Sin órdenes de compra registradas'}<br><br>${canEdit()?'<button class="ibtn primary" onclick="showAddOrden()" style="margin:0 auto">+ Nueva orden</button>':''}</div>`
-      :filtered.map(o=>ordenHTML(o)).join('')}
+      ?`<div class="empty">${_ocHayFiltroFila()?'Ninguna orden tiene renglones de eso':(S.comprasEstadoFiltro?'No hay órdenes con ese estado':'Sin órdenes de compra registradas')}<br><br>${canEdit()?'<button class="ibtn primary" onclick="showAddOrden()" style="margin:0 auto">+ Nueva orden</button>':''}</div>`
+      :(S.comprasAgrupar?_ocGruposHTML(filtered,S.comprasAgrupar):filtered.map(o=>ordenHTML(o)).join(''))}
     <div style="height:120px"></div>`;
+}
+
+/* La barra de clasificar: agrupar, los dos filtros y el atajo a lo que falta.
+   Va DEBAJO de los números y encima de la lista, que es por donde se entra. */
+function _ocBarraClasifHTML(nSinClasificar){
+  var sel='min-height:44px;font-size:12px;font-family:var(--font);border-radius:9px;'+
+          'border:1.5px solid var(--border2);background:var(--bg2);color:var(--text);padding:0 8px;flex:1;min-width:0';
+  var bt=function(lbl,on,js){
+    return '<button onclick="'+js+'" style="flex:1;min-width:0;min-height:44px;border-radius:9px;'+
+      'font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);border:1.5px solid '+
+      (on?'var(--accent-fill)':'var(--border2)')+';background:'+(on?'var(--accent-fill)':'var(--bg2)')+
+      ';color:'+(on?'#fff':'var(--text2)')+'">'+lbl+'</button>';
+  };
+  var fp=S.comprasPartida||'', fc=S.comprasContratista||'';
+  return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);'+
+    'padding:10px 12px;margin-bottom:12px">'+
+    '<div style="font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;'+
+      'letter-spacing:.06em;margin-bottom:6px">Agrupar</div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:8px">'+
+      bt('Ninguno', !S.comprasAgrupar, "S.comprasAgrupar='';renderCompras()")+
+      bt('Partida', S.comprasAgrupar==='partida', "S.comprasAgrupar='partida';renderCompras()")+
+      bt('Contratista', S.comprasAgrupar==='contratista', "S.comprasAgrupar='contratista';renderCompras()")+
+    '</div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:'+((fp||fc)?'8px':'0')+'">'+
+      '<select onchange="S.comprasPartida=this.value;renderCompras()" style="'+sel+'">'+
+        '<option value="">Toda partida</option>'+
+        '<option value="__sin__"'+(fp==='__sin__'?' selected':'')+'>'+OC_SIN_PARTIDA+(nSinClasificar?' ('+nSinClasificar+')':'')+'</option>'+
+        PARTIDAS_MADRE.map(function(g){
+          return '<optgroup label="'+esc(g.grupo)+'">'+g.items.map(function(p){
+            return '<option value="'+p[0]+'"'+(fp===p[0]?' selected':'')+'>'+esc(p[1])+'</option>';
+          }).join('')+'</optgroup>';
+        }).join('')+
+      '</select>'+
+      '<select onchange="S.comprasContratista=this.value;renderCompras()" style="'+sel+'">'+
+        '<option value="">Todo contratista</option>'+
+        '<option value="__sin__"'+(fc==='__sin__'?' selected':'')+'>'+OC_SIN_CONTRATISTA+'</option>'+
+        _ocContratistasOpts().map(function(n){
+          return '<option value="'+esc(n)+'"'+(fc===n?' selected':'')+'>'+esc(n)+'</option>';
+        }).join('')+
+      '</select>'+
+    '</div>'+
+    /* El atajo a lo que falta por clasificar, y la salida del filtro. Un filtro
+       que no se ve no se puede soltar y la lista mentiría en silencio (v81). */
+    ((fp||fc)
+      ? '<button onclick="S.comprasPartida=\'\';S.comprasContratista=\'\';renderCompras()" '+
+        'style="width:100%;min-height:44px;border-radius:9px;border:1.5px solid var(--accent);'+
+        'background:var(--bg2);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;'+
+        'font-family:var(--font)">Quitar los filtros</button>'
+      : (nSinClasificar
+        ? '<button onclick="S.comprasPartida=\'__sin__\';renderCompras()" style="width:100%;min-height:44px;'+
+          'border-radius:9px;border:1.5px dashed var(--amber);background:var(--bg2);color:var(--amber);'+
+          'font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Sin clasificar ('+nSinClasificar+')</button>'
+        : ''))+
+  '</div>';
+}
+
+/* Los bloques. La cabecera dice NOMBRE, CUÁNTOS RENGLONES y EL MONTO DE ESOS
+   RENGLONES — no el total de la orden: una compra mezclada cae en dos bloques
+   y sumar su total en los dos diría el doble de lo que se gastó.
+   Y una orden aparece en los dos bloques a propósito: es lo que pasa de verdad
+   en la ferretería. */
+function _ocGruposHTML(ordenes, modo){
+  var m={}, claves=[];
+  var sinRenglones=[];
+  ordenes.forEach(function(o){
+    var filas=_ocFilas(o);
+    if(!filas.length){ sinRenglones.push(o); return; }
+    var vistas=0;
+    filas.forEach(function(r){
+      if(_ocHayFiltroFila() && !_ocFilaPasaFiltro(r)) return;
+      vistas++;
+      var k = modo==='partida' ? _ocFilaPartidaNom(r) : (_ocFilaCont(r)||OC_SIN_CONTRATISTA);
+      if(!m[k]){ m[k]={titulo:k, n:0, monto:0, ids:{}, ordenes:[]}; claves.push(k); }
+      m[k].n++; m[k].monto+=_ocFilaMonto(r);
+      if(!m[k].ids[o.id]){ m[k].ids[o.id]=1; m[k].ordenes.push(o); }
+    });
+    if(!vistas) sinRenglones.push(o);
+  });
+  /* Las órdenes viejas que guardan los renglones como TEXTO (`items`) no tienen
+     de dónde sacar partida: van en su propio bloque en vez de desaparecer. Un
+     grupo que no suma el total es como se deja de creerle a una pantalla
+     (v105). */
+  var idx=function(k){
+    if(modo!=='partida') return 0;
+    var n=0;
+    for(var i=0;i<PARTIDAS_MADRE.length;i++) for(var j=0;j<PARTIDAS_MADRE[i].items.length;j++){
+      n++; if(PARTIDAS_MADRE[i].items[j][1]===k) return n;
+    }
+    return 9999;
+  };
+  claves.sort(function(a,b){
+    var sa=(a===OC_SIN_PARTIDA||a===OC_SIN_CONTRATISTA), sb2=(b===OC_SIN_PARTIDA||b===OC_SIN_CONTRATISTA);
+    if(sa!==sb2) return sa?1:-1;                       // lo sin clasificar, al final
+    if(modo==='partida') return idx(a)-idx(b);         // en el orden del esquema
+    return m[b].monto-m[a].monto || a.localeCompare(b,'es');
+  });
+  var out=claves.map(function(k){
+    var g=m[k];
+    return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);'+
+      'padding:9px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+      '<div style="min-width:0"><div style="font-size:13px;font-weight:800;color:var(--text)">'+esc(g.titulo)+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+g.n+(g.n===1?' renglón':' renglones')+
+        ' · '+g.ordenes.length+(g.ordenes.length===1?' orden':' órdenes')+'</div></div>'+
+      '<div style="font-size:13px;font-weight:800;color:var(--accent);font-family:var(--mono);white-space:nowrap">'+
+        ocMoney(g.monto)+'</div></div>'+
+      g.ordenes.map(function(o){ return ordenHTML(o); }).join('');
+  }).join('');
+  if(sinRenglones.length){
+    out+='<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);'+
+      'padding:9px 12px;margin-bottom:6px"><div style="font-size:13px;font-weight:800;color:var(--text)">'+
+      'Sin renglones sueltos</div><div style="font-size:11px;color:var(--text3);margin-top:2px">'+
+      sinRenglones.length+(sinRenglones.length===1?' orden':' órdenes')+' · guardan lo comprado como texto, no por renglón</div></div>'+
+      sinRenglones.map(function(o){ return ordenHTML(o); }).join('');
+  }
+  return out;
 }
 
 function showAddOrden(id){
@@ -30747,7 +31136,9 @@ function showAddOrden(id){
   // Cargar renglones de trabajo desde items_json
   S.ocItems=(o&&Array.isArray(o.items_json))?o.items_json.map(r=>({
     descripcion:r.descripcion||'',cantidad:Number(r.cantidad)||0,unidad:r.unidad||'Ud',
-    precio:Number(r.precio)||0,verificado:!!r.verificado
+    precio:Number(r.precio)||0,verificado:!!r.verificado,
+    // v127 · Vacíos en las órdenes de antes, y eso es válido: se leen «Sin clasificar».
+    partida_id:r.partida_id||'', partida:r.partida||'', contratista:r.contratista||''
   })):[];
   const itbisPctDisp=(o&&o.itbis_pct!=null)?(o.itbis_pct*100):18;
   const mc=document.getElementById('mcontent');
@@ -30788,6 +31179,7 @@ function showAddOrden(id){
       <input type="text" id="oc-entrega" value="${esc(o?.fecha_entrega||'')}" placeholder="Ej: 5 días / 30-ene-2026"></div>
 
     <div style="font-size:11px;font-weight:800;color:var(--accent);margin:12px 0 4px;letter-spacing:.04em">RENGLONES</div>
+    ${_ocAplicarBarraHTML()}
     <div id="oc-rows"></div>
     <button onclick="_ocAddRow()" class="ibtn" style="width:100%;border-style:dashed;color:var(--accent);border-color:var(--accent);margin-bottom:6px">Agregar renglón</button>
 
@@ -30853,7 +31245,13 @@ async function saveOrden(id){
       unidad:r.unidad||'',
       precio:Number(r.precio)||0,
       total:(Number(r.cantidad)||0)*(Number(r.precio)||0),
-      verificado:!!r.verificado
+      verificado:!!r.verificado,
+      /* v127 · La clasificación viaja dentro del renglón, en `items_json`. Van
+         el id y el nombre, y solo si hay algo: un renglón sin clasificar se
+         guarda SIN las claves, igual que las 373 filas de antes — así el
+         formato no cambia para quien ya lo lee. */
+      ...(r.partida_id?{partida_id:r.partida_id, partida:r.partida||_ocPartidaNombre(r.partida_id)}:{}),
+      ...(r.contratista?{contratista:r.contratista}:{})
     }));
   const t=_ocCalc();
   const ingNombre=document.getElementById('oc-ing').value;
@@ -30975,7 +31373,12 @@ function generarPDFOrden(id){
     const items=Array.isArray(o.items_json)?o.items_json:[];
     items.forEach((r,idx)=>{
       const descLines=doc.splitTextToSize(r.descripcion||'',cols[1].w-3);
-      const rh=Math.max(6,descLines.length*4+2);
+      /* v127 · EL PAPEL SALE CLASIFICADO. Va como segunda línea bajo la
+         descripción y no como columna nueva: la tabla ya reparte 182mm entre
+         siete columnas y meterle dos más dejaba la descripción en nada — es lo
+         que costó medir la v117 en el cronograma. */
+      const clas=_ocPdfClasif(r);
+      const rh=Math.max(6,descLines.length*4+2+(clas?3.8:0));
       if(y+rh>275){doc.addPage();y=18;drawHead();doc.setFont('helvetica','normal');doc.setTextColor(40);doc.setFontSize(8);}
       if(idx%2===1){doc.setFillColor(245,247,250);doc.rect(M,y,RW,rh,'F');}
       let cx=M;
@@ -30992,6 +31395,11 @@ function generarPDFOrden(id){
         doc.text(val,tx,y+4.2,{align:c.a});
         cx+=c.w;
       });
+      if(clas){
+        doc.setFontSize(6.6);doc.setTextColor(120);
+        doc.text(clas,M+cols[0].w+2,y+4.2+descLines.length*4);
+        doc.setFontSize(8);doc.setTextColor(40);
+      }
       doc.setDrawColor(225);doc.line(M,y+rh,W-M,y+rh);
       y+=rh;
     });
@@ -31022,6 +31430,36 @@ function generarPDFOrden(id){
     doc.text('TOTAL',tx0,y+5);
     doc.text(ocMoney(Number(o.total)||0),tx1,y+5,{align:'right'});
     y+=14;
+
+    /* ── Resumen de la clasificación (v127) ──
+       Lo que pidió el dueño: que el reporte salga CON clasificación. Debajo
+       del total, cuánto lleva cada partida y cuánto es de cada contratista,
+       con el número de renglones al lado.
+       SOLO SALE SI HAY ALGO CLASIFICADO: las 96 órdenes de antes imprimen
+       exactamente lo que imprimían, sin una sección vacía que no dice nada.
+       Suma los RENGLONES, así que no cuadra con el TOTAL de arriba —ese lleva
+       ITBIS, descuento y envío— y por eso lo dice en su título. */
+    var _hayClas=items.some(function(r){ return r.partida_id||r.contratista; });
+    if(_hayClas){
+      [['POR PARTIDA','partida'],['PARA QUIÉN','contratista']].forEach(function(par){
+        var res=_ocResumen(items, par[1]);
+        if(!res.length) return;
+        if(y>248){doc.addPage();y=20;}
+        doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(C[0],C[1],C[2]);
+        doc.text(par[0],M,y);
+        doc.setFont('helvetica','normal');doc.setFontSize(6.6);doc.setTextColor(150);
+        doc.text('(suma de renglones, sin ITBIS ni envío)',M+30,y);
+        y+=4.5;
+        doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(60);
+        res.forEach(function(g){
+          if(y>272){doc.addPage();y=20;}
+          doc.text(g.titulo+'  ('+g.n+')',M+2,y);
+          doc.text(ocMoney(g.monto),W-M,y,{align:'right'});
+          y+=4.5;
+        });
+        y+=3;
+      });
+    }
 
     // ── Observaciones ──
     if(o.notas){

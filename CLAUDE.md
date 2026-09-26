@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v126 — 22 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v127 — 26 de septiembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -240,6 +240,9 @@ mismos botones que cualquier otra.
 | **Ver lo mismo de otra manera** | **Partidas → los botones del final** — `catVistaSet()`, `_catAmbito()`. Hasta la v117 era un selector de cinco vistas arriba |
 | **Ordenar las partidas a tu gusto, renombrarlas, juntarlas, quitarlas o agregar** | **Partidas → un capítulo → «Por partida»** — `_catPorPartidaHTML()`, `CAT_ORDENES`, `catPartidaCorrer()`, `catPNuevaAbrir()` (v114) |
 | **Sacar del plan lo que sobra** | **Partidas → Árbol → «Lo que está fuera del plan»** — `catFueraAbrir()`. Descartar **no borra** |
+| **Decir de qué partida y para qué contratista es cada material** | **Compras → la orden → cada renglón** (v127) — dos escogedores, `PARTIDAS_MADRE` y `S.personal`. Se guardan dentro de `items_json` |
+| **Saber cuánto se compró de cada taller** | **Compras → Agrupar: Partida / Contratista** (v127) — `_ocGruposHTML()`. La cabecera suma **los renglones**, no el total de la orden |
+| **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
 
 
 **Los botones de registrar son LOS MISMOS en los dos sitios, aunque no
@@ -430,6 +433,99 @@ clickee está tocando lo que el usuario no puede tocar.
 «Contratista» faltaban además las 9 de ingeniero. Ahora hay bloque **«Sin tipo
 de personal»** y los tres modos suman 1.059 y 347 vencidas. Si un modo suma
 menos que la cabecera, alguien volvió a dejar un `tipo_personal` fuera.
+
+### LAS COMPRAS SE CLASIFICAN POR RENGLÓN (v127)
+
+Palabras del dueño: *«dentro de las órdenes de compra quiero poder organizar y
+clasificar materiales por contratistas o por partidas — Plomería,
+Electricidad, Ebanistería…»*. Hasta la v126 una orden era una lista de
+renglones y nada más: después no había forma de saber cuánto se gastó en cada
+taller ni qué se le entregó a quién.
+
+**LA CLASIFICACIÓN ES DEL RENGLÓN, NO DE LA ORDEN**, y eso lo decide la obra:
+una compra en la ferretería trae plomería, ebanistería y pintura en la MISMA
+factura. Clasificar la orden entera habría dejado fuera justo las compras
+mezcladas, que son las que hay.
+
+**NO SE TOCÓ LA BASE.** `items_json` ya es `jsonb`, así que cada renglón gana
+tres claves — **`partida_id`, `partida` y `contratista`** — y **las tres son
+opcionales**. Medido contra la base el 26-sep: **96 órdenes, 373 renglones,
+CERO clasificados**, y las claves de un renglón son exactamente `no`,
+`descripcion`, `cantidad`, `unidad`, `precio`, `total`, `verificado`. Esas 373
+se abren, se guardan y se imprimen igual, y **sin partida se leen «Sin
+clasificar»**. Un renglón sin clasificar se guarda **sin las claves nuevas**,
+así que el formato tampoco cambia para quien ya lo lee.
+
+**Se guarda el id Y el nombre.** El id (`es_p9`) para agrupar y sumar; el
+nombre («Plomería») para que una orden de hace un año se siga leyendo aunque
+el esquema cambie. Si el id guardado ya no está en la constante, el escogedor
+**añade su opción al final** en vez de perderlo en silencio — la orden diría
+otra cosa de la que se escribió, que es peor que no decir nada.
+
+**LAS 28 PARTIDAS MADRE VIVEN EN UNA CONSTANTE DEL CÓDIGO** (`PARTIDAS_MADRE`),
+agrupadas por sus 8 grupos. Salen de `obra_nodos` con `origen='partida'` —el
+esquema del dueño de la v120— pero traerlas de allá obliga a
+`cargarCatalogo()`, que baja **3,75 MB**, y esta pantalla no necesita ni una
+fila más del catálogo. Es la regla de la v125: toda carga nueva de una tabla
+completa hay que medirla y justificarla. **⚠️ Si en `obra_nodos` se agrega o se
+renombra una partida madre, hay que añadirla aquí a mano.**
+
+**Los contratistas salen de `S.personal`**, que ya se carga al arrancar, y por
+`getContratistasOpts()` —el criterio que ya existía, no un segundo—. El
+personal propio es **UNA opción, `PAL_PROPIO`**, igual que las pastillas de la
+lista (v126) y Clasificar (v120). Contra la base: **26 contratistas activos y 7
+propios**. Ni una consulta nueva: medido, entrar a Compras, agrupar, filtrar y
+guardar una orden cuesta **CERO `GET`**, igual que en la v126.
+
+**El renglón nuevo hereda la partida y el contratista del anterior**, porque
+una compra de plomería son ocho renglones de plomería y escogerlo ocho veces
+parado en la ferretería es como se deja de usar una función.
+
+**«Clasificar de una vez» SOLO LLENA LOS RENGLONES EN BLANCO**, y es un solo
+botón para las dos cosas que se piden —llenar una compra nueva y clasificar una
+de las 96 viejas—: son la misma operación, y dos caminos para lo mismo obligan
+a elegir sin añadir nada (v80). **Nunca pisa lo que ya está puesto**: si el
+dueño clasificó tres renglones a mano, un toque no se los puede llevar por
+delante.
+
+**NADA SE CLASIFICA SOLO.** Es la regla de la v102 y de la v120 traída aquí: el
+parecido de texto puede ordenar, pero la casilla la pone el dueño.
+
+**Agrupar suma RENGLONES, no órdenes.** La cabecera de un bloque dice nombre,
+cuántos renglones y **el monto de esos renglones**: una compra mezclada cae en
+dos bloques y sumar su total en los dos diría el doble de lo que se gastó. Que
+una orden salga en dos bloques es correcto — es lo que pasó en la ferretería.
+Y el monto de arriba **sigue siendo el de todas las órdenes**: lo filtrado se
+dice al lado («filtrado: RD$ …»), porque un número que cambia de significado
+según el filtro es como se deja de creerle a una pantalla.
+
+**EL PDF DE LA ORDEN SALE CLASIFICADO, y eso es lo que el dueño pidió.** A
+media versión lo dijo en una línea: *«es el reporte el que quiero tener la
+posibilidad de que me salga con clasificación»*. El papel que se lleva al
+suplidor y se archiva lleva ahora, **debajo de la descripción de cada
+renglón**, «Plomería · Daniel Espinal» en letra chica, y **debajo del total,
+dos resúmenes**: POR PARTIDA y PARA QUIÉN, con cuántos renglones y cuánto
+dinero lleva cada uno.
+
+- **Va como segunda línea, no como columna nueva.** La tabla del PDF ya reparte
+  182mm entre siete columnas; dos más dejaban la descripción en nada — es lo
+  que costó medir la v117 en el cronograma.
+- **Solo sale si hay algo clasificado.** Las 96 órdenes de antes imprimen
+  exactamente lo que imprimían: comprobado renglón por renglón, sin una sola
+  línea de más y sin secciones vacías.
+- **El resumen suma RENGLONES y lo dice en el papel** («suma de renglones, sin
+  ITBIS ni envío»): no cuadra con el TOTAL de arriba, que lleva ITBIS,
+  descuento y envío. Un número que no cuadra con el de al lado y no explica por
+  qué es como se deja de creerle a los dos.
+- **La cuenta la hace `_ocResumen`, la MISMA que pinta las pastillas de la
+  tarjeta.** Si el papel contara por su lado, la pantalla y el PDF dirían
+  números distintos de la misma orden.
+
+**Los filtros son por renglón**: al filtrar por Plomería se ven las órdenes que
+**tienen algún renglón** de plomería, y dentro se abren los renglones con los
+que pasan **resaltados** — si no, el dueño ve la orden y no sabe por cuál de
+sus renglones entró. Los renglones van **plegados** por defecto: son 373 en 96
+órdenes y la lista es para escoger cuál abrir (v86).
 
 ### La planificación por partidas madre (v106) — el esqueleto de Partidas
 
@@ -2768,6 +2864,28 @@ mismo:**
   sin ella al primer intento. Ábrelas una a una desde «Más» y compruébalo
 - **Las diez de «Más» abren y ninguna revienta**, con cero errores de consola
 - **La miga de pan mide 44px.** Es un botón y se toca con el dedo
+- **Cada renglón de compra lleva partida y contratista** (v127), y **las
+  órdenes viejas no se rompen**: abre OC-092 —cuatro renglones sin clasificar—,
+  guárdala y compara `items_json` **clave por clave**: las siete de siempre, sin
+  ninguna nueva. Y su PDF sigue sacando los cuatro renglones
+- **Guardar una orden clasificada son 1 escritura y CERO `GET`**, y al volver a
+  pedirla a la base los renglones conservan lo suyo. Compruébalo **recargando**,
+  no mirando `S.compras`: el app parchea en memoria y la pantalla mentiría igual
+- **Entrar a Compras, agrupar, filtrar y guardar cuesta lo mismo que en la
+  v126**: cero `GET` nuevos. Si aparece uno, alguien fue a buscar las partidas
+  al catálogo — son 3,75 MB y están en `PARTIDAS_MADRE`
+- **Agrupar por partida suma los RENGLONES.** Una orden con renglones de dos
+  partidas sale en los dos bloques, con el monto que le toca a cada uno; si un
+  bloque enseña el total de la orden, se está contando dos veces
+- **«Clasificar de una vez» no pisa nada.** Clasifica un renglón a mano, aplica
+  otra cosa a todos y comprueba que ese renglón **no cambió**
+- **El renglón nuevo hereda** la partida y el contratista del anterior
+- **EL PDF SALE CLASIFICADO** (v127): en una orden clasificada, cada renglón
+  lleva «Partida · Contratista» debajo de la descripción y al final van POR
+  PARTIDA y PARA QUIÉN con sus montos. En una orden vieja, **ninguna de las dos
+  secciones aparece** y el papel es el de siempre. Compruébalo con un jsPDF de
+  mentira que conteste a cualquier método: si le faltan métodos, el `catch` de
+  `generarPDFOrden` se traga el fallo y la prueba miente
 - **El % se cambia DESDE LA FILA, sin abrirla** (v126). Tócalo: sale la tira
   `0 · 25 · 50 · 75 · ✓ Completada` con el valor actual marcado y botones de
   44px. Poner 50% son **1 `PATCH` + 1 `POST obra_cambios` y CERO `GET`**, el
@@ -3056,6 +3174,10 @@ pertenece a ningún nivel.
 | **v126** — la primera versión de las pastillas ofrecía una por cualquier nombre con **al menos una** abierta que no fuera de propio. «Antonio» tiene 59 abiertas de propio y **una** marcada contratista: le salía pastilla propia diciendo **60**, que es exactamente lo que el dueño pidió no ver. | `tipo_personal` no es de fiar (§8) y un caso suelto no define a nadie. Cuando tengas que decidir de quién es algo a partir de un campo sucio, **pregúntale a la mayoría** —`_catCapMayoria` lo hace desde la v102— en vez de a la primera fila que coincida. |
 | **v126** — el arnés dio «el mantener presionado no funciona» y era el arnés: la fila estaba a **22.000px** de alto en la lista, así que el ratón tocaba el vacío. Un `scrollIntoView` antes de apuntar y pasó a la primera. | Para tocar de verdad hay que **traer la fila a la pantalla**, como hace el dedo. Es el v58 otra vez: medir o tocar lo que el usuario no tiene delante da un resultado que no significa nada. |
 
+| **v127** — el escogedor de «Para» salía con una sola opción y la prueba decía que el contratista no se guardaba. No era el app: el fixture de `obra_personal` de la v106 tiene **8 filas y ninguna trae la columna `tipo`**, así que `getContratistasOpts()` —que pide `tipo==='contratista'`— devolvía cero, y poner `.value` a una opción que no existe deja el `<select>` en blanco **sin error**. | Un doble incompleto no falla: **calla**. Cuando una prueba diga que un dato no se guarda, mira primero si el control llegó a tener ese valor — un `<select>` al que le pides una opción inexistente se queda vacío y no lo dice. Y si el fixture no trae una columna que el código pregunta, **arréglalo contra la base** (26 contratistas, 7 propios), no bajes la comprobación. |
+| **v127** — la sonda del PDF montó un jsPDF de mentira con la lista de métodos escrita a mano. Al primero que faltaba, el `catch` de `generarPDFOrden` se tragó la excepción y la prueba informó «los renglones no salen en el PDF» sobre un PDF que estaba bien. | Para doblar una librería, contesta a **cualquier** método (un `Proxy` que devuelva una función vacía), no a los que recuerdes. Si el código que pruebas tiene un `catch` que traga, tu doble incompleto se convierte en un fallo inventado — es la v108 otra vez: cuando una medición da un número raro, sospecha primero de lo que mide. |
+| **v127** — «itemsIgualesTrasGuardar: false» sobre dos objetos con **los mismos siete campos y los mismos valores**: `JSON.stringify` compara el ORDEN de las claves, y al guardar se reescriben en otro orden. | Dos objetos iguales pueden dar cadenas distintas. Para decir «esto no cambió», compara **clave por clave** (o con las claves ordenadas), no el texto del `stringify` — si no, una prueba que vigila una regresión real grita por nada y se termina ignorando. |
+
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
 real** — o el usuario, parado en la obra.
@@ -3120,7 +3242,7 @@ orden de magnitud.
 | `obra_cambios` | Historial de todo lo que se escribe. Quién, cuándo, qué. | **4,833 filas** |
 | `obra_personal` | Contratistas y personal propio. | 37 |
 | `obra_asistencia` | Asistencia diaria. | ~1,400 |
-| `obra_ordenes_compra` | Órdenes a proveedores. | ~72 |
+| `obra_ordenes_compra` | Órdenes a proveedores. `items_json` es `jsonb` y desde la **v127** cada renglón puede llevar `partida_id`, `partida` y `contratista` — **opcionales**, sin columna ni tabla nueva. Medido el 26-sep: **96 órdenes · 373 renglones · 0 clasificados**, y las claves de un renglón son `no`, `descripcion`, `cantidad`, `unidad`, `precio`, `total`, `verificado`. | 96 · 373 renglones |
 | `obra_config` | Configuración compartida, clave/valor. | — |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
