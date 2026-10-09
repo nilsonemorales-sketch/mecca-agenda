@@ -559,6 +559,56 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 .cat-mano{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10.5px;
   font-weight:700;color:var(--amber);background:var(--amber-light);border:1px dashed var(--amber);
   border-radius:8px;padding:2px 7px;line-height:1.45;margin-top:3px}
+
+/* ── TOPES — identificador de piezas (v129) ────────────────── */
+.tp-wrap{padding:10px 12px 28px;max-width:720px;margin:0 auto}
+.tp-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:13px}
+.tp-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tp-lbl{display:block;font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:4px}
+.tp-lbl2{font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);font-weight:700;margin:12px 0 6px}
+.tp-in{width:100%;padding:12px 10px;font-size:19px;font-family:var(--font);border:1.5px solid var(--border2);border-radius:12px;background:var(--bg3);color:var(--text);font-variant-numeric:tabular-nums}
+input.tp-in[type=search]{font-size:14px}
+.tp-in:focus{outline:2px solid var(--accent);outline-offset:1px}
+.tp-row{display:flex;flex-wrap:wrap;gap:6px}
+.tp-chip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:700;font-family:var(--font);cursor:pointer}
+.tp-chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--text)}
+.tp-chip svg{flex:none}
+.tp-sum{font-size:12.5px;color:var(--text3);margin:14px 2px 8px}
+.tp-hit{background:var(--bg2);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:var(--r);padding:12px;margin-bottom:10px}
+.tp-hit.tp-far{opacity:.75;border-left-color:var(--text3)}
+.tp-hit.tp-elim{border-left-color:var(--red)}
+.tp-hit.tp-abril{border-left-color:var(--green)}
+.tp-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-family:var(--tit);font-size:15px;color:var(--text)}
+.tp-apto{font-size:13px;color:var(--accent);font-weight:700;margin-top:2px}
+.tp-dims{font-size:14px;color:var(--text);margin-top:5px;font-variant-numeric:tabular-nums}
+.tp-meta{font-size:12.5px;color:var(--text2);margin-top:4px}
+.tp-sub{font-size:11.5px;color:var(--text3);font-variant-numeric:tabular-nums}
+.tp-md{font-size:12px;margin-top:7px;padding:6px 9px;border-radius:9px;font-weight:600}
+.tp-md-igual{background:var(--green-light);color:var(--green)}
+.tp-md-difiere{background:var(--amber-light);color:var(--amber)}
+.tp-md-fuera{background:var(--red-light);color:var(--red)}
+.tp-nota{font-size:11.5px;color:var(--text3);margin-top:6px;border-top:1px dashed var(--border2);padding-top:6px}
+.tp-fig{margin-top:8px}
+.tp-pill{border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.tp-p-alp{background:var(--accent-light);color:var(--accent)}
+.tp-p-zem{background:var(--green-light);color:var(--green)}
+.tp-p-elim{background:var(--red-light);color:var(--red)}
+.tp-p-abril{background:var(--amber-light);color:var(--amber)}
+.tp-vacio{text-align:center;color:var(--text3);font-size:13px;padding:20px 10px}
+.tp-grp{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);margin-top:8px;padding:9px 11px}
+.tp-grp summary{font-family:var(--tit);font-size:13.5px;font-weight:700;cursor:pointer;color:var(--text);
+  min-height:40px;padding:10px 0;box-sizing:border-box}
+/* LA CABECERA DEL GRUPO ES UN TAP TARGET y nacio con 16px de alto: el
+   <summary> no hereda el min-height que el CSS le pone a <button>, asi que
+   se queda en lo que mide su linea de texto. El minimo del proyecto son
+   40px (§1) y esto se toca con el dedo, parado en la obra y con polvo. Lo
+   cazo la sonda que mide lo VISIBLE, como el boton de 34px de la v107 y la
+   miga de 28px de la v121. */
+.tp-tw{overflow-x:auto}
+.tp-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;font-variant-numeric:tabular-nums;color:var(--text2)}
+.tp-tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:5px 6px 5px 0;border-bottom:1px solid var(--border2)}
+.tp-tbl td{padding:5px 6px 5px 0;border-bottom:1px solid var(--border)}
+.tp-pie{font-size:11px;color:var(--text3);margin-top:16px;border-top:1px solid var(--border);padding-top:10px}
 </style>
 
 </head>
@@ -641,6 +691,10 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
       <span class="sb-btn-lbl">Compras</span>
     </button>
+    <button class="sb-btn" id="sb-topes" onclick="goTab('topes')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="20" height="8" rx="1"/><line x1="7" y1="8" x2="7" y2="12"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="17" y1="8" x2="17" y2="12"/></svg>
+      <span class="sb-btn-lbl">Topes</span>
+    </button>
     <button class="sb-btn" id="sb-plan" onclick="goTab('plan')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="7" y1="2" x2="7" y2="6"/><line x1="17" y1="2" x2="17" y2="6"/><line x1="7" y1="14" x2="10" y2="14"/><line x1="7" y1="18" x2="13" y2="18"/></svg>
       <span class="sb-btn-lbl">Plan</span>
@@ -702,6 +756,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <div class="tab" data-tab="fotos" onclick="goTab('fotos')">Fotos</div>
     <div class="tab" data-tab="planos" onclick="goTab('planos')">Planos</div>
     <div class="tab" data-tab="compras" onclick="goTab('compras')">Compras</div>
+    <div class="tab" data-tab="topes" onclick="goTab('topes')">Topes</div>
     <div class="tab" data-tab="plan" id="tab-plan" onclick="goTab('plan')" style="display:none">Plan</div>
     <div class="tab" data-tab="replan" id="tab-replan" onclick="goTab('replan')" style="display:none">Replnf.</div>
     <div class="tab" data-tab="bitacora" id="tab-bitacora" onclick="goTab('bitacora')" style="display:none">Bitácora</div>
@@ -765,6 +820,9 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
       <div id="c-compras-subnav"></div>
       <div id="c-compras"></div>
     </div>
+
+    <!-- TOPES: identificador de piezas de tope en obra (v129). Solo consulta. -->
+    <div class="view" id="view-topes"><div id="c-topes"></div></div>
 
     <!-- PLAN: Last Planner (General / Lookahead / Semanal / Replan) -->
     <div class="view" id="view-plan"><div id="c-plan" style="height:100%"></div></div>
@@ -855,6 +913,12 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
     <button class="dw-btn" onclick="goTabD('fotos')">Galería de fotos</button>
     <button class="dw-btn" onclick="goTabD('planos')">Planos y documentos</button>
     <button class="dw-btn" onclick="goTabD('compras')">Órdenes de Compra</button>
+    <!-- v129 · LA PUERTA DEL TELÉFONO. La barra de pestañas de arriba está
+         `display:none` por debajo de 600px, y la barra de abajo tiene sus cinco
+         puestos llenos: sin esta línea, Topes solo se podría abrir desde el
+         iPad y el módulo se usa parado en la obra, con el teléfono en la mano.
+         Es la lección de la v116: una pantalla a la que no se llega no existe. -->
+    <button class="dw-btn" id="dw-topes" onclick="goTabD('topes')">Topes — Identificar una pieza</button>
     <button class="dw-btn" id="dw-plan" onclick="goTabD('plan')">Planificación — Last Planner</button>
     <button class="dw-btn" id="dw-gerencia" onclick="goTabD('gerencia')" style="display:none">Gerencia — Panel ejecutivo</button>
     <button class="dw-btn" id="dw-catalogo" onclick="goTabD('catalogo')" style="display:none">Partidas — Catálogo (prueba)</button>
@@ -890,7 +954,7 @@ button,select,.asist-chip,.ibtn,.tab,.dw-btn,.dnav-btn{min-height:44px;display:i
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20260926_128';
+const APP_VERSION='20261009_129';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -16191,7 +16255,7 @@ function goTab(tab){
     tab=legacyMap[tab];
   }
   S.currentTab=tab;
-  var VIEWS=['obra','terreno','equipo','reportes','fotos','planos','compras','plan','replan','bitacora','metodologia','gerencia','catalogo'];
+  var VIEWS=['obra','terreno','equipo','reportes','fotos','planos','compras','topes','plan','replan','bitacora','metodologia','gerencia','catalogo'];
   VIEWS.forEach(function(v){
     var el=document.getElementById('view-'+v);
     if(el) el.classList.toggle('active', v===tab);
@@ -16215,6 +16279,7 @@ function goTab(tab){
   else if(tab==='fotos')    renderFotos();
   else if(tab==='planos')   loadPlanos();
   else if(tab==='compras')  renderCompras();
+  else if(tab==='topes')    renderTopes();
   else if(tab==='plan')     renderPlan();
   else if(tab==='replan')   renderReplan();
   else if(tab==='bitacora') loadBitacora();
@@ -16227,6 +16292,206 @@ function goTab(tab){
     if(!isAdmin()){ showToast('Solo el administrador puede ver Partidas','warn',3000); goTab('obra'); return; }
     renderCatalogo();
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TOPES — IDENTIFICADOR DE PIEZAS EN OBRA   (v129)
+//
+// Módulo de consulta: el ingeniero mide un tope y el app le dice qué pieza
+// es, de qué apartamento y en qué material. NO escribe en Supabase: toda la
+// data viene del despiece Bridex v26 (22-sep-2026) y del shop drawing de
+// Madesol del 1-oct-2026, congelada en el array TP_PIEZAS.
+// ══════════════════════════════════════════════════════════════
+var TP_PIEZAS = [{"id": "B6-01", "L": 1879.6, "W": 609.6, "ala": null, "q": 1, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "", "grupo": "B-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Rotulada 74\" en la libreta", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B6-02", "L": 3048.0, "W": 647.7, "ala": 1117.6, "q": 1, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "", "grupo": "B-6", "tipo": "Tope", "bocel": "Bocel al frente", "nota": "PIEZA EN L de una sola pieza, ancho 647.7. El ala de 1,117.6 va incluida aqui: no se corta suelta", "estado": "por_cortar", "md": {"e": "difiere", "t": "Madesol dibuja la L con fondo total 1,118 mm (frente 648 + ala 470). El despiece Bridex la tiene con ala de 1,117.6. MEDIR EN OBRA."}}, {"id": "B6-03", "L": 914.4, "W": 254.0, "ala": null, "q": 1, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "", "grupo": "B-6", "tipo": "Tope", "bocel": "Bocel al frente", "nota": "Se corta aparte, no forma parte de la L", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B6-04", "L": 1549.0, "W": 228.6, "ala": null, "q": 1, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "", "grupo": "B-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B6-05", "L": 1574.8, "W": 419.1, "ala": null, "q": 1, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "", "grupo": "B-6", "tipo": "Tope", "bocel": "Bocel en todo el perímetro", "nota": "Bocel en todo el perimetro", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B6-06", "L": 812.8, "W": 469.9, "ala": null, "q": 1, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "", "grupo": "B-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B6-07", "L": 3429.0, "W": 660.4, "ala": null, "q": 1, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "", "grupo": "B-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "En la libreta 609.6 tachado y corregido a 660.4", "estado": "por_cortar", "md": {"e": "difiere", "t": "Madesol la corta en dos: 3,340 mm + junta de 89 mm, mismo ancho 660. La junta queda a la vista."}}, {"id": "B6-08", "L": 635.0, "W": 609.6, "ala": null, "q": 3, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "", "grupo": "B-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B6-09", "L": 1117.6, "W": 609.6, "ala": null, "q": 1, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "", "grupo": "B-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Pieza suelta, aparte del ala de la L (que va a 647.7)", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A5-01", "L": 2781.3, "W": 647.7, "ala": null, "q": 1, "mat": "alpine", "apto": "A5", "amb": "Cocina", "det": "", "grupo": "A-5", "tipo": "Tope", "bocel": "Bocel: frente + canto derecho", "nota": "Bocel en el frente y en el canto derecho", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A5-02", "L": 2781.3, "W": 660.4, "ala": null, "q": 1, "mat": "alpine", "apto": "A5", "amb": "Cocina", "det": "", "grupo": "A-5", "tipo": "Eliminada", "bocel": "—", "nota": "Marcada \"No va\" a mano en la revision del 22-sep-2026.", "estado": "eliminada", "md": {"e": "fuera", "t": "Ya no aparece en el plano Madesol del 1-oct: la corrección fue aplicada."}}, {"id": "A5-03", "L": 812.8, "W": 469.9, "ala": null, "q": 1, "mat": "alpine", "apto": "A5", "amb": "Cocina", "det": "", "grupo": "A-5", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A5-04", "L": 635.0, "W": 609.6, "ala": null, "q": 2, "mat": "alpine", "apto": "A5", "amb": "Cocina", "det": "", "grupo": "A-5", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A2345-01", "L": 1879.6, "W": 660.4, "ala": null, "q": 4, "mat": "alpine", "apto": "A2 · A3 · A4 · A5", "amb": "Cocina", "det": "", "grupo": "A-2-3-4-5", "tipo": "Tope", "bocel": "Bocel en todo el perímetro", "nota": "Bocel en todo el perimetro. Una por apartamento (A2, A3, A4 y A5)", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "LAVB-01", "L": 1955.8, "W": 558.8, "ala": null, "q": 5, "mat": "alpine", "apto": "B2 al B6", "amb": "Baño", "det": "Baño principal", "grupo": "LAV-B", "tipo": "Tope sin bocel", "bocel": "Sin bocel", "nota": "Bano Principal", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "LAVB-02", "L": 1181.1, "W": 558.8, "ala": null, "q": 5, "mat": "alpine", "apto": "B2 al B6", "amb": "Baño", "det": "Baño común", "grupo": "LAV-B", "tipo": "Tope sin bocel", "bocel": "Sin bocel", "nota": "Bano Comun", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "LAVB-03", "L": 1168.4, "W": 431.8, "ala": null, "q": 5, "mat": "alpine", "apto": "B2 al B6", "amb": "Baño", "det": "Baño de visita", "grupo": "LAV-B", "tipo": "Tope sin bocel", "bocel": "Sin bocel", "nota": "Bano Visita", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "LAVA-01", "L": 1371.6, "W": 558.8, "ala": null, "q": 5, "mat": "alpine", "apto": "A2 al A6", "amb": "Baño", "det": "Baño principal", "grupo": "LAV-A", "tipo": "Tope sin bocel", "bocel": "Sin bocel", "nota": "Bano Principal", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "LAVA-02", "L": 1778.0, "W": 558.8, "ala": null, "q": 5, "mat": "alpine", "apto": "A2 al A6", "amb": "Baño", "det": "Baño común", "grupo": "LAV-A", "tipo": "Tope sin bocel", "bocel": "Sin bocel", "nota": "Bano Comun", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "LAVA-03", "L": 1143.0, "W": 406.4, "ala": null, "q": 5, "mat": "alpine", "apto": "A2 al A6", "amb": "Baño", "det": "Baño de visita", "grupo": "LAV-A", "tipo": "Tope sin bocel", "bocel": "Sin bocel", "nota": "Bano Visita", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B345-01", "L": 1981.2, "W": 647.7, "ala": null, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "", "grupo": "B-3-4-5", "tipo": "Tope", "bocel": "Bocel al frente", "nota": "Bocel al frente, en un solo lado largo", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B345-02", "L": 1981.2, "W": 609.6, "ala": null, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "", "grupo": "B-3-4-5", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B345-03", "L": 3048.0, "W": 647.7, "ala": 1117.6, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "", "grupo": "B-3-4-5", "tipo": "Tope", "bocel": "Bocel al frente", "nota": "PIEZA EN L de una sola pieza, ancho 647.7. El ala de 1,117.6 va incluida aqui: no se corta suelta", "estado": "por_cortar", "md": {"e": "difiere", "t": "Madesol dibuja la L con fondo total 1,117 mm (frente 648 + ala 469). El despiece Bridex la tiene con ala de 1,117.6. MEDIR EN OBRA."}}, {"id": "B345-04", "L": 914.4, "W": 254.0, "ala": null, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "", "grupo": "B-3-4-5", "tipo": "Tope", "bocel": "Bocel al frente", "nota": "Se corta aparte, no forma parte de la L", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B345-05", "L": 1549.0, "W": 228.6, "ala": null, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "", "grupo": "B-3-4-5", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B345-06", "L": 1574.8, "W": 419.1, "ala": null, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "", "grupo": "B-3-4-5", "tipo": "Tope", "bocel": "Bocel en todo el perímetro", "nota": "Bocel en todo el perimetro", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B345-07", "L": 812.8, "W": 469.9, "ala": null, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "", "grupo": "B-3-4-5", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B345-08", "L": 3429.0, "W": 660.4, "ala": null, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "", "grupo": "B-3-4-5", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "En la libreta 609.6 tachado y corregido a 660.4", "estado": "por_cortar", "md": {"e": "difiere", "t": "Madesol la corta en dos: 3,250 mm + junta de 179 mm, mismo ancho 660. La junta queda a la vista."}}, {"id": "B345-09", "L": 635.0, "W": 609.6, "ala": null, "q": 9, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "", "grupo": "B-3-4-5", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "B345-10", "L": 1117.6, "W": 609.6, "ala": null, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "", "grupo": "B-3-4-5", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Pieza suelta, aparte del ala de la L (que va a 647.7)", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A6-01", "L": 2768.3, "W": 660.4, "ala": null, "q": 1, "mat": "zement", "apto": "A6", "amb": "Cocina", "det": "", "grupo": "A-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Medida tal cual la libreta - no es pulgada exacta", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A6-02", "L": 1676.4, "W": 609.6, "ala": null, "q": 1, "mat": "zement", "apto": "A6", "amb": "Cocina", "det": "", "grupo": "A-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A6-03", "L": 2768.6, "W": 647.7, "ala": null, "q": 1, "mat": "zement", "apto": "A6", "amb": "Cocina", "det": "", "grupo": "A-6", "tipo": "Tope", "bocel": "Bocel: frente + canto derecho", "nota": "Bocel en el frente y en el canto derecho", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A6-04", "L": 1676.4, "W": 647.7, "ala": null, "q": 1, "mat": "zement", "apto": "A6", "amb": "Cocina", "det": "", "grupo": "A-6", "tipo": "Tope", "bocel": "Bocel al frente", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A6-05", "L": 812.8, "W": 469.9, "ala": null, "q": 1, "mat": "zement", "apto": "A6", "amb": "Cocina", "det": "", "grupo": "A-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A6-06", "L": 635.0, "W": 609.6, "ala": null, "q": 3, "mat": "zement", "apto": "A6", "amb": "Cocina", "det": "", "grupo": "A-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "A6-07", "L": 1879.6, "W": 660.4, "ala": null, "q": 1, "mat": "zement", "apto": "A6", "amb": "Cocina", "det": "", "grupo": "A-6", "tipo": "Tope", "bocel": "Bocel en todo el perímetro", "nota": "Bocel en todo el perimetro. Misma pieza del A2-A5, pero en material nuevo", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "C7-01", "L": 1625.0, "W": 647.7, "ala": null, "q": 1, "mat": "zement", "apto": "C7 penthouse", "amb": "Cocina", "det": "", "grupo": "C-7", "tipo": "Tope", "bocel": "Bocel al frente", "nota": "Bocel al frente", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "C7-02", "L": 2420.0, "W": 741.0, "ala": null, "q": 1, "mat": "zement", "apto": "C7 penthouse", "amb": "Cocina", "det": "", "grupo": "C-7", "tipo": "Tope", "bocel": "Bocel en los dos lados largos", "nota": "Bocel en los dos lados largos", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "C7-03", "L": 960.0, "W": 700.0, "ala": null, "q": 1, "mat": "zement", "apto": "C7 penthouse", "amb": "Cocina", "det": "", "grupo": "C-7", "tipo": "Eliminada", "bocel": "—", "nota": "Tachada con una X a mano en la revision del 22-sep-2026.", "estado": "eliminada", "md": {"e": "fuera", "t": "Ya no aparece en el plano Madesol del 1-oct: la corrección fue aplicada."}}, {"id": "C7-04", "L": 970.0, "W": 1550.0, "ala": null, "q": 1, "mat": "zement", "apto": "C7 penthouse", "amb": "Cocina", "det": "", "grupo": "C-7", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Espaldar del C7", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "C7-05", "L": 1625.0, "W": 624.6, "ala": null, "q": 1, "mat": "zement", "apto": "C7 penthouse", "amb": "Cocina", "det": "", "grupo": "C-7", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Espaldar", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "C7-06", "L": 647.7, "W": 624.6, "ala": null, "q": 2, "mat": "zement", "apto": "C7 penthouse", "amb": "Cocina", "det": "", "grupo": "C-7", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Los dos costados", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "N7-01", "L": 1920.0, "W": 420.0, "ala": null, "q": 1, "mat": "zement", "apto": "C7 y área común", "amb": "Baño", "det": "Baño principal C7", "grupo": "N-7", "tipo": "Tope sin bocel", "bocel": "Sin bocel", "nota": "Bano principal C7. Largo 1,860+60; ancho 395+25. Revisar con Milo", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "N7-02", "L": 940.0, "W": 425.0, "ala": null, "q": 1, "mat": "zement", "apto": "C7 y área común", "amb": "Baño", "det": "Baño de visita C7", "grupo": "N-7", "tipo": "Tope sin bocel", "bocel": "Sin bocel", "nota": "Bano de visita del C7", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "N7-03", "L": 1750.0, "W": 483.0, "ala": null, "q": 1, "mat": "zement", "apto": "C7 y área común", "amb": "Baño", "det": "Baño área común N7", "grupo": "N-7", "tipo": "Tope sin bocel", "bocel": "Sin bocel", "nota": "Bano del area comun del N7", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "LOB-01", "L": 1200.0, "W": 400.0, "ala": null, "q": 1, "mat": "zement", "apto": "Lobby", "amb": "Lobby", "det": "", "grupo": "LOBBY", "tipo": "Tope", "bocel": "Bocel en U: 2 largos + 1 corto", "nota": "Bocel en U: los dos lados largos y un lado corto", "estado": "por_cortar", "md": {"e": "igual", "t": "Confirmada en el plano Madesol del 1-oct-2026"}}, {"id": "ABR-S5-1", "L": 2743.0, "W": 610.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Revestimiento cocinas lado A", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S5. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S5-2", "L": 813.0, "W": 610.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Revestimiento cocinas lado A", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S5. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S5-3", "L": 1753.0, "W": 610.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Revestimiento cocinas lado A", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S5. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S6-4", "L": 635.0, "W": 610.0, "ala": null, "q": 3, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Revestimiento cocinas lado A", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S6. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S7-5", "L": 2769.0, "W": 648.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Topes cocinas lado A", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S7. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S7-6", "L": 1753.0, "W": 648.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Topes cocinas lado A", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S7. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S8-7", "L": 2857.0, "W": 610.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Revestimiento cocinas lado B", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S8. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S8-8", "L": 610.0, "W": 648.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Revestimiento cocinas lado B", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S8. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S8-9", "L": 1194.0, "W": 610.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Revestimiento cocinas lado B", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S8. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S9-10", "L": 2083.0, "W": 610.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Revestimiento cocinas lado B", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S9. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S9-11", "L": 635.0, "W": 610.0, "ala": null, "q": 3, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Revestimiento cocinas lado B", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S9. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S10-12", "L": 2857.0, "W": 648.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Topes cocinas lado B — pieza en L", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S10. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S10-13", "L": 711.0, "W": 927.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Topes cocinas lado B", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S10. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S10-14", "L": 1194.0, "W": 648.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Topes cocinas lado B", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S10. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "ABR-S11-15", "L": 2083.0, "W": 648.0, "ala": null, "q": 1, "mat": "alpine", "apto": "Ya instalada", "amb": "Cocina", "det": "Topes cocinas lado B", "grupo": "Corte de abril", "tipo": "Cortada", "bocel": "Ver en sitio", "nota": "Pieza cortada en abril de 2026, hoja Madesol S11. Medida leída de la hoja de corte.", "estado": "abril", "md": null}, {"id": "B6-07-A", "L": 3340.0, "W": 660.4, "ala": null, "q": 1, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "Tramo largo del espaldar B6-07", "grupo": "B-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Madesol parte la pieza de 3,429 mm porque la plancha mide 3,340.", "estado": "por_cortar", "md": {"e": "igual", "t": "Así aparece en el plano Madesol del 1-oct-2026"}}, {"id": "B6-07-B", "L": 89.0, "W": 660.4, "ala": null, "q": 1, "mat": "alpine", "apto": "B6", "amb": "Cocina", "det": "Junta del espaldar B6-07", "grupo": "B-6", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Pedazo que completa los 3,429 mm. La junta queda a la vista.", "estado": "por_cortar", "md": {"e": "igual", "t": "Así aparece en el plano Madesol del 1-oct-2026"}}, {"id": "B345-08-A", "L": 3250.0, "W": 660.4, "ala": null, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "Tramo largo del espaldar B345-08", "grupo": "B-3-4-5", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Madesol parte la pieza de 3,429 mm porque la plancha de Zement mide 3,250.", "estado": "por_cortar", "md": {"e": "igual", "t": "Así aparece en el plano Madesol del 1-oct-2026"}}, {"id": "B345-08-B", "L": 179.0, "W": 660.4, "ala": null, "q": 3, "mat": "zement", "apto": "B3 · B4 · B5", "amb": "Cocina", "det": "Junta del espaldar B345-08", "grupo": "B-3-4-5", "tipo": "Espaldar", "bocel": "Sin bocel", "nota": "Pedazo que completa los 3,429 mm. La junta queda a la vista.", "estado": "por_cortar", "md": {"e": "igual", "t": "Así aparece en el plano Madesol del 1-oct-2026"}}, {"id": "FAJA-ALP", "L": 0.0, "W": 36.0, "ala": null, "q": 0, "mat": "alpine", "apto": "Varias piezas", "amb": "Canto", "det": "Faja de canto 36 mm", "grupo": "Fajas de canto", "tipo": "Faja", "bocel": "Se pega bajo el borde con bocel", "nota": "Tira de 36 mm que Madesol corta para engrosar el canto de las piezas con bocel. El largo es el de la pieza a la que pertenece.", "estado": "por_cortar", "md": {"e": "igual", "t": "Aparece como 36 MM Typ en el plano Madesol del 1-oct-2026"}}, {"id": "FAJA-ZEM", "L": 0.0, "W": 36.0, "ala": null, "q": 0, "mat": "zement", "apto": "Varias piezas", "amb": "Canto", "det": "Faja de canto 36 mm", "grupo": "Fajas de canto", "tipo": "Faja", "bocel": "Se pega bajo el borde con bocel", "nota": "Tira de 36 mm que Madesol corta para engrosar el canto de las piezas con bocel. El largo es el de la pieza a la que pertenece.", "estado": "por_cortar", "md": {"e": "igual", "t": "Aparece como 36 MM Typ en el plano Madesol del 1-oct-2026"}}];
+var TP = {unit:'mm', tol:15, mat:'todos', forma:'todas', est:'por_cortar', q:''};
+var TP_MM = 25.4;
+var TP_FORMA_NOM = {larga:'Alargada', media:'Mediana', cuadrada:'Casi cuadrada', tira:'Tira angosta', L:'Pieza en L'};
+
+function tpNum(n){ return (Math.round(n*10)/10).toLocaleString('es-DO'); }
+function tpPulg(n){ var i=n/TP_MM; return (Math.abs(i-Math.round(i))<0.02 ? Math.round(i) : Math.round(i*100)/100)+'"'; }
+function tpForma(p){
+  if(p.ala || (p.det||'').toLowerCase().indexOf('pieza en l')>=0) return 'L';
+  var a=Math.max(p.L,p.W), b=Math.min(p.L,p.W);
+  if(b<=300) return 'tira';
+  var r=a/b;
+  if(r>=2.2) return 'larga';
+  if(r>=1.4) return 'media';
+  return 'cuadrada';
+}
+function tpVal(id){ var el=document.getElementById(id); if(!el) return null;
+  var v=parseFloat(el.value); if(isNaN(v)||v<=0) return null; return TP.unit==='mm'? v : v*TP_MM; }
+function tpDif(p,a,b,c){
+  var d;
+  if(a&&b){
+    d=Math.min(Math.max(Math.abs(a-p.L),Math.abs(b-p.W)), Math.max(Math.abs(a-p.W),Math.abs(b-p.L)));
+  } else if(a||b){
+    var v=a||b;
+    d=Math.min(Math.abs(v-p.L), Math.abs(v-p.W), p.ala? Math.abs(v-p.ala):Infinity);
+  } else d=0;
+  if(c){
+    if(!p.ala) return Infinity;
+    d=Math.max(d, Math.min(Math.abs(c-p.ala), Math.abs(c-(p.ala+p.W))));
+  }
+  return d;
+}
+function tpCandidatas(){
+  return TP_PIEZAS.filter(function(p){
+    if(TP.mat!=='todos' && p.mat!==TP.mat) return false;
+    if(TP.est==='por_cortar' && p.estado!=='por_cortar') return false;
+    if(TP.est==='difs' && !(p.md && p.md.e!=='igual')) return false;
+    if(TP.forma!=='todas' && tpForma(p)!==TP.forma) return false;
+    return true;
+  });
+}
+function tpSvg(p){
+  var W=200,H=92,pad=14, rel=Math.max(p.L,p.W);
+  var w=(p.L/rel)*(W-2*pad), h=Math.max(10,(p.W/rel)*(H-2*pad));
+  var x=pad, y=(H-h)/2, bo=p.bocel||'';
+  if(tpForma(p)==='L'){
+    var ala=p.ala||1118, hh=Math.max(14,h), alto=Math.min(H-2*pad-4, hh*2.1), yy=pad+2;
+    return '<svg class="tp-fig" viewBox="0 0 '+W+' '+H+'" width="100%" height="92" role="img" aria-label="Croquis de la pieza en L">'+
+      '<path d="M'+pad+' '+yy+' h'+hh+' v'+(alto-hh)+' h'+(w-hh)+' v'+hh+' h-'+w+' z" fill="var(--bg4)" stroke="var(--border2)" stroke-width="1.4"/>'+
+      '<line x1="'+pad+'" y1="'+(yy+alto+3)+'" x2="'+(pad+w)+'" y2="'+(yy+alto+3)+'" stroke="var(--amber)" stroke-width="3"/>'+
+      '<text x="'+(pad+w/2)+'" y="'+(yy-4)+'" text-anchor="middle" font-size="9" fill="var(--text3)">'+tpNum(p.L)+' mm de frente</text>'+
+      '<text x="'+(pad+2)+'" y="'+(yy+alto+13)+'" font-size="9" fill="var(--text3)">ala '+tpNum(ala)+' · fondo '+tpNum(p.W)+'</text></svg>';
+  }
+  var ed='';
+  function E(x1,y1,x2,y2){ return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="var(--amber)" stroke-width="3" stroke-linecap="round"/>'; }
+  if(bo.indexOf('perímetro')>=0) ed='<rect x="'+(x-2)+'" y="'+(y-2)+'" width="'+(w+4)+'" height="'+(h+4)+'" fill="none" stroke="var(--amber)" stroke-width="3" rx="2"/>';
+  else if(bo.indexOf('dos lados largos')>=0) ed=E(x,y+h+3,x+w,y+h+3)+E(x,y-3,x+w,y-3);
+  else if(bo.indexOf('canto derecho')>=0)    ed=E(x,y+h+3,x+w,y+h+3)+E(x+w+3,y,x+w+3,y+h);
+  else if(bo.indexOf('en U')>=0)             ed=E(x,y+h+3,x+w,y+h+3)+E(x+w+3,y,x+w+3,y+h)+E(x,y-3,x+w,y-3);
+  else if(bo.indexOf('al frente')>=0)        ed=E(x,y+h+3,x+w,y+h+3);
+  return '<svg class="tp-fig" viewBox="0 0 '+W+' '+H+'" width="100%" height="92" role="img" aria-label="Croquis de la pieza">'+
+    '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="var(--bg4)" stroke="var(--border2)" stroke-width="1.4" rx="2"/>'+ed+
+    '<text x="'+(x+w/2)+'" y="'+(y-6)+'" text-anchor="middle" font-size="9" fill="var(--text3)">'+tpNum(p.L)+' mm</text>'+
+    '<text x="'+(x+w+8)+'" y="'+(y+h/2+3)+'" font-size="9" fill="var(--text3)">'+tpNum(p.W)+'</text></svg>';
+}
+function tpFicha(p,d,fuera,sinDif){
+  var cls = p.estado==='eliminada'?'tp-elim' : (p.estado==='abril'?'tp-abril':'');
+  var pill = p.estado==='eliminada' ? '<span class="tp-pill tp-p-elim">ELIMINADA — no va</span>'
+    : (p.estado==='abril' ? '<span class="tp-pill tp-p-abril">Ya cortada en abril</span>'
+    : (p.mat==='alpine' ? '<span class="tp-pill tp-p-alp">Alpine Mist</span>' : '<span class="tp-pill tp-p-zem">Zement White Glace</span>'));
+  var dims = p.L ? tpNum(p.L)+' × '+tpNum(p.W)+' mm <span class="tp-sub">('+tpPulg(p.L)+' × '+tpPulg(p.W)+')</span>'
+                 : tpNum(p.W)+' mm de ancho · el largo es el de la pieza que lleva el canto';
+  if(p.ala) dims += '<br><span class="tp-sub">Pieza en L — frente '+tpNum(p.L)+' · fondo '+tpNum(p.W)+' · ala '+tpNum(p.ala)+' · fondo total '+tpNum(p.W+p.ala)+' mm</span>';
+  return '<article class="tp-hit '+cls+(fuera?' tp-far':'')+'">'+
+    '<div class="tp-h"><strong>'+p.id+'</strong>'+pill+'</div>'+
+    '<div class="tp-apto">'+p.apto+(p.det?' · '+p.det:'')+'</div>'+
+    '<div class="tp-dims">'+dims+'</div>'+
+    '<div class="tp-meta">'+TP_FORMA_NOM[tpForma(p)]+' · '+p.amb+' · '+p.tipo+' · '+p.bocel+' · cantidad '+p.q+'</div>'+
+    (sinDif?'':'<div class="tp-sub">'+(fuera?'Fuera de tolerancia: ':'Diferencia: ')+'± '+tpNum(d)+' mm</div>')+
+    (p.md?'<div class="tp-md tp-md-'+p.md.e+'">'+(p.md.e==='igual'?'✓ ':'⚠ ')+p.md.t+'</div>':'')+
+    (p.L?tpSvg(p):'')+
+    (p.nota?'<div class="tp-nota">'+p.nota+'</div>':'')+'</article>';
+}
+function tpChip(grupo,val,actual,txt,extra){
+  return '<button class="tp-chip'+(val===actual?' on':'')+'" onclick="tpSet(\''+grupo+'\',\''+val+'\')">'+(extra||'')+txt+'</button>';
+}
+function tpSet(grupo,val){
+  if(grupo==='tol') TP.tol=parseFloat(val); else TP[grupo]=val;
+  if(grupo==='forma' && val!=='L'){ var m3=document.getElementById('tp-m3'); if(m3) m3.value=''; }
+  renderTopes(true);
+}
+function tpIcono(f){
+  var s='<svg width="24" height="15" viewBox="0 0 26 16" fill="none" stroke="currentColor" stroke-width="1.6">';
+  if(f==='larga')    return s+'<rect x="1" y="5" width="24" height="6" rx="1"/></svg>';
+  if(f==='media')    return s+'<rect x="4" y="2.5" width="18" height="11" rx="1"/></svg>';
+  if(f==='cuadrada') return s+'<rect x="7.5" y="1.5" width="11" height="13" rx="1"/></svg>';
+  if(f==='tira')     return s+'<rect x="1" y="6.5" width="24" height="3" rx="1"/></svg>';
+  if(f==='L')        return s+'<path d="M1.5 1.5h7v8h16v5h-23z" stroke-linejoin="round"/></svg>';
+  return '';
+}
+function renderTopes(soloResultados){
+  var cont=document.getElementById('c-topes'); if(!cont) return;
+  if(!soloResultados || !document.getElementById('tp-res')){
+    cont.innerHTML =
+      '<div class="tp-wrap">'+
+      '<div class="tp-card">'+
+        '<div class="tp-grid2">'+
+          '<div><label class="tp-lbl" for="tp-m1">Medida larga</label><input id="tp-m1" class="tp-in" type="number" inputmode="decimal" placeholder="1778" oninput="tpRun()"></div>'+
+          '<div><label class="tp-lbl" for="tp-m2">Medida corta</label><input id="tp-m2" class="tp-in" type="number" inputmode="decimal" placeholder="559" oninput="tpRun()"></div>'+
+        '</div>'+
+        '<div id="tp-lblock" style="display:none;margin-top:10px">'+
+          '<label class="tp-lbl" for="tp-m3">Largo del ala (o fondo total)</label>'+
+          '<input id="tp-m3" class="tp-in" type="number" inputmode="decimal" placeholder="1118" oninput="tpRun()">'+
+          '<div class="tp-sub" style="margin-top:5px">En las piezas en L hacen falta tres medidas: frente, fondo y ala. Con dos no se distinguen de un tope corrido.</div>'+
+        '</div>'+
+        '<div class="tp-lbl2">Unidad</div><div class="tp-row" id="tp-unit"></div>'+
+        '<div class="tp-lbl2">Tolerancia</div><div class="tp-row" id="tp-tol"></div>'+
+        '<div class="tp-lbl2">Material</div><div class="tp-row" id="tp-mat"></div>'+
+        '<div class="tp-lbl2">Forma de la pieza</div><div class="tp-row" id="tp-forma"></div>'+
+        '<div class="tp-lbl2">Qué incluir</div><div class="tp-row" id="tp-est"></div>'+
+      '</div>'+
+      '<p class="tp-sum" id="tp-sum"></p>'+
+      '<div id="tp-res"></div>'+
+      '<div class="tp-card" style="margin-top:14px">'+
+        '<label class="tp-lbl" for="tp-q">Buscar en el catálogo</label>'+
+        /* El ejemplo DECIA «lavamanos» y esa palabra no esta en ningun sitio de lo
+         que se busca —el grupo se llama LAV-A, el ambiente «Bano»—, asi que
+         escribirla contestaba «Nada con ese texto». Un ejemplo que no funciona
+         es como se deja de usar un buscador; los tres de ahora dan 11, 25 y 1. */
+      '<input id="tp-q" class="tp-in" type="search" placeholder="B6, baño, 1778..." oninput="tpCat()">'+
+        '<div id="tp-cat"></div>'+
+      '</div>'+
+      '<p class="tp-pie">Despiece Bridex v26 del 22-sep-2026 cruzado con el shop drawing Madesol del 1-oct-2026. '+
+      'Madesol redondea al milímetro siguiente: 812,8 aparece como 813. Verifica con cinta antes de cortar.</p>'+
+      '</div>';
+  }
+  document.getElementById('tp-unit').innerHTML = tpChip('unit','mm',TP.unit,'Milímetros')+tpChip('unit','in',TP.unit,'Pulgadas');
+  document.getElementById('tp-tol').innerHTML  = [5,15,40,100].map(function(t){ return tpChip('tol',String(t),String(TP.tol),'± '+t+' mm'); }).join('');
+  document.getElementById('tp-mat').innerHTML  = tpChip('mat','todos',TP.mat,'Todos')+tpChip('mat','alpine',TP.mat,'Alpine Mist')+tpChip('mat','zement',TP.mat,'Zement');
+  document.getElementById('tp-forma').innerHTML= tpChip('forma','todas',TP.forma,'Todas')+
+    ['larga','media','cuadrada','tira','L'].map(function(f){ return tpChip('forma',f,TP.forma,TP_FORMA_NOM[f],tpIcono(f)); }).join('');
+  document.getElementById('tp-est').innerHTML  = tpChip('est','por_cortar',TP.est,'Por cortar')+tpChip('est','todo',TP.est,'También lo ya cortado')+tpChip('est','difs',TP.est,'Difieren de Madesol');
+  var lb=document.getElementById('tp-lblock'); if(lb) lb.style.display = (TP.forma==='L'?'':'none');
+  tpRun(); tpCat();
+}
+function tpRun(){
+  var a=tpVal('tp-m1'), b=tpVal('tp-m2'), c=tpVal('tp-m3');
+  var res=document.getElementById('tp-res'), sum=document.getElementById('tp-sum');
+  if(!res||!sum) return;
+  if(!a&&!b&&!c){
+    if(TP.forma!=='todas'){
+      var ps=tpCandidatas().sort(function(x,y){ return y.L-x.L; });
+      sum.textContent = ps.length+' piezas con forma '+TP_FORMA_NOM[TP.forma].toLowerCase()+'. Agrega una medida para afinar.';
+      res.innerHTML = ps.map(function(p){ return tpFicha(p,0,false,true); }).join('');
+      return;
+    }
+    sum.textContent='Escribe una medida. Con una sola ya busco; con las dos afino.';
+    res.innerHTML='<div class="tp-vacio">Mide el tope y escribe las medidas.<br>Ejemplo: 1.778 × 559 son los lavamanos comunes del lado A.</div>';
+    return;
+  }
+  var lista=tpCandidatas().map(function(p){ return {p:p, d:tpDif(p,a,b,c)}; })
+    .filter(function(x){ return isFinite(x.d); })
+    .sort(function(x,y){ return x.d-y.d; });
+  var dentro=lista.filter(function(x){ return x.d<=TP.tol; });
+  if(dentro.length){
+    sum.textContent = (dentro.length===1?'1 pieza coincide':dentro.length+' piezas coinciden')+' dentro de ± '+TP.tol+' mm.';
+    res.innerHTML = dentro.map(function(x){ return tpFicha(x.p,x.d,false); }).join('');
+  } else {
+    sum.textContent='Ninguna pieza entra en ± '+TP.tol+' mm. Estas son las tres más cercanas.';
+    res.innerHTML = lista.slice(0,3).map(function(x){ return tpFicha(x.p,x.d,true); }).join('');
+  }
+}
+function tpCat(){
+  var el=document.getElementById('tp-cat'); if(!el) return;
+  var qel=document.getElementById('tp-q'), q=(qel&&qel.value||'').toLowerCase().trim();
+  var grupos={};
+  TP_PIEZAS.forEach(function(p){
+    var txt=(p.id+' '+p.apto+' '+p.amb+' '+p.det+' '+p.grupo+' '+p.L+' '+p.W+' '+p.tipo).toLowerCase();
+    if(q && txt.indexOf(q)<0) return;
+    (grupos[p.grupo]=grupos[p.grupo]||[]).push(p);
+  });
+  var out=Object.keys(grupos).map(function(g){
+    var ps=grupos[g];
+    var filas=ps.map(function(p){
+      return '<tr><td><strong>'+p.id+'</strong></td><td>'+(p.L?tpNum(p.L)+' × '+tpNum(p.W):tpNum(p.W)+' de ancho')+'</td><td>'+p.q+'</td><td>'+p.apto+'</td></tr>';
+    }).join('');
+    return '<details class="tp-grp"'+(q?' open':'')+'><summary>'+g+' — '+ps.length+' piezas · '+(ps[0].mat==='alpine'?'Alpine Mist':'Zement')+'</summary>'+
+      '<div class="tp-tw"><table class="tp-tbl"><thead><tr><th>Pieza</th><th>Medidas (mm)</th><th>Cant.</th><th>Apto.</th></tr></thead><tbody>'+filas+'</tbody></table></div></details>';
+  }).join('');
+  el.innerHTML = out || '<div class="tp-vacio">Nada con ese texto.</div>';
 }
 
 // ══════════════════════════════════════════════════════════════

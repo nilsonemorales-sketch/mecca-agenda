@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v128 — 26 de septiembre de 2026.** Antes de escribir, comprueba
+**Al día a v129 — 9 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -88,7 +88,7 @@ Corre gratis debajo de las 10,000 neuronas diarias que regala Cloudflare
 
 | Archivo | Qué es |
 |---|---|
-| `index.html` | **El app entero.** ~21,100 líneas, 1.36 MB. HTML, CSS y JS en un solo archivo. |
+| `index.html` | **El app entero.** 33.202 líneas, 2,0 MB (v129). HTML, CSS y JS en un solo archivo. |
 | `sw.js` | Service worker. 61 líneas. **Pieza frágil, ver §5.** |
 | `worker/worker.js` | El Worker de Cloudflare (voz e inteligencia). |
 | `worker/wrangler.toml` | Configuración del Worker. |
@@ -109,13 +109,13 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v124 (22 sep 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v129 (9 oct 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
-Compras · Bitácora · Gerencia · Partidas · Metodología.** *Partidas* es un
-módulo de PRUEBA y solo lo ve el administrador — ver «El Catálogo de
-partidas» más abajo. El app **abre en Obra**
+Compras · Topes · Bitácora · Gerencia · Partidas · Metodología.** *Partidas* es
+un módulo de PRUEBA y solo lo ve el administrador — ver «El Catálogo de
+partidas» más abajo. *Topes* (v129) la ven **todos**, sin gate. El app **abre en Obra**
 desde v88: se usa de pie en la obra, y Obra pregunta dónde estás en vez de
 soltar 1.080 renglones. Actividades queda a un toque en la barra de abajo.
 
@@ -244,6 +244,7 @@ mismos botones que cualquier otra.
 | **Poner los renglones en el orden que se compran** | **Compras → la orden → las flechas ↑↓ del renglón** (v128) — `_ocMoverRow()`. Ese es el orden del PDF |
 | **Marcar un material como urgente** | **Compras → la orden → el punto del renglón** (v128) — `_ocUrgenteRow()`. Rojo o gris, y sale en el PDF y en la tarjeta |
 | **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
+| **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. **Solo consulta: la data va congelada en `TP_PIEZAS` y no pide NADA a la base** |
 
 
 **Los botones de registrar son LOS MISMOS en los dos sitios, aunque no
@@ -434,6 +435,73 @@ clickee está tocando lo que el usuario no puede tocar.
 «Contratista» faltaban además las 9 de ingeniero. Ahora hay bloque **«Sin tipo
 de personal»** y los tres modos suman 1.059 y 347 vencidas. Si un modo suma
 menos que la cabecera, alguien volvió a dejar un `tipo_personal` fuera.
+
+### TOPES (v129) — el primer módulo que no habla con la base
+
+El ingeniero está parado frente a un tope de cuarzo con la cinta en la mano y
+la pregunta es una sola: **¿cuál de las 68 piezas es ésta, de qué apartamento
+y en qué material?** Hasta la v128 eso se contestaba abriendo un PDF del
+despiece en el teléfono y buscando a ojo entre tablas.
+
+**ES SOLO CONSULTA, Y ESA ES LA DECISIÓN QUE LO DEFINE.** No toca Supabase, no
+pasa por `Acciones`, no escribe nada y **no pide ni un GET** — medido: entrar,
+buscar, filtrar por material, por forma y por estado, recorrer el catálogo y
+repintar cuesta **0 `GET` y 0 escrituras**. Es la regla de la v125 llevada al
+extremo: toda la data va congelada en la constante **`TP_PIEZAS`**, 68 piezas
+(133 contando cantidades), sacadas del despiece Bridex v26 del 22-sep-2026
+cruzado con el shop drawing de Madesol del 1-oct-2026.
+
+**Por eso NO hay tabla nueva, ni columna, ni siembra.** Si mañana cambia el
+despiece, se cambia la constante y se publica: el módulo se borra entero
+quitando `TP_PIEZAS`, las catorce funciones `tp*`/`renderTopes`, el bloque CSS
+`.tp-*` y los cinco enganches (`tab`, `sb-topes`, `dw-topes`, `view-topes`,
+`'topes'` en `VIEWS` y la rama de `goTab`). El app queda exactamente como en
+la v128.
+
+Por dentro: vista `view-topes`, contenedor `c-topes`, CSS `.tp-*`, funciones
+`tp*` y `renderTopes`. **Sin gate de administrador** — lo usan los residentes.
+
+- **Dos medidas, y con una sola ya busca.** `tpDif` compara la pareja en los
+  dos sentidos (largo×ancho y ancho×largo), porque nadie mide un tope sabiendo
+  cuál de los dos lados es «el largo» del plano. Con 1778 y 559 sale **una
+  sola pieza: LAVA-02, A2 al A6, baño común**.
+- **La tolerancia es del dueño, no del app**: ± 5 · 15 · 40 · 100 mm. Arranca
+  en 15. Si nada entra, **no dice «no hay»: enseña las tres más cercanas**
+  marcadas como fuera de tolerancia. Una pantalla que contesta «nada» con la
+  cinta en la mano no sirve de nada.
+- **LAS PIEZAS EN L PIDEN TRES MEDIDAS.** Con dos, una L no se distingue de un
+  tope corrido. Al escoger la forma «Pieza en L» aparece el tercer campo
+  (el ala) y se dice por qué. Son **dos** en toda la obra, B6-02 y B345-03, y
+  tienen las tres medidas idénticas: buscarlas devuelve las dos, que es
+  correcto — están en apartamentos distintos.
+- **El croquis se dibuja, no se guarda.** `tpSvg` saca la proporción de las
+  medidas y marca en ámbar **dónde va el bocel**, que es lo que se pregunta
+  después de saber qué pieza es.
+- **Lo ya cortado y lo eliminado NO se esconden, se etiquetan.** Arranca en
+  «Por cortar» (51 de 68); «También lo ya cortado» mete las 15 de abril y las
+  2 eliminadas, cada una con su pastilla. Esconderlas haría creer que la obra
+  tiene 51 piezas de tope.
+- **Lo que no cuadra con Madesol se DICE en la ficha** (`md`), con el texto de
+  la diferencia. El despiece de Bridex y el plano del fabricante no coinciden
+  en todo, y el módulo no escoge cuál tiene razón: enseña la diferencia y
+  manda a medir en obra.
+
+**LA PUERTA DEL TELÉFONO ES EL CAJÓN, NO LA PESTAÑA.** Ver §6: la barra de
+pestañas de arriba es `display:none` por debajo de 600px.
+
+*Dos cosas quedaron avisadas y las decide el dueño:*
+
+1. **`B6-02` y `B345-03` dicen «fondo total 1.765,3 mm»** —la suma de fondo
+   (647,7) y ala (1.117,6)—, pero su propia nota dice que Madesol dibuja esa L
+   con **fondo total 1.118** (frente 648 + ala 470). O el ala del despiece ES
+   el fondo total y no se suma, o son dos piezas distintas. `tpDif` acepta las
+   dos lecturas a propósito (casa con `ala` y con `ala+fondo`), así que la
+   pieza se encuentra escribiendo 1118 o 1765; lo que no se puede es inventar
+   cuál es la buena. **Hay que medirla en obra.**
+2. **Cinco filas de pastillas entre las medidas y la respuesta.** A 390px el
+   resultado queda justo debajo del pliegue. Es la lección de la v83 («cada
+   fila de controles empuja el trabajo fuera de la pantalla»): si el dueño lo
+   nota, lo que toca es **plegar** unidad/material/forma/estado, no quitarlos.
 
 ### LO QUE LA v128 PODÓ DE LA v127 — dos días después, y es la lección
 
@@ -2968,6 +3036,26 @@ mismo:**
   no a ojo. Y hazlo con un jsPDF de mentira que conteste a cualquier método: si
   le faltan métodos, el `catch` de `generarPDFOrden` se traga el fallo y la
   prueba miente
+- **TOPES NO LE PIDE NADA A LA BASE** (v129). Entra, busca, filtra por material,
+  forma y estado, recorre el catálogo y repinta: **0 `GET` y 0 escrituras**.
+  Cuéntalos en la ruta, no en `window.sb`. Si aparece uno, alguien sacó la data
+  de `TP_PIEZAS` y la fue a buscar a Supabase
+- **1778 × 559 da UNA SOLA pieza: LAVA-02, «A2 al A6 · Baño común»** (v129), con
+  su croquis. Si salen dos, alguien tocó `tpDif` o la tolerancia de entrada
+  (± 15 mm). Y con **una sola** medida también busca
+- **«Pieza en L» saca el TERCER campo** (v129), el del ala, y al salir de esa
+  forma el campo se esconde **y se borra**. Las piezas en L son **dos**, B6-02 y
+  B345-03, y con 3048 · 648 · 1118 salen las dos: tienen las mismas medidas en
+  apartamentos distintos, no es un fallo
+- **`TP_PIEZAS` son 68 piezas / 133 unidades**, 38 Alpine y 30 Zement, y por
+  estado **51 por cortar · 15 de abril · 2 eliminadas**. Lo cortado y lo
+  eliminado no se esconden: se etiquetan
+- **TOPES SE ABRE DESDE EL TELÉFONO** (v129). A 390px la barra de pestañas de
+  arriba está oculta: la puerta es **`dw-topes`, en el cajón**. Ábrela tocando la
+  hamburguesa en un viewport de 390, no llamando a `goTab`
+- **En Topes nada baja de 40px y nada se sale de 390** (v129): 34 cosas tocables,
+  **cero** por debajo de 40 y **cero** scroll horizontal, a 390 y a 1024. Mide
+  también los `<summary>`: no son `<button>` y la regla global no los cubre
 - **El % se cambia DESDE LA FILA, sin abrirla** (v126). Tócalo: sale la tira
   `0 · 25 · 50 · 75 · ✓ Completada` con el valor actual marcado y botones de
   44px. Poner 50% son **1 `PATCH` + 1 `POST obra_cambios` y CERO `GET`**, el
@@ -3261,6 +3349,9 @@ pertenece a ningún nivel.
 | **v127** — «itemsIgualesTrasGuardar: false» sobre dos objetos con **los mismos siete campos y los mismos valores**: `JSON.stringify` compara el ORDEN de las claves, y al guardar se reescriben en otro orden. | Dos objetos iguales pueden dar cadenas distintas. Para decir «esto no cambió», compara **clave por clave** (o con las claves ordenadas), no el texto del `stringify` — si no, una prueba que vigila una regresión real grita por nada y se termina ignorando. |
 
 | **v127→v128** — el escogedor de contratista y los filtros de la lista duraron **dos días**: el dueño los usó en obra y dijo que no le hacen falta. Al quitarlos, el primer borrador leía el contratista del `<select>` recién borrado, así que `_ocReadRows` lo devolvía vacío y **el primer guardado de una orden clasificada habría borrado el dato**. | Quitar un control **no puede borrar lo que ya está guardado**: lo que se deja de preguntar se arrastra del array de trabajo a la escritura, sin pasar por el DOM. Y la comprobación no es mirar la pantalla — es **guardar y recargar de la base**. Lo otro que enseña esto: el dueño corta funciones dos días después de recibirlas, y eso es el método trabajando; lo que aguanta esa prueba es lo que se queda. |
+| **v129** — la pestaña nueva se colgó de la barra de arriba, que es donde están todas… y **en el teléfono esa barra no existe**: `@media(max-width:600px){.tabs{display:none}}`. La barra de abajo tiene sus cinco puestos llenos. Con eso, un módulo pensado para usarse **parado en la obra con el teléfono en la mano** solo se abría desde el iPad. Lo cazó la sonda al intentar TOCAR la pestaña: «element is not visible». | **Un módulo nuevo necesita su puerta en las DOS navegaciones**, y en este app son distintas: arriba las pestañas (>600px) y la barra lateral, abajo el cajón (`dw-btn`) y la barra de cinco. Antes de dar una pantalla por alcanzable, **ábrela desde un viewport de 390** — es la v116 otra vez, y la v116 costó días de que el Cronograma «no existiera». |
+| **v129** — las cabeceras de grupo del catálogo de topes son `<summary>` y nacieron con **16px de alto**. El CSS del app le pone `min-height:44px` a **todo `<button>`**, pero un `<summary>` no es un botón y no hereda nada: se quedó en lo que mide su línea de texto. | La regla de los 40px (§1) es del **tap target**, no del `<button>`. Si metes algo que se toca y no es un botón —`<summary>`, un `<a>`, un `<div onclick>`—, **mídele el alto**, porque ninguna regla global lo va a salvar. Lo cazó la sonda que mide lo visible, como el botón de 34px de la v107 y la miga de 28px de la v121. |
+| **v129** — la caja de buscar del catálogo de topes decía de ejemplo «B6, **lavamanos**, 1778…» y esa palabra **no está en nada de lo que se busca**: el grupo se llama `LAV-A` y el ambiente `Baño`. Escribir el ejemplo que el propio campo sugiere contestaba «Nada con ese texto». | Un `placeholder` es una promesa. **Prueba los ejemplos que escribes**: los tres de ahora devuelven 14, 9 y 1 renglones. Un buscador que falla con su propia sugerencia es el que nadie vuelve a usar. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
