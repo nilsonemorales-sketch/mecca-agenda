@@ -605,10 +605,43 @@ input.tp-in[type=search]{font-size:14px}
    cazo la sonda que mide lo VISIBLE, como el boton de 34px de la v107 y la
    miga de 28px de la v121. */
 .tp-tw{overflow-x:auto}
-.tp-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;font-variant-numeric:tabular-nums;color:var(--text2)}
+.tp-tbl{width:auto;min-width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;font-variant-numeric:tabular-nums;color:var(--text2)}
+/* v130 · LA TABLA SE DESPLAZA A LO ANCHO, NO SE APRIETA. Con `width:100%` y
+   el contador metido dentro, las columnas se estrujaban y el «− 3 de 5 +» se
+   partia en TRES lineas: la fila pasaba de 50 a 120px, y con 47 renglones eso
+   es el doble de catalogo que bajar. Para eso esta `.tp-tw{overflow-x:auto}`.
+   NO le pongas `-webkit-overflow-scrolling:touch`: rompe `sticky` en el Safari
+   del iPhone (v117). */
+.tp-tbl th,.tp-tbl td{white-space:nowrap}
 .tp-tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:5px 6px 5px 0;border-bottom:1px solid var(--border2)}
 .tp-tbl td{padding:5px 6px 5px 0;border-bottom:1px solid var(--border)}
 .tp-pie{font-size:11px;color:var(--text3);margin-top:16px;border-top:1px solid var(--border);padding-top:10px}
+/* ── v130 · LAS IDENTIFICADAS ── */
+.tp-marca{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:11px 13px;margin-bottom:10px}
+.tp-marca-l{font-size:13px;color:var(--text2)}
+.tp-marca-l strong{font-size:18px;color:var(--text);font-family:var(--tit)}
+.tp-barra{height:7px;background:var(--bg4);border-radius:99px;overflow:hidden;margin-top:7px}
+.tp-barra i{display:block;height:100%;background:var(--green);border-radius:99px;transition:width .2s}
+.tp-marcar,.tp-marcado{gap:6px;padding:8px 13px;border-radius:12px;font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;margin-top:9px}
+.tp-marcar{background:var(--bg3);border:1.5px solid var(--border2);color:var(--text2)}
+.tp-marcado{background:var(--green-light);border:1.5px solid var(--green);color:var(--green)}
+.tp-chip.tp-pend{background:var(--amber-light);border-color:var(--amber);color:var(--amber)}
+/* EL CONTADOR de los renglones de más de una pieza. Los dos pasos son
+   botones, así que el CSS global ya les pone los 44px: no les quites el
+   min-height para «que quepan», que es como la fila de la v126 creció 31px. */
+.tp-cont{display:inline-flex;align-items:center;gap:2px;margin-top:9px;border:1.5px solid var(--border2);
+  background:var(--bg3);border-radius:12px;padding:0 4px;flex-wrap:wrap}
+.tp-cont.lleno{border-color:var(--green);background:var(--green-light)}
+.tp-paso{width:44px;background:none;border:none;color:var(--text);font-size:19px;font-weight:700;cursor:pointer;font-family:var(--font)}
+.tp-paso:disabled{opacity:.3;cursor:default}
+.tp-cont-n{min-width:62px;text-align:center;font-size:13px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.tp-cont.lleno .tp-cont-n,.tp-cont.lleno .tp-paso{color:var(--green)}
+.tp-nocuenta{font-size:11.5px;color:var(--text3);margin-top:9px;border-top:1px dashed var(--border2);padding-top:7px}
+.tp-tbl .tp-marcar,.tp-tbl .tp-marcado,.tp-tbl .tp-cont{margin-top:0;white-space:nowrap}
+.tp-tbl .tp-cont{flex-wrap:nowrap}
+.tp-tbl .tp-marcar,.tp-tbl .tp-marcado{padding:4px 9px;font-size:11.5px}
+.tp-hit.tp-ok{border-left-color:var(--green)}
+.tp-grp-pie{margin-top:8px}
 </style>
 
 </head>
@@ -954,7 +987,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261009_129';
+const APP_VERSION='20261009_130';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -16336,6 +16369,9 @@ function tpDif(p,a,b,c){
 }
 function tpCandidatas(){
   return TP_PIEZAS.filter(function(p){
+    /* v130 · el interruptor del marcador. Va aqui y no en una pastilla mas:
+       cinco filas de controles ya empujan la respuesta fuera de la pantalla. */
+    if(TP_SOLO_FALTAN && !_tpFalta(p)) return false;
     if(TP.mat!=='todos' && p.mat!==TP.mat) return false;
     if(TP.est==='por_cortar' && p.estado!=='por_cortar') return false;
     if(TP.est==='difs' && !(p.md && p.md.e!=='igual')) return false;
@@ -16369,6 +16405,7 @@ function tpSvg(p){
 }
 function tpFicha(p,d,fuera,sinDif){
   var cls = p.estado==='eliminada'?'tp-elim' : (p.estado==='abril'?'tp-abril':'');
+  if(tpCuenta(p) && !_tpFalta(p)) cls+=' tp-ok';   // verde solo cuando estan TODAS sus piezas
   var pill = p.estado==='eliminada' ? '<span class="tp-pill tp-p-elim">ELIMINADA — no va</span>'
     : (p.estado==='abril' ? '<span class="tp-pill tp-p-abril">Ya cortada en abril</span>'
     : (p.mat==='alpine' ? '<span class="tp-pill tp-p-alp">Alpine Mist</span>' : '<span class="tp-pill tp-p-zem">Zement White Glace</span>'));
@@ -16383,7 +16420,8 @@ function tpFicha(p,d,fuera,sinDif){
     (sinDif?'':'<div class="tp-sub">'+(fuera?'Fuera de tolerancia: ':'Diferencia: ')+'± '+tpNum(d)+' mm</div>')+
     (p.md?'<div class="tp-md tp-md-'+p.md.e+'">'+(p.md.e==='igual'?'✓ ':'⚠ ')+p.md.t+'</div>':'')+
     (p.L?tpSvg(p):'')+
-    (p.nota?'<div class="tp-nota">'+p.nota+'</div>':'')+'</article>';
+    (p.nota?'<div class="tp-nota">'+p.nota+'</div>':'')+
+    _tpMarcaHTML(p)+'</article>';
 }
 function tpChip(grupo,val,actual,txt,extra){
   return '<button class="tp-chip'+(val===actual?' on':'')+'" onclick="tpSet(\''+grupo+'\',\''+val+'\')">'+(extra||'')+txt+'</button>';
@@ -16402,11 +16440,208 @@ function tpIcono(f){
   if(f==='L')        return s+'<path d="M1.5 1.5h7v8h16v5h-23z" stroke-linejoin="round"/></svg>';
   return '';
 }
+
+/* ══ LAS QUE YA SE IDENTIFICARON (v130) ════════════════════════════════
+   Palabras del dueño: «me gustaría q se marquen las q ya se van identificando,
+   y como ya iniciamos y tenemos unas cuantas identificadas, q el app las pueda
+   marcar también». Dos cosas: marcar la que acabas de medir, y marcar a mano
+   las que se identificaron antes de que esto existiera.
+
+   AQUÍ SE ROMPE EL «CERO GET» DE LA v129, A PROPÓSITO Y MEDIDO. Las 68 líneas
+   del despiece siguen congeladas en el código —eso no cambia—, pero una marca
+   es trabajo de obra: tiene que sobrevivir, verse desde el iPad Y desde el
+   teléfono, y que la vea el residente. En `localStorage` se marcarían veinte
+   piezas en el teléfono y el iPad diría cero: es la mentira de la v109 con
+   otra cara. Vive en `obra_config`, clave `topes_identificadas`, UN JSON en
+   UNA fila — columnas `key` y `value`, y **`value` es `text`, no `jsonb`**, así
+   que el JSON va convertido a texto. Mismo patrón que `cat_no_iguales`, que
+   hoy es la ÚNICA fila de este tipo que existe en la tabla (547 bytes): el
+   código también escribe `cat_grupos`, pero nadie ha creado un grupo todavía y
+   esa fila no está. El módulo se sigue borrando entero quitando una clave.
+
+   LO QUE CUESTA, DICHO: 1 `GET` de UNA fila al entrar al módulo, una vez por
+   sesión, y 1 `GET` + 1 `POST` de esa misma fila por marca —o por atajo de
+   grupo completo, no por pieza—. El catálogo no pide nada. */
+
+/* ── QUÉ CUENTA Y QUÉ NO ───────────────────────────────────────────────
+   EL CONTADOR VA POR PIEZAS, NO POR RENGLONES: son **108**, no 68 (medido
+   sobre el propio array — alpine 20 renglones/50 piezas, zement 27/58). Un
+   renglón como LAVA-02 son cinco lavamanos, uno por apartamento.
+
+   Quedan fuera las 15 del corte de abril (ya instaladas), las 2 eliminadas,
+   las 2 fajas de canto —que son tiras, no piezas— y **B6-07 y B345-08**:
+   Madesol ya no las corta así, las parte en `-A` + `-B`, que están en el array
+   aparte. Contar las dos originales ADEMÁS de sus mitades infla el conteo en
+   4 piezas y nadie llegaría nunca al 100%.
+
+   El motivo de cada exclusión se dice en la ficha en vez de dejar la pieza sin
+   botón y sin explicación. Y vive en UNA sola función: si el contador y el
+   botón usaran criterios distintos, la pantalla diría dos cosas. */
+function _tpNoCuenta(p){
+  if(p.estado==='abril')     return 'Ya cortada e instalada en abril: no entra en el conteo.';
+  if(p.estado==='eliminada') return 'Eliminada: no se corta, y no entra en el conteo.';
+  if(p.tipo==='Faja')        return 'Es tira de canto, no una pieza: no entra en el conteo.';
+  if(p.id==='B6-07'||p.id==='B345-08')
+    return 'Madesol ya no la corta así: se marcan sus dos mitades, '+p.id+'-A y '+p.id+'-B.';
+  return '';
+}
+function tpCuenta(p){ return !_tpNoCuenta(p); }
+function _tpTotal(){ return TP_PIEZAS.filter(tpCuenta).reduce(function(s,p){ return s+(p.q||0); },0); }
+function _tpHechas(){ return TP_PIEZAS.filter(tpCuenta).reduce(function(s,p){
+  return s+Math.min(p.q||0, ((TP_IDENT[p.id]||{}).n)||0); },0); }
+function _tpN(id){ return ((TP_IDENT[id]||{}).n)||0; }
+function _tpFalta(p){ return tpCuenta(p) && _tpN(p.id) < (p.q||0); }
+
+var TP_IDENT={};            // {id:{n,u,f}} — n es CUÁNTAS piezas de ese renglón
+var TP_IDENT_QUIT={};       // lo que ESTA sesión puso en cero, para no resucitarlo
+var TP_IDENT_CARGADO=false; // ¿contestó la base?
+var TP_IDENT_PEND=false;    // hay marcas sin guardar
+var TP_SOLO_FALTAN=false;
+var TP_IDENT_KEY='topes_identificadas';
+var TP_IDENT_LS='mecca_topes_ident_v1';
+
+function _tpIdentLocal(){
+  try{ var v=JSON.parse(localStorage.getItem(TP_IDENT_LS)||'null'); return (v&&typeof v==='object')?v:null; }
+  catch(e){ return null; }
+}
+function _tpIdentLocalSet(){
+  /* El espejo del teléfono NO es la verdad: es el seguro de la v91 para que lo
+     que el ingeniero ya marcó no se pierda si la red se cayó en medio. */
+  try{ localStorage.setItem(TP_IDENT_LS, JSON.stringify({m:TP_IDENT, q:TP_IDENT_QUIT, pend:TP_IDENT_PEND})); }catch(e){}
+}
+function _tpIdentFundir(base){
+  /* base ∪ lo mío, menos lo que yo puse en cero. En ESE orden: al revés, una
+     desmarca la resucitaría la copia de la base en el acto. */
+  var m=Object.assign({}, base||{}, TP_IDENT);
+  Object.keys(TP_IDENT_QUIT).forEach(function(k){ delete m[k]; });
+  return m;
+}
+async function tpIdentCargar(){
+  var loc=_tpIdentLocal();
+  if(loc){ TP_IDENT=Object.assign({}, loc.m||{}, TP_IDENT);
+           TP_IDENT_QUIT=Object.assign({}, loc.q||{}, TP_IDENT_QUIT);
+           TP_IDENT_PEND=!!loc.pend; }
+  try{
+    var r=await sb('obra_config?key=eq.'+TP_IDENT_KEY+'&limit=1');
+    TP_IDENT=_tpIdentFundir((r&&r[0]&&r[0].value)?JSON.parse(r[0].value):{});
+    TP_IDENT_CARGADO=true;
+    _tpIdentLocalSet();
+    if(TP_IDENT_PEND) tpIdentGuardar();     // lo que quedó colgado de ayer sale hoy
+  }catch(e){
+    /* Si no contestó, el módulo SIGUE ENTERO: se mide y se identifica igual, y
+       el marcador dice que las marcas no están al día. Un identificador que no
+       abre porque una fila no contestó no sirve en una obra. */
+    TP_IDENT_CARGADO=false;
+  }
+  if(S.currentTab==='topes') renderTopes(true);
+}
+/* ⚠️ ESTO NO ESTÁ PROTEGIDO CONTRA DOS GUARDADOS A LA VEZ, Y ES A SABIENDAS.
+   `obra_config` no tiene `updated_at` ni columna de versión, así que releer y
+   fundir justo antes de escribir ACHICA la ventana pero no la cierra: si dos
+   teléfonos guardan en el mismo segundo, el último pisa al otro. Con 108
+   piezas y tres personas el riesgo es chico y se acepta. **No inventes un
+   bloqueo ni una columna nueva para esto** — pero que el que venga detrás no
+   crea que está protegido, porque no lo está. */
+async function tpIdentGuardar(){
+  try{
+    var r=await sb('obra_config?key=eq.'+TP_IDENT_KEY+'&limit=1');
+    TP_IDENT=_tpIdentFundir((r&&r[0]&&r[0].value)?JSON.parse(r[0].value):{});
+    await sb('obra_config',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+      body:JSON.stringify({key:TP_IDENT_KEY, value:JSON.stringify(TP_IDENT)})});
+    TP_IDENT_PEND=false; TP_IDENT_QUIT={}; TP_IDENT_CARGADO=true;
+    _tpIdentLocalSet();
+  }catch(e){
+    /* LA MARCA NO SE REVIERTE. Regla de la v91: lo que el ingeniero ya hizo no
+       se tira. Se queda en pantalla, se guarda en el teléfono y el marcador lo
+       dice hasta que salga. */
+    TP_IDENT_PEND=true; _tpIdentLocalSet();
+  }
+  if(S.currentTab==='topes') renderTopes(true);
+}
+/* Los cinco toques del «+» de un lavamanos son UNA sola escritura, no cinco:
+   es la regla de la v125 —lo que sube también cuesta— sin hacerle esperar al
+   dedo, porque la pantalla ya se pintó con la marca puesta. */
+var _tpGuardarT=null;
+function _tpGuardarPronto(){
+  if(_tpGuardarT) clearTimeout(_tpGuardarT);
+  _tpGuardarT=setTimeout(function(){ _tpGuardarT=null; tpIdentGuardar(); }, 800);
+}
+function tpMarcar(id, d){
+  if(!canEdit()){ showToast('Tu usuario no puede marcar piezas','warn',3000); return; }
+  var p=TP_PIEZAS.filter(function(x){ return x.id===id; })[0];
+  if(!p || _tpNoCuenta(p)) return;
+  var n=Math.max(0, Math.min(p.q||0, _tpN(id)+(d||1)));
+  if(n<=0){ delete TP_IDENT[id]; TP_IDENT_QUIT[id]=1; }
+  else { TP_IDENT[id]={n:n, u:(S.user&&S.user.nombre)||'', f:today()}; delete TP_IDENT_QUIT[id]; }
+  TP_IDENT_PEND=true; _tpIdentLocalSet();
+  renderTopes(true);
+  _tpGuardarPronto();
+}
+function tpMarcarGrupo(g){
+  if(!canEdit()){ showToast('Tu usuario no puede marcar piezas','warn',3000); return; }
+  /* El atajo que hace que esto se termine: las que ya se identificaron antes
+     del app son grupos enteros, y de una en una nadie marca quince. NADA SE
+     MARCA SOLO (v102, v120): esto lo aprieta el dueño y dice cuántas PIEZAS va
+     a marcar antes. Y es UNA lectura-fusión-escritura para el grupo entero. */
+  var ps=TP_PIEZAS.filter(function(p){ return p.grupo===g && _tpFalta(p); });
+  var faltan=ps.reduce(function(s,p){ return s+((p.q||0)-_tpN(p.id)); },0);
+  if(!faltan) return;
+  if(!confirm('¿Marcar como identificadas las '+faltan+' pieza'+(faltan!==1?'s':'')+' que faltan de '+g+'?')) return;
+  var f=today(), u=(S.user&&S.user.nombre)||'';
+  ps.forEach(function(p){ TP_IDENT[p.id]={n:p.q, u:u, f:f}; delete TP_IDENT_QUIT[p.id]; });
+  TP_IDENT_PEND=true; _tpIdentLocalSet();
+  renderTopes(true);
+  _tpGuardarPronto();
+}
+function tpSoloFaltan(){ TP_SOLO_FALTAN=!TP_SOLO_FALTAN; renderTopes(true); }
+/* El marcador es lo que dice cuándo se puede parar, igual que
+   `_catMarcadorHTML` en Partidas. Y el interruptor de «ver las que faltan» va
+   AQUÍ, en la línea donde ya está el número, y no en una sexta fila de
+   pastillas: cada fila de controles empuja la respuesta fuera de la pantalla
+   (v83). */
+function _tpMarcadorHTML(){
+  var n=_tpHechas(), t=_tpTotal(), faltan=t-n;
+  var pct=t?Math.round(n*100/t):0;
+  return '<div class="tp-marca">'+
+    '<div class="tp-marca-l"><strong>'+n+'</strong> de '+t+' piezas identificadas'+
+      (faltan?' · faltan '+faltan:' · no falta ninguna')+'</div>'+
+    '<div class="tp-barra"><i style="width:'+pct+'%"></i></div>'+
+    '<div class="tp-row" style="margin-top:8px">'+
+      (faltan?'<button class="tp-chip'+(TP_SOLO_FALTAN?' on':'')+'" onclick="tpSoloFaltan()">Ver solo lo que falta</button>':'')+
+      (TP_IDENT_PEND?'<button class="tp-chip tp-pend" onclick="tpIdentGuardar()">Marcas sin guardar · toca para enviar</button>':'')+
+      (!TP_IDENT_CARGADO?'<span class="tp-sub">Las marcas no se pudieron traer: lo demás funciona igual.</span>':'')+
+    '</div></div>';
+}
+/* Un renglón de cantidad 1 es una casilla; uno de cantidad 5 son cinco piezas
+   distintas en cinco apartamentos, así que lleva CONTADOR. Con una casilla, el
+   ingeniero identifica un lavamanos y el app apuntaría cinco — que es
+   exactamente la mentira que este módulo viene a evitar. */
+function _tpMarcaHTML(p, corto){
+  var por=_tpNoCuenta(p);
+  if(por) return corto?'<span class="tp-sub">—</span>':'<div class="tp-nocuenta">'+por+'</div>';
+  var m=TP_IDENT[p.id], n=_tpN(p.id), lleno=(n>=(p.q||0));
+  var quien=m?'<span class="tp-sub"> · '+(m.u||'')+(m.f?' · '+_nodoFecha(m.f):'')+'</span>':'';
+  if((p.q||0)<=1){
+    return lleno
+      ? '<button class="tp-marcado" onclick="tpMarcar(\''+p.id+'\',-1)" title="Quitar la marca">✓ Identificada'+(corto?'':quien)+'</button>'
+      : '<button class="tp-marcar" onclick="tpMarcar(\''+p.id+'\',1)">☐ '+(corto?'Marcar':'Marcar identificada')+'</button>';
+  }
+  return '<div class="tp-cont'+(lleno?' lleno':'')+'">'+
+    '<button class="tp-paso" onclick="tpMarcar(\''+p.id+'\',-1)"'+(n<=0?' disabled':'')+' aria-label="Quitar una">−</button>'+
+    '<span class="tp-cont-n">'+n+' de '+p.q+'</span>'+
+    '<button class="tp-paso" onclick="tpMarcar(\''+p.id+'\',1)"'+(lleno?' disabled':'')+' aria-label="Sumar una">+</button>'+
+    (corto?'':quien)+'</div>';
+}
+
 function renderTopes(soloResultados){
   var cont=document.getElementById('c-topes'); if(!cont) return;
+  /* Las marcas se piden UNA vez por entrada al modulo, no en cada repintado:
+     el repintado corto ocurre con CADA TECLA que se escribe en las medidas. */
+  if(!soloResultados && !TP_IDENT_CARGADO) tpIdentCargar();
   if(!soloResultados || !document.getElementById('tp-res')){
     cont.innerHTML =
       '<div class="tp-wrap">'+
+      '<div id="tp-marcador"></div>'+
       '<div class="tp-card">'+
         '<div class="tp-grid2">'+
           '<div><label class="tp-lbl" for="tp-m1">Medida larga</label><input id="tp-m1" class="tp-in" type="number" inputmode="decimal" placeholder="1778" oninput="tpRun()"></div>'+
@@ -16438,6 +16673,9 @@ function renderTopes(soloResultados){
       'Madesol redondea al milímetro siguiente: 812,8 aparece como 813. Verifica con cinta antes de cortar.</p>'+
       '</div>';
   }
+  /* El marcador se repinta SIEMPRE, tambien en el repintado corto: su numero
+     cambia con cada marca y dejarlo en el armazon lo congelaria. */
+  document.getElementById('tp-marcador').innerHTML = _tpMarcadorHTML();
   document.getElementById('tp-unit').innerHTML = tpChip('unit','mm',TP.unit,'Milímetros')+tpChip('unit','in',TP.unit,'Pulgadas');
   document.getElementById('tp-tol').innerHTML  = [5,15,40,100].map(function(t){ return tpChip('tol',String(t),String(TP.tol),'± '+t+' mm'); }).join('');
   document.getElementById('tp-mat').innerHTML  = tpChip('mat','todos',TP.mat,'Todos')+tpChip('mat','alpine',TP.mat,'Alpine Mist')+tpChip('mat','zement',TP.mat,'Zement');
@@ -16452,9 +16690,14 @@ function tpRun(){
   var res=document.getElementById('tp-res'), sum=document.getElementById('tp-sum');
   if(!res||!sum) return;
   if(!a&&!b&&!c){
-    if(TP.forma!=='todas'){
+    /* v130 · con «ver solo lo que falta» puesto la pantalla tiene que ENSEÑAR
+       la lista: un interruptor que no cambia nada visible es un interruptor
+       roto, y sin medidas escritas esta rama era la unica que pintaba algo. */
+    if(TP_SOLO_FALTAN || TP.forma!=='todas'){
       var ps=tpCandidatas().sort(function(x,y){ return y.L-x.L; });
-      sum.textContent = ps.length+' piezas con forma '+TP_FORMA_NOM[TP.forma].toLowerCase()+'. Agrega una medida para afinar.';
+      sum.textContent = TP_SOLO_FALTAN
+        ? (_tpTotal()-_tpHechas())+' piezas por identificar, en '+ps.length+' renglones. Escribe una medida para afinar.'
+        : ps.length+' piezas con forma '+TP_FORMA_NOM[TP.forma].toLowerCase()+'. Agrega una medida para afinar.';
       res.innerHTML = ps.map(function(p){ return tpFicha(p,0,false,true); }).join('');
       return;
     }
@@ -16486,10 +16729,24 @@ function tpCat(){
   var out=Object.keys(grupos).map(function(g){
     var ps=grupos[g];
     var filas=ps.map(function(p){
-      return '<tr><td><strong>'+p.id+'</strong></td><td>'+(p.L?tpNum(p.L)+' × '+tpNum(p.W):tpNum(p.W)+' de ancho')+'</td><td>'+p.q+'</td><td>'+p.apto+'</td></tr>';
+      /* La marca va SEGUNDA, pegada al nombre de la pieza. Puesta al final se
+         quedaba fuera de la caja que se desplaza: habia que arrastrar la tabla
+         de lado para llegar al boton que es el motivo de esta pantalla. */
+      return '<tr><td><strong>'+p.id+'</strong></td><td>'+_tpMarcaHTML(p,true)+'</td>'+
+        '<td>'+(p.L?tpNum(p.L)+' × '+tpNum(p.W):tpNum(p.W)+' de ancho')+'</td><td>'+p.q+'</td><td>'+p.apto+'</td></tr>';
     }).join('');
-    return '<details class="tp-grp"'+(q?' open':'')+'><summary>'+g+' — '+ps.length+' piezas · '+(ps[0].mat==='alpine'?'Alpine Mist':'Zement')+'</summary>'+
-      '<div class="tp-tw"><table class="tp-tbl"><thead><tr><th>Pieza</th><th>Medidas (mm)</th><th>Cant.</th><th>Apto.</th></tr></thead><tbody>'+filas+'</tbody></table></div></details>';
+    /* v130 · DESDE AQUI SE MARCAN LAS QUE YA SE IDENTIFICARON ANTES DEL APP:
+       son grupos enteros y no hay que volver a medirlas para reconocerlas.
+       La cabecera cuenta PIEZAS, no renglones: decia «11 piezas» sobre once
+       renglones que son catorce piezas. */
+    var cuentan=ps.filter(tpCuenta);
+    var tot=cuentan.reduce(function(s,p){ return s+(p.q||0); },0);
+    var hechas=cuentan.reduce(function(s,p){ return s+Math.min(p.q||0,_tpN(p.id)); },0);
+    return '<details class="tp-grp"'+(q?' open':'')+'><summary>'+g+' — '+ps.length+' renglones · '+(ps[0].mat==='alpine'?'Alpine Mist':'Zement')+
+      (tot?' · <span style="color:'+(hechas>=tot?'var(--green)':'var(--text3)')+'">'+hechas+' de '+tot+' identificadas</span>':'')+'</summary>'+
+      '<div class="tp-tw"><table class="tp-tbl"><thead><tr><th>Pieza</th><th>Identificadas</th><th>Medidas (mm)</th><th>Cant.</th><th>Apto.</th></tr></thead><tbody>'+filas+'</tbody></table></div>'+
+      (tot>hechas?'<div class="tp-grp-pie"><button class="tp-marcar" onclick="tpMarcarGrupo(\''+g.replace(/'/g,"\\'")+'\')">☐ Marcar las '+(tot-hechas)+' que faltan de '+g+'</button></div>':'')+
+      '</details>';
   }).join('');
   el.innerHTML = out || '<div class="tp-vacio">Nada con ese texto.</div>';
 }

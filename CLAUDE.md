@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v129 — 9 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v130 — 9 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v129 (9 oct 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v130 (9 oct 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -244,7 +244,8 @@ mismos botones que cualquier otra.
 | **Poner los renglones en el orden que se compran** | **Compras → la orden → las flechas ↑↓ del renglón** (v128) — `_ocMoverRow()`. Ese es el orden del PDF |
 | **Marcar un material como urgente** | **Compras → la orden → el punto del renglón** (v128) — `_ocUrgenteRow()`. Rojo o gris, y sale en el PDF y en la tarjeta |
 | **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
-| **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. **Solo consulta: la data va congelada en `TP_PIEZAS` y no pide NADA a la base** |
+| **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
+| **Ir marcando las piezas de tope que ya se identificaron** | **Topes** (v130) — en la ficha del resultado y en el catálogo. `tpMarcar()`, `tpMarcarGrupo()`, marcador `_tpMarcadorHTML()`. Son **108 piezas**, no 68 renglones. Vive en `obra_config`, clave `topes_identificadas` |
 
 
 **Los botones de registrar son LOS MISMOS en los dos sitios, aunque no
@@ -488,6 +489,81 @@ Por dentro: vista `view-topes`, contenedor `c-topes`, CSS `.tp-*`, funciones
 
 **LA PUERTA DEL TELÉFONO ES EL CAJÓN, NO LA PESTAÑA.** Ver §6: la barra de
 pestañas de arriba es `display:none` por debajo de 600px.
+
+#### Marcar lo que ya se identificó (v130) — y por qué son 108, no 68
+
+Palabras del dueño: *«me gustaría q se marquen las q ya se van identificando, y
+como ya iniciamos y tenemos unas cuantas identificadas, q el app las pueda
+marcar también».* Dos cosas: marcar la que acabas de medir, y marcar a mano las
+que se identificaron antes de que esto existiera.
+
+**AQUÍ SE ROMPE EL «CERO GET» DE LA v129, A PROPÓSITO.** El catálogo de piezas
+sigue congelado y sin pedir nada; lo que se guarda son las marcas, que son
+trabajo de obra: tienen que sobrevivir, verse desde el iPad **y** desde el
+teléfono, y que las vea el residente. En `localStorage` se marcarían veinte
+piezas en el teléfono y el iPad diría cero — la mentira de la v109 con otra
+cara. Viven en **`obra_config`, clave `topes_identificadas`**: columnas `key` y
+`value`, y **`value` es `text`, no `jsonb`**, así que el JSON va convertido a
+texto. El módulo se sigue borrando entero quitando una clave.
+
+**Lo que cuesta, medido:** 1 `GET` de UNA fila al entrar al módulo —una vez por
+entrada, no por repintado, que ocurre con cada tecla—, y 1 `GET` + 1 `POST` de
+esa misma fila por marca, o por atajo de grupo completo. Buscar y filtrar:
+**0 `GET`**.
+
+**EL CONTADOR VA POR PIEZAS: SON 108, NO 68.** Un renglón como `LAVA-02` son
+cinco lavamanos, uno por apartamento. Medido sobre el propio array: **47
+renglones / 108 piezas** (alpine 20/50, zement 27/58). Quedan fuera, y **no
+entran en el contador**, 21 renglones: las 15 del corte de abril (ya
+instaladas), las 2 eliminadas, las 2 fajas de canto —que son tiras, no piezas—
+y **`B6-07` y `B345-08`**, porque Madesol ya no las corta así: las parte en
+`-A` + `-B`, que están en el array aparte. **Contar las dos originales ADEMÁS de
+sus mitades infla el conteo en 4 piezas y nadie llegaría nunca al 100%.**
+
+El criterio vive en **una sola función, `_tpNoCuenta`**, que devuelve el MOTIVO
+en texto; `tpCuenta` es su negación. Si el contador y el botón usaran criterios
+distintos, la pantalla diría dos cosas. Y las 21 que no cuentan **no se quedan
+mudas**: en vez de botón enseñan por qué («Madesol ya no la corta así: se marcan
+sus dos mitades, B6-07-A y B6-07-B»). Una pieza sin botón y sin explicación es
+como se cree que el app se rompió.
+
+**POR ESO LA MARCA NO ES UN SÍ/NO.** Los 25 renglones de cantidad 1 llevan
+casilla; los **22 de cantidad mayor llevan contador `− 3 de 5 +`**. Con una
+casilla, el ingeniero identifica un lavamanos y el app apuntaría cinco — que es
+exactamente la mentira que este módulo viene a evitar. El JSON guarda el número:
+`{"LAVA-02":{"n":3,"u":"Nilson","f":"2026-10-09"}}`, y el renglón se pone verde
+**solo cuando `n === q`**.
+
+**Los cinco toques del «+» son UNA escritura, no cinco** (`_tpGuardarPronto`,
+800 ms). La pantalla ya pintó la marca, así que el dedo no espera, y no se
+repite el gasto de la v124.
+
+> **⚠️ ESTO NO ESTÁ PROTEGIDO CONTRA DOS GUARDADOS A LA VEZ, Y ES A SABIENDAS.**
+> `obra_config` no tiene `updated_at` ni columna de versión, así que releer y
+> fundir justo antes de escribir **achica la ventana pero no la cierra**: si dos
+> teléfonos guardan en el mismo segundo, el último pisa al otro. Con 108 piezas
+> y tres personas el riesgo es chico y se acepta. **No inventes un bloqueo ni
+> una columna nueva.** Pero que el que venga detrás no crea que está protegido.
+
+La fusión es **base ∪ lo mío, menos lo que esta sesión puso en cero**
+(`TP_IDENT_QUIT`), en ese orden: al revés, una desmarca la resucitaría la copia
+de la base en el acto.
+
+**Nada se registra en `obra_cambios`**: la marca ya guarda quién y cuándo dentro
+del mismo JSON, y duplicarlo metería 108 renglones de topes en la bitácora sin
+aportar nada. **Nada nace marcado** (v102, v120) — el atajo por grupo es para
+las que ya se identificaron antes del app, dice cuántas PIEZAS va a marcar antes
+de apretarlo, y es **una sola** lectura-fusión-escritura para el grupo entero.
+
+**Sin señal la marca no se pierde**: se queda en pantalla, se guarda en el
+teléfono (`mecca_topes_ident_v1`) y el marcador dice «marcas sin guardar · toca
+para enviar» hasta que salga. Es la regla de la v91. Y **si `obra_config` no
+contesta, el módulo abre igual** y lo dice: se mide y se identifica lo mismo.
+
+**El interruptor «Ver solo lo que falta» va en la línea del número**, no en una
+sexta fila de pastillas (v83) — y **enseña la lista**: un interruptor que no
+cambia nada visible es un interruptor roto, y sin medidas escritas esa rama de
+`tpRun` era la única que pintaba algo.
 
 *Dos cosas quedaron avisadas y las decide el dueño:*
 
@@ -3056,6 +3132,39 @@ mismo:**
 - **En Topes nada baja de 40px y nada se sale de 390** (v129): 34 cosas tocables,
   **cero** por debajo de 40 y **cero** scroll horizontal, a 390 y a 1024. Mide
   también los `<summary>`: no son `<button>` y la regla global no los cubre
+- **EL CONTADOR DE TOPES VA POR PIEZAS: 108, NO 68** (v130). Con la base limpia
+  dice **«0 de 108 piezas identificadas · faltan 108»**; márcalo todo y da
+  **108 de 108**, y compruébalo **sumando** `min(q,n)`, no a ojo. Son 47
+  renglones (alpine 20/50, zement 27/58) y **21 que no cuentan**: 15 de abril,
+  2 eliminadas, 2 fajas y **B6-07 y B345-08**. Si sale 112, alguien volvió a
+  contar esas dos ADEMÁS de sus mitades `-A`/`-B`
+- **Las 21 que no cuentan no llevan botón PERO DICEN POR QUÉ** (v130). Mide
+  3429 × 660.4: salen B6-07 y B345-08, sin control y con «Madesol ya no la
+  corta así: se marcan sus dos mitades». Una pieza sin botón y sin explicación
+  parece un app roto
+- **Un renglón de 5 piezas lleva CONTADOR, no casilla** (v130). `LAVA-02` abre
+  en `− 0 de 5 +`; cinco toques dan `5 de 5`, verde, y son **1 `GET` + 1 `POST`
+  a `obra_config`, no cinco** (van diferidos 800 ms). `B6-01`, que es de una,
+  sí es casilla
+- **LA MARCA SOBREVIVE, Y ESO SE COMPRUEBA RECARGANDO** (v130), no mirando
+  `TP_IDENT`. Marca, recarga de la base y tiene que seguir. Baja el contador a
+  cero, recarga, y **no puede resucitar**: si vuelve, la fusión se está
+  aplicando al revés
+- **El atajo del grupo es UNA lectura-fusión-escritura** (v130) y dice cuántas
+  PIEZAS va a marcar: «☐ Marcar las 11 que faltan de B-6». Quince `GET` + quince
+  `POST` es volver al gasto de la v124
+- **Entrar a Topes cuesta UN `GET` de `obra_config`, y uno solo** (v130) — por
+  ENTRADA, no por repintado, que ocurre con cada tecla. Buscar, filtrar y
+  recorrer el catálogo: **cero**
+- **Sin `obra_config` el módulo abre igual** (v130): corta esa ruta, entra, mide
+  1778 × 559 y tiene que salir LAVA-02, con el aviso de que las marcas no se
+  pudieron traer
+- **Un usuario `view` no marca** (v130), ni desde el botón ni llamando a
+  `tpMarcar` o `tpMarcarGrupo`: cero escrituras intentadas
+- **La tabla del catálogo se desplaza DENTRO de su caja** (v130), no la página,
+  y la fila mide **57px**. Si se va a 120, el contador se está partiendo en tres
+  líneas porque alguien le devolvió el `width:100%` a `.tp-tbl`. Y el contador
+  tiene que caber SIN desplazar: va en la segunda columna, pegado al nombre
 - **El % se cambia DESDE LA FILA, sin abrirla** (v126). Tócalo: sale la tira
   `0 · 25 · 50 · 75 · ✓ Completada` con el valor actual marcado y botones de
   44px. Poner 50% son **1 `PATCH` + 1 `POST obra_cambios` y CERO `GET`**, el
@@ -3351,6 +3460,9 @@ pertenece a ningún nivel.
 | **v127→v128** — el escogedor de contratista y los filtros de la lista duraron **dos días**: el dueño los usó en obra y dijo que no le hacen falta. Al quitarlos, el primer borrador leía el contratista del `<select>` recién borrado, así que `_ocReadRows` lo devolvía vacío y **el primer guardado de una orden clasificada habría borrado el dato**. | Quitar un control **no puede borrar lo que ya está guardado**: lo que se deja de preguntar se arrastra del array de trabajo a la escritura, sin pasar por el DOM. Y la comprobación no es mirar la pantalla — es **guardar y recargar de la base**. Lo otro que enseña esto: el dueño corta funciones dos días después de recibirlas, y eso es el método trabajando; lo que aguanta esa prueba es lo que se queda. |
 | **v129** — la pestaña nueva se colgó de la barra de arriba, que es donde están todas… y **en el teléfono esa barra no existe**: `@media(max-width:600px){.tabs{display:none}}`. La barra de abajo tiene sus cinco puestos llenos. Con eso, un módulo pensado para usarse **parado en la obra con el teléfono en la mano** solo se abría desde el iPad. Lo cazó la sonda al intentar TOCAR la pestaña: «element is not visible». | **Un módulo nuevo necesita su puerta en las DOS navegaciones**, y en este app son distintas: arriba las pestañas (>600px) y la barra lateral, abajo el cajón (`dw-btn`) y la barra de cinco. Antes de dar una pantalla por alcanzable, **ábrela desde un viewport de 390** — es la v116 otra vez, y la v116 costó días de que el Cronograma «no existiera». |
 | **v129** — las cabeceras de grupo del catálogo de topes son `<summary>` y nacieron con **16px de alto**. El CSS del app le pone `min-height:44px` a **todo `<button>`**, pero un `<summary>` no es un botón y no hereda nada: se quedó en lo que mide su línea de texto. | La regla de los 40px (§1) es del **tap target**, no del `<button>`. Si metes algo que se toca y no es un botón —`<summary>`, un `<a>`, un `<div onclick>`—, **mídele el alto**, porque ninguna regla global lo va a salvar. Lo cazó la sonda que mide lo visible, como el botón de 34px de la v107 y la miga de 28px de la v121. |
+| **v130** — el contador `− 3 de 5 +` dentro de la tabla del catálogo la dejaba sin ancho y se partía en **tres líneas**: la fila pasó de 57 a **120px**, y con 47 renglones eso es el doble de catálogo que bajar. La tabla tenía `width:100%`, así que se apretaba en vez de usar el `overflow-x:auto` que su propio contenedor ya tenía. | Una tabla con `width:100%` **no se desborda: se estruja**. Si le metes una columna nueva, ponle `width:auto;min-width:100%` y `white-space:nowrap` y deja que la caja se desplace — y **mídele el alto a la fila antes y después**, que es la v86 y la v126 con otra cara. |
+| **v130** — la sonda del teléfono acusó de desbordar a **49 botones** que están dentro de la tabla que se desplaza: medía el `right` absoluto contra los 390px. El §1 dice justamente lo contrario — una tabla ancha se desplaza dentro de su contenedor. | Para decir «esto se sale de la pantalla» hay que **excluir lo que vive en una caja que scrollea** y comprobar aparte dos cosas: que la página NO scrollee y que la caja SÍ pueda. Medir el borde absoluto convierte un diseño correcto en 49 fallos inventados. |
+| **v130** — la marca iba a ser un sí/no. Un renglón como `LAVA-02` son **cinco** lavamanos: con una casilla, el ingeniero identifica uno y el app habría apuntado cinco. Y el contador iba a decir 68, que son RENGLONES — las piezas son **108**, y contar `B6-07` y `B345-08` además de sus mitades `-A`/`-B` lo habría subido a 112, con el 100% inalcanzable para siempre. | **Antes de poner un contador, pregunta qué cuenta una fila.** Aquí una fila son de 1 a 9 piezas, así que la unidad del marcador y la unidad de la marca tienen que ser la misma o el número miente desde el primer día. Lo cazó el dueño leyendo el array, no el código. |
 | **v129** — la caja de buscar del catálogo de topes decía de ejemplo «B6, **lavamanos**, 1778…» y esa palabra **no está en nada de lo que se busca**: el grupo se llama `LAV-A` y el ambiente `Baño`. Escribir el ejemplo que el propio campo sugiere contestaba «Nada con ese texto». | Un `placeholder` es una promesa. **Prueba los ejemplos que escribes**: los tres de ahora devuelven 14, 9 y 1 renglones. Un buscador que falla con su propia sugerencia es el que nadie vuelve a usar. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
@@ -3418,7 +3530,7 @@ orden de magnitud.
 | `obra_personal` | Contratistas y personal propio. | 37 |
 | `obra_asistencia` | Asistencia diaria. | ~1,400 |
 | `obra_ordenes_compra` | Órdenes a proveedores. `items_json` es `jsonb` y desde la **v127** cada renglón puede llevar `partida_id` y `partida`, y desde la **v128** `urgente:true` — **todas opcionales**, sin columna ni tabla nueva. La clave `contratista` de la v127 **ya no se escribe** (el dueño la mandó a quitar a los dos días) pero **la que quedó escrita se conserva**: se carga y se vuelve a guardar tal cual. Medido el 26-sep: **96 órdenes · 373 renglones · 0 clasificados**, y las claves de un renglón son `no`, `descripcion`, `cantidad`, `unidad`, `precio`, `total`, `verificado`. | 96 · 373 renglones |
-| `obra_config` | Configuración compartida, clave/valor. | — |
+| `obra_config` | Configuración compartida: columnas **`key`** y **`value`**, y **`value` es `text`, no `jsonb`**. Medido el 9-oct: **seis filas** — `cat_no_iguales` (547 bytes), `drive_url`, `fecha_entrega`, `fecha_inicio_obra`, `voz_api_clave`, `voz_api_url`. **`cat_grupos` NO existe**: el código la escribe, pero nadie ha creado un grupo todavía. Desde la **v130** vive aquí **`topes_identificadas`**, el JSON de las piezas de tope ya identificadas (`{id:{n,u,f}}`). **No tiene `updated_at` ni versión**, así que dos guardados a la vez se pisan — ver la v130 en §3.5. | 6 filas |
 | `obra_bitacora`, `obra_penalidades`, `obra_planos`, `obra_planos_mapa`, `obra_plan_semanal`, `obra_plan_actividades`, `obra_semanas`, `obra_tareas` | Bitácora, penalidades, planos, plan semanal. | — |
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
 | `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Desde la v118 `obra_partida_actividad` es además lo que la tabla lee para la columna CAPÍTULO y lo que reescribe al cambiarlo. Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**; **con `orden` desde v114** (el orden que el dueño pone a mano en «Por partida»). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
