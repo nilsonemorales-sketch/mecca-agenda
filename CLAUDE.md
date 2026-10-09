@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v130 — 9 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v131 — 9 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -88,7 +88,7 @@ Corre gratis debajo de las 10,000 neuronas diarias que regala Cloudflare
 
 | Archivo | Qué es |
 |---|---|
-| `index.html` | **El app entero.** 33.202 líneas, 2,0 MB (v129). HTML, CSS y JS en un solo archivo. |
+| `index.html` | **El app entero.** ~33.400 líneas, 2,0 MB (v131). HTML, CSS y JS en un solo archivo. |
 | `sw.js` | Service worker. 61 líneas. **Pieza frágil, ver §5.** |
 | `worker/worker.js` | El Worker de Cloudflare (voz e inteligencia). |
 | `worker/wrangler.toml` | Configuración del Worker. |
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v130 (9 oct 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v131 (9 oct 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -564,6 +564,54 @@ contesta, el módulo abre igual** y lo dice: se mide y se identifica lo mismo.
 sexta fila de pastillas (v83) — y **enseña la lista**: un interruptor que no
 cambia nada visible es un interruptor roto, y sin medidas escritas esa rama de
 `tpRun` era la única que pintaba algo.
+
+#### Cómo medir una pieza en L (v131) — el croquis dice dónde va la cinta
+
+El tercer campo decía **«Largo del ala (o fondo total)»** y una línea de letra
+chica debajo. Parado frente al tope eso no alcanza: **el ala y el fondo total
+son dos medidas distintas**, y el que mide la que no es se queda sin resultado
+y cree que el app está malo. Medido sobre las dos piezas en L, con 3048 y 648
+en los dos primeros campos:
+
+| en el tercer campo | diferencia | ¿la encuentra? |
+|---|---|---|
+| 1.117,6 | ± 0,3 mm | sí |
+| 1.118 (lo que dibuja Madesol) | ± 0,4 mm | sí |
+| 1.765 (fondo + ala) | ± 0,3 mm | sí |
+| **470** (el pedazo que sobresale) | **± 647,6 mm** | **NO** |
+| **648** (el fondo a secas) | **± 469,6 mm** | **NO** |
+
+Tres cosas, y ninguna toca un número del array:
+
+- **La etiqueta dice DÓNDE poner la cinta** —«Fondo total — de la pared al
+  borde del frente, por el lado más hondo»— y debajo van los tres pasos en
+  **tres renglones**, no en un párrafo: FRENTE, FONDO y FONDO TOTAL, cada uno
+  diciendo de dónde a dónde. Y una línea en gris: 1.118 o 1.765 valen los dos,
+  **los 470 no**.
+- **EL CROQUIS LLEVA LAS TRES COTAS**, en el ámbar que ya usaba, más la
+  **PARED** en línea punteada sobre el borde de atrás y **«borde del frente»**
+  debajo del bocel. Eso es lo que contesta «¿de dónde a dónde?» sin leer. Las
+  cotas van a **1,2 de grosor y el bocel a 3**: así no se confunden.
+- **El aviso de la discrepancia dice qué la resuelve**: cerca de 1.117,6 manda
+  Madesol, cerca de 1.765,3 manda Bridex, anótelo y avise antes de que se
+  corte. **Los dos números salen del renglón** (`p.ala` y `p.W + p.ala`), no
+  escritos a mano: si cambia el despiece, la línea cambia con él.
+
+**EL CROQUIS DE LA L SE PINTA A ANCHO COMPLETO, el resto no.** Llevaba
+`width="100%"` con `height="92"` fijo sobre un viewBox de 200×92: con eso el
+navegador **lo encaja en 200px de ancho** y deja el resto de la tarjeta en
+blanco — por eso el dibujo se veía chiquito. El de la L lleva ahora
+`style="width:100%;height:auto"` y sale a 309px sobre una tarjeta de 338; **los
+rectangulares no se tocaron** y siguen con su `height="92"`. Son dos tamaños a
+propósito: la L es donde la medición se equivoca.
+
+**Va a escala del fondo total, y el ancho del ala es un supuesto**: el despiece
+no da esa medida. El dibujo la aproxima y **no se pinta ningún número para
+ella** — no se inventa una cifra, solo un dibujo.
+
+*De paso:* cuando nada entra en la tolerancia, la pantalla decía «Éstas son las
+**tres** más cercanas» siempre, y con «Pieza en L» puesta solo hay **dos**
+candidatas en toda la obra. Ahora dice el número que va a enseñar.
 
 *Dos cosas quedaron avisadas y las decide el dueño:*
 
@@ -3161,6 +3209,23 @@ mismo:**
   pudieron traer
 - **Un usuario `view` no marca** (v130), ni desde el botón ni llamando a
   `tpMarcar` o `tpMarcarGrupo`: cero escrituras intentadas
+- **LAS TRES LECTURAS DEL FONDO TOTAL ENCUENTRAN LA PIEZA EN L** (v131). Con
+  3048 y 648 puestos: **1.117,6 · 1.118 y 1.765** dan `B6-02` y `B345-03`;
+  **470 y 648 NO** —se van ± 647,6 y ± 469,6— y la pantalla lo dice con las
+  más cercanas en vez de callarse. Si 470 empieza a encontrarla, alguien tocó
+  `tpDif`
+- **El croquis de la L lleva sus tres cotas** (v131): `FRENTE`, `FONDO`,
+  `FONDO TOTAL`, más `PARED` y `borde del frente`. Cuenta los `<text>`: son
+  **cinco**. Y cabe a 390 **sin desplazar nada** — 309px sobre una tarjeta de
+  338, cero scroll horizontal
+- **El croquis de una pieza RECTANGULAR no cambió** (v131): sigue con
+  `viewBox="0 0 200 92"`, su `height="92"` y **sin cotas**. Solo la L se pinta
+  a ancho completo
+- **El aviso de la L dice qué resuelve la medición** (v131), y **solo en las
+  piezas con `ala`**: en una normal `.tp-decide` tiene que dar **cero**. Sus
+  dos números salen del renglón, no escritos a mano
+- **Cuando nada entra en la tolerancia, el número que dice es el que enseña**
+  (v131). Con «Pieza en L» puesta son **dos**, no tres
 - **La tabla del catálogo se desplaza DENTRO de su caja** (v130), no la página,
   y la fila mide **57px**. Si se va a 120, el contador se está partiendo en tres
   líneas porque alguien le devolvió el `width:100%` a `.tp-tbl`. Y el contador
@@ -3462,6 +3527,8 @@ pertenece a ningún nivel.
 | **v129** — las cabeceras de grupo del catálogo de topes son `<summary>` y nacieron con **16px de alto**. El CSS del app le pone `min-height:44px` a **todo `<button>`**, pero un `<summary>` no es un botón y no hereda nada: se quedó en lo que mide su línea de texto. | La regla de los 40px (§1) es del **tap target**, no del `<button>`. Si metes algo que se toca y no es un botón —`<summary>`, un `<a>`, un `<div onclick>`—, **mídele el alto**, porque ninguna regla global lo va a salvar. Lo cazó la sonda que mide lo visible, como el botón de 34px de la v107 y la miga de 28px de la v121. |
 | **v130** — el contador `− 3 de 5 +` dentro de la tabla del catálogo la dejaba sin ancho y se partía en **tres líneas**: la fila pasó de 57 a **120px**, y con 47 renglones eso es el doble de catálogo que bajar. La tabla tenía `width:100%`, así que se apretaba en vez de usar el `overflow-x:auto` que su propio contenedor ya tenía. | Una tabla con `width:100%` **no se desborda: se estruja**. Si le metes una columna nueva, ponle `width:auto;min-width:100%` y `white-space:nowrap` y deja que la caja se desplace — y **mídele el alto a la fila antes y después**, que es la v86 y la v126 con otra cara. |
 | **v130** — la sonda del teléfono acusó de desbordar a **49 botones** que están dentro de la tabla que se desplaza: medía el `right` absoluto contra los 390px. El §1 dice justamente lo contrario — una tabla ancha se desplaza dentro de su contenedor. | Para decir «esto se sale de la pantalla» hay que **excluir lo que vive en una caja que scrollea** y comprobar aparte dos cosas: que la página NO scrollee y que la caja SÍ pueda. Medir el borde absoluto convierte un diseño correcto en 49 fallos inventados. |
+| **v131** — el tercer campo de una pieza en L decía «Largo del ala (o fondo total)»: son **dos medidas distintas**, y quien medía el pedazo que sobresale —unos 470, que es como Madesol dibuja el ala— se iba **± 647,6 mm** y no encontraba la pieza. El código estaba bien; el que no sabía de dónde a dónde medir era el ingeniero. | Cuando una entrada admite varias lecturas, **el arreglo no es el código: es decir dónde se pone la cinta**. Mídelo: aquí fueron cinco valores contra `tpDif`, y dos de los cinco fallaban. Y un croquis que dibuja la forma pero no las cotas no contesta la pregunta que la gente tiene delante. |
+| **v131** — el croquis se veía chiquito y nadie sabía por qué: `width="100%"` con un `height` FIJO y un viewBox de 200×92 hace que el navegador lo encaje en **200px de ancho** y deje el resto de la tarjeta en blanco. Llevaba así desde la v129. | Un `<svg>` con `viewBox` y `width:100%` necesita **`height:auto`**, no un número: con los dos puestos manda el que deja la caja más chica y el dibujo se encoge en silencio. Se ve midiendo el `getBoundingClientRect` del svg contra el de la tarjeta, no mirándolo. |
 | **v130** — la marca iba a ser un sí/no. Un renglón como `LAVA-02` son **cinco** lavamanos: con una casilla, el ingeniero identifica uno y el app habría apuntado cinco. Y el contador iba a decir 68, que son RENGLONES — las piezas son **108**, y contar `B6-07` y `B345-08` además de sus mitades `-A`/`-B` lo habría subido a 112, con el 100% inalcanzable para siempre. | **Antes de poner un contador, pregunta qué cuenta una fila.** Aquí una fila son de 1 a 9 piezas, así que la unidad del marcador y la unidad de la marca tienen que ser la misma o el número miente desde el primer día. Lo cazó el dueño leyendo el array, no el código. |
 | **v129** — la caja de buscar del catálogo de topes decía de ejemplo «B6, **lavamanos**, 1778…» y esa palabra **no está en nada de lo que se busca**: el grupo se llama `LAV-A` y el ambiente `Baño`. Escribir el ejemplo que el propio campo sugiere contestaba «Nada con ese texto». | Un `placeholder` es una promesa. **Prueba los ejemplos que escribes**: los tres de ahora devuelven 14, 9 y 1 renglones. Un buscador que falla con su propia sugerencia es el que nadie vuelve a usar. |
 
