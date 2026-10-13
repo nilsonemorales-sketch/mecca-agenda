@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v134 — 14 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v135 — 14 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -253,6 +253,7 @@ mismos botones que cualquier otra.
 | **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
 | **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
 | **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
+| **Contar penalidades y registros de un ingeniero** | **Los ayudantes del libro** (v135) — `_penSituaciones()`, `_penRegistrosPorDia()`, `_penRegTexto()`. Toda pantalla que cuente `obra_penalidades` pasa por ahí. Ver «El libro de penalidades» en §8 |
 | **Crear o editar una actividad con el formulario corto** | **Los tres formularios** (Propio, Contratista, Ingeniero) — `showAddActPropio`, `showAddActContratista`, `showAddActIngeniero` (v133). Lo poco usado va plegado en «Más detalles» (`_formMasHTML`); prioridad (`_formPrioHTML`) y foto (`_formFotoHTML`) son nuevas |
 | **Ir marcando las piezas de tope que ya se identificaron** | **Topes** (v130) — en la ficha del resultado y en el catálogo. `tpMarcar()`, `tpMarcarGrupo()`, marcador `_tpMarcadorHTML()`. Son **108 piezas**, no 68 renglones. Vive en `obra_config`, clave `topes_identificadas` |
 
@@ -3327,6 +3328,16 @@ mismo:**
   `tpMarcar` o `tpMarcarGrupo`: cero escrituras intentadas
 - **LA LISTA DE CHEQUEO DA TODO IGUAL** (v134): `node lista-chequeo.mjs`
   contra lo publicado, **cero DISTINTO** o el porqué en el commit
+- **EL LIBRO DE PENALIDADES DA LO QUE TIENE QUE DAR** (v135), en la sección
+  propia de la lista: tres cargas el último día del mes a las 8:30 p. m. —la
+  tercera como otro aparato— escriben **UNA** inactividad; Karina con **2
+  cerradas y ninguna abierta NO** la recibe; el mismo cierre dos veces es **UNA**
+  fila; y el Historial de Moisés dice **3 situaciones, 2 días de inactividad y 2
+  líneas de registro** sobre 136 filas. Seis de las siete fallan contra la
+  v134 —la de no borrar pasa en las dos—, que es lo que demuestra que miden el
+  arreglo
+- **No se borra ni una fila de `obra_penalidades`.** Cuenta las escrituras de
+  la prueba: **cero `DELETE`** y cero `PATCH` a esa tabla
 - **El escogedor de quién guarda lo mismo que las casillas** (v134): crear con
   Milo y Jordy manda `"Milo, Jordy"` en el orden de la lista; editar `"Milo,
   Contratista Viejo"` sin tocar lo devuelve igual, con el no registrado. Abierto
@@ -3670,6 +3681,8 @@ pertenece a ningún nivel.
 | **v133** — la fecha de inicio se plegó en «Más detalles», como se pidió, y el formulario de Contratista dejó de crear: `Acciones.validar` la exige, y el aviso de error se pintaba **dentro del pliegue cerrado**. «Agregar» parecía muerto. La opción de plegarla la había ofrecido yo, sin mirar la validación. | **Antes de plegar o esconder un campo, busca si la validación lo pide** y dónde se pinta su error. Un campo obligatorio escondido convierte el botón de guardar en un botón muerto. Lo cazó la sonda de crear —no se creó nada en ninguna de las dos versiones— y no la lectura del código. |
 | **v133** — la sonda que debía demostrar el fallo del aviso escondido dijo que el aviso **se veía**: dentro de un `<details>` cerrado, este Chromium oculta el contenido sin quitarle la caja, y `getBoundingClientRect` daba **42px**. | Para saber si algo se ve, pregúntale al navegador (`el.checkVisibility()`), no a la caja. Es el `scrollWidth` de la v117 con otra cara. Y la prueba nueva **tiene que fallar contra el fallo**: se reprodujo el borrador roto y solo con `checkVisibility` dio «no se ve». |
 | **v134** — la primera corrida de la lista de chequeo dio DISTINTO el ingeniero de una alta. No era el escogedor nuevo: la sonda vieja marcaba la casilla con `checked=true`, que no dispara el `onchange`, así que en la v133 no corría `autoAsignarIng` — lo que sí hace el dedo. | **Una prueba que pone valores a mano se salta los eventos que el usuario sí dispara.** Clic, no `checked=`. Es el v58 en pequeño: tocar lo que el usuario toca. |
+| **v135** — el pedido decía que «Actividad completada» se escribía una vez por actividad «en vez de una por día», 13 veces de más, y que el historial de Moisés tenía que decir 130. Medido: cada fila era un cierre real (89 filas distintas = 89 cierres en `obra_cambios`), solo el 9% eran copias, y 130 no salía de ninguna forma de contar. Arreglar «una por día» habría tirado el detalle de qué se cerró. | **Una proporción alta no es una prueba de duplicado**: compara con otra fuente antes de llamarlo copia — aquí `obra_cambios`. Y cuando el número que te piden no se reproduce, **no se ajusta el código hasta que dé**: se para y se pregunta. |
+| **v135** — la sonda del Historial dio vacío en las DOS versiones: entrar al Historial no pide nada, lo pide `loadHistorial` al tocar un filtro. Y después dio 3 situaciones donde se esperaban 2: la propia prueba había escrito la inactividad de hoy. | Lo vacío en las dos versiones es la prueba, no el app (v88). Y lo de la v111 otra vez: **una sonda que escribe cambia lo que miden las de abajo** — se corrige lo ESPERADO, diciendo por qué, no el app. |
 | **v133** — **el contenedor se reinició y se llevó el scratchpad entero**: los 22 arneses de regresión, sus fixtures —varios eran copias de la base— y el comparador. La v130 y la v131 quedaron sin publicar a mitad de su regresión. | Lo que vive en el scratchpad dura lo que dure el contenedor. La regresión se rehízo con **datos inventados** (`reg133.mjs`: 700 actividades con semilla fija, el mismo doble para las dos versiones, el candado en la ruta) — mide filtros, vistas, las ocho agrupaciones, renglones, Obra, Compras, Equipo, Reportes, Partidas, Topes y el alta/edición. **Decidido en la v134**: el dueño autorizó el archivo, y vive en el repo como `lista-chequeo.mjs`, con los datos y el candado dentro. |
 | **v131** — el tercer campo de una pieza en L decía «Largo del ala (o fondo total)»: son **dos medidas distintas**, y quien medía el pedazo que sobresale —unos 470, que es como Madesol dibuja el ala— se iba **± 647,6 mm** y no encontraba la pieza. El código estaba bien; el que no sabía de dónde a dónde medir era el ingeniero. | Cuando una entrada admite varias lecturas, **el arreglo no es el código: es decir dónde se pone la cinta**. Mídelo: aquí fueron cinco valores contra `tpDif`, y dos de los cinco fallaban. Y un croquis que dibuja la forma pero no las cotas no contesta la pregunta que la gente tiene delante. |
 | **v131** — el croquis se veía chiquito y nadie sabía por qué: `width="100%"` con un `height` FIJO y un viewBox de 200×92 hace que el navegador lo encaje en **200px de ancho** y deje el resto de la tarjeta en blanco. Llevaba así desde la v129. | Un `<svg>` con `viewBox` y `width:100%` necesita **`height:auto`**, no un número: con los dos puestos manda el que deja la caja más chica y el dibujo se encoge en silencio. Se ve midiendo el `getBoundingClientRect` del svg contra el de la tarjeta, no mirándolo. |
@@ -3728,6 +3741,13 @@ contratistas y uno no registrado, y de personal propio), los `GET` de los
 formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
+
+**Desde la v135 tiene una segunda parte, «EL LIBRO DE PENALIDADES»**, que no
+compara: COMPRUEBA contra lo que tiene que dar, con un reloj fijo en el último
+día del mes a las 8:30 p. m. de Santo Domingo y su propio doble de
+`obra_penalidades`. Si una comprobación falla en la versión nueva, la lista
+sale con código 1. Contra la v134 fallan seis de las siete, a propósito; la
+séptima —cero `DELETE` y cero `PATCH` a `obra_penalidades`— pasa en las dos.
 
 **El candado va DENTRO del archivo, en la ruta**: lo que va a Supabase lo
 contesta el doble en memoria y lo demás se corta. No hace falta ninguna llave.
@@ -3813,41 +3833,95 @@ orden de magnitud.
   usuario diga en un recorrido que algo falta, **búscalo también entre las
   completadas** antes de crear una partida nueva encima.
 
-### Las penalidades automáticas — explicadas en la v134, SIN TOCAR
+### El libro de penalidades (v134 explicado, v135 arreglado) — NO SE BORRA NADA
 
-El dueño pidió que se le explicaran antes de decidir nada. **No se cambiaron.**
-Esto es lo que hacen, leído en el código y medido contra la base (dos consultas
-agregadas, solo lectura, 13-oct):
+**Decisión del dueño: no se borra ni una fila** de `obra_penalidades`, ni se
+cambia `monto` ni `aplicada`. Lo que se arregló es cómo se cuenta lo que ya
+está y que no se siga duplicando. **No pongas una llave única sin preguntar**:
+con las filas viejas ahí no se puede poner sin borrar.
 
-- **Qué escribe:** una fila en **`obra_penalidades`** por ingeniero y día, tipo
-  `'Inactividad en obra'`, **`monto:0`**, **`aplicada:false`**,
-  `ingeniero_id:'sistema'`, y la descripción «Menos de 2 registros en el día.
-  Registros: N. Horario: 07:30–17:00». **No toca actividades, no toca
-  contratistas, no escribe dinero.** Con `aplicada:false` **no suma puntos**
-  (`calcPuntosPersona` y Bonificaciones las saltan): sale como «Pendiente» en la
-  lista de penalidades y se cuenta en el Historial por ingeniero.
-- **La regla** (`autoPenalidadInactividad`): un ingeniero activo —ni Nilson, ni
-  archivados, ni `sinPenalidad` (Liamelia)— con **menos de 2 actividades de
-  `S.acts` con `fecha` de hoy y su `ingeniero_id`**. Hoy eso es Moisés y Karina.
-  **`S.acts` no trae las cerradas**: una que se registró y se cerró el mismo día
-  no cuenta (la grieta de la v102/v107/v123, otra vez).
-- **Cuándo:** solo al **cargar el app o tocar ↺** (`loadAll` →
-  `loadSecundario`), **solo en el teléfono del administrador** (`isAdmin()`),
-  solo si son las **17:00 o más** de la hora del teléfono y es día laborable. El
-  refresco de 90 s no la llama. Un teléfono de ingeniero **nunca escribe**.
-- **Desde cuándo:** ya estaba en el primer commit del repo (v81, 14-sep). Lo
-  anterior no está en la historia; la primera fila en la base es del 3-jun-2026.
-- **Duplicados — SÍ PASAN.** No hay llave única: el freno es mirar `S.pens`, que
-  se pide al cargar con `fecha >= <mes>-01`, y **`<mes>` sale de
-  `toISOString()`, que es la hora UTC**. A partir de las 20:00 de Santo Domingo
-  del último día del mes, UTC ya está en el mes siguiente: `S.pens` llega sin
-  las de hoy y **cada recarga escribe otra**. También hay carrera si dos
-  aparatos del administrador cargan a la vez. Medido: **92 filas en 66
-  días-persona, 26 de más**, en cinco fechas — **18 filas el 31-ago** (6 por
-  persona), 8 el 17-ago, 6 el 25-ago, 5 el 20-jul, 2 el 25-jun. Todas con
-  `personal_id` nulo (los ingenieros no están en `obra_personal`).
+**LA TABLA GUARDA DOS COSAS DISTINTAS**, y hasta la v134 casi todas las
+pantallas las contaban juntas, fila por fila:
 
+| | qué es | tipos | puntos |
+|---|---|---|---|
+| **Situación** | algo que se le apunta a alguien | Inactividad en obra, Tardanza, Conflicto… | sí, solo si `aplicada` |
+| **Registro** | lo que hizo, para la bitácora | Actividad completada, Contratista registrado, Asistencia registrada (`cat:'Log'`) | cero |
 
+**UN REGISTRO NO ES UNA COPIA.** El pedido de la v135 llegó diciendo que
+«Actividad completada» salía 13 veces por día-persona porque el app escribía
+una por actividad «en vez de una por día». **Medido, no era así**: el 27-jul
+Karina tiene 132 filas y **89 actividades distintas**, y `obra_cambios` dice que
+ese día cerró **89**; el 8-ago Moisés tiene 126 filas, 125 distintas, y cerró
+**125**. Cada fila dice QUÉ actividad se cerró o A QUIÉN se registró. Juntarlas
+en una por día tiraría ese detalle — y el dueño escogió **una fila por EVENTO**.
+
+**Medido el 13-oct**: 2.249 filas. De 2.143 de registro, **160 son copias
+exactas** (misma persona, día, tipo y descripción); de 92 de inactividad, **26**.
+
+**La causa de cada copia, y su arreglo:**
+
+| tipo | copias | causa | arreglo |
+|---|---|---|---|
+| Inactividad en obra | 26 | 15 del último día del mes: el mes se armaba con `toISOString()` (hora UNIVERSAL) y desde las 8 p. m. `S.pens` llegaba sin las de hoy. 10 a menos de 5 s: dos cargas a la vez | el mes en hora local (`today()`), relectura de la base antes de escribir, marca del día en el teléfono (`mecca_inact_<fecha>`) y `_inactCorriendo` |
+| Actividad completada | 132 | 123 son la MISMA actividad cerrada dos veces ese día (`obra_cambios` tiene los dos cierres) | `logEvento` no repite el mismo evento el mismo día |
+| Contratista registrado | 23 | volver a tocar el mismo estado | ídem |
+| Asistencia registrada | 5 | ídem | ídem |
+
+**`logEvento` mira en `S.pens`**, que ya tiene el mes y donde ella misma deja
+lo que escribe: ni un GET. **`autoPenalidadInactividad` sí pide dos cosas, y lo
+autorizó el dueño**: solo en el teléfono del administrador, a partir de la hora
+de salida y una vez al día por aparato —las cerradas de hoy (`id`,
+`ingeniero_id`) y las inactividades de hoy justo antes de escribir—. Si
+cualquiera de las dos falla **no escribe**: castigar sin poder comprobar es
+peor que no castigar hoy. ⚠️ Dos aparatos que escriban en el mismo segundo
+todavía pueden duplicar; la relectura deja la ventana en lo que tarda un POST.
+
+**LA REGLA DE INACTIVIDAD CUENTA LAS CERRADAS** (v135). Contaba solo `S.acts`,
+que no trae las cerradas: castigaba al que registraba y cerraba el mismo día.
+Ahora son abiertas + cerradas con `fecha` de hoy a su nombre, sin contar dos
+veces la misma. Lo demás no cambió: menos de 2, desde la hora de salida, día
+laborable, ni Nilson ni archivados ni `sinPenalidad`.
+
+**CÓMO SE CUENTA** (`_penSituaciones`, `_penRegistrosPorDia`, en un solo sitio):
+
+- **Situación: una por persona + fecha + tipo.** Si el libro la tiene repetida,
+  sale una vez y dice «en el libro 3 veces ese día». **No se esconde.**
+- **Registro: una línea por persona + fecha + tipo con los eventos distintos**
+  — «2026-09-28 · 125 actividades completadas».
+- Lo usan: Equipo → Penalidades (tarjetas, total y lista), Personal →
+  Indicadores, la tarjeta de cada persona, el Historial (pantalla, vista por
+  contratista y PDF), el PDF del Reporte y Bonificaciones. **Los puntos no
+  cambiaron**: cuentan las `aplicada`, que son 8.
+- **Con la base real**, desde junio: Moisés pasa de **1.269 filas** a **24
+  situaciones** (21 días de inactividad) **+ 110 líneas de registro**; Karina de
+  493 a **15 + 37**. *(El pedido decía 130 y 77; no se pudo reproducir de
+  ninguna forma de contar, y no se ajustó nada para que diera.)*
+
+**El Historial ya no tiene el tope de 50**: eran 50 filas para TODOS los
+ingenieros y en 30 días hay 115 — enseñaba menos de la mitad sin decirlo. Va
+por `sbTodo` con seis columnas: unos 20 KB por 30 días. *Avisado y sin tocar:*
+al entrar al Historial **no se pide nada** hasta tocar un filtro o «Limpiar
+filtros» (`loadHistorial`), así que entra vacío. Así estaba antes.
+
+**Quedan sin tocar, avisados:** `S.pens` se pide con `limit=500` del mes al
+arrancar (con los registros, un mes de mucho cierre se pasa: las situaciones de
+principio de mes podrían no contar en los puntos), Bonificaciones pide lo mismo
+con `limit=500`, y Bonificaciones y `penalizarDiasSinRegistro` siguen con el mes
+en hora universal. No escriben ninguno de los cuatro tipos.
+
+#### Lo que se midió la primera vez (v134), por qué y cuándo dispara
+
+- **Qué escribe:** fila en `obra_penalidades`, tipo `'Inactividad en obra'`,
+  `monto:0`, `aplicada:false`, `ingeniero_id:'sistema'`. No toca actividades,
+  contratistas ni dinero, y con `aplicada:false` **no suma puntos**.
+- **Cuándo:** solo al cargar el app o tocar ↺ (`loadAll` → `loadSecundario`),
+  solo en el teléfono del administrador, desde las 17:00. El refresco de 90 s no
+  la llama. Un teléfono de ingeniero **nunca escribe**.
+- **Desde cuándo:** ya estaba en el primer commit del repo (v81). La primera
+  fila en la base es del 3-jun-2026.
+
+## 9. El motor `Parecido`
 
 Agrupa partidas que son el mismo taller escrito distinto («Revestimiento
 en cerámica — cocina caliente» ≈ «Revestimiento de cocina caliente»).

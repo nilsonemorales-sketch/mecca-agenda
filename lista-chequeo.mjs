@@ -288,10 +288,126 @@ async function probar(nombreVer, html, b){
   return out;
 }
 
+/* ── EL LIBRO DE PENALIDADES (v135) ──────────────────────────────────────
+   Aquí no se compara una versión con otra: se COMPRUEBA contra lo que tiene
+   que dar, porque la v135 cambia a propósito lo que escribe y lo que cuenta.
+   Por eso estas comprobaciones fallan contra la v134 — así se sabe que miden
+   el arreglo y no otra cosa.
+   El reloj se fija en el 30-sep-2026 a las 8:30 p. m. de Santo Domingo: último
+   día del mes después de las 8, que en hora universal ya es 1-oct. Es la hora
+   exacta en que la v134 escribía de más (18 filas el 31-ago en la base). */
+const PEN_ESPERADO={
+  inactividadFilas:{v:1, d:'tres cargas el último día del mes, 8:30 p. m. (la 3ª como otro aparato): UNA fila de inactividad (Moisés, sin nada hoy)'},
+  karinaCerradas:{v:0, d:'Karina con 2 actividades CERRADAS hoy y ninguna abierta: NO recibe penalidad'},
+  logDoble:{v:1, d:'el mismo cierre registrado dos veces el mismo día: UNA fila'},
+  // La prueba misma escribe hoy (30-sep) la inactividad de Moisés: por eso son 3 y 2, no 2 y 1.
+  histSituaciones:{v:3, d:'historial de Moisés: 3 situaciones (inactividad del 29 y del 30 + tardanza), no 136 filas'},
+  histInactividad:{v:2, d:'historial de Moisés: inactividad cuenta 2 días aunque el libro tenga 4 filas'},
+  sinBorrar:{v:0, d:'cero DELETE y cero PATCH a obra_penalidades en toda la prueba: no se borra ni se cambia ni una fila'},
+  histRegistros:{v:2, d:'historial de Moisés: los 131 registros salen en 2 líneas por día (125 cierres · 5 contratistas)'},
+};
+async function probarLibro(nombreVer, html, b){
+  const D=datos(); const {PERS}=D;
+  const HOY='2026-09-30';
+  const ACTS=[
+    {id:'k1',descripcion:'Karina cerrada 1',area:'N4 — Apto 4A',estado:'completado',porcentaje:'100',tipo_personal:'ingeniero',personal_nombre:'Ing. Karina Breton',ingeniero_nombre:'Ing. Karina Breton',ingeniero_id:'karina',fecha:HOY,fecha_inicio:HOY,fecha_fin:HOY,created_at:HOY+'T12:00:00Z'},
+    {id:'k2',descripcion:'Karina cerrada 2',area:'N4 — Apto 4B',estado:'completado',porcentaje:'100',tipo_personal:'ingeniero',personal_nombre:'Ing. Karina Breton',ingeniero_nombre:'Ing. Karina Breton',ingeniero_id:'karina',fecha:HOY,fecha_inicio:HOY,fecha_fin:HOY,created_at:HOY+'T13:00:00Z'},
+    {id:'v1',descripcion:'Abierta vieja',area:'N2 — Apto 2A',estado:'pendiente',porcentaje:'0',tipo_personal:'contratista',personal_nombre:'Milo',ingeniero_nombre:'Ing. Nilson',ingeniero_id:'nilson',fecha:'2026-09-01',fecha_inicio:'2026-09-01',fecha_fin:'2026-10-20',created_at:'2026-09-01T12:00:00Z'},
+  ];
+  // El libro de Moisés en los 30 días anteriores: 135 filas que son 2 situaciones y 2 días de registros.
+  const M='Ing. Moises Jimenez', PENS=[]; let nid=0;
+  const pen=(f,t,d)=>PENS.push({id:'pn'+(nid++),personal_nombre:M,fecha:f,tipo:t,descripcion:d,monto:0,aplicada:false,ingeniero_id:'moises'});
+  for(let i=0;i<3;i++) pen('2026-09-29','Inactividad en obra','Menos de 2 registros en el día. Registros: 0. Horario: 07:30–17:00');
+  for(let i=0;i<125;i++) pen('2026-09-28','Actividad completada','Completó: Tarea '+i+' — N5 — Apto 5A');
+  pen('2026-09-28','Actividad completada','Completó: Tarea 0 — N5 — Apto 5A');
+  for(let i=0;i<5;i++) pen('2026-09-27','Contratista registrado','Contratista '+i+' → presente (2026-09-27)');
+  pen('2026-09-25','Tardanza','Llegó 9:10');
+  const POSTS=[], OTRAS=[];
+  const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
+  const ctx=await b.newContext({serviceWorkers:'block',viewport:{width:390,height:844},timezoneId:'America/Santo_Domingo'});
+  const T=new Date('2026-09-30T20:30:00-04:00').getTime();
+  await ctx.addInitScript(t=>{ const R=Date, off=t-R.now();
+    class F extends R{ constructor(...a){ if(a.length) super(...a); else super(R.now()+off); } static now(){ return R.now()+off; } }
+    window.Date=F; window.confirm=()=>true; window.alert=()=>{}; }, T);
+  const ok=(r,body)=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  const filtra=(f,pth)=>{
+    const q=new URLSearchParams(pth.split('?')[1]||'');
+    for(const [k,v] of q.entries()){
+      if(['select','order','limit','offset'].includes(k)) continue;
+      const m=v.match(/^(eq|gte|lte|neq)\.(.*)$/); if(!m) continue;
+      const [_,op,val]=m;
+      f=f.filter(x=>{ const a=String(x[k]??''); return op==='eq'?a===val:op==='neq'?a!==val:op==='gte'?a>=val:a<=val; });
+    }
+    return f;
+  };
+  await ctx.route('**', r=>{
+    const u=r.request().url(), m=r.request().method();
+    if(u.startsWith(ORIGEN)) return r.continue();
+    if(!/\/rest\/v1\//.test(u)) return r.abort();
+    const pth=u.split('/rest/v1/')[1]||'', base=pth.split('?')[0];
+    if(m!=='GET'){
+      let d=null; try{ d=JSON.parse(r.request().postData()||'null'); }catch(e){}
+      if(base==='obra_penalidades'&&m!=='POST') OTRAS.push(m);
+      if(base==='obra_penalidades'&&m==='POST'&&d){ (Array.isArray(d)?d:[d]).forEach(x=>{ PENS.push(Object.assign({},x)); POSTS.push(x); }); }
+      return ok(r,[]);
+    }
+    let f=[];
+    if(base==='obra_actividades') f=filtra(ACTS,pth);
+    else if(base==='obra_personal') f=PERS;
+    else if(base==='obra_penalidades') f=filtra(PENS,pth).slice().sort((x,y)=>String(y.fecha).localeCompare(String(x.fecha)));
+    const lim=new URLSearchParams(pth.split('?')[1]||'').get('limit'); if(lim) f=f.slice(0,+lim);
+    const rg=r.request().headers()['range']||''; if(rg){ const [d0,h]=rg.split('-').map(Number); f=f.slice(d0,h+1); }
+    return ok(r,f);
+  });
+  const p=await ctx.newPage();
+  const G=(f,...a)=>p.evaluate(f,...a);
+  const arrancar=async()=>{
+    await p.goto(ORIGEN+'/index.html',{waitUntil:'load'});
+    await G(()=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify({id:'nilson',nombre:'Ing. Nilson',rol:'admin'})); }catch(e){} });
+    await p.reload({waitUntil:'load'});
+    for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&Array.isArray(S.pens)&&S.acts&&S.acts.length).catch(()=>0)) break; await p.waitForTimeout(500); }
+    await p.waitForTimeout(2500);
+  };
+  await arrancar(); await arrancar();   // dos cargas seguidas, el mismo día
+  /* Una tercera como si fuera OTRO aparato: sin la marca que deja el teléfono.
+     Así la que frena la copia es la relectura de la base, no la marca. */
+  await G(()=>{ try{ Object.keys(localStorage).filter(k=>/^mecca_inact_/.test(k)).forEach(k=>localStorage.removeItem(k)); }catch(e){} });
+  await arrancar();
+  const inact=POSTS.filter(x=>x.tipo==='Inactividad en obra'&&x.fecha===HOY);
+  const r={};
+  r.inactividadFilas=inact.filter(x=>x.personal_nombre===M).length;
+  r.karinaCerradas=inact.filter(x=>x.personal_nombre==='Ing. Karina Breton').length;
+  const n0=POSTS.length;
+  await G(async()=>{ await logEvento('Actividad completada','Completó: prueba doble — N3 — Apto 3A'); await logEvento('Actividad completada','Completó: prueba doble — N3 — Apto 3A'); });
+  await p.waitForTimeout(500);
+  r.logDoble=POSTS.slice(n0).filter(x=>x.descripcion==='Completó: prueba doble — N3 — Apto 3A').length;
+  // el historial, abierto como lo abre el dueño
+  // Al entrar, el Historial no pide nada: lo pide al tocar un filtro o «Limpiar filtros», que llaman a loadHistorial.
+  await G(()=>{ goTab('reportes'); S.reportesVista='historial'; renderReportesHub(); loadHistorial(); });
+  await p.waitForTimeout(2500);
+  const h=await G(()=>{
+    const t=(document.getElementById('c-hist')||{}).innerText||'';
+    const i=t.indexOf('Ing. Moises Jimenez'), j=t.indexOf('Ing. Luis Jimenez',i+1);
+    const seg=i<0?'':t.slice(i, j<0?undefined:j);
+    const num=re=>{ const m=seg.match(re); return m?+m[1]:null; };
+    return {sit:num(/SITUACIONES \/ PENALIDADES \((\d+)\)/), inact:num(/(\d+)\s*\n\s*Inactividad/), reg:num(/REGISTROS DEL D[IÍ]A \((\d+)\)/)||0};
+  });
+  r.sinBorrar=OTRAS.length;
+  r.histSituaciones=h.sit; r.histInactividad=h.inact; r.histRegistros=h.reg;
+  if(FOTOS){
+    await p.evaluate(()=>{ const t=document.getElementById('c-hist'); const i=[...t.querySelectorAll('div')].find(d=>/^Ing\. Moises Jimenez$/.test((d.textContent||'').trim())); if(i){ i.scrollIntoView({block:'start'}); window.scrollBy(0,-150); document.querySelectorAll('*').forEach(e=>{ if(e.scrollTop&&e.contains(i)) e.scrollTop=Math.max(0,e.scrollTop-150); }); } });
+    await p.waitForTimeout(300);
+    await p.screenshot({path:path.join(FOTOS,nombreVer+'-historial-moises.png')});
+  }
+  await ctx.close(); srv.close();
+  return r;
+}
+
 // ── el comparador ─────────────────────────────────────────────────────────
 const b=await chromium.launch({executablePath:CHROME,args:['--no-sandbox']});
 const res=[];
-for(const v of VERS){ process.stderr.write('· probando '+v+' …\n'); res.push(await probar(v.replace(/[^\w.-]/g,'_'), leerVersion(v), b)); }
+for(const v of VERS){ process.stderr.write('· probando '+v+' …\n'); const nv=v.replace(/[^\w.-]/g,'_');
+  const r=await probar(nv, leerVersion(v), b); r.libro=await probarLibro(nv, leerVersion(v), b); res.push(r); }
 await b.close();
 if(JSONOUT){ console.log(JSON.stringify(res,null,1)); process.exit(0); }
 
@@ -309,6 +425,16 @@ for(const [i,r] of res.entries()){
   console.log('── propio de '+VERS[i]+' ──');
   for(const k of Object.keys(r.propio)) console.log('  '+k+': '+JSON.stringify(r.propio[k]));
 }
+// Las comprobaciones del libro: contra lo esperado, en las dos versiones.
+let fallaDespues=0;
+console.log('\nEL LIBRO DE PENALIDADES — contra lo que tiene que dar (v135)\n');
+for(const k of Object.keys(PEN_ESPERADO)){
+  const e=PEN_ESPERADO[k];
+  const marca=res.map(r=>{ const v=r.libro[k]; return (v===e.v?'✓':'✗')+' '+v; });
+  if(res[1].libro[k]!==e.v) fallaDespues++;
+  console.log('  '+marca[0].padEnd(8)+marca[1].padEnd(8)+' (tiene que dar '+e.v+')  '+e.d);
+}
+console.log('  ↑ antes · después. '+(fallaDespues?fallaDespues+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
 console.log('\nCANDADO: escrituras interceptadas '+res.map(r=>Object.values(r.propio.escrituras).reduce((s,x)=>s+x,0)).join(' / ')+
   ' · salidas cortadas (fuentes, fotos) '+res.map(r=>r.propio.salidasCortadas).join(' / ')+' · a la base real: 0');
-process.exit(dist?1:0);
+process.exit(dist||fallaDespues?1:0);

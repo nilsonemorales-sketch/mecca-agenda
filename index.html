@@ -1032,7 +1032,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261014_134';
+const APP_VERSION='20261014_135';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1468,7 +1468,30 @@ function mostrarAlertasInactividad(alertas, horario, fecha){
   banner.style.display='block';
 }
 
-// Auto-penalidad por inactividad (llamar al final del día)
+/* Auto-penalidad por inactividad (al final del día).
+   v135 · TRES ARREGLOS, y la regla es la misma: menos de 2 actividades del día
+   a su nombre, a partir de la hora de salida, en día laborable, solo desde el
+   teléfono del administrador.
+   1. CUENTA TAMBIÉN LAS CERRADAS. `S.acts` solo trae las abiertas, así que el
+      ingeniero que registraba su trabajo y lo cerraba el mismo día salía como
+      inactivo — al revés de lo que se quiere premiar. Se piden las cerradas
+      de hoy: `id` e `ingeniero_id` y nada más, unos cientos de bytes.
+   2. RELEE LA BASE JUSTO ANTES DE ESCRIBIR. El freno era `S.pens`, y eso se
+      pedía con el mes en hora UNIVERSAL: desde las 8 p. m. del último día del
+      mes `S.pens` llegaba sin las de hoy y cada recarga escribía otra (15 de
+      las 26 copias medidas, todas el 31-ago). Otras 10 caían a menos de 5 s
+      una de otra: dos cargas casi a la vez. Ahora se pregunta a
+      `obra_penalidades` por las de hoy, de ese tipo, antes de cada tanda.
+   3. UNA VEZ AL DÍA POR APARATO. Hecha la comprobación, una marca en el
+      teléfono (`mecca_inact_<fecha>`) hace que las recargas siguientes no
+      pidan nada. Y `_inactCorriendo` impide dos tandas a la vez en la misma
+      sesión.
+   ⚠️ Sin llave única en la tabla, dos aparatos que escriban en el MISMO
+   segundo todavía pueden duplicar; la relectura deja esa ventana en lo que
+   tarda un POST. La llave única no se puso: con las filas viejas ahí, exige
+   borrar, y eso lo decide el dueño. */
+var _inactCorriendo=false;
+var PEN_INACTIVIDAD='Inactividad en obra';
 async function autoPenalidadInactividad(){
   if(!isAdmin()) return;
   const hoy = today();
@@ -1478,18 +1501,43 @@ async function autoPenalidadInactividad(){
   const horaActual = ahora.getHours()*60+ahora.getMinutes();
   const [hf,mf] = horario.fin.split(':').map(Number);
   if(horaActual < hf*60+mf) return; // Not end of day yet
-  for(const [uid_, u] of Object.entries(USERS).filter(([k,u_])=>k!=='nilson'&&!u_.archivado&&!u_.sinPenalidad)){
-    const actsHoy = S.acts.filter(a=>a.fecha===hoy&&_matchIngId(a.ingeniero_id,uid_));
-    if(actsHoy.length < 2){
-      // Check if penalty already registered today
-      const yaExiste = S.pens.some(p=>p.personal_nombre===u.nombre&&p.fecha===hoy&&p.tipo==='Inactividad en obra');
-      if(!yaExiste){
-        const p={id:uid(),personal_id:resolvePersonalId(uid_),personal_nombre:u.nombre,fecha:hoy,tipo:'Inactividad en obra',descripcion:`Menos de 2 registros en el día. Registros: ${actsHoy.length}. Horario: ${horario.inicio}–${horario.fin}`,monto:0,aplicada:false,ingeniero_id:'sistema'};
+  var marca='mecca_inact_'+hoy;
+  try{ if(localStorage.getItem(marca)) return; }catch(e){}
+  if(_inactCorriendo) return;
+  _inactCorriendo=true;
+  try{
+    // Las de hoy, abiertas (ya en memoria) y cerradas (de la base), sin contar dos veces la misma.
+    var cerradas=await sb('obra_actividades?select=id,ingeniero_id&fecha=eq.'+hoy+'&estado=eq.completado');
+    var delDia={};
+    (S.acts||[]).forEach(function(a){ if(a.fecha===hoy) delDia[a.id]=a; });
+    (cerradas||[]).forEach(function(a){ if(!delDia[a.id]) delDia[a.id]=a; });
+    var todas=Object.keys(delDia).map(function(k){ return delDia[k]; });
+    var faltan=[], todoBien=true;
+    Object.entries(USERS).filter(([k,u_])=>k!=='nilson'&&!u_.archivado&&!u_.sinPenalidad).forEach(function(e){
+      var n=todas.filter(function(a){ return _matchIngId(a.ingeniero_id,e[0]); }).length;
+      if(n<2) faltan.push({uid_:e[0],u:e[1],n:n});
+    });
+    if(faltan.length){
+      var ya=await sb('obra_penalidades?select=personal_nombre&fecha=eq.'+hoy+'&tipo=eq.'+encodeURIComponent(PEN_INACTIVIDAD));
+      var yaNom={};
+      (ya||[]).forEach(function(p){ yaNom[p.personal_nombre]=1; });
+      (S.pens||[]).forEach(function(p){ if(p.fecha===hoy&&p.tipo===PEN_INACTIVIDAD) yaNom[p.personal_nombre]=1; });
+      for(const f of faltan){
+        if(yaNom[f.u.nombre]) continue;
+        const p={id:uid(),personal_id:resolvePersonalId(f.uid_),personal_nombre:f.u.nombre,fecha:hoy,tipo:PEN_INACTIVIDAD,descripcion:`Menos de 2 registros en el día. Registros: ${f.n}. Horario: ${horario.inicio}–${horario.fin}`,monto:0,aplicada:false,ingeniero_id:'sistema'};
         S.pens.unshift(p);
-        try{await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(p)});}catch(e){}
+        try{await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(p)});}
+        catch(e){ todoBien=false; }
       }
     }
-  }
+    // La marca solo si todo se guardó: si un POST falló, la próxima carga
+    // relee la base y escribe lo que falte (la relectura evita la copia).
+    if(todoBien){ try{ localStorage.setItem(marca,'1'); }catch(e){} }
+  }catch(e){
+    /* Si no se pudo leer, no se escribe: castigar sin poder comprobar es peor
+       que no castigar hoy. La próxima carga lo vuelve a intentar. */
+    console.warn('autoPenalidadInactividad:',e);
+  }finally{ _inactCorriendo=false; }
   renderPens();
 }
 
@@ -1975,7 +2023,7 @@ function getNivelDesempeno(puntos){
 }
 
 function calcPuntosPersona(nombre){
-  const mes=new Date().toISOString().slice(0,7);
+  const mes=today().slice(0,7);   // v135 · hora local, igual que la carga
   // Only aplicada:true records count; log-category entries (0 pts) are excluded implicitly
   const pens=S.pens.filter(p=>p.personal_nombre===nombre&&p.fecha?.startsWith(mes)&&p.aplicada!==false);
   return pens.reduce((acc,p)=>{
@@ -1984,6 +2032,50 @@ function calcPuntosPersona(nombre){
     return acc+cfg.puntos;
   },0);
 }
+/* ══ v135 · CONTAR EL LIBRO DE PENALIDADES ═══════════════════════════════
+   `obra_penalidades` guarda DOS cosas en la misma tabla: las SITUACIONES
+   (inactividad, tardanza, conflicto…, que llevan puntos) y los REGISTROS
+   (`cat:'Log'` en PUNTOS_CONFIG: actividad completada, contratista y
+   asistencia registrados, cero puntos). Hasta la v134 casi todas las
+   pantallas contaban FILAS y metían los registros como «situaciones»: el día
+   que Moisés cerró 125 actividades le salían 125 situaciones.
+   - Situación: UNA por persona + fecha + tipo. Si el libro la tiene repetida
+     (las 26 copias de inactividad), sale una vez y dice cuántas.
+   - Registro: agrupado por persona + fecha + tipo, contando EVENTOS distintos
+     («8-ago · 125 actividades completadas»). No se esconde: se resume.
+   NO SE BORRA NI SE CAMBIA NINGUNA FILA: esto es solo cómo se cuentan. */
+function _penEsRegistro(p){ var c=PUNTOS_CONFIG[p&&p.tipo]; return !!(c&&c.cat==='Log'); }
+function _penClave(p){ return (p.personal_nombre||'')+'|'+(p.fecha||'')+'|'+(p.tipo||''); }
+function _penSituaciones(pens){
+  var m={}, out=[];
+  (pens||[]).forEach(function(p){
+    if(!p||_penEsRegistro(p)) return;
+    var k=_penClave(p);
+    if(m[k]){ m[k].veces++; if(p.aplicada) m[k].aplicada=true; return; }
+    m[k]=Object.assign({},p,{veces:1,_fila:p}); out.push(m[k]);
+  });
+  return out;
+}
+function _penRegistrosPorDia(pens){
+  var m={}, out=[];
+  (pens||[]).forEach(function(p){
+    if(!p||!_penEsRegistro(p)) return;
+    var k=_penClave(p);
+    if(!m[k]){ m[k]={personal_nombre:p.personal_nombre,fecha:p.fecha,tipo:p.tipo,n:0,_vistos:{}}; out.push(m[k]); }
+    var d=p.descripcion||'';
+    if(!m[k]._vistos[d]){ m[k]._vistos[d]=1; m[k].n++; }
+  });
+  return out;
+}
+var PEN_REG_PALABRAS={'Actividad completada':['actividad completada','actividades completadas'],
+  'Contratista registrado':['contratista registrado','contratistas registrados'],
+  'Asistencia registrada':['asistencia registrada','asistencias registradas']};
+function _penRegTexto(g){
+  var w=PEN_REG_PALABRAS[g.tipo];
+  return g.n+' '+(w?(g.n===1?w[0]:w[1]):g.tipo);
+}
+function _penVecesTexto(p){ return p.veces>1?'en el libro '+p.veces+' veces ese día':''; }
+
 const ESTADOS_ASIST=['presente','tarde','medio día','ausente','justificado'];
 
 let S={
@@ -2710,7 +2802,11 @@ async function loadSecundario(){
   loadCompras().catch(()=>{});
   try{
     // Load all engineers' penalties for current month (needed for point calcs and bonif)
-    const mes=new Date().toISOString().slice(0,7);
+    /* v135 · EL MES EN HORA DE AQUÍ, no en la universal. Con `toISOString()`
+       desde las 8 p. m. del último día del mes ya era el mes siguiente:
+       `S.pens` llegaba sin las de hoy y la inactividad se escribía otra vez en
+       cada recarga — 18 filas el 31-ago. */
+    const mes=today().slice(0,7);
     const pens=await sb('obra_penalidades?fecha=gte.'+mes+'-01&order=fecha.desc&limit=500');
     S.pens=pens;
     if(isAdmin()) renderPens();
@@ -10431,11 +10527,23 @@ async function _cmdConfirmar(){
   }
 }
 
+/* v135 · UN EVENTO, UNA FILA. Cada fila de registro dice QUÉ pasó —qué
+   actividad se cerró, a qué contratista o trabajador se registró—, así que
+   NO se junta en una por día: eso tiraría el detalle. Lo que no se repite es
+   el MISMO evento el mismo día. Medido contra la base el 13-oct: de 2.143
+   filas de registro, 160 eran copias exactas — en 123 de las 132 de
+   «Actividad completada» la misma actividad se cerró dos veces ese día, y las
+   de contratista y asistencia salían de volver a tocar el mismo estado. Se
+   mira en `S.pens`, que ya tiene el mes cargado y donde esta misma función
+   deja cada fila que escribe: ni un GET. */
 async function logEvento(tipo, descripcion, ingId){
   var uid_=ingId||(S.user?.id||'');
   var u=USERS[uid_]; if(!u) return;
+  var hoy=today();
+  if((S.pens||[]).some(function(p){ return p.personal_nombre===u.nombre && p.fecha===hoy &&
+      p.tipo===tipo && (p.descripcion||'')===(descripcion||''); })) return;
   var evt={id:uid(),personal_id:resolvePersonalId(uid_),personal_nombre:u.nombre,
-    fecha:today(),tipo:tipo,descripcion:descripcion,
+    fecha:hoy,tipo:tipo,descripcion:descripcion,
     monto:0,aplicada:false,ingeniero_id:uid_};
   S.pens.unshift(evt);
   try{await sb('obra_penalidades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(evt)});}
@@ -12649,7 +12757,7 @@ function renderPens(){
     el.innerHTML='<div class="empty" style="padding:40px 20px"><div style="font-size:32px;margin-bottom:12px">🔒</div><div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px">Acceso restringido</div><div style="font-size:12px;color:var(--text3);margin-bottom:16px">Las penalidades solo están disponibles para el Administrador</div><button class="ibtn primary" onclick="requireEdit(()=>{})" style="margin:0 auto">Iniciar sesión como Admin</button></div>';
     return;
   }
-  var mes=new Date().toISOString().slice(0,7);
+  var mes=today().slice(0,7);   // v135 · hora local
 
   // ── Engineer performance cards ──
   var ings=Object.entries(USERS).map(function(e){
@@ -12660,7 +12768,7 @@ function renderPens(){
       var cfg=PUNTOS_CONFIG[p.tipo]; var isLog=cfg&&cfg.cat==='Log';
       return !isLog&&p.personal_nombre===u.nombre&&p.fecha&&p.fecha.startsWith(mes);
     });
-    return{k:k,nombre:u.nombre,rol:u.rol,pts:pts,niv:niv,pensMes:pensMes.length};
+    return{k:k,nombre:u.nombre,rol:u.rol,pts:pts,niv:niv,pensMes:_penSituaciones(pensMes).length};
   }).sort(function(a,b){return b.pts-a.pts;});
 
   // ── Penalty list with filters ──
@@ -12696,13 +12804,16 @@ function renderPens(){
 
   // SECTION 2: Penalty list
   h+='<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;-webkit-overflow-scrolling:touch;scrollbar-width:none">'+chips+'</div>';
-  h+='<div style="font-size:11px;color:var(--text3);margin-bottom:10px">'+S.pens.length+' situación'+(S.pens.length!==1?'es':'')+' registrada'+(S.pens.length!==1?'s':'')+' en total</div>';
+  /* v135 · Contaba S.pens.length: TODAS las filas del mes, registros
+     incluidos. Ahora son situaciones de verdad, una por persona, día y tipo. */
+  var _nSit=_penSituaciones(S.pens).length;
+  h+='<div style="font-size:11px;color:var(--text3);margin-bottom:10px">'+_nSit+' situación'+(_nSit!==1?'es':'')+' registrada'+(_nSit!==1?'s':'')+' este mes</div>';
 
   if(!filtered.length){
     h+='<div class="empty">Sin penalidades'+(S.penFiltro!=='todos'?' en esta categoría':'')+'</div>';
   } else {
     personas.forEach(function(persona){
-      var pens=filtered.filter(function(p){return p.personal_nombre===persona;});
+      var pens=_penSituaciones(filtered.filter(function(p){return p.personal_nombre===persona;}));
       var tipo=penTipoPersona(pens[0]);
       var tipoIcon=tipo==='ingeniero'?'👤':tipo==='contratista'?'🔨':'👷';
       var ac=avColor(persona);
@@ -12717,7 +12828,7 @@ function renderPens(){
       if(isAdmin()) h+='<button onclick="showAddPenParaPersona(\''+esc(persona).replace(/'/g,"\\'")+'\')" style="flex-shrink:0;padding:5px 8px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg);color:var(--text2);font-size:11px;cursor:pointer;font-family:var(--font)">+ Registrar</button>';
       h+='</div>';
       pens.forEach(function(p){
-        var pi=S.pens.indexOf(p);
+        var pi=S.pens.indexOf(p._fila||p);
         var cfg=PUNTOS_CONFIG[p.tipo]||{puntos:1};
         var pts=cfg.puntos;
         var ptsColor=pts<0?'var(--green)':pts>=5?'var(--red)':pts>=3?'var(--amber)':'#666';
@@ -12731,6 +12842,7 @@ function renderPens(){
         h+='</div></div>';
         h+='<div style="font-size:11px;color:var(--text3);margin-bottom:4px">'+fmtF(p.fecha)+'</div>';
         if(p.descripcion) h+='<div style="font-size:11.5px;color:var(--text2);line-height:1.4;padding:6px 8px;background:var(--bg2);border-radius:6px">'+esc(p.descripcion)+'</div>';
+        if(p.veces>1) h+='<div style="font-size:10.5px;color:var(--amber);margin-top:4px">'+_penVecesTexto(p)+'</div>';
         h+='</div>';
       });
       h+='</div>';
@@ -12922,7 +13034,8 @@ function renderPersonal(){
       ${!S.persDesempOpen?'':[...S.personal,...Object.entries(USERS).map(([k,u])=>({nombre:u.nombre,oficio:u.rol==='admin'?'Administrador':'Ingeniero',tipo:'ingeniero'}))].map(p=>{
         const pts=calcPuntosPersona(p.nombre);
         const niv=getNivelDesempeno(pts);
-        const pensMes=S.pens.filter(x=>x.personal_nombre===p.nombre&&x.fecha?.startsWith(new Date().toISOString().slice(0,7)));
+        // v135 · situaciones de verdad: sin registros y una por día y tipo.
+        const pensMes=_penSituaciones(S.pens.filter(x=>x.personal_nombre===p.nombre&&x.fecha?.startsWith(today().slice(0,7))));
         return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow)">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
             <div style="display:flex;align-items:center;gap:8px">
@@ -12952,7 +13065,7 @@ function togglePersDesemp(){ S.persDesempOpen=!S.persDesempOpen; renderPersonal(
 
 function personalItemHTML(p){
   const asistHoy=S.asist.find(a=>a.personal_id===p.id);
-  const penCount=S.pens.filter(pen=>pen.personal_id===p.id).length;
+  const penCount=_penSituaciones(S.pens.filter(pen=>pen.personal_id===p.id)).length;   // v135
   const actCount=S.acts.filter(a=>a.personal_nombre===p.nombre).length;
   return`<div class="p-item">
     <div class="p-av" style="background:${avColor(p.nombre)}22;color:${avColor(p.nombre)};border-color:${avColor(p.nombre)}44">${initials(p.nombre)}</div>
@@ -14123,8 +14236,15 @@ async function generarPDF(opts){
     }
 
     // ── SITUACIONES / PENALIDADES ─────────────────────────────────
-    if(secs.penalidades&&pens.length){
-      secBanner('SITUACIONES REGISTRADAS  ('+pens.length+')',RED);
+    /* v135 · El número es de SITUACIONES (una por persona, día y tipo); los
+       registros —actividades cerradas, contratistas, asistencia— van
+       resumidos por día al final, una línea cada uno, no fila por fila. */
+    var _penSit=_penSituaciones(pens), _penReg=_penRegistrosPorDia(pens);
+    var _penLin=_penSit.concat(_penReg.map(function(g){
+      return {fecha:g.fecha, personal_nombre:g.personal_nombre, tipo:'Registro', descripcion:_penRegTexto(g)};
+    }));
+    if(secs.penalidades&&_penLin.length){
+      secBanner('SITUACIONES REGISTRADAS  ('+_penSit.length+')'+(_penReg.length?'  ·  REGISTROS DEL DIA  ('+_penReg.length+')':''),RED);
       // Cabecera tabla
       chk(7);
       fc(LGRAY2);doc.rect(M,y,RW,7,'F');
@@ -14134,7 +14254,7 @@ async function generarPDF(opts){
       doc.text('PERSONA',M+20,y+4.5);
       doc.text('TIPO DE SITUACION',M+72,y+4.5);
       y+=7;_rowIdx=0;
-      pens.forEach(function(p){
+      _penLin.forEach(function(p){
         chk(12);
         _rowIdx++;
         if(_rowIdx%2===0){fc([255,248,248]);doc.rect(M,y-1,RW,6,'F');}
@@ -14146,7 +14266,7 @@ async function generarPDF(opts){
         y+=6;
         if(p.descripcion){
           chk(6);tc([140,140,140]);doc.setFontSize(7);doc.setFont('helvetica','italic');
-          var dl=doc.splitTextToSize(safe(p.descripcion),RW-25);
+          var dl=doc.splitTextToSize(safe(p.descripcion)+(p.veces>1?'  ('+_penVecesTexto(p)+')':''),RW-25);
           dl.forEach(function(l){chk(4);doc.text(l,M+20,y);y+=4;});
           y+=1;
         }
@@ -14254,7 +14374,11 @@ async function loadHistorial(){
     const [acts, asist, pens, creadoLogs] = await Promise.all([
       sb(`obra_actividades?order=fecha.desc,created_at.desc&limit=100${fechaQ}${fechaQ2}${ingQ}`),
       sb(`obra_asistencia?order=fecha.desc&limit=100${fechaQ}${fechaQ2}${ingQ}`),
-      sb(`obra_penalidades?order=fecha.desc&limit=50${fechaQ}${fechaQ2}`),
+      /* v135 · SIN EL TOPE DE 50, que era silencioso: 50 filas para TODOS los
+         ingenieros juntos, y en 30 días hay 115 — el historial enseñaba menos de
+         la mitad sin decirlo. Va por `sbTodo` y solo con las columnas que se
+         pintan: medido el 13-oct, 30 días son 115 filas, unos 20 KB. */
+      sbTodo(`obra_penalidades?select=id,personal_nombre,fecha,tipo,descripcion,aplicada&order=fecha.desc${fechaQ}${fechaQ2}`),
       sb(`obra_cambios?accion=eq.creado&entidad=eq.actividad&limit=500`).catch(()=>[]),
     ]);
     S.histActs=acts; S.histAsist=asist; S.histPens=pens; S.histCreadoLogs=creadoLogs||[];
@@ -14391,10 +14515,15 @@ function renderHistorial(){
   const ingData = Object.entries(USERS).map(([uid_, u])=>{
     const myActs = histActs.filter(a=>a.ingeniero_id===uid_);
     const myAsist = histAsist.filter(a=>a.ingeniero_id===uid_);
-    const myPens = histPens.filter(p=>p.personal_nombre===u.nombre);
+    /* v135 · Las filas se cuentan como lo que son: situaciones (una por día y
+       tipo) y registros (resumidos por día). `myPens` contaba cada fila, y un
+       día de 125 actividades cerradas salía como 125 situaciones. */
+    const _mp = histPens.filter(p=>p.personal_nombre===u.nombre);
+    const myPens = _penSituaciones(_mp);
+    const myRegs = _penRegistrosPorDia(_mp);
     const completadas = myActs.filter(a=>a.estado==='completado').length;
-    const inactividad = myPens.filter(p=>p.tipo==='Inactividad en obra').length;
-    return {uid_, u, myActs, myAsist, myPens, completadas, inactividad};
+    const inactividad = myPens.filter(p=>p.tipo===PEN_INACTIVIDAD).length;
+    return {uid_, u, myActs, myAsist, myPens, myRegs, completadas, inactividad};
   }).filter(d=> S.histFiltroIng==='todos' || d.uid_===S.histFiltroIng);
 
   const _nHF=(S.histFiltroIng&&S.histFiltroIng!=='todos'?1:0)+(S.histFecha||S.histFechaFin?1:0);
@@ -14423,7 +14552,7 @@ function renderHistorial(){
       <button onclick="S.histFecha='';S.histFechaFin='';S.histFiltroIng='todos';S.histFiltroCont='';loadHistorial()" style="margin-top:8px;width:100%;padding:8px;border-radius:var(--r);border:1px solid var(--border2);background:transparent;color:var(--text3);font-family:var(--font);font-size:12px;cursor:pointer">Limpiar filtros</button>
     </div>
 
-    ${S.histModo==='contratista'?_histContratistasHTML():ingData.map(({uid_, u, myActs, myAsist, myPens, completadas, inactividad})=>`
+    ${S.histModo==='contratista'?_histContratistasHTML():ingData.map(({uid_, u, myActs, myAsist, myPens, myRegs, completadas, inactividad})=>`
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:14px;overflow:hidden">
 
       <!-- HEADER ING -->
@@ -14507,11 +14636,26 @@ function renderHistorial(){
             <span style="font-size:10px;font-family:var(--mono);color:var(--text3)">${p.fecha}</span>
           </div>
           ${p.descripcion?`<div style="font-size:11px;color:var(--text2);margin-top:3px">${esc(p.descripcion)}</div>`:''}
-          <div style="font-size:10px;color:${p.aplicada?'var(--red)':'var(--amber)'};margin-top:3px">${p.aplicada?'✓ Aplicada':'Pendiente'}</div>
+          <div style="font-size:10px;color:${p.aplicada?'var(--red)':'var(--amber)'};margin-top:3px">${p.aplicada?'✓ Aplicada':'Pendiente'}${p.veces>1?' · '+_penVecesTexto(p):''}</div>
         </div>`).join('')}
       </div>`:''}
 
-      ${myActs.length===0&&myAsist.length===0&&myPens.length===0?`<div class="empty" style="padding:20px">Sin registros en el período seleccionado</div>`:''}
+      <!-- REGISTROS (v135): resumidos por día, no fila por fila -->
+      ${myRegs.length>0?`
+      <div style="padding:10px 12px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">
+          <span>REGISTROS DEL DÍA (${myRegs.length})</span>
+          <button onclick="toggleSection('regs-${uid_}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px">ver/ocultar</button>
+        </div>
+        <div id="regs-${uid_}">
+        ${myRegs.map(g=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px">
+          <span style="color:var(--text3);font-family:var(--mono);min-width:80px">${g.fecha}</span>
+          <span style="flex:1;color:var(--text2)">${esc(_penRegTexto(g))}</span>
+        </div>`).join('')}
+        </div>
+      </div>`:''}
+
+      ${myActs.length===0&&myAsist.length===0&&myPens.length===0&&myRegs.length===0?`<div class="empty" style="padding:20px">Sin registros en el período seleccionado</div>`:''}
     </div>`).join('')}
     <div style="height:70px"></div>`;
 }
@@ -14532,7 +14676,7 @@ function _histContratistasHTML(){
   var grupos={},orden=[];
   acts.forEach(function(a){
     var k=(a.personal_nombre||'').trim()||'Sin asignar';
-    if(!grupos[k]){grupos[k]={items:[],pens:pens.filter(function(p){return p.personal_nombre===k;})};orden.push(k);}
+    if(!grupos[k]){grupos[k]={items:[],pens:_penSituaciones(pens.filter(function(p){return p.personal_nombre===k;}))};orden.push(k);}
     grupos[k].items.push(a);
   });
   orden.sort(function(x,y){return grupos[y].items.length-grupos[x].items.length;});
@@ -14676,7 +14820,8 @@ function exportarHistorialPDF(uid_){
     drawHeader();y=26;
 
     const myActs=(S.histActs||[]).filter(a=>a.ingeniero_id===uid_);
-    const myPens=(S.histPens||[]).filter(p=>p.personal_nombre===u.nombre);
+    const _mp=(S.histPens||[]).filter(p=>p.personal_nombre===u.nombre);
+    const myPens=_penSituaciones(_mp), myRegs=_penRegistrosPorDia(_mp);   // v135, igual que la pantalla
     const myComp=myActs.filter(a=>a.estado==='completado').length;
 
     // Nombre del ingeniero + resumen
@@ -14749,7 +14894,18 @@ function exportarHistorialPDF(uid_){
           var dl2=doc.splitTextToSize(safe(p.descripcion),RW-8);
           dl2.forEach(function(l){chk(4);doc.text(l,M+8,y);y+=4;});
         }
+        if(p.veces>1){ chk(4);tc([180,120,0]);doc.setFontSize(7);doc.setFont('helvetica','normal');doc.text(safe(_penVecesTexto(p)),M+8,y);y+=4; }
         y+=3;dc(BOR);doc.setLineWidth(0.15);doc.line(M+4,y,W-M-4,y);y+=4;
+      });
+    }
+    if(myRegs.length){
+      chk(12);
+      fc(DARK);doc.roundedRect(M,y,RW,9,1.5,1.5,'F');
+      tc(WHT);doc.setFontSize(9);doc.setFont('helvetica','bold');
+      doc.text('REGISTROS DEL DIA  ('+myRegs.length+')',M+4,y+6);y+=13;
+      myRegs.forEach(function(g){
+        chk(6);tc(TXT);doc.setFontSize(8);doc.setFont('helvetica','normal');
+        doc.text(g.fecha+'  —  '+safe(_penRegTexto(g)),M+4,y);y+=6;
       });
     }
 
@@ -28247,30 +28403,32 @@ function renderBonificaciones(){
   h+='</div>';
 
   // Activity log for the month — log-category entries from fresh DB fetch
-  var logEntries=(_bonifPens||[]).filter(function(p){
-    var cfg=PUNTOS_CONFIG[p.tipo]; return cfg&&cfg.cat==='Log';
-  }).slice(0,60);
-  if(logEntries.length){
+  /* v135 · Los registros del mes, RESUMIDOS POR DÍA («8-ago · ✅ 125
+     actividades completadas»), no las primeras 60 filas sueltas: con un día
+     de 125 cierres esas 60 eran medio día de un solo ingeniero. */
+  var logGrupos=_penRegistrosPorDia(_bonifPens);
+  if(logGrupos.length){
     h+='<div style="margin-top:14px">';
     h+='<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Registro de interacciones — '+mesNombre(mes)+'</div>';
-    // Group by engineer
-    var logByIng={};
-    logEntries.forEach(function(e){
-      var k=e.personal_nombre||'?'; if(!logByIng[k]) logByIng[k]=[];
-      logByIng[k].push(e);
+    var logByIng={}, ordenIng=[];
+    logGrupos.forEach(function(g){
+      var k=g.personal_nombre||'?'; if(!logByIng[k]){ logByIng[k]=[]; ordenIng.push(k); }
+      logByIng[k].push(g);
     });
-    Object.entries(logByIng).forEach(function(entry){
-      var nombre=entry[0]; var logs=entry[1];
+    ordenIng.forEach(function(nombre){
+      var gs=logByIng[nombre];
+      var dias={}; gs.forEach(function(g){ dias[g.fecha]=1; });
+      var nDias=Object.keys(dias).length;
       h+='<div class="card" style="margin-bottom:8px">';
-      h+='<div style="padding:8px 12px 4px;font-size:12px;font-weight:700;color:var(--accent)">'+esc(nombre)+' · '+logs.length+' interacciones</div>';
-      logs.slice(0,10).forEach(function(ev){
-        var icon=ev.tipo==='Actividad completada'?'✅':ev.tipo==='Contratista registrado'?'🔨':'👷';
+      h+='<div style="padding:8px 12px 4px;font-size:12px;font-weight:700;color:var(--accent)">'+esc(nombre)+' · '+nDias+(nDias===1?' día':' días')+' con registros</div>';
+      gs.slice(0,10).forEach(function(g){
+        var icon=g.tipo==='Actividad completada'?'✅':g.tipo==='Contratista registrado'?'🔨':'👷';
         h+='<div style="padding:4px 12px;font-size:11px;color:var(--text2);border-top:1px solid var(--border)40;display:flex;gap:8px;align-items:baseline">';
-        h+='<span style="flex-shrink:0;color:var(--text3)">'+esc(ev.fecha)+'</span>';
-        h+='<span>'+icon+' '+esc(ev.descripcion)+'</span>';
+        h+='<span style="flex-shrink:0;color:var(--text3)">'+esc(g.fecha)+'</span>';
+        h+='<span>'+icon+' '+esc(_penRegTexto(g))+'</span>';
         h+='</div>';
       });
-      if(logs.length>10) h+='<div style="padding:4px 12px 8px;font-size:10px;color:var(--text3)">...y '+(logs.length-10)+' más</div>';
+      if(gs.length>10) h+='<div style="padding:4px 12px 8px;font-size:10px;color:var(--text3)">...y '+(gs.length-10)+' líneas más</div>';
       h+='</div>';
     });
     h+='</div>';
