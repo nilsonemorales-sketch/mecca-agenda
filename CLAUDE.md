@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v131 — 9 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v133 — 13 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -88,7 +88,7 @@ Corre gratis debajo de las 10,000 neuronas diarias que regala Cloudflare
 
 | Archivo | Qué es |
 |---|---|
-| `index.html` | **El app entero.** ~33.400 líneas, 2,0 MB (v131). HTML, CSS y JS en un solo archivo. |
+| `index.html` | **El app entero.** ~33.600 líneas, 2,0 MB (v133). HTML, CSS y JS en un solo archivo. |
 | `sw.js` | Service worker. 61 líneas. **Pieza frágil, ver §5.** |
 | `worker/worker.js` | El Worker de Cloudflare (voz e inteligencia). |
 | `worker/wrangler.toml` | Configuración del Worker. |
@@ -109,7 +109,7 @@ datos, no el código.
 ## 3.5 Dónde vive cada cosa — mapa del app
 
 Antes de construir una pantalla, busca si ya existe. Este mapa está al día
-a **v131 (9 oct 2026)**. Si lo que vas a hacer se parece a algo de aquí,
+a **v133 (13 oct 2026)**. Si lo que vas a hacer se parece a algo de aquí,
 **amplíalo en su sitio; no lo hagas otra vez en otra pestaña.**
 
 El menú es: **Obra · Actividades · Equipo · Reportes · Fotos · Planos ·
@@ -245,6 +245,7 @@ mismos botones que cualquier otra.
 | **Marcar un material como urgente** | **Compras → la orden → el punto del renglón** (v128) — `_ocUrgenteRow()`. Rojo o gris, y sale en el PDF y en la tarjeta |
 | **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
 | **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
+| **Crear o editar una actividad con el formulario corto** | **Los tres formularios** (Propio, Contratista, Ingeniero) — `showAddActPropio`, `showAddActContratista`, `showAddActIngeniero` (v133). Lo poco usado va plegado en «Más detalles» (`_formMasHTML`); prioridad (`_formPrioHTML`) y foto (`_formFotoHTML`) son nuevas |
 | **Ir marcando las piezas de tope que ya se identificaron** | **Topes** (v130) — en la ficha del resultado y en el catálogo. `tpMarcar()`, `tpMarcarGrupo()`, marcador `_tpMarcadorHTML()`. Son **108 piezas**, no 68 renglones. Vive en `obra_config`, clave `topes_identificadas` |
 
 
@@ -436,6 +437,70 @@ clickee está tocando lo que el usuario no puede tocar.
 «Contratista» faltaban además las 9 de ingeniero. Ahora hay bloque **«Sin tipo
 de personal»** y los tres modos suman 1.059 y 347 vencidas. Si un modo suma
 menos que la cabecera, alguien volvió a dejar un `tipo_personal` fuera.
+
+### EL FORMULARIO CORTO (v133) — lo plegado NO se quitó
+
+El dueño midió las **2.596** actividades y pidió sacar del formulario lo que
+nadie llena. **Su medición era de la BASE, no de la pantalla, y no cuadraban:**
+de los 13 campos que nombró, **solo cinco salían en el formulario** —
+`cantidad_real`, `cantidad_plan`, `unidad`, `requiere_arq` y «PLAN GENERAL»
+(`plan_id`)—. Los otros ocho (`semana`, `solapes_ok`, `actividad_padre_id`,
+`pendientes`, `tipo`, `plano_x/y`, `estancada_motivo`, `verificado`) **no estaban
+en ningún formulario**: los escriben otras pantallas o nadie. Lo que dice «tipo»
+en el formulario es `tipo_personal`, no la columna `tipo` («diaria»). **Antes de
+quitar algo de una pantalla, mira si está en la pantalla.**
+
+Y son **TRES formularios**, no uno: Personal propio, Contratista y Tarea de
+ingeniero. Los tres llevan ahora el mismo orden: descripción · ubicación ·
+quién (trabajadores / contratistas / ingenieros) · **fecha inicio y fecha fin en
+una fila** · estado · avance · **prioridad** · notas · **foto** · y abajo, plegado
+y cerrado, **«Más detalles»**.
+
+**LO PLEGADO SIGUE EN EL DOM, y eso es lo que importa.** `saveAct` lee la unidad
+y las cantidades con `getFld('a-u')`, `getFld('a-plan')`… del formulario: si
+se QUITARAN, el primer guardado de las 36-38 actividades que las tienen las
+dejaría en blanco sin que nadie lo viera. Plegadas dentro de un `<details>`, el
+campo está y se manda igual. Comprobado editando una con `m² · 12 · 3` y
+guardando sin tocar: el `PATCH` lleva los mismos tres valores y la base los
+conserva.
+
+En «Más detalles» van: requiere Arq. · responsables (en Propio y Contratista;
+**en Tarea de ingeniero no**, ahí los ingenieros SON quien hace el trabajo) ·
+hora de inicio y hora fin · **la medición junta** (unidad, planificada,
+realizada) · predecesoras.
+
+- **LA MEDICIÓN VA JUNTA porque `calcPct` saca el % de realizada ÷ planificada.**
+  Quitar solo «realizada» —estaba en la lista de «nunca usados»— reventaba el
+  formulario al tocar la planificada, y arreglarlo era tocar el cálculo de
+  avance.
+- **LA FECHA DE INICIO NO SE PLIEGA, aunque se pidió.** `Acciones.validar` la
+  EXIGE en las de contratista y de ingeniero (`sin_fechas`) y
+  `_actMostrarError` pinta el aviso al lado de `a-fi`. Plegada, el aviso salía
+  DENTRO del pliegue cerrado: se tocaba «Agregar» y no pasaba nada visible.
+  Va en la misma fila que la fecha fin: **cero píxeles de más**. Lo cazó la
+  sonda de crear, que no creaba nada.
+- **«PLAN GENERAL» SÍ SE QUITÓ.** Lo llenaba `obra_plan_actividades` —**65
+  filas**, que `loadPlanActividades` carga al arrancar aunque el módulo Plan
+  esté escondido— y **0 de 2.596** actividades lo tenían puesto. `saveAct` y
+  `saveActIngeniero` ya **solo escriben `plan_id` si el selector existe**:
+  sin eso habrían mandado `null` en cada guardado.
+- **PRIORIDAD Y FOTO SON NUEVAS EN EL FORMULARIO**, pedidas por el dueño, y van
+  por caminos que ya existían. La prioridad son los **dos estados** del botón de
+  la tarjeta (normal / urgente, los mismos que acepta `Acciones.setPrioridad`) y
+  **solo se escribe si se toca un botón**: editar una actividad sin prioridad
+  para cambiar otra cosa no puede dejar en `obra_cambios` un «prioridad →
+  normal» que nadie puso. La foto es «Pedir la foto al guardar»: al terminar el
+  guardado abre **`abrirFotoUpload`, la de siempre**, sobre el id recién
+  guardado — una foto necesita el id y el formulario no lo tiene antes. Con
+  varias ubicaciones la foto va a la **primera**.
+
+**NO CABE A 390, y por qué.** Medido con los 26 contratistas reales: el de
+Contratista mide **2.482 px y la lista de contratistas sola son 1.558** (el
+63%); Propio 1.280 (trabajadores 356); Ingeniero 1.068. El pliegue bajó el
+botón «Agregar» un 15-20%, pero **mientras la lista de quién sea una casilla por
+persona, ningún orden lo hace caber**. Lo que haría caber es otra forma de
+escoger —una línea que se toca y despliega el escogedor, como el pliegue de la
+v122—, y **eso lo decide el dueño**.
 
 ### TOPES (v129) — el primer módulo que no habla con la base
 
@@ -3209,6 +3274,21 @@ mismo:**
   pudieron traer
 - **Un usuario `view` no marca** (v130), ni desde el botón ni llamando a
   `tpMarcar` o `tpMarcarGrupo`: cero escrituras intentadas
+- **LO PLEGADO EN EL FORMULARIO NO SE PIERDE AL GUARDAR** (v133). Edita una
+  actividad con `unidad`, `cantidad_plan` y `cantidad_real` puestas, guarda SIN
+  abrir «Más detalles» y mira el `PATCH` y la base: los tres valores intactos.
+  Si salen en blanco, alguien sacó el campo del DOM en vez de plegarlo
+- **Crear sin fecha de inicio ENSEÑA el aviso** (v133), en Contratista y en
+  Ingeniero, y no escribe nada. Mídelo con **`checkVisibility()`**, no con el
+  tamaño: dentro de un `<details>` cerrado Chromium esconde sin quitar la caja y
+  `getBoundingClientRect` da 42px. Con la fecha plegada esta prueba FALLA, que
+  es lo que tiene que hacer
+- **Crear con el formulario corto manda lo mismo que antes** (v133), campo por
+  campo, salvo `plan_id`, que ya no se manda (la base lo deja en null igual).
+  Y **«PLAN GENERAL» no sale** en ninguno de los tres
+- **Prioridad «Urgente» desde el formulario manda `prioridad:'urgente'`**, y
+  editar sin tocarla **no manda la clave**. «Pedir la foto al guardar» abre
+  `abrirFotoUpload` con el id de la actividad recién creada (v133)
 - **LAS TRES LECTURAS DEL FONDO TOTAL ENCUENTRAN LA PIEZA EN L** (v131). Con
   3048 y 648 puestos: **1.117,6 · 1.118 y 1.765** dan `B6-02` y `B345-03`;
   **470 y 648 NO** —se van ± 647,6 y ± 469,6— y la pantalla lo dice con las
@@ -3527,6 +3607,10 @@ pertenece a ningún nivel.
 | **v129** — las cabeceras de grupo del catálogo de topes son `<summary>` y nacieron con **16px de alto**. El CSS del app le pone `min-height:44px` a **todo `<button>`**, pero un `<summary>` no es un botón y no hereda nada: se quedó en lo que mide su línea de texto. | La regla de los 40px (§1) es del **tap target**, no del `<button>`. Si metes algo que se toca y no es un botón —`<summary>`, un `<a>`, un `<div onclick>`—, **mídele el alto**, porque ninguna regla global lo va a salvar. Lo cazó la sonda que mide lo visible, como el botón de 34px de la v107 y la miga de 28px de la v121. |
 | **v130** — el contador `− 3 de 5 +` dentro de la tabla del catálogo la dejaba sin ancho y se partía en **tres líneas**: la fila pasó de 57 a **120px**, y con 47 renglones eso es el doble de catálogo que bajar. La tabla tenía `width:100%`, así que se apretaba en vez de usar el `overflow-x:auto` que su propio contenedor ya tenía. | Una tabla con `width:100%` **no se desborda: se estruja**. Si le metes una columna nueva, ponle `width:auto;min-width:100%` y `white-space:nowrap` y deja que la caja se desplace — y **mídele el alto a la fila antes y después**, que es la v86 y la v126 con otra cara. |
 | **v130** — la sonda del teléfono acusó de desbordar a **49 botones** que están dentro de la tabla que se desplaza: medía el `right` absoluto contra los 390px. El §1 dice justamente lo contrario — una tabla ancha se desplaza dentro de su contenedor. | Para decir «esto se sale de la pantalla» hay que **excluir lo que vive en una caja que scrollea** y comprobar aparte dos cosas: que la página NO scrollee y que la caja SÍ pueda. Medir el borde absoluto convierte un diseño correcto en 49 fallos inventados. |
+| **v133** — el pedido traía 13 campos «para sacar o esconder» medidos en la **base**, y en la **pantalla** solo estaban cinco. Ocho no salían en ningún formulario: quitarlos era no hacer nada, y decir que se hizo habría sido mentir. | Lo que mide la base no es lo que enseña la pantalla. Antes de quitar o esconder, **haz la lista de lo que de verdad sale**, formulario por formulario — aquí eran tres, no uno —, y repórtala antes de tocar. |
+| **v133** — la fecha de inicio se plegó en «Más detalles», como se pidió, y el formulario de Contratista dejó de crear: `Acciones.validar` la exige, y el aviso de error se pintaba **dentro del pliegue cerrado**. «Agregar» parecía muerto. La opción de plegarla la había ofrecido yo, sin mirar la validación. | **Antes de plegar o esconder un campo, busca si la validación lo pide** y dónde se pinta su error. Un campo obligatorio escondido convierte el botón de guardar en un botón muerto. Lo cazó la sonda de crear —no se creó nada en ninguna de las dos versiones— y no la lectura del código. |
+| **v133** — la sonda que debía demostrar el fallo del aviso escondido dijo que el aviso **se veía**: dentro de un `<details>` cerrado, este Chromium oculta el contenido sin quitarle la caja, y `getBoundingClientRect` daba **42px**. | Para saber si algo se ve, pregúntale al navegador (`el.checkVisibility()`), no a la caja. Es el `scrollWidth` de la v117 con otra cara. Y la prueba nueva **tiene que fallar contra el fallo**: se reprodujo el borrador roto y solo con `checkVisibility` dio «no se ve». |
+| **v133** — **el contenedor se reinició y se llevó el scratchpad entero**: los 22 arneses de regresión, sus fixtures —varios eran copias de la base— y el comparador. La v130 y la v131 quedaron sin publicar a mitad de su regresión. | Lo que vive en el scratchpad dura lo que dure el contenedor. La regresión se rehízo con **datos inventados** (`reg133.mjs`: 700 actividades con semilla fija, el mismo doble para las dos versiones, el candado en la ruta) — mide filtros, vistas, las ocho agrupaciones, renglones, Obra, Compras, Equipo, Reportes, Partidas, Topes y el alta/edición. **Si se quiere que sobreviva, hay que decidir dónde guardarla**: el repo no admite archivos nuevos sin que el dueño lo diga. |
 | **v131** — el tercer campo de una pieza en L decía «Largo del ala (o fondo total)»: son **dos medidas distintas**, y quien medía el pedazo que sobresale —unos 470, que es como Madesol dibuja el ala— se iba **± 647,6 mm** y no encontraba la pieza. El código estaba bien; el que no sabía de dónde a dónde medir era el ingeniero. | Cuando una entrada admite varias lecturas, **el arreglo no es el código: es decir dónde se pone la cinta**. Mídelo: aquí fueron cinco valores contra `tpDif`, y dos de los cinco fallaban. Y un croquis que dibuja la forma pero no las cotas no contesta la pregunta que la gente tiene delante. |
 | **v131** — el croquis se veía chiquito y nadie sabía por qué: `width="100%"` con un `height` FIJO y un viewBox de 200×92 hace que el navegador lo encaje en **200px de ancho** y deje el resto de la tarjeta en blanco. Llevaba así desde la v129. | Un `<svg>` con `viewBox` y `width:100%` necesita **`height:auto`**, no un número: con los dos puestos manda el que deja la caja más chica y el dibujo se encoge en silencio. Se ve midiendo el `getBoundingClientRect` del svg contra el de la tarjeta, no mirándolo. |
 | **v130** — la marca iba a ser un sí/no. Un renglón como `LAVA-02` son **cinco** lavamanos: con una casilla, el ingeniero identifica uno y el app habría apuntado cinco. Y el contador iba a decir 68, que son RENGLONES — las piezas son **108**, y contar `B6-07` y `B345-08` además de sus mitades `-A`/`-B` lo habría subido a 112, con el 100% inalcanzable para siempre. | **Antes de poner un contador, pregunta qué cuenta una fila.** Aquí una fila son de 1 a 9 piezas, así que la unidad del marcador y la unidad de la marca tienen que ser la misma o el número miente desde el primer día. Lo cazó el dueño leyendo el array, no el código. |

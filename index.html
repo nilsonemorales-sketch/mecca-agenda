@@ -642,6 +642,20 @@ input.tp-in[type=search]{font-size:14px}
 .tp-tbl .tp-marcar,.tp-tbl .tp-marcado{padding:4px 9px;font-size:11.5px}
 .tp-hit.tp-ok{border-left-color:var(--green)}
 .tp-grp-pie{margin-top:8px}
+/* v133 · el formulario corto: prioridad, foto y el pliegue «Más detalles» */
+.fm-dos{display:flex;gap:8px}
+.fm-op{flex:1;min-height:44px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);
+  border-radius:var(--r);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
+.fm-op.on{background:var(--accent-soft);border-color:var(--accent);color:var(--text)}
+.fm-op.urg.on{background:var(--red-light);border-color:var(--red);color:var(--red)}
+.fm-foto{width:100%}
+.fm-mas{margin:12px 0 6px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)}
+.fm-mas>summary{min-height:44px;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:14px;
+  cursor:pointer;color:var(--text2);list-style:none}
+.fm-mas>summary::-webkit-details-marker{display:none}
+.fm-mas>summary::before{content:'▸';margin-right:8px}
+.fm-mas[open]>summary::before{content:'▾'}
+.fm-mas-in{padding:4px 12px 10px}
 /* v131 · los tres pasos de la cinta, y lo que resuelve la medición */
 .tp-pasos{font-size:11.5px;color:var(--text2);margin-top:8px;line-height:1.5}
 .tp-pasos div{margin-bottom:3px}
@@ -994,7 +1008,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261009_131';
+const APP_VERSION='20261013_133';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -11112,6 +11126,79 @@ function editAct(id){
 }
 
 // ── FORM PERSONAL X LA CASA ──────────────────────────────
+/* ══ v133 · EL FORMULARIO CORTO ══════════════════════════════════════════
+   Medido sobre las 2.596 actividades: la mitad de lo que pedía el formulario
+   no lo llena nadie. A 390px el botón «Agregar» quedaba a 1,5-1,7 pantallazos.
+
+   LO QUE SE PLEGÓ NO SE QUITÓ. Va dentro de «Más detalles», cerrado al abrir,
+   y SIGUE EN LA PANTALLA: `saveAct` lee la unidad y las cantidades del DOM
+   (`getFld('a-u')`, `getFld('a-plan')`), así que si se quitaran, el primer
+   guardado de las 36-38 actividades que las tienen las dejaría en blanco. Es
+   la lección de la v128 —quitar un control no puede borrar lo guardado— con
+   otra cara. Plegado: Arq., responsables (salvo en la tarea de ingeniero,
+   donde son quien hace el trabajo), hora de inicio y hora fin, la medición y
+   las predecesoras.
+
+   LA FECHA DE INICIO NO SE PLIEGA, aunque se pidió, y aquí está por qué:
+   `Acciones.validar` la EXIGE en las de contratista y de ingeniero
+   (`sin_fechas`), y `_actMostrarError` pinta el aviso al lado de `a-fi`.
+   Plegada, el aviso salía DENTRO del pliegue cerrado: se tocaba «Agregar» y
+   no pasaba nada visible — el botón muerto. Va en la misma fila que la fecha
+   fin, así que no cuesta ni un píxel de alto. Antes de plegar un campo, mira
+   si la validación lo pide.
+
+   LA MEDICIÓN VA JUNTA (unidad, planificada, realizada): `calcPct` saca el %
+   de realizada ÷ planificada, y quitar una sola reventaba al tocar la otra.
+
+   «PLAN GENERAL» SÍ SE QUITÓ: lo llena `obra_plan_actividades` (65 filas, con
+   el módulo Plan escondido) y 0 de 2.596 actividades lo tienen puesto. El
+   guardado ya no escribe `plan_id` si el selector no está, así que nada se
+   pisa.
+
+   PRIORIDAD Y FOTO SON NUEVAS EN EL FORMULARIO, pedidas por el dueño, y van
+   por los caminos que ya existían: la prioridad son los dos estados del botón
+   de la tarjeta (normal/urgente) y se guarda en el mismo `Acciones.crear` /
+   `editar`; la foto abre `abrirFotoUpload`, la de siempre, sobre la actividad
+   ya guardada — una foto necesita el id, y el formulario no lo tiene antes. */
+function _formMasHTML(dentro){
+  return '<details class="fm-mas"><summary>Más detalles</summary><div class="fm-mas-in">'+dentro+'</div></details>';
+}
+function _formPrioHTML(a){
+  /* Se guarda el valor CRUDO y solo se escribe si el dueño toca un botón: una
+     actividad sin prioridad que se edita para otra cosa no puede salir
+     escrita en `obra_cambios` como «prioridad → normal». */
+  var u=(a&&a.prioridad)==='urgente';
+  return '<div class="fw"><label class="fl">Prioridad</label><div class="fm-dos">'+
+    '<button type="button" id="a-prio-n" class="fm-op'+(u?'':' on')+'" onclick="_formPrio(\'normal\')">Normal</button>'+
+    '<button type="button" id="a-prio-u" class="fm-op urg'+(u?' on':'')+'" onclick="_formPrio(\'urgente\')">● Urgente</button>'+
+    '</div><input type="hidden" id="a-prio" value=""></div>';
+}
+function _formPrio(v){
+  var i=document.getElementById('a-prio'); if(!i) return;
+  i.value=v;
+  var n=document.getElementById('a-prio-n'), u=document.getElementById('a-prio-u');
+  if(n) n.classList.toggle('on', v==='normal');
+  if(u) u.classList.toggle('on', v==='urgente');
+}
+function _formFotoHTML(a){
+  return '<div class="fw"><label class="fl">Foto</label>'+
+    '<button type="button" id="a-foto-b" class="fm-op fm-foto" onclick="_formFotoTog()">📷 Pedir la foto al guardar</button>'+
+    '<input type="hidden" id="a-foto" value=""></div>';
+}
+function _formFotoTog(){
+  var i=document.getElementById('a-foto'), b=document.getElementById('a-foto-b'); if(!i||!b) return;
+  var on=i.value!=='1'; i.value=on?'1':'';
+  b.classList.toggle('on',on);
+  b.textContent=on?'📷 Se pide la foto al guardar ✓':'📷 Pedir la foto al guardar';
+}
+/* Después de guardar, la foto va por el camino de siempre. Con varias
+   ubicaciones se crea una por sitio, y la foto queda en la PRIMERA: es la
+   misma foto, y pedirla once veces no lo hace nadie parado en la obra. */
+function _formFotoDespues(id){
+  if(!id) return;
+  setTimeout(function(){ abrirFotoUpload(id); }, 350);
+}
+
 function showAddActPropio(ai, ctx){
   const edit=ai!==undefined;
   const a=edit?S.acts[ai]:{descripcion:'',area:'',estado:'pendiente',tipo_personal:'propio',unidad:'',cantidad_plan:0,cantidad_real:0,porcentaje:0,notas:'',ingeniero_nombre:S.user?.nombre||'',personal_nombre:''};
@@ -11120,7 +11207,6 @@ function showAddActPropio(ai, ctx){
     <h3>${edit?'Editar actividad':'Actividad — Personal x la casa'}</h3>
     <div class="fw"><label class="fl">¿Qué se realizó? *</label>
       <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Ej: Colocación de cerámica baño..." style="font-size:15px"></div>
-    ${arqToggleHTML(a)}
     ${a.id?`<div style="margin:-2px 0 8px"><button type="button" onclick="abrirPendientes('${a.id}')" style="padding:6px 12px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Pendientes (${_pendAbiertos(a).length})</button></div>`:''}
     <div class="fw">
       <label class="fl">Ubicación / Área</label>
@@ -11137,10 +11223,7 @@ function showAddActPropio(ai, ctx){
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
     <div id="ubicaciones-selected" style="min-height:4px"></div>
     <div id="otras-ubic"></div>
-    <div class="fgrid">
-      <div class="fw"><label class="fl">Responsable(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
-        ${ingCheckboxes(a, !edit)}</div>
-      <div class="fw">
+    <div class="fw">
         <label class="fl">Trabajadores <span style="font-size:10px;color:var(--text3)">(selecciona varios)</span></label>
         ${(function(){
           var selNames=(a.personal_nombre||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
@@ -11153,26 +11236,7 @@ function showAddActPropio(ai, ctx){
               '</label>';
           }).join('')+'<input type="hidden" id="a-pers" value="'+esc(a.personal_nombre||'')+'">';
         })()}
-      </div>      <div class="fw"><label class="fl">Estado</label>
-        <select id="a-est" class="sel" onchange="syncEstadoPct(this)">
-          <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>Pendiente</option>
-          <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>En progreso</option>
-          <option value="completado" ${a.estado==='completado'?'selected':''}>${PAL_COMPLETADA}</option>
-        </select></div>
-      <div class="fw"><label class="fl">Unidad</label>
-        <input type="text" id="a-u" value="${esc(a.unidad)}" placeholder="m², ml, unid..."></div>
-      <div class="fw"><label class="fl">Cant. planificada</label>
-        <input type="number" id="a-plan" value="${a.cantidad_plan||0}" min="0" inputmode="decimal" onchange="calcPct()"></div>
-      <div class="fw"><label class="fl">Cant. realizada</label>
-        <input type="number" id="a-real" value="${a.cantidad_real||0}" min="0" inputmode="decimal" onchange="calcPct()"></div>
-    </div>
-    <div class="fw"><label class="fl">% Avance</label>
-      <input type="range" id="a-pct" value="${a.porcentaje||0}" min="0" max="100" style="width:100%;accent-color:var(--accent);height:6px;margin:8px 0" oninput="document.getElementById('a-pct-lbl').textContent=this.value+'%'">
-      <div style="text-align:center;font-family:var(--mono);font-size:14px;color:var(--accent)" id="a-pct-lbl">${a.porcentaje||0}%</div></div>
-    <div class="fw"><label class="fl">Notas</label>
-      <textarea id="a-n" class="ta" placeholder="Materiales usados, observaciones...">${esc(a.notas)}</textarea></div>
-    <input type="hidden" id="a-tipo" value="propio">
-    <input type="hidden" id="a-edit-id" value="${edit?a.id:''}">
+      </div>
     <div class="fgrid">
       <div class="fw"><label class="fl">Fecha inicio (opcional)</label>
         <input type="date" id="a-fi" value="${a.fecha_inicio||''}" onchange="calcDuracion()"></div>
@@ -11183,14 +11247,41 @@ function showAddActPropio(ai, ctx){
       <span style="font-size:11px;color:var(--text3)">Duración: </span>
       <span style="font-family:var(--mono);color:var(--accent);font-weight:600" id="dur-propio-lbl">${calcDurLbl(a.fecha_inicio,a.fecha_fin)}</span>
     </div>
+    <div class="fw"><label class="fl">Estado</label>
+        <select id="a-est" class="sel" onchange="syncEstadoPct(this)">
+          <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>Pendiente</option>
+          <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>En progreso</option>
+          <option value="completado" ${a.estado==='completado'?'selected':''}>${PAL_COMPLETADA}</option>
+        </select></div>
+    <div class="fw"><label class="fl">% Avance</label>
+      <input type="range" id="a-pct" value="${a.porcentaje||0}" min="0" max="100" style="width:100%;accent-color:var(--accent);height:6px;margin:8px 0" oninput="document.getElementById('a-pct-lbl').textContent=this.value+'%'">
+      <div style="text-align:center;font-family:var(--mono);font-size:14px;color:var(--accent)" id="a-pct-lbl">${a.porcentaje||0}%</div></div>
+    ${_formPrioHTML(a)}
+    <div class="fw"><label class="fl">Notas</label>
+      <textarea id="a-n" class="ta" placeholder="Materiales usados, observaciones...">${esc(a.notas)}</textarea></div>
+    ${_formFotoHTML(a)}
+    <input type="hidden" id="a-tipo" value="propio">
+    <input type="hidden" id="a-edit-id" value="${edit?a.id:''}">
+    ${_formMasHTML(`
+    ${arqToggleHTML(a)}
+      <div class="fw"><label class="fl">Responsable(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
+        ${ingCheckboxes(a, !edit)}</div>
     <div class="fgrid">
       <div class="fw"><label class="fl">Hora inicio</label>
         <input type="time" id="a-hi" value="${a.hora_inicio||''}"></div>
       <div class="fw"><label class="fl">Hora fin</label>
         <input type="time" id="a-hf" value="${a.hora_fin||''}"></div>
     </div>
+    <div class="fgrid">
+      <div class="fw"><label class="fl">Unidad</label>
+        <input type="text" id="a-u" value="${esc(a.unidad)}" placeholder="m², ml, unid..."></div>
+      <div class="fw"><label class="fl">Cant. planificada</label>
+        <input type="number" id="a-plan" value="${a.cantidad_plan||0}" min="0" inputmode="decimal" onchange="calcPct()"></div>
+      <div class="fw"><label class="fl">Cant. realizada</label>
+        <input type="number" id="a-real" value="${a.cantidad_real||0}" min="0" inputmode="decimal" onchange="calcPct()"></div>
+    </div>
     ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
-    ${(S.planActs||[]).length?`<div style="margin-top:12px"><label class="fl" style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px;letter-spacing:.07em">PLAN GENERAL</label><select id="sa-plan-id" style="width:100%;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:var(--font)"><option value="">— Sin vincular —</option>${(S.planActs||[]).map(p=>'<option value="'+p.id+'"'+((a.plan_id===p.id)?' selected':'')+'>'+esc(p.nombre)+(p.nivel?' ('+p.nivel+')':'')+'</option>').join('')}</select></div>`:''}
+    `)}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
@@ -11347,9 +11438,7 @@ function showAddActContratista(ai, preContratista, ctx){
     <div class="fw"><label class="fl">¿Qué se va a realizar? *</label>
       <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Ej: Instalación sistema eléctrico..." style="font-size:15px" oninput="_pintarHermanas()"></div>
     <div id="a-sug"></div>
-    ${arqToggleHTML(a)}
     ${a.id?`<div style="margin:-2px 0 8px"><button type="button" onclick="abrirPendientes('${a.id}')" style="padding:6px 12px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Pendientes (${_pendAbiertos(a).length})</button></div>`:''}
-
     <div class="fw">
       <label class="fl">Ubicación / Área</label>
       <div style="display:flex;gap:8px;align-items:center">
@@ -11365,11 +11454,7 @@ function showAddActContratista(ai, preContratista, ctx){
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
     <div id="ubicaciones-selected" style="min-height:4px"></div>
     <div id="otras-ubic"></div>
-
-    <div class="fgrid">
-      <div class="fw"><label class="fl">Responsable(s) (Ing/Arq) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
-        ${ingCheckboxes(a, !edit)}</div>
-      <div class="fw"><label class="fl">Contratista(s) asignado(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
+    <div class="fw"><label class="fl">Contratista(s) asignado(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
         ${(function(){
           var selNames=_responsables(a.personal_nombre);
           var conts=S.personal.filter(p=>p.tipo==='contratista');
@@ -11381,15 +11466,6 @@ function showAddActContratista(ai, preContratista, ctx){
           return conts.map(p=>chk(p.nombre,false,p.oficio)).join('')+extras.map(n=>chk(n,true,'')).join('')+'<input type="hidden" id="a-pers" value="'+esc(a.personal_nombre||'')+'">';
         })()}
       </div>
-    </div>
-
-    <div class="fw"><label class="fl">Estado</label>
-      <select id="a-est" class="sel" style="font-size:15px" onchange="syncEstadoPct(this)">
-        <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>Pendiente</option>
-        <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>En progreso</option>
-        <option value="completado" ${a.estado==='completado'?'selected':''}>${PAL_COMPLETADA}</option>
-      </select></div>
-
     <div class="fgrid">
       <div class="fw"><label class="fl">Fecha inicio</label>
         <input type="date" id="a-fi" value="${a.fecha_inicio||''}" onchange="calcDuracion()"></div>
@@ -11402,13 +11478,31 @@ function showAddActContratista(ai, preContratista, ctx){
         <span style="font-family:var(--mono);color:var(--accent);font-weight:600" id="duracion-lbl">${calcDurLbl(a.fecha_inicio,a.fecha_fin)}</span>
       </div>
     </div>
+    <div class="fw"><label class="fl">Estado</label>
+      <select id="a-est" class="sel" style="font-size:15px" onchange="syncEstadoPct(this)">
+        <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>Pendiente</option>
+        <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>En progreso</option>
+        <option value="completado" ${a.estado==='completado'?'selected':''}>${PAL_COMPLETADA}</option>
+      </select></div>
+    <div class="fw"><label class="fl">% Avance</label>
+      <input type="range" id="a-pct" value="${a.porcentaje||0}" min="0" max="100" style="width:100%;accent-color:var(--accent);height:6px;margin:8px 0" oninput="document.getElementById('a-pct-lbl').textContent=this.value+'%'">
+      <div style="text-align:center;font-family:var(--mono);font-size:14px;color:var(--accent)" id="a-pct-lbl">${a.porcentaje||0}%</div></div>
+    ${_formPrioHTML(a)}
+    <div class="fw"><label class="fl">Notas</label>
+      <textarea id="a-n" class="ta" placeholder="Condiciones, materiales, acuerdos...">${esc(a.notas)}</textarea></div>
+    ${_formFotoHTML(a)}
+    <input type="hidden" id="a-tipo" value="contratista">
+    <input type="hidden" id="a-edit-id" value="${edit?a.id:''}">
+    ${_formMasHTML(`
+    ${arqToggleHTML(a)}
+      <div class="fw"><label class="fl">Responsable(s) (Ing/Arq) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
+        ${ingCheckboxes(a, !edit)}</div>
     <div class="fgrid">
       <div class="fw"><label class="fl">Hora inicio</label>
         <input type="time" id="a-hi" value="${a.hora_inicio||''}"></div>
       <div class="fw"><label class="fl">Hora fin</label>
         <input type="time" id="a-hf" value="${a.hora_fin||''}"></div>
     </div>
-
     <div class="fgrid">
       <div class="fw"><label class="fl">Unidad</label>
         <input type="text" id="a-u" value="${esc(a.unidad)}" placeholder="m², ml, global..."></div>
@@ -11416,18 +11510,8 @@ function showAddActContratista(ai, preContratista, ctx){
         <input type="number" id="a-plan" value="${a.cantidad_plan||0}" min="0" inputmode="decimal"></div>
     </div>
     <input type="hidden" id="a-real" value="${a.cantidad_real||0}">
-
-    <div class="fw"><label class="fl">% Avance</label>
-      <input type="range" id="a-pct" value="${a.porcentaje||0}" min="0" max="100" style="width:100%;accent-color:var(--accent);height:6px;margin:8px 0" oninput="document.getElementById('a-pct-lbl').textContent=this.value+'%'">
-      <div style="text-align:center;font-family:var(--mono);font-size:14px;color:var(--accent)" id="a-pct-lbl">${a.porcentaje||0}%</div></div>
-
-    <div class="fw"><label class="fl">Notas</label>
-      <textarea id="a-n" class="ta" placeholder="Condiciones, materiales, acuerdos...">${esc(a.notas)}</textarea></div>
-
-    <input type="hidden" id="a-tipo" value="contratista">
-    <input type="hidden" id="a-edit-id" value="${edit?a.id:''}">
     ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
-    ${(S.planActs||[]).length?`<div style="margin-top:12px"><label class="fl" style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px;letter-spacing:.07em">PLAN GENERAL</label><select id="sa-plan-id" style="width:100%;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:var(--font)"><option value="">— Sin vincular —</option>${(S.planActs||[]).map(p=>'<option value="'+p.id+'"'+((a.plan_id===p.id)?' selected':'')+'>'+esc(p.nombre)+(p.nivel?' ('+p.nivel+')':'')+'</option>').join('')}</select></div>`:''}
+    `)}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
@@ -11467,18 +11551,14 @@ function showAddActIngeniero(ai, ctx){
   document.getElementById('mcontent').innerHTML=`
     <div class="mhandle"></div>
     <h3>${edit?'Editar tarea':'Tarea administrativa — Ingeniero'}</h3>
-
     <div class="fw"><label class="fl">Tipo de tarea</label>
       <select id="a-tipo-admin" class="sel" style="font-size:15px;margin-bottom:6px" onchange="var d=document.getElementById('a-d');if(this.value!=='Otro')d.value=this.value;">
         <option value="">— Seleccionar tipo —</option>
         ${TIPOS_ADMIN.map(t=>`<option value="${t}" ${a.descripcion===t?'selected':''}>${t}</option>`).join('')}
       </select></div>
-
     <div class="fw"><label class="fl">Descripción *</label>
       <input type="text" id="a-d" value="${esc(a.descripcion)}" placeholder="Detalle la tarea..." style="font-size:15px"></div>
-    ${arqToggleHTML(a)}
     ${a.id?`<div style="margin:-2px 0 8px"><button type="button" onclick="abrirPendientes('${a.id}')" style="padding:6px 12px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font)">Pendientes (${_pendAbiertos(a).length})</button></div>`:''}
-
     <div class="fw"><label class="fl">Área / Ubicación</label>
       <div style="display:flex;gap:8px;align-items:center">
         ${ubicacionSelect('a-area-single','')}
@@ -11493,23 +11573,9 @@ function showAddActIngeniero(ai, ctx){
     <div id="ubic-count-msg" style="display:none;font-size:11px;font-weight:600;color:var(--accent);padding:6px 10px;background:var(--blue-light);border-radius:var(--r);margin-bottom:8px"></div>
     <div id="ubicaciones-selected" style="min-height:4px"></div>
     <div id="otras-ubic"></div>
-
     <div class="fw"><label class="fl">Ingeniero(s) responsable(s) <span style="font-size:10px;color:var(--text3)">(uno o varios)</span></label>
       ${ingCheckboxes(a.ingeniero_nombre?a:{ingeniero_nombre:a.personal_nombre||a.ingeniero_nombre}, !edit)}</div>
     <input type="hidden" id="a-pers" value="">
-
-    <div class="fgrid">
-      <div class="fw"><label class="fl">Estado</label>
-        <select id="a-est" class="sel" onchange="syncEstadoPct(this)">
-          <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>Pendiente</option>
-          <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>En progreso</option>
-          <option value="completado" ${a.estado==='completado'?'selected':''}>${PAL_COMPLETADA}</option>
-        </select></div>
-      <div class="fw"><label class="fl">% Avance</label>
-        <input type="range" id="a-pct" value="${a.porcentaje||0}" min="0" max="100" style="width:100%;accent-color:var(--accent);height:6px;margin:10px 0" oninput="document.getElementById('a-pct-lbl').textContent=this.value+'%'">
-        <div style="text-align:center;font-family:var(--mono);font-size:13px;color:var(--accent)" id="a-pct-lbl">${a.porcentaje||0}%</div></div>
-    </div>
-
     <div class="fgrid">
       <div class="fw"><label class="fl">Fecha inicio</label>
         <input type="date" id="a-fi" value="${a.fecha_inicio||''}" onchange="calcDuracion()"></div>
@@ -11522,22 +11588,35 @@ function showAddActIngeniero(ai, ctx){
         <span style="font-family:var(--mono);color:var(--blue);font-weight:600" id="duracion-lbl">${calcDurLbl(a.fecha_inicio,a.fecha_fin)}</span>
       </div></div>
     <div class="fgrid">
-      <div class="fw"><label class="fl">Hora inicio</label>
-        <input type="time" id="a-hi" value="${a.hora_inicio||''}"></div>
-      <div class="fw"><label class="fl">Hora fin</label>
-        <input type="time" id="a-hf" value="${a.hora_fin||''}"></div>
+      <div class="fw"><label class="fl">Estado</label>
+        <select id="a-est" class="sel" onchange="syncEstadoPct(this)">
+          <option value="pendiente" ${a.estado==='pendiente'?'selected':''}>Pendiente</option>
+          <option value="en-progreso" ${a.estado==='en-progreso'?'selected':''}>En progreso</option>
+          <option value="completado" ${a.estado==='completado'?'selected':''}>${PAL_COMPLETADA}</option>
+        </select></div>
+      <div class="fw"><label class="fl">% Avance</label>
+        <input type="range" id="a-pct" value="${a.porcentaje||0}" min="0" max="100" style="width:100%;accent-color:var(--accent);height:6px;margin:10px 0" oninput="document.getElementById('a-pct-lbl').textContent=this.value+'%'">
+        <div style="text-align:center;font-family:var(--mono);font-size:13px;color:var(--accent)" id="a-pct-lbl">${a.porcentaje||0}%</div></div>
     </div>
-
+    ${_formPrioHTML(a)}
     <div class="fw"><label class="fl">Notas</label>
       <textarea id="a-n" class="ta" placeholder="Observaciones, acuerdos, pendientes...">${esc(a.notas)}</textarea></div>
-
+    ${_formFotoHTML(a)}
     <input type="hidden" id="a-u" value="">
     <input type="hidden" id="a-plan" value="0">
     <input type="hidden" id="a-real" value="0">
     <input type="hidden" id="a-tipo" value="ingeniero">
     <input type="hidden" id="a-edit-id" value="${edit?a.id:''}">
+    ${_formMasHTML(`
+    ${arqToggleHTML(a)}
+    <div class="fgrid">
+      <div class="fw"><label class="fl">Hora inicio</label>
+        <input type="time" id="a-hi" value="${a.hora_inicio||''}"></div>
+      <div class="fw"><label class="fl">Hora fin</label>
+        <input type="time" id="a-hf" value="${a.hora_fin||''}"></div>
+    </div>
     ${buildPredSection(edit?a.id:null, edit?getPreds(a):[])}
-    ${(S.planActs||[]).length?`<div style="margin-top:12px"><label class="fl" style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px;letter-spacing:.07em">PLAN GENERAL</label><select id="sa-plan-id" style="width:100%;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:var(--font)"><option value="">— Sin vincular —</option>${(S.planActs||[]).map(p=>'<option value="'+p.id+'"'+((a.plan_id===p.id)?' selected':'')+'>'+esc(p.nombre)+(p.nivel?' ('+p.nivel+')':'')+'</option>').join('')}</select></div>`:''}
+    `)}
     <div class="mactions">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       ${edit?`<button class="btn danger" onclick="delAct(${ai})">Eliminar</button>`:''}
@@ -11580,8 +11659,14 @@ async function saveActIngeniero(ai){
     fecha_fin:(document.getElementById('a-ff')||{value:''}).value,
     fecha:S.fecha, foto_pendiente:false,
     predecesoras:(document.getElementById('a-preds')||{value:''}).value.trim()||null,
-    plan_id:(document.getElementById('sa-plan-id')||{value:''}).value||null,
   };
+  /* v133 · lo mismo que en saveAct: sin el selector no se escribe `plan_id`, y
+     la prioridad solo si el dueño tocó un botón. */
+  var _plSelI=document.getElementById('sa-plan-id');
+  if(_plSelI) a.plan_id=_plSelI.value||null;
+  var _prioI=(document.getElementById('a-prio')||{value:''}).value;
+  if(_prioI) a.prioridad=_prioI;
+  var _quiereFotoI=(document.getElementById('a-foto')||{value:''}).value==='1';
   var _hiI=(document.getElementById('a-hi')||{value:''}).value.trim();
   var _hfI=(document.getElementById('a-hf')||{value:''}).value.trim();
   if(_hiI) a.hora_inicio=_hiI;
@@ -11614,6 +11699,7 @@ async function saveActIngeniero(ai){
       reRenderActs();
       var _cr=(await _pr).creadas;
       _undoCreate((_cr[0]&&_cr[0].descripcion)||'actividad',_cr.map(function(x){return Object.assign({},x);}));
+      if(_quiereFotoI) _formFotoDespues(_cr[0]&&_cr[0].id);
     }else{
       /* Las otras ubicaciones marcadas se leen ANTES de cerrar el modal:
          despues el DOM ya no existe. */
@@ -11624,6 +11710,7 @@ async function saveActIngeniero(ai){
          serian el mismo objeto y no cambiaria nada nunca. */
       var _antes=Object.assign({}, window._editActual||{});
       await Acciones.editar(editIdIng,a);
+      if(_quiereFotoI) _formFotoDespues(editIdIng);
 
       if(_otras.length){
         /* Solo se copia lo que de verdad se toco en el formulario. Mandar el
@@ -11837,8 +11924,14 @@ async function saveAct(ai){
     fecha:S.fecha,
     foto_pendiente:false,
     predecesoras:getFld('a-preds','').trim()||null,
-    plan_id:(document.getElementById('sa-plan-id')||{value:''}).value||null,
   };
+  /* v133 · «PLAN GENERAL» salió del formulario: solo se escribe `plan_id` si el
+     selector está. Sin esto se mandaría null a cada guardado. */
+  var _plSel=document.getElementById('sa-plan-id');
+  if(_plSel) a.plan_id=_plSel.value||null;
+  var _prio=getFld('a-prio','');
+  if(_prio) a.prioridad=_prio;
+  var _quiereFoto=getFld('a-foto','')==='1';
   var _hi=getFld('a-hi','').trim(),_hf=getFld('a-hf','').trim();
   if(_hi) a.hora_inicio=_hi;
   if(_hf) a.hora_fin=_hf;
@@ -11923,6 +12016,7 @@ async function saveAct(ai){
     _actSaving=false;
     setSS('ok','✓ '+hhmm()); reRenderActs();
     if(!editId) showToast('Actividad guardada','ok',3500);
+    if(_quiereFoto) _formFotoDespues(editId || (_creadas[0]&&_creadas[0].id));
     loadAbiertas();
     if(S.actVista==='apto' && S.aptoSel) loadAptoActs(S.aptoSel).then(function(){renderActs();});
   }catch(e){
