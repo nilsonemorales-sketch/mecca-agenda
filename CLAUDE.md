@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v135 — 14 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v136 — 14 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -253,6 +253,7 @@ mismos botones que cualquier otra.
 | **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
 | **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
 | **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
+| **CAMINAR un apartamento y marcar lo hecho** | **Recorrido** (v136) — el cajón y la barra lateral. Es el panel del apartamento (`_recPanelApto`) con la lista de ambientes delante (`abrirRecorrido`, `_recAmbientesHTML`), tocar = marcar (`recMarcar`) y «Guardar N cambios» (`recGuardar`). Ver «El Recorrido» abajo |
 | **Contar penalidades y registros de un ingeniero** | **Los ayudantes del libro** (v135) — `_penSituaciones()`, `_penRegistrosPorDia()`, `_penRegTexto()`. Toda pantalla que cuente `obra_penalidades` pasa por ahí. Ver «El libro de penalidades» en §8 |
 | **Crear o editar una actividad con el formulario corto** | **Los tres formularios** (Propio, Contratista, Ingeniero) — `showAddActPropio`, `showAddActContratista`, `showAddActIngeniero` (v133). Lo poco usado va plegado en «Más detalles» (`_formMasHTML`); prioridad (`_formPrioHTML`) y foto (`_formFotoHTML`) son nuevas |
 | **Ir marcando las piezas de tope que ya se identificaron** | **Topes** (v130) — en la ficha del resultado y en el catálogo. `tpMarcar()`, `tpMarcarGrupo()`, marcador `_tpMarcadorHTML()`. Son **108 piezas**, no 68 renglones. Vive en `obra_config`, clave `topes_identificadas` |
@@ -2777,6 +2778,61 @@ práctico. **Se retiró entero en v81** (~475 líneas). Si alguien pide «una
 pantalla que pase las partidas una por una», esto ya se intentó: lo que
 funciona en obra es la lista, con las acciones en la fila.
 
+### EL RECORRIDO (v136) — caminar un ambiente y marcar lo hecho
+
+El dueño sale a caminar un apartamento con el teléfono y tiene que poder marcar
+lo hecho sin abrir actividad por actividad: el 6A tenía **105 abiertas de 14
+contratistas**.
+
+**NO ES UNA PANTALLA NUEVA, Y FUE DECISIÓN DEL DUEÑO.** El pedido describía una
+pantalla «Recorrido» nueva: ambiente → grupos por contratista plegados con
+«N abiertas, M vencidas» → actividades con su fecha. **Eso ya existía**: es el
+panel del apartamento de abajo (`_recPanelApto`), al que se llegaba tocando la
+torre. Preguntado con opciones, escogió **ampliar ese panel**. Dos pantallas
+que agrupan lo mismo es lo que se retiró con «Hoy» y con «En Obra». *(Y no es el
+«recorrido paso a paso» retirado en la v81: aquél pasaba las partidas UNA POR
+UNA; éste es la lista con las acciones en la fila, que es lo que funcionó.)*
+
+Lo que ganó el panel:
+
+- **Una puerta propia**: «Recorrido» en el cajón (`dw-recorrido`, la puerta
+  del teléfono) y en la barra lateral (`sb-recorrido`). Abre la **lista de
+  ambientes** —las áreas con algo abierto, en orden del edificio
+  (`_revOrdenArea`), con abiertas, vencidas y «N sin guardar»— y de ahí el panel
+  de siempre, con «‹ Ambientes» para volver. Desde la torre se sigue entrando
+  igual que antes.
+- **TOCAR UNA ACTIVIDAD LA MARCA HECHA** (`recMarcar`): se pone verde con su
+  check y dice «Completada · sin guardar». Otro toque la desmarca. El **›** de
+  la derecha lleva a la lista, que es lo que hacía el toque hasta la v135 —ese
+  camino no se perdió—. Los grupos llevan un **punto rojo o verde** y «N
+  marcadas».
+- **NADA SE ESCRIBE HASTA «Guardar N cambios»**, que va en la franja FIJA de
+  abajo: se ve siempre, sin desplazar, por larga que sea la lista. Marcar
+  repinta la hoja **conservando la posición** (`_pintarRecHoja`): sin eso la
+  lista volvía arriba con cada toque.
+- **LAS MARCAS SIN GUARDAR SE QUEDAN EN EL TELÉFONO** (`mecca_rec_marcas_v1`,
+  decisión del dueño): si el app se cierra a medio recorrido, al volver siguen
+  ahí con el botón puesto. Solo cuentan las que siguen abiertas en ese ambiente
+  (`_recMarcadas`): una cerrada por otro lado no se vuelve a cerrar.
+
+**GUARDAR ES UN TOQUE, NO UNA ESCRITURA, y es a sabiendas.** El pedido decía
+«escribe todo de un golpe» **y** «por el mismo camino del botón de completar»,
+y las dos cosas no caben: completar escribe, por actividad, su `PATCH`, su
+renglón en `obra_cambios` y su «Actividad completada» del libro. Hacerlo en
+una sola escritura era abrir un camino nuevo (el error de la v79 y la v80) un
+día antes de usarlo en obra. **El dueño escogió el camino de siempre**:
+`recGuardar` hace lo mismo que «cerrar en bloque» —`Acciones.completar` de 5 en
+5, cada una con su `catch`— más el `logEvento` del botón de completar. Medido
+con tres: **3 `PATCH obra_actividades` + 3 `POST obra_cambios` + 3 `POST
+obra_penalidades`, cero `GET`**. Una que falle no tumba las demás, se queda
+marcada y **se dice cuál**. Sin señal va a la **cola de `Acciones`** (v91) —no
+a la de Topes, que es de `obra_config`—, y cuenta como guardada.
+
+**Lo que quedó fuera de la v136**, en este orden y para cuando el dueño diga:
+«+ Pendiente» con fichas de los contratistas del ambiente (mientras tanto está
+el «+ Anotar» de siempre, que abre el formulario entero), mantener el dedo para
+«a medias / trabada / como estaba», y la cámara en la actividad.
+
 ### El panel del apartamento se organiza POR CONTRATISTA
 
 Tocar un apartamento en la torre abre `_recPanelApto()`: sus cuatro números
@@ -3328,6 +3384,12 @@ mismo:**
   `tpMarcar` o `tpMarcarGrupo`: cero escrituras intentadas
 - **LA LISTA DE CHEQUEO DA TODO IGUAL** (v134): `node lista-chequeo.mjs`
   contra lo publicado, **cero DISTINTO** o el porqué en el commit
+- **EL RECORRIDO DA LO QUE TIENE QUE DAR** (v136), en su sección de la lista:
+  la puerta del cajón abre los ambientes; el 6A sale con un grupo por
+  contratista, todos plegados; marcar tres **no escribe nada** y el botón dice
+  «Guardar 3 cambios» **sin desplazar a 390**; desmarcar baja a 2; recargar no
+  pierde las marcas; guardar son **3 `PATCH` + 3 `obra_cambios`**, las tres al
+  100%, lo demás del 6A igual, y **cero `GET`**
 - **EL LIBRO DE PENALIDADES DA LO QUE TIENE QUE DAR** (v135), en la sección
   propia de la lista: tres cargas el último día del mes a las 8:30 p. m. —la
   tercera como otro aparato— escriben **UNA** inactividad; Karina con **2
@@ -3683,6 +3745,8 @@ pertenece a ningún nivel.
 | **v134** — la primera corrida de la lista de chequeo dio DISTINTO el ingeniero de una alta. No era el escogedor nuevo: la sonda vieja marcaba la casilla con `checked=true`, que no dispara el `onchange`, así que en la v133 no corría `autoAsignarIng` — lo que sí hace el dedo. | **Una prueba que pone valores a mano se salta los eventos que el usuario sí dispara.** Clic, no `checked=`. Es el v58 en pequeño: tocar lo que el usuario toca. |
 | **v135** — el pedido decía que «Actividad completada» se escribía una vez por actividad «en vez de una por día», 13 veces de más, y que el historial de Moisés tenía que decir 130. Medido: cada fila era un cierre real (89 filas distintas = 89 cierres en `obra_cambios`), solo el 9% eran copias, y 130 no salía de ninguna forma de contar. Arreglar «una por día» habría tirado el detalle de qué se cerró. | **Una proporción alta no es una prueba de duplicado**: compara con otra fuente antes de llamarlo copia — aquí `obra_cambios`. Y cuando el número que te piden no se reproduce, **no se ajusta el código hasta que dé**: se para y se pregunta. |
 | **v135** — la sonda del Historial dio vacío en las DOS versiones: entrar al Historial no pide nada, lo pide `loadHistorial` al tocar un filtro. Y después dio 3 situaciones donde se esperaban 2: la propia prueba había escrito la inactividad de hoy. | Lo vacío en las dos versiones es la prueba, no el app (v88). Y lo de la v111 otra vez: **una sonda que escribe cambia lo que miden las de abajo** — se corrige lo ESPERADO, diciendo por qué, no el app. |
+| **v136** — el pedido traía una pantalla «Recorrido» nueva que ya existía casi entera: el panel del apartamento, por contratista, plegado, con abiertas y vencidas, al que se llegaba tocando la torre. Y pedía a la vez «una sola escritura» y «el mismo camino del botón de completar», que no caben juntos. | **Antes de construir, busca la pantalla en el mapa** —es la regla de la §3.5 y la lección de «Hoy»—: aquí bastaba con ampliarla. Y cuando dos condiciones del pedido se excluyen, **se dice cuál choca con cuál y decide el dueño**; no se escoge una en silencio. |
+| **v136** — la lista de chequeo dio DISTINTO en `vistas.lista` por 14 caracteres, siempre con los mismos dos valores y siempre en la versión que corría PRIMERO, con el navegador recién abierto. La v135 contra sí misma dio igual dos veces. | Era la prueba: medía la Lista antes de que llegara lo que el arranque pide aparte. Ahora espera a que la red se calme antes de medir. **Una prueba intermitente no vale nada** (v84): o se arregla o se borra, y nunca se publica «porque a la segunda dio igual». |
 | **v133** — **el contenedor se reinició y se llevó el scratchpad entero**: los 22 arneses de regresión, sus fixtures —varios eran copias de la base— y el comparador. La v130 y la v131 quedaron sin publicar a mitad de su regresión. | Lo que vive en el scratchpad dura lo que dure el contenedor. La regresión se rehízo con **datos inventados** (`reg133.mjs`: 700 actividades con semilla fija, el mismo doble para las dos versiones, el candado en la ruta) — mide filtros, vistas, las ocho agrupaciones, renglones, Obra, Compras, Equipo, Reportes, Partidas, Topes y el alta/edición. **Decidido en la v134**: el dueño autorizó el archivo, y vive en el repo como `lista-chequeo.mjs`, con los datos y el candado dentro. |
 | **v131** — el tercer campo de una pieza en L decía «Largo del ala (o fondo total)»: son **dos medidas distintas**, y quien medía el pedazo que sobresale —unos 470, que es como Madesol dibuja el ala— se iba **± 647,6 mm** y no encontraba la pieza. El código estaba bien; el que no sabía de dónde a dónde medir era el ingeniero. | Cuando una entrada admite varias lecturas, **el arreglo no es el código: es decir dónde se pone la cinta**. Mídelo: aquí fueron cinco valores contra `tpDif`, y dos de los cinco fallaban. Y un croquis que dibuja la forma pero no las cotas no contesta la pregunta que la gente tiene delante. |
 | **v131** — el croquis se veía chiquito y nadie sabía por qué: `width="100%"` con un `height` FIJO y un viewBox de 200×92 hace que el navegador lo encaje en **200px de ancho** y deje el resto de la tarjeta en blanco. Llevaba así desde la v129. | Un `<svg>` con `viewBox` y `width:100%` necesita **`height:auto`**, no un número: con los dos puestos manda el que deja la caja más chica y el dibujo se encoge en silencio. Se ve midiendo el `getBoundingClientRect` del svg contra el de la tarjeta, no mirándolo. |
@@ -3741,6 +3805,11 @@ contratistas y uno no registrado, y de personal propio), los `GET` de los
 formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
+
+**Desde la v136 tiene una tercera parte, «EL RECORRIDO»**: entra por la puerta
+del cajón a 390, escoge el 6A, abre grupos y toca actividades de verdad, y
+comprueba once cosas contra lo que tienen que dar —incluido que guardar son
+tres `PATCH` y que no hay ni un `GET`—.
 
 **Desde la v135 tiene una segunda parte, «EL LIBRO DE PENALIDADES»**, que no
 compara: COMPRUEBA contra lo que tiene que dar, con un reloj fijo en el último

@@ -657,6 +657,24 @@ input.tp-in[type=search]{font-size:14px}
 .fm-mas[open]>summary::before{content:'▾'}
 .fm-mas-in{padding:4px 12px 10px}
 /* v134 · QUIÉN, en una línea que abre el buscador (el patrón de la ficha v122) */
+.rec-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;display:inline-block}
+.rec-amb{display:flex;align-items:center;justify-content:flex-start;gap:10px;width:100%;min-height:52px;padding:10px 13px;
+  margin-bottom:7px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg2);cursor:pointer;font-family:var(--font)}
+.rec-act{display:flex;align-items:stretch;gap:5px;margin-bottom:5px}
+.rec-act-b{flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-start;gap:10px;text-align:left;min-height:48px;
+  padding:8px 10px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg3);cursor:pointer;
+  font-family:var(--font);color:var(--text)}
+.rec-act.on .rec-act-b{border-color:var(--green);background:var(--green-light)}
+.rec-box{width:22px;height:22px;flex:0 0 auto;border-radius:6px;border:1.5px solid var(--border2);background:var(--bg2);
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff}
+.rec-act.on .rec-box{background:var(--green);border-color:var(--green)}
+.rec-act-ir{flex:0 0 44px;min-height:48px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);
+  color:var(--text3);font-size:18px;cursor:pointer}
+.rec-guardar{flex:1;min-height:52px;border:none;border-radius:var(--r);background:var(--green);color:#fff;
+  font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer}
+.rec-guardar[disabled]{opacity:.6}
+.rec-volver{min-height:44px;margin-bottom:6px;padding:0 12px;border:none;border-radius:9px;background:var(--bg3);
+  color:var(--text2);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer}
 .qp-linea{width:100%;min-height:44px;display:flex;align-items:center;justify-content:flex-start;gap:9px;padding:6px 12px;
   border:1.5px solid var(--border2);border-radius:var(--r);background:var(--bg3);cursor:pointer;
   font-family:var(--font);text-align:left;color:var(--text)}
@@ -768,6 +786,10 @@ input.tp-in[type=search]{font-size:14px}
     <button class="sb-btn" id="sb-compras" onclick="goTab('compras')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
       <span class="sb-btn-lbl">Compras</span>
+    </button>
+    <button class="sb-btn" id="sb-recorrido" onclick="abrirRecorrido()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span class="sb-btn-lbl">Recorrido</span>
     </button>
     <button class="sb-btn" id="sb-topes" onclick="goTab('topes')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="20" height="8" rx="1"/><line x1="7" y1="8" x2="7" y2="12"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="17" y1="8" x2="17" y2="12"/></svg>
@@ -997,6 +1019,8 @@ input.tp-in[type=search]{font-size:14px}
          iPad y el módulo se usa parado en la obra, con el teléfono en la mano.
          Es la lección de la v116: una pantalla a la que no se llega no existe. -->
     <button class="dw-btn" id="dw-topes" onclick="goTabD('topes')">Topes — Identificar una pieza</button>
+    <!-- v136 · Recorrido: caminar un ambiente y marcar lo hecho. Es el panel del apartamento con la lista de ambientes delante. -->
+    <button class="dw-btn" id="dw-recorrido" onclick="closeDrawer();abrirRecorrido()">Recorrido — Caminar un apartamento</button>
     <button class="dw-btn" id="dw-plan" onclick="goTabD('plan')">Planificación — Last Planner</button>
     <button class="dw-btn" id="dw-gerencia" onclick="goTabD('gerencia')" style="display:none">Gerencia — Panel ejecutivo</button>
     <button class="dw-btn" id="dw-catalogo" onclick="goTabD('catalogo')" style="display:none">Partidas — Catálogo (prueba)</button>
@@ -1032,7 +1056,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261014_135';
+const APP_VERSION='20261014_136';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -4527,6 +4551,111 @@ function abrirAptoTorre(area){
   pintarRecorrido();
 }
 
+/* ══ v136 · EL RECORRIDO: caminar un ambiente y marcar lo hecho ══════════
+   NO ES UNA PANTALLA NUEVA: es el panel del apartamento de siempre
+   (`_recPanelApto`, por contratista, grupos plegados) con tres cosas más —
+   decisión del dueño, para no tener dos pantallas que agrupan lo mismo:
+   1. TOCAR UNA ACTIVIDAD LA MARCA HECHA, y tocarla otra vez la desmarca. Nada
+      se escribe hasta «Guardar N cambios». El › de al lado sigue llevando a
+      la lista, que es lo que hacía el toque hasta la v135.
+   2. GUARDAR ES UN TOQUE y cierra cada una POR EL CAMINO DE SIEMPRE: el mismo
+      de «cerrar en bloque» —`Acciones.completar` de 5 en 5, cada una con su
+      catch— más el `logEvento` que pone el botón de completar. Cada actividad
+      queda al 100% y con su renglón en la bitácora, igual que cerrada a mano.
+      No es una sola escritura y no puede serlo sin abrir un camino nuevo de
+      escritura (v79, v80). Sin señal, va a la cola de `Acciones` (v91).
+   3. LAS MARCAS SIN GUARDAR SE QUEDAN EN EL TELÉFONO (`mecca_rec_marcas_v1`):
+      si el app se cierra a medio recorrido, al volver siguen ahí con el botón
+      puesto. Nada se escribe solo.
+   Y una puerta propia: «Recorrido» en el cajón y en la barra lateral abre la
+   lista de ambientes —las áreas con trabajo abierto, en orden del edificio—.
+   Todo sale de `S.acts`, que ya está cargado: CERO GET. */
+var REC_MARCAS_LS='mecca_rec_marcas_v1';
+var _recMarcasMem=null;
+function _recMarcas(){
+  if(_recMarcasMem) return _recMarcasMem;
+  try{ _recMarcasMem=JSON.parse(localStorage.getItem(REC_MARCAS_LS)||'{}')||{}; }catch(e){ _recMarcasMem={}; }
+  return _recMarcasMem;
+}
+function _recMarcasGuardar(){
+  try{ localStorage.setItem(REC_MARCAS_LS, JSON.stringify(_recMarcas())); }catch(e){}
+}
+/* Las marcadas que siguen abiertas en ese ambiente. Una que se cerró por otro
+   lado o cambió de sitio ya no cuenta: guardar no puede tocar lo que no se ve. */
+function _recMarcadas(area){
+  var m=_recMarcas();
+  return (S.acts||[]).filter(function(a){
+    return m[a.id] && a.estado!=='completado' && (a.area||'')===area;
+  }).map(function(a){ return a.id; });
+}
+function recMarcar(id){
+  if(!canEdit()){ showToast('Tu usuario no puede marcar','err'); return; }
+  var m=_recMarcas();
+  if(m[id]) delete m[id]; else m[id]={t:'hecha', f:today()};
+  _recMarcasGuardar();
+  pintarRecorrido();
+}
+function abrirRecorrido(){
+  S.recorrido={area:null, lista:true, tab:'panel', abierto:null, confirmando:null};
+  pintarRecorrido();
+}
+function recIrAmbiente(area){
+  S.recorrido={area:area, lista:true, tab:'panel', abierto:null, confirmando:null};
+  pintarRecorrido();
+}
+/* Los ambientes con algo abierto, en el orden en que se camina la torre. */
+function _recAmbientesHTML(){
+  var m={}, orden=[];
+  (S.acts||[]).forEach(function(a){
+    if(a.estado==='completado') return;
+    var k=a.area||'';
+    if(!m[k]){ m[k]={ab:0,ve:0}; orden.push(k); }
+    m[k].ab++; if(FILTRO_HUECO.retrasadas(a)) m[k].ve++;
+  });
+  orden.sort(function(x,y){ return (_revOrdenArea(x)-_revOrdenArea(y)) || (x===''?1:y===''?-1:x.localeCompare(y,'es')); });
+  if(!orden.length) return '<div class="empty" style="padding:26px 10px">No hay nada abierto en la obra</div>';
+  var h='<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Escoge dónde estás. Tocar una actividad la marca hecha; nada se guarda hasta «Guardar».</div>';
+  orden.forEach(function(k){
+    var c=m[k], nm=k||PAL_SIN_UBIC, pend=_recMarcadas(k).length;
+    h+='<button onclick="recIrAmbiente('+JSON.stringify(k).replace(/"/g,'&quot;')+')" class="rec-amb">'+
+      '<span class="rec-dot" style="background:'+(c.ve?'var(--red)':'var(--green)')+'"></span>'+
+      '<span style="flex:1;min-width:0;text-align:left">'+
+        '<span style="display:block;font-size:14px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(nm)+'</span>'+
+        '<span style="display:block;font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">'+
+          c.ab+' abierta'+(c.ab!==1?'s':'')+(c.ve?' · <span style="color:var(--red);font-weight:700">'+c.ve+' vencida'+(c.ve!==1?'s':'')+'</span>':'')+
+          (pend?' · <span style="color:var(--green);font-weight:700">'+pend+' sin guardar</span>':'')+
+        '</span></span>'+
+      '<span style="color:var(--text3)">›</span></button>';
+  });
+  return h;
+}
+async function recGuardar(){
+  if(!canEdit()) return;
+  var R=S.recorrido; if(!R||R.area===null||R._guardando) return;
+  var ids=_recMarcadas(R.area); if(!ids.length) return;
+  R._guardando=true; pintarRecorrido();
+  var m=_recMarcas(), bien=0, mal=[], total=ids.length, hechas=0;
+  setSS('syncing','Guardando 0 de '+total+'...');
+  for(var i=0;i<ids.length;i+=5){
+    await Promise.all(ids.slice(i,i+5).map(function(id){
+      var a=Acciones.porId(id)||{};
+      // Lo mismo que el botón de completar (doMarcarCompletada): su registro y su cierre.
+      logEvento('Actividad completada', 'Completó: '+(a.descripcion||'')+(a.area?' — '+a.area:''));
+      return Acciones.completar(id)
+        .then(function(){ bien++; delete m[id]; },
+              function(e){ mal.push((a.descripcion||id)+((e&&e.message)?' ('+e.message+')':'')); })
+        .then(function(){ hechas++; setSS('syncing','Guardando '+hechas+' de '+total+'...'); });
+    }));
+  }
+  _recMarcasGuardar();
+  R._guardando=false;
+  setSS(mal.length?'err':'ok', mal.length?'No se guardaron '+mal.length:'✓ '+hhmm());
+  if(mal.length) showToast('Guardadas '+bien+' de '+total+'. No se pudo: '+mal.slice(0,3).join(' · ')+(mal.length>3?'…':''),'err',9000);
+  else showToast(PAL_COMPLETADA+': '+bien+(bien===1?' actividad':' actividades')+' ✓');
+  pintarRecorrido();
+  try{ if(typeof reRenderActs==='function') reRenderActs(); }catch(e){}
+}
+
 /* Lo que cuenta como "de esta semana": vence el viernes de esta semana o
    antes. Lo vencido entra — sigue debiendose esta semana. */
 function _finDeSemana(){
@@ -4681,6 +4810,7 @@ function _recPanelApto(grupos){
     var ve=g.items.filter(FILTRO_HUECO.retrasadas).length;
     var abierta=(S.recorrido.abierto===g.q);
     var qj=JSON.stringify(g.q).replace(/"/g,'&quot;');
+    var _mk=_recMarcas(), nMarc=g.items.filter(function(a){ return _mk[a.id]; }).length;   // v136
 
     h+='<div style="margin-bottom:8px">'+
       '<button onclick="recAbrir('+qj+')" style="display:flex;align-items:center;gap:10px;width:100%;'+
@@ -4688,12 +4818,14 @@ function _recPanelApto(grupos){
         'font-family:var(--font);background:'+(abierta?'var(--bg3)':'var(--bg2)')+';'+
         'border:1.5px solid '+(ve?'var(--red)':(abierta?'var(--accent)':'var(--border)'))+'">'+
         '<span style="color:var(--text3);font-size:13px;width:12px;flex:0 0 auto">'+(abierta?'▾':'▸')+'</span>'+
+        '<span class="rec-dot" style="background:'+(ve?'var(--red)':'var(--green)')+'"></span>'+
         '<span style="flex:1;min-width:0">'+
           '<span style="display:block;font-size:13.5px;font-weight:700;color:var(--text);'+
             'overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(g.q)+'</span>'+
           '<span style="display:block;font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">'+
             ab+' abierta'+(ab!==1?'s':'')+
             (ve?' · <span style="color:var(--red);font-weight:700">'+ve+' vencida'+(ve!==1?'s':'')+'</span>':'')+
+            (nMarc?' · <span style="color:var(--green);font-weight:700">'+nMarc+' marcada'+(nMarc!==1?'s':'')+'</span>':'')+
           '</span>'+
         '</span></button>';
 
@@ -4730,15 +4862,19 @@ function _recPanelApto(grupos){
         var fv=fechaVenc(a);
         var dm=fv?(fv.slice(8,10)+'/'+fv.slice(5,7)):'sin fecha';
         var col=(d!==null&&d>0)?'var(--red)':(d===0?'var(--amber)':'var(--text3)');
-        h+='<button onclick="recPreguntar(\''+String(a.id).replace(/'/g,"\\'")+'\')" '+
-          'style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;min-height:44px;'+
-          'padding:9px 11px;margin-bottom:5px;border-radius:10px;border:1px solid var(--border);'+
-          'background:var(--bg3);cursor:pointer;font-family:var(--font);color:var(--text)">'+
-          '<span style="flex:1;min-width:0;font-size:12.5px;line-height:1.35">'+
-            esc(a.descripcion||'(sin descripción)')+'</span>'+
-          '<span style="flex:0 0 auto;font-family:var(--mono);font-size:10.5px;font-weight:800;'+
-            'color:'+col+'">'+dm+'</span>'+
-          '<span style="flex:0 0 auto;color:var(--text3)">›</span></button>';
+        /* v136 · TOCAR = MARCAR HECHA (y otra vez, desmarcar). El › de la
+           derecha lleva a la lista, que es lo que hacía el toque hasta la v135. */
+        var sid=String(a.id).replace(/'/g,"\\'"), on=!!_mk[a.id];
+        h+='<div class="rec-act'+(on?' on':'')+'">'+
+          '<button class="rec-act-b" onclick="recMarcar(\''+sid+'\')">'+
+          '<span class="rec-box">'+(on?'✓':'')+'</span>'+
+          '<span style="flex:1;min-width:0">'+
+            '<span style="display:block;font-size:12.5px;line-height:1.35">'+esc(a.descripcion||'(sin descripción)')+'</span>'+
+            '<span style="display:block;font-family:var(--mono);font-size:10.5px;font-weight:800;margin-top:2px;color:'+(on?'var(--green)':col)+'">'+
+              (on?PAL_COMPLETADA+' · sin guardar':(fv?'vence '+dm:'sin fecha'))+'</span>'+
+          '</span></button>'+
+          '<button class="rec-act-ir" onclick="recPreguntar(\''+sid+'\')" aria-label="Abrir en la lista">›</button>'+
+        '</div>';
       });
       h+='<button onclick="recVerFaltan('+qj+')" style="width:100%;border:1px dashed var(--border2);'+
         'background:transparent;color:var(--text2);border-radius:10px;padding:11px;margin:3px 0 6px;'+
@@ -4776,22 +4912,28 @@ function recAbrir(q){
 
 function pintarRecorrido(){
   var R=S.recorrido; if(!R) return;
-  var d=(S._torre||{})[R.area]||{pct:0,faltan:0,total:0,hechas:0,lista:[]};
-  var i=REC_ORDEN.indexOf(R.area), ant=REC_ORDEN[i-1], sig=REC_ORDEN[i+1];
+  if(R.area===null){ _pintarRecHoja(_recListaHTML()); return; }   // v136 · la lista de ambientes
+  var dT=(S._torre||{})[R.area];
+  var d=dT||{pct:0,faltan:0,total:0,hechas:0,lista:[]};
+  /* Las flechas solo entre apartamentos: con un área que no es apartamento el
+     índice es -1 y la flecha de la derecha llevaba al 2A sin motivo. */
+  var i=REC_ORDEN.indexOf(R.area), ant=i>=0?REC_ORDEN[i-1]:null, sig=i>=0?REC_ORDEN[i+1]:null;
   var grupos=_recGrupos(R.area);
   var faltan = (grupos && grupos!=='error')
     ? grupos.reduce(function(s,g){return s+g.items.length;},0) : d.faltan;
+  var nMarc=_recMarcadas(R.area).length;
 
   var h='<div style="display:flex;flex-direction:column;height:100%">'+
     /* cabecera con las flechas: 2A ‹ Apto 2B › 3A */
     '<div style="padding:calc(12px + var(--st)) 15px 0;flex-shrink:0">'+
+      (R.lista?'<button onclick="abrirRecorrido()" class="rec-volver">‹ Ambientes</button>':'')+
       '<div style="display:flex;align-items:center;gap:8px">'+
         _recFlecha(ant,'‹ ')+
         '<div style="text-align:center;flex:1;min-width:0">'+
           '<div style="font-family:var(--tit);font-size:20px;font-weight:800;letter-spacing:-.025em;'+
-            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(_recNom(R.area))+'</div>'+
+            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(R.area?_recNom(R.area):PAL_SIN_UBIC)+'</div>'+
           '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">'+
-            d.pct+'% · faltan '+faltan+'</div>'+
+            (dT?d.pct+'% · ':'')+'faltan '+faltan+'</div>'+
         '</div>'+
         _recFlecha(sig,'',' ›')+
       '</div>'+
@@ -4803,13 +4945,35 @@ function pintarRecorrido(){
     '<div id="rec-cuerpo" style="flex:1;overflow-y:auto;padding:13px 15px 14px">'+
       _recPanelApto(grupos)+
     '</div>'+
+    /* v136 · La franja de abajo es FIJA: «Guardar N cambios» se ve siempre,
+       sin desplazar, por larga que sea la lista del apartamento. */
+    '<div style="padding:0 15px calc(13px + var(--sb));flex-shrink:0;display:flex;gap:8px">'+
+      ((nMarc||R._guardando)
+        ? '<button id="rec-guardar" onclick="recGuardar()" class="rec-guardar"'+(R._guardando?' disabled':'')+'>'+
+            (R._guardando?'Guardando…':'Guardar '+nMarc+' cambio'+(nMarc!==1?'s':''))+'</button>'
+        : '')+
+      '<button onclick="cerrarHojaApto()" style="'+((nMarc||R._guardando)?'flex:0 0 auto;padding:0 16px;':'flex:1;')+'min-height:48px;border:none;'+
+        'background:var(--bg3);color:var(--text2);border-radius:var(--r);font-family:var(--font);'+
+        'font-size:14px;font-weight:600;cursor:pointer">'+((nMarc||R._guardando)?'Cerrar':(R.lista?'Cerrar':'Cerrar y volver al edificio'))+'</button>'+
+    '</div>'+
+  '</div>';
+  _pintarRecHoja(h);
+}
+/* La lista de ambientes, en la misma hoja: cabecera, lista y Cerrar. */
+function _recListaHTML(){
+  return '<div style="display:flex;flex-direction:column;height:100%">'+
+    '<div style="padding:calc(12px + var(--st)) 15px 0;flex-shrink:0">'+
+      '<div style="font-family:var(--tit);font-size:20px;font-weight:800;letter-spacing:-.025em">Recorrido</div>'+
+    '</div>'+
+    '<div id="rec-cuerpo" style="flex:1;overflow-y:auto;padding:11px 15px 14px">'+_recAmbientesHTML()+'</div>'+
     '<div style="padding:0 15px calc(13px + var(--sb));flex-shrink:0">'+
       '<button onclick="cerrarHojaApto()" style="width:100%;min-height:48px;border:none;'+
         'background:var(--bg3);color:var(--text2);border-radius:var(--r);font-family:var(--font);'+
-        'font-size:14px;font-weight:600;cursor:pointer">Cerrar y volver al edificio</button>'+
+        'font-size:14px;font-weight:600;cursor:pointer">Cerrar</button>'+
     '</div>'+
   '</div>';
-
+}
+function _pintarRecHoja(h){
   var el=document.getElementById('hoja-rec');
   if(!el){
     el=document.createElement('div');
@@ -4821,7 +4985,14 @@ function pintarRecorrido(){
       'animation:hojaSube .22s cubic-bezier(.2,.8,.3,1);display:flex;flex-direction:column';
     document.body.appendChild(el);
   }
+  /* v136 · Marcar repinta la hoja: sin esto la lista volvía arriba de golpe
+     con cada toque, y en un apartamento de 105 eso es perder el sitio. Se
+     conserva solo si se sigue en el mismo ambiente. */
+  var cu=document.getElementById('rec-cuerpo'), top=cu?cu.scrollTop:0;
+  var clave=S.recorrido?String(S.recorrido.area):'', mismo=(el.dataset.area===clave);
+  el.dataset.area=clave;
   el.innerHTML=h;
+  if(mismo&&top){ var cu2=document.getElementById('rec-cuerpo'); if(cu2) cu2.scrollTop=top; }
 }
 function _recFlecha(area,pre,post){
   if(!area) return '<div style="width:56px;flex-shrink:0"></div>';
