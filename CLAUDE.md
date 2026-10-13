@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v133 — 13 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v134 — 14 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -97,10 +97,17 @@ Corre gratis debajo de las 10,000 neuronas diarias que regala Cloudflare
 | `bridex-logo.png` | Logo para los PDF. |
 | `bridex-marca.png` | La marca de Bridex dentro del app (v70). |
 | `icono-app.png`, `icono-180.png` | El icono de la app en la pantalla de inicio (v74). |
+| `lista-chequeo.mjs` | **La lista de chequeo (v134).** La prueba, los datos inventados con semilla fija, el candado y el comparador, en UN archivo. **Se corre antes de cada publicación** — ver §7. |
 | `CLAUDE.md`, `README.md`, `LICENSE`, `.gitignore` | Este documento y lo de siempre. |
 
-**Un solo archivo es una decisión, no un descuido.** No lo partas, no
-crees archivos nuevos, no metas un bundler. GitHub lo entrega comprimido:
+**El app es `index.html` y la lista de chequeo es `lista-chequeo.mjs`. Nada
+más.** Dos archivos de trabajo, no tres: el dueño autorizó el segundo en la
+v134 porque el contenedor se reinició dos veces y se llevó los arneses del
+scratchpad. **Si la lista crece y un solo archivo deja de ser práctico, se para
+y se le pregunta al dueño antes de hacer dos.**
+
+**Un solo archivo para el app es una decisión, no un descuido.** No lo partas,
+no crees archivos nuevos, no metas un bundler. GitHub lo entrega comprimido:
 son 346 KB por la red, en 0.12 segundos. El peso real del arranque son los
 datos, no el código.
 
@@ -245,6 +252,7 @@ mismos botones que cualquier otra.
 | **Marcar un material como urgente** | **Compras → la orden → el punto del renglón** (v128) — `_ocUrgenteRow()`. Rojo o gris, y sale en el PDF y en la tarjeta |
 | **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
 | **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
+| **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
 | **Crear o editar una actividad con el formulario corto** | **Los tres formularios** (Propio, Contratista, Ingeniero) — `showAddActPropio`, `showAddActContratista`, `showAddActIngeniero` (v133). Lo poco usado va plegado en «Más detalles» (`_formMasHTML`); prioridad (`_formPrioHTML`) y foto (`_formFotoHTML`) son nuevas |
 | **Ir marcando las piezas de tope que ya se identificaron** | **Topes** (v130) — en la ficha del resultado y en el catálogo. `tpMarcar()`, `tpMarcarGrupo()`, marcador `_tpMarcadorHTML()`. Son **108 piezas**, no 68 renglones. Vive en `obra_config`, clave `topes_identificadas` |
 
@@ -501,6 +509,49 @@ botón «Agregar» un 15-20%, pero **mientras la lista de quién sea una casilla
 persona, ningún orden lo hace caber**. Lo que haría caber es otra forma de
 escoger —una línea que se toca y despliega el escogedor, como el pliegue de la
 v122—, y **eso lo decide el dueño**.
+
+> **Lo decidió en la v134**: la línea. Ver abajo.
+
+### QUIÉN, EN UNA LÍNEA (v134) — el escogedor de contratistas
+
+Las 26 casillas de Contratista y las de Trabajadores de Propio son ahora **una
+línea de 44px** con lo escogido y un chevron (`_quienHTML`). Al tocarla se abre
+**debajo, dentro de la misma caja**, un buscador: campo de texto, la lista y
+«Listo». Es el patrón de la ficha de la v122 —etiqueta, valor, chevron, y el
+escogedor sale dentro de la línea, nunca fuera (v79)—.
+
+- **Sigue siendo VARIOS.** Se tocan los que hagan falta; la línea dice los dos
+  primeros y «+N».
+- **Busca mientras se escribe**, sin tildes ni mayúsculas (`_catNorm`), por
+  nombre y por oficio. «tavarez» encuentra a «Eduardo Tavárez».
+- **PRIMERO LOS QUE YA TIENEN TRABAJO ABIERTO EN ESA UBICACIÓN**, con «N
+  abiertas aquí» al lado, y debajo «Los demás» en orden alfabético. Se cuenta
+  sobre `S.acts` —ya cargado, solo trae abiertas—: **cero `GET`**. Se recalcula
+  al abrir, así que escoger la ubicación después también vale.
+- **EL GUARDADO NO CAMBIÓ.** El campo oculto `#a-pers` es el mismo y `saveAct`
+  lo lee igual. Al editar **nace con el texto guardado tal cual** y solo se
+  reescribe si se toca a alguien. **Se escribe en el ORDEN DE LA LISTA, no en el
+  del toque** (`_qpSync`), porque así guardaban las casillas y el primero es el
+  que trae a su ingeniero (`autoAsignarIng`).
+- **Un nombre que ya no está registrado no se pierde**: sale marcado, «no
+  registrado», y se puede quitar a mano.
+- **Sin contratista, la LÍNEA se pone roja**: `#a-pers` es un campo oculto y
+  el rojo de `_actMostrarError` no se veía en él.
+- **`updateWorkersField` se BORRÓ**: era de las casillas y ya no la llama
+  nadie (v113: una función huérfana es un gatillo puesto). «Usar contratista y
+  fechas» (`usarHermanas`) marca por `qpPoner`.
+
+**Medido a 390×844 con 26 contratistas** (lista de chequeo): Contratista
+**2.482 → 986 px**, Propio **1.280 → 986**, Ingeniero **1.068 sin cambio**.
+**Sigue sin caber**: «Agregar» queda en **y = 1.021**, 177px por debajo de
+844 — una pasada de dedo. Lo que queda encima son descripción, ubicación con
+sus dos atajos, quién, fechas, estado, avance, prioridad, notas y foto.
+
+**El de Ingeniero NO se cambió, a propósito:** son **4 casillas** (los
+ingenieros activos), no 26, y la misma función (`ingCheckboxes`) pinta los
+«Responsables» de los otros dos formularios con la asignación automática
+(`data-auto`, `_setIngHeredado`). Pasarlo a línea ahorra ~76px y no lo hace
+caber. Si el dueño lo quiere igual, es un paso aparte.
 
 ### TOPES (v129) — el primer módulo que no habla con la base
 
@@ -3274,6 +3325,14 @@ mismo:**
   pudieron traer
 - **Un usuario `view` no marca** (v130), ni desde el botón ni llamando a
   `tpMarcar` o `tpMarcarGrupo`: cero escrituras intentadas
+- **LA LISTA DE CHEQUEO DA TODO IGUAL** (v134): `node lista-chequeo.mjs`
+  contra lo publicado, **cero DISTINTO** o el porqué en el commit
+- **El escogedor de quién guarda lo mismo que las casillas** (v134): crear con
+  Milo y Jordy manda `"Milo, Jordy"` en el orden de la lista; editar `"Milo,
+  Contratista Viejo"` sin tocar lo devuelve igual, con el no registrado. Abierto
+  con una ubicación, los primeros son los que tienen abiertas ahí, y **cero
+  `GET`** al abrir, buscar y marcar. Sin contratista: aviso visible y la línea
+  en rojo
 - **LO PLEGADO EN EL FORMULARIO NO SE PIERDE AL GUARDAR** (v133). Edita una
   actividad con `unidad`, `cantidad_plan` y `cantidad_real` puestas, guarda SIN
   abrir «Más detalles» y mira el `PATCH` y la base: los tres valores intactos.
@@ -3610,7 +3669,8 @@ pertenece a ningún nivel.
 | **v133** — el pedido traía 13 campos «para sacar o esconder» medidos en la **base**, y en la **pantalla** solo estaban cinco. Ocho no salían en ningún formulario: quitarlos era no hacer nada, y decir que se hizo habría sido mentir. | Lo que mide la base no es lo que enseña la pantalla. Antes de quitar o esconder, **haz la lista de lo que de verdad sale**, formulario por formulario — aquí eran tres, no uno —, y repórtala antes de tocar. |
 | **v133** — la fecha de inicio se plegó en «Más detalles», como se pidió, y el formulario de Contratista dejó de crear: `Acciones.validar` la exige, y el aviso de error se pintaba **dentro del pliegue cerrado**. «Agregar» parecía muerto. La opción de plegarla la había ofrecido yo, sin mirar la validación. | **Antes de plegar o esconder un campo, busca si la validación lo pide** y dónde se pinta su error. Un campo obligatorio escondido convierte el botón de guardar en un botón muerto. Lo cazó la sonda de crear —no se creó nada en ninguna de las dos versiones— y no la lectura del código. |
 | **v133** — la sonda que debía demostrar el fallo del aviso escondido dijo que el aviso **se veía**: dentro de un `<details>` cerrado, este Chromium oculta el contenido sin quitarle la caja, y `getBoundingClientRect` daba **42px**. | Para saber si algo se ve, pregúntale al navegador (`el.checkVisibility()`), no a la caja. Es el `scrollWidth` de la v117 con otra cara. Y la prueba nueva **tiene que fallar contra el fallo**: se reprodujo el borrador roto y solo con `checkVisibility` dio «no se ve». |
-| **v133** — **el contenedor se reinició y se llevó el scratchpad entero**: los 22 arneses de regresión, sus fixtures —varios eran copias de la base— y el comparador. La v130 y la v131 quedaron sin publicar a mitad de su regresión. | Lo que vive en el scratchpad dura lo que dure el contenedor. La regresión se rehízo con **datos inventados** (`reg133.mjs`: 700 actividades con semilla fija, el mismo doble para las dos versiones, el candado en la ruta) — mide filtros, vistas, las ocho agrupaciones, renglones, Obra, Compras, Equipo, Reportes, Partidas, Topes y el alta/edición. **Si se quiere que sobreviva, hay que decidir dónde guardarla**: el repo no admite archivos nuevos sin que el dueño lo diga. |
+| **v134** — la primera corrida de la lista de chequeo dio DISTINTO el ingeniero de una alta. No era el escogedor nuevo: la sonda vieja marcaba la casilla con `checked=true`, que no dispara el `onchange`, así que en la v133 no corría `autoAsignarIng` — lo que sí hace el dedo. | **Una prueba que pone valores a mano se salta los eventos que el usuario sí dispara.** Clic, no `checked=`. Es el v58 en pequeño: tocar lo que el usuario toca. |
+| **v133** — **el contenedor se reinició y se llevó el scratchpad entero**: los 22 arneses de regresión, sus fixtures —varios eran copias de la base— y el comparador. La v130 y la v131 quedaron sin publicar a mitad de su regresión. | Lo que vive en el scratchpad dura lo que dure el contenedor. La regresión se rehízo con **datos inventados** (`reg133.mjs`: 700 actividades con semilla fija, el mismo doble para las dos versiones, el candado en la ruta) — mide filtros, vistas, las ocho agrupaciones, renglones, Obra, Compras, Equipo, Reportes, Partidas, Topes y el alta/edición. **Decidido en la v134**: el dueño autorizó el archivo, y vive en el repo como `lista-chequeo.mjs`, con los datos y el candado dentro. |
 | **v131** — el tercer campo de una pieza en L decía «Largo del ala (o fondo total)»: son **dos medidas distintas**, y quien medía el pedazo que sobresale —unos 470, que es como Madesol dibuja el ala— se iba **± 647,6 mm** y no encontraba la pieza. El código estaba bien; el que no sabía de dónde a dónde medir era el ingeniero. | Cuando una entrada admite varias lecturas, **el arreglo no es el código: es decir dónde se pone la cinta**. Mídelo: aquí fueron cinco valores contra `tpDif`, y dos de los cinco fallaban. Y un croquis que dibuja la forma pero no las cotas no contesta la pregunta que la gente tiene delante. |
 | **v131** — el croquis se veía chiquito y nadie sabía por qué: `width="100%"` con un `height` FIJO y un viewBox de 200×92 hace que el navegador lo encaje en **200px de ancho** y deje el resto de la tarjeta en blanco. Llevaba así desde la v129. | Un `<svg>` con `viewBox` y `width:100%` necesita **`height:auto`**, no un número: con los dos puestos manda el que deja la caja más chica y el dibujo se encoge en silencio. Se ve midiendo el `getBoundingClientRect` del svg contra el de la tarjeta, no mirándolo. |
 | **v130** — la marca iba a ser un sí/no. Un renglón como `LAVA-02` son **cinco** lavamanos: con una casilla, el ingeniero identifica uno y el app habría apuntado cinco. Y el contador iba a decir 68, que son RENGLONES — las piezas son **108**, y contar `B6-07` y `B345-08` además de sus mitades `-A`/`-B` lo habría subido a 112, con el 100% inalcanzable para siempre. | **Antes de poner un contador, pregunta qué cuenta una fila.** Aquí una fila son de 1 a 9 piezas, así que la unidad del marcador y la unidad de la marca tienen que ser la misma o el número miente desde el primer día. Lo cazó el dueño leyendo el array, no el código. |
@@ -3650,10 +3710,38 @@ cuántas escrituras interceptaste — tiene que ser el número esperado.
 > comprobar un número casi siempre basta **SQL agregado por el MCP de
 > Supabase** —una fila de vuelta— en vez de bajar la tabla.
 
-**3. Lado a lado con la versión anterior.** Saca el `index.html` de antes
-(`git show HEAD:index.html`), sírvelo en otro puerto y corre el mismo
-script contra los dos. Es la única forma de decir «no rompí nada» sin que
-sea una opinión.
+**3. LA LISTA DE CHEQUEO, ANTES DE CADA PUBLICACIÓN (v134).**
+
+```
+node lista-chequeo.mjs                 # HEAD (lo publicado) contra el index.html de la copia
+node lista-chequeo.mjs main index.html # o cualquier par: rama, commit o archivo
+node lista-chequeo.mjs HEAD index.html --fotos <carpeta>   # además, capturas a 390
+```
+
+Sirve las dos versiones en `127.0.0.1`, las abre en Chromium con **los mismos
+datos inventados** (semilla fija: 700 actividades, 26 contratistas, 7 propios,
+4 órdenes) y les hace las mismas preguntas: los ocho filtros, las cuatro
+vistas, las ocho agrupaciones, los renglones, Obra, Compras, Equipo, Reportes,
+Partidas, Topes, crear con uno y con dos contratistas, los avisos de sin
+contratista y sin fecha de inicio, editar sin tocar (con medición, con dos
+contratistas y uno no registrado, y de personal propio), los `GET` de los
+formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
+renglón y termina con el candado: escrituras interceptadas, salidas cortadas
+y **cero a la base real**. Sale con código 1 si algo es distinto.
+
+**El candado va DENTRO del archivo, en la ruta**: lo que va a Supabase lo
+contesta el doble en memoria y lo demás se corta. No hace falta ninguna llave.
+
+Lo **común** tiene que dar igual. Lo **propio** de cada versión —alto de los
+formularios, lecturas totales— se imprime para leerlo: cambia a propósito.
+**Si un renglón sale DISTINTO a propósito, se dice en el commit por qué.** Y si
+añades una pantalla, **añádele su renglón a la lista** en el mismo commit.
+
+*Lo que costó la primera corrida, para que no se repita:* salió DISTINTO el
+ingeniero de una alta, y no era el app: la sonda vieja marcaba la casilla con
+`checked=true` y no con un clic, así que en la v133 no corría el `onchange` que
+trae al ingeniero del contratista. **Un dedo dispara el evento: la prueba
+también.**
 
 **4. Reporta siempre estos números, con datos de verdad:**
 
@@ -3663,7 +3751,7 @@ sea una opinión.
 
 Si alguno cambió respecto a antes de tu cambio, **no subas: arréglalo.**
 
-**5. Sube `APP_VERSION`** (línea ~820, formato `'AAAAMMDD_NN'`).
+**5. Sube `APP_VERSION`** (línea ~1035, formato `'AAAAMMDD_NN'`).
 Sin eso el usuario no sabe si le bajó la versión nueva.
 
 ---
@@ -3725,9 +3813,41 @@ orden de magnitud.
   usuario diga en un recorrido que algo falta, **búscalo también entre las
   completadas** antes de crear una partida nueva encima.
 
----
+### Las penalidades automáticas — explicadas en la v134, SIN TOCAR
 
-## 9. El motor `Parecido`
+El dueño pidió que se le explicaran antes de decidir nada. **No se cambiaron.**
+Esto es lo que hacen, leído en el código y medido contra la base (dos consultas
+agregadas, solo lectura, 13-oct):
+
+- **Qué escribe:** una fila en **`obra_penalidades`** por ingeniero y día, tipo
+  `'Inactividad en obra'`, **`monto:0`**, **`aplicada:false`**,
+  `ingeniero_id:'sistema'`, y la descripción «Menos de 2 registros en el día.
+  Registros: N. Horario: 07:30–17:00». **No toca actividades, no toca
+  contratistas, no escribe dinero.** Con `aplicada:false` **no suma puntos**
+  (`calcPuntosPersona` y Bonificaciones las saltan): sale como «Pendiente» en la
+  lista de penalidades y se cuenta en el Historial por ingeniero.
+- **La regla** (`autoPenalidadInactividad`): un ingeniero activo —ni Nilson, ni
+  archivados, ni `sinPenalidad` (Liamelia)— con **menos de 2 actividades de
+  `S.acts` con `fecha` de hoy y su `ingeniero_id`**. Hoy eso es Moisés y Karina.
+  **`S.acts` no trae las cerradas**: una que se registró y se cerró el mismo día
+  no cuenta (la grieta de la v102/v107/v123, otra vez).
+- **Cuándo:** solo al **cargar el app o tocar ↺** (`loadAll` →
+  `loadSecundario`), **solo en el teléfono del administrador** (`isAdmin()`),
+  solo si son las **17:00 o más** de la hora del teléfono y es día laborable. El
+  refresco de 90 s no la llama. Un teléfono de ingeniero **nunca escribe**.
+- **Desde cuándo:** ya estaba en el primer commit del repo (v81, 14-sep). Lo
+  anterior no está en la historia; la primera fila en la base es del 3-jun-2026.
+- **Duplicados — SÍ PASAN.** No hay llave única: el freno es mirar `S.pens`, que
+  se pide al cargar con `fecha >= <mes>-01`, y **`<mes>` sale de
+  `toISOString()`, que es la hora UTC**. A partir de las 20:00 de Santo Domingo
+  del último día del mes, UTC ya está en el mes siguiente: `S.pens` llega sin
+  las de hoy y **cada recarga escribe otra**. También hay carrera si dos
+  aparatos del administrador cargan a la vez. Medido: **92 filas en 66
+  días-persona, 26 de más**, en cinco fechas — **18 filas el 31-ago** (6 por
+  persona), 8 el 17-ago, 6 el 25-ago, 5 el 20-jul, 2 el 25-jun. Todas con
+  `personal_id` nulo (los ingenieros no están en `obra_personal`).
+
+
 
 Agrupa partidas que son el mismo taller escrito distinto («Revestimiento
 en cerámica — cocina caliente» ≈ «Revestimiento de cocina caliente»).
