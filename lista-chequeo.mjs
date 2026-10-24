@@ -409,47 +409,63 @@ async function probarLibro(nombreVer, html, b){
   return r;
 }
 
-/* ── EL RECORRIDO (v136) ──────────────────────────────────────────────────
-   Como el libro: contra lo que tiene que dar, con los MISMOS datos inventados
-   de la parte común. Se entra como el dueño —la puerta del cajón, a 390—,
-   se escoge el 6A, se abren grupos y se tocan actividades de verdad. */
+/* ── EL MODO OBRA (v136 el Recorrido, v137 con sus tres botones) ──────────
+   Contra lo que tiene que dar, con los MISMOS datos inventados de la parte
+   común. Se entra como el dueño —la puerta del cajón, a 390—, se escoge el 6A,
+   se abren grupos y se tocan los botones de verdad. Dos rondas: una con señal
+   (Completada · Avanzó 50 · Sin cambios) y otra SIN señal, que tiene que salir
+   entera y una sola vez cuando vuelve la red. */
 const REC_ESPERADO={
-  hayPuerta:{v:true, d:'el cajón tiene «Recorrido» y abre la lista de ambientes'},
+  hayPuerta:{v:true, d:'el cajón tiene «Modo Obra» y abre la lista de ambientes'},
   ambientesCuadran:{v:true, d:'la lista de ambientes son las áreas con algo abierto, y el 6A dice sus abiertas'},
   gruposCuadran:{v:true, d:'en el 6A, un grupo por contratista (el primero de cada actividad), todos PLEGADOS'},
-  marcarNoEscribe:{v:0, d:'marcar tres no escribe nada: cero escrituras antes de «Guardar»'},
-  botonDice:{v:'Guardar 3 cambios', d:'el botón de abajo dice «Guardar 3 cambios» y se ve sin desplazar a 390×844'},
-  desmarcar:{v:'Guardar 2 cambios', d:'tocar otra vez una marcada la desmarca'},
-  sobreviveRecarga:{v:'Guardar 3 cambios', d:'las marcas sin guardar siguen ahí después de recargar el app'},
-  guardarEscribe:{v:'3 PATCH obra_actividades · 3 POST obra_cambios', d:'guardar tres = las tres por el camino de siempre, cada una con su renglón en la bitácora'},
-  quedanAl100:{v:3, d:'las tres quedan completadas y al 100% en la base'},
-  loDemasIgual:{v:true, d:'lo que no se tocó en el 6A no cambió en nada'},
-  ceroGet:{v:0, d:'cero GET desde que se abre el Recorrido hasta después de guardar'},
+  tresBotones:{v:true, d:'cada renglón trae «✓ Completada», «Avanzó» y «Sin cambios», de 48px o más'},
+  marcarNoEscribe:{v:0, d:'marcar tres no escribe nada: cero escrituras antes de «Guardar el recorrido»'},
+  botonDice:{v:'Guardar el recorrido (3)', d:'el botón de abajo dice cuántas van y se ve sin desplazar a 390×844'},
+  sobreviveRecarga:{v:'Guardar el recorrido (3)', d:'las marcas sin guardar siguen ahí después de recargar el app'},
+  completada:{v:'completado·100·HOY·Ing. Nilson·1 completado', d:'Completada → completado al 100%, revisada hoy por quien está, UN renglón de historial'},
+  avanzo:{v:'en-progreso·50·HOY·1 avance', d:'Avanzó 50 → 50% en progreso, revisada hoy, UN renglón de historial'},
+  sinCambios:{v:'igual·HOY·1 revisado', d:'Sin cambios → ni estado ni avance cambian, solo la revisión de hoy, y UN renglón «revisado» (decisión del dueño: las dos cosas)'},
+  entidad:{v:'actividad', d:'el historial va con la entidad «actividad», la que lee el refresco de los otros teléfonos'},
+  sinSenal:{v:'2 guardadas · 1 PATCH y 1 renglón cada una', d:'sin red el recorrido se queda en la cola y al volver entra completo y UNA sola vez'},
+  recargaVeNuevo:{v:'50', d:'recargando el app, la que avanzó sale con 50%, no con el valor viejo'},
+  buscador:{v:true, d:'el buscador encuentra en OTRO sitio por palabras, con sus tres botones, y dice que solo mira lo abierto'},
+  verCompletadas:{v:'1 GET · las justas', d:'«Ver completadas» pide UNA vez solo las de ese contratista en ese sitio'},
+  ceroGet:{v:0, d:'fuera de «Ver completadas», cero GET desde que se abre el Modo Obra hasta después de guardar'},
 };
 async function probarRecorrido(nombreVer, html, b){
   const D=datos(); const {ACTS,PERS}=D;
   const AREA='N6 — Apto 6A';
-  const ESC=[], LEC=[];
+  const ESC=[], LEC=[], CAMBIOS=[], PATCHOK={};
   const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
   const ctx=await b.newContext({serviceWorkers:'block',viewport:{width:390,height:844}});
   await ctx.addInitScript(()=>{ window.confirm=()=>true; window.alert=()=>{}; });
   const ok=(r,body)=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
-  let contar=false;
+  let contar=false, sinRed=false;
   await ctx.route('**', r=>{
     const u=r.request().url(), m=r.request().method();
     if(u.startsWith(ORIGEN)) return r.continue();
     if(!/\/rest\/v1\//.test(u)) return r.abort();
     const pth=decodeURIComponent(u.split('/rest/v1/')[1]||''), base=pth.split('?')[0];
     if(m!=='GET'){
+      if(sinRed && (base==='obra_actividades'||base==='obra_cambios'||base==='obra_penalidades')) return r.abort('internetdisconnected');
       const body=r.request().postData()||'';
       if(contar) ESC.push(m+' '+base);
       try{ const d=body?JSON.parse(body):null;
-        if(base==='obra_actividades'&&m==='PATCH'){ const mm=pth.match(/id=eq\.([^&]+)/); if(mm) ACTS.filter(x=>x.id===mm[1]).forEach(x=>Object.assign(x,d)); } }catch(e){}
+        if(base==='obra_actividades'&&m==='PATCH'){ const mm=pth.match(/id=eq\.([^&]+)/); if(mm){ PATCHOK[mm[1]]=(PATCHOK[mm[1]]||0)+1; ACTS.filter(x=>x.id===mm[1]).forEach(x=>Object.assign(x,d)); } }
+        if(base==='obra_cambios'&&m==='POST') (Array.isArray(d)?d:[d]).forEach(x=>CAMBIOS.push(x));
+      }catch(e){}
       return ok(r,[]);
     }
-    if(contar && base!=='obra_asistencia' && base!=='obra_cambios') LEC.push(base);
+    if(contar && base!=='obra_asistencia' && base!=='obra_cambios') LEC.push(pth);
     let f=[];
-    if(base==='obra_actividades'){ f=ACTS; if(/estado=neq\.completado/.test(pth)) f=f.filter(a=>a.estado!=='completado'); }
+    if(base==='obra_actividades'){
+      f=ACTS;
+      if(/estado=neq\.completado/.test(pth)) f=f.filter(a=>a.estado!=='completado');
+      if(/estado=eq\.completado/.test(pth)) f=f.filter(a=>a.estado==='completado');
+      const ar=pth.match(/[?&]area=eq\.([^&]*)/); if(ar) f=f.filter(a=>(a.area||'')===ar[1]);
+      const il=pth.match(/personal_nombre=ilike\.\*([^*&]*)\*/); if(il) f=f.filter(a=>(a.personal_nombre||'').toLowerCase().indexOf(il[1].toLowerCase())>=0);
+    }
     else if(base==='obra_personal') f=PERS;
     const rg=r.request().headers()['range']||''; if(rg){ const [d0,h]=rg.split('-').map(Number); f=f.slice(d0,h+1); }
     return ok(r,f);
@@ -461,63 +477,108 @@ async function probarRecorrido(nombreVer, html, b){
     await G(()=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify({id:'nilson',nombre:'Ing. Nilson',rol:'admin'})); }catch(e){} });
     await p.reload({waitUntil:'load'});
     for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S.acts&&S.acts.length).catch(()=>0)) break; await p.waitForTimeout(500); }
-    await p.waitForTimeout(1500);
+    await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1500);
   };
   await arrancar();
+  const HOY=await G(()=>today());
   const r={};
-  // Lo que el 6A tiene que enseñar, contado aquí aparte, de los datos.
   const abiertas6A=ACTS.filter(a=>a.area===AREA&&a.estado!=='completado');
-  const primeros=new Set(abiertas6A.map(a=>((a.personal_nombre||'').split(',').map(s=>s.trim()).filter(Boolean)[0])||'Sin asignar'));
-  const antes=JSON.stringify(abiertas6A.map(a=>[a.id,a.estado,a.porcentaje,a.fecha_fin,a.personal_nombre]));
+  const primero=a=>((a.personal_nombre||'').split(',').map(s=>s.trim()).filter(Boolean)[0])||'Sin asignar';
+  const primeros=new Set(abiertas6A.map(primero));
   contar=true;
-  // La puerta del teléfono: la hamburguesa y el cajón.
   const hay=await G(()=>!!document.getElementById('dw-recorrido'));
   r.hayPuerta=hay;
   if(!hay){ await ctx.close(); srv.close(); for(const k of Object.keys(REC_ESPERADO)) if(!(k in r)) r[k]=null; return r; }
+  /* Contra una versión que no tiene lo de esta parte, la prueba no puede
+     tumbar la lista entera: lo que falte sale en blanco y FALLA su renglón. */
+  p.setDefaultTimeout(6000);
+  try{
   await p.locator('button[onclick*="toggleDrawer"]:visible').first().click(); await p.waitForTimeout(400);
   await p.locator('#dw-recorrido').click(); await p.waitForTimeout(500);
   r.ambientesCuadran=await G(([area,n])=>{ const bs=[...document.querySelectorAll('#hoja-rec .rec-amb')];
     const b=bs.find(x=>x.innerText.indexOf(area)>=0); return !!b && b.innerText.indexOf(n+' abierta')>=0; },[AREA,abiertas6A.length]);
-  if(FOTOS) await p.screenshot({path:path.join(FOTOS,nombreVer+'-recorrido-ambientes.png')});
+  if(FOTOS) await p.screenshot({path:path.join(FOTOS,nombreVer+'-modoobra-ambientes.png')});
+  // buscador: una palabra de una abierta de OTRO sitio
+  const otra=ACTS.find(a=>a.estado!=='completado'&&a.area==='N3 — Apto 3B');
+  await p.locator('#mo-q').fill(otra.descripcion); await p.waitForTimeout(300);
+  r.buscador=await G(id=>{ const res=document.getElementById('mo-res'); if(!res) return false;
+    const l=[...res.querySelectorAll('.mo-lin')]; const ok=l.some(x=>x.querySelector('[onclick*="'+id+'"]'));
+    const nota=/solo en lo abierto/i.test(document.getElementById('hoja-rec').innerText);
+    return ok && nota && !!(res.querySelector('.mo-b.ok')&&res.querySelector('.mo-b.av')&&res.querySelector('.mo-b.ig')); }, otra.id);
+  await p.locator('#mo-q').fill(''); await p.waitForTimeout(200);
   await p.locator('#hoja-rec .rec-amb',{hasText:AREA}).click(); await p.waitForTimeout(400);
   r.gruposCuadran=await G(n=>{ const hs=document.querySelectorAll('#rec-cuerpo button[onclick^="recAbrir"]');
-    return hs.length===n && document.querySelectorAll('#rec-cuerpo .rec-act').length===0; }, primeros.size);
-  if(FOTOS) await p.screenshot({path:path.join(FOTOS,nombreVer+'-recorrido-6A.png')});
-  // Abrir el primer grupo y tocar dos; luego el segundo grupo y tocar una.
+    return hs.length===n && document.querySelectorAll('#rec-cuerpo .mo-lin').length===0; }, primeros.size);
+  if(FOTOS) await p.screenshot({path:path.join(FOTOS,nombreVer+'-modoobra-6A.png')});
   const grupos=p.locator('#rec-cuerpo button[onclick^="recAbrir"]');
   await grupos.nth(0).click(); await p.waitForTimeout(300);
-  const tocar=async()=>{ await p.locator('#rec-cuerpo .rec-act:not(.on) .rec-act-b').first().click(); await p.waitForTimeout(200); };
-  await tocar(); await tocar();
-  if(FOTOS){ await p.locator('#rec-cuerpo .rec-act.on').first().scrollIntoViewIfNeeded(); await p.screenshot({path:path.join(FOTOS,nombreVer+'-recorrido-grupo-abierto.png')}); }
-  await grupos.nth(1).click(); await p.waitForTimeout(300);
-  await tocar();
+  r._botones=await G(()=>[...document.querySelectorAll('#rec-cuerpo .mo-lin')].slice(0,3).map(x=>[...x.querySelectorAll('.mo-b')].map(b=>b.textContent.trim()+':'+Math.round(b.getBoundingClientRect().height))));
+  r.tresBotones=await G(()=>{ const l=document.querySelectorAll('#rec-cuerpo .mo-lin'); if(!l.length) return false;
+    return [...l].every(x=>{ const bs=[...x.querySelectorAll('.mo-b')]; return bs.length===3 && bs.every(b=>b.getBoundingClientRect().height>=48) &&
+      /Completada/.test(bs[0].textContent) && /Avanzó/.test(bs[1].textContent) && /Sin cambios/.test(bs[2].textContent); }); });
+  const ids=await G(()=>[...document.querySelectorAll('#rec-cuerpo .mo-lin .mo-b.ok')].map(b=>(b.getAttribute('onclick').match(/moMarcar\('([^']+)'/)||[])[1]));
+  const [idC,idA,idI]=ids;
+  const antes={}; for(const id of ids) antes[id]=JSON.parse(JSON.stringify(ACTS.find(a=>a.id===id)));
+  const lin=id=>p.locator('#rec-cuerpo .mo-lin',{has:p.locator(`[onclick="moMarcar('${id}','hecha')"]`)});
+  await lin(idC).locator('.mo-b.ok').click(); await p.waitForTimeout(150);
+  await lin(idA).locator('.mo-b.av').click(); await p.waitForTimeout(150);
+  await lin(idA).locator('.mo-b.av',{hasText:'50%'}).click(); await p.waitForTimeout(150);
+  if(FOTOS){ await lin(idA).scrollIntoViewIfNeeded(); await p.screenshot({path:path.join(FOTOS,nombreVer+'-modoobra-grupo.png')}); }
+  await lin(idI).locator('.mo-b.ig').click(); await p.waitForTimeout(150);
   r.marcarNoEscribe=ESC.length;
   const boton=async()=>G(()=>{ const b=document.getElementById('rec-guardar'); if(!b) return null; const rc=b.getBoundingClientRect();
     return (rc.bottom<=844&&b.checkVisibility())?b.textContent.trim():'(fuera de la pantalla) '+b.textContent.trim(); });
   r.botonDice=await boton();
-  // desmarcar una y volverla a marcar
-  await p.locator('#rec-cuerpo .rec-act.on .rec-act-b').first().click(); await p.waitForTimeout(200);
-  r.desmarcar=await boton();
-  await tocar();
-  // recargar: las marcas siguen
-  contar=false; await arrancar(); await p.waitForTimeout(2000); contar=true;
-  await G(()=>abrirRecorrido()); await p.waitForTimeout(300);
-  await p.locator('#hoja-rec .rec-amb',{hasText:AREA}).click(); await p.waitForTimeout(400);
+  contar=false; await arrancar(); await p.waitForTimeout(1500); contar=true;
+  await G(a=>{ abrirRecorrido(); recIrAmbiente(a); },AREA); await p.waitForTimeout(400);
   r.sobreviveRecarga=await boton();
-  const marcadas=await G(a=>_recMarcadas(a),AREA);
-  // guardar
+  // Ronda 1, con señal
   const e0=ESC.length;
   await p.locator('#rec-guardar').click();
   for(let t=0;t<20;t++){ await p.waitForTimeout(300); if(!(await G(()=>!!(S.recorrido&&S.recorrido._guardando)))) break; }
   await p.waitForTimeout(600);
-  const esc=ESC.slice(e0);
-  const n=k=>esc.filter(x=>x===k).length;
-  r.guardarEscribe=n('PATCH obra_actividades')+' PATCH obra_actividades · '+n('POST obra_cambios')+' POST obra_cambios';
-  r.quedanAl100=ACTS.filter(a=>marcadas.indexOf(a.id)>=0&&a.estado==='completado'&&String(a.porcentaje)==='100').length;
-  const despues=JSON.stringify(abiertas6A.filter(a=>marcadas.indexOf(a.id)<0).map(a=>[a.id,a.estado,a.porcentaje,a.fecha_fin,a.personal_nombre]));
-  r.loDemasIgual=(despues===JSON.stringify(JSON.parse(antes).filter(x=>marcadas.indexOf(x[0])<0)));
-  r.ceroGet=LEC.length;
-  r._lecturas=LEC; r._escriturasAlGuardar=esc;
+  const camb=id=>CAMBIOS.filter(c=>c.entidad_id===id);
+  const ac=id=>ACTS.find(a=>a.id===id);
+  const fRev=x=>(x.revisado_fecha===HOY?'HOY':String(x.revisado_fecha));
+  { const x=ac(idC), c=camb(idC);
+    r.completada=x.estado+'·'+x.porcentaje+'·'+fRev(x)+'·'+x.revisado_por+'·'+c.length+' '+(c[0]||{}).accion;
+    if(!String(antes[idC].fecha_fin||'').trim() && x.fecha_fin!==HOY) r.completada+=' (sin la entrega de hoy)'; }
+  { const x=ac(idA), c=camb(idA); r.avanzo=x.estado+'·'+x.porcentaje+'·'+fRev(x)+'·'+c.length+' '+(c[0]||{}).accion; }
+  { const x=ac(idI), c=camb(idI), igual=(x.estado===antes[idI].estado&&String(x.porcentaje)===String(antes[idI].porcentaje));
+    r.sinCambios=(igual?'igual':'CAMBIÓ')+'·'+fRev(x)+'·'+c.length+' '+(c[0]||{}).accion; }
+  r.entidad=[...new Set(CAMBIOS.filter(c=>ids.includes(c.entidad_id)).map(c=>c.entidad))].join(',');
+  // Ronda 2, SIN señal: dos del segundo grupo
+  await grupos.nth(1).click(); await p.waitForTimeout(300);
+  const ids2=await G(()=>[...document.querySelectorAll('#rec-cuerpo .mo-lin .mo-b.ok')].map(b=>(b.getAttribute('onclick').match(/moMarcar\('([^']+)'/)||[])[1]).slice(0,2));
+  await lin(ids2[0]).locator('.mo-b.ok').click(); await p.waitForTimeout(150);
+  await lin(ids2[1]).locator('.mo-b.ig').click(); await p.waitForTimeout(150);
+  sinRed=true;
+  await p.locator('#rec-guardar').click();
+  for(let t=0;t<20;t++){ await p.waitForTimeout(300); if(!(await G(()=>!!(S.recorrido&&S.recorrido._guardando)))) break; }
+  await p.waitForTimeout(500);
+  sinRed=false;
+  await G(()=>{ window.dispatchEvent(new Event('online')); }); await p.waitForTimeout(2500);
+  await G(()=>{ try{ colaEnviar(); }catch(e){} }); await p.waitForTimeout(1500);   // otra vuelta: no puede duplicar
+  const okSR=ids2.filter(id=>PATCHOK[id]===1 && camb(id).length===1).length;
+  r.sinSenal=okSR+' guardadas · '+(ids2.every(id=>PATCHOK[id]===1)?'1 PATCH':'PATCH '+ids2.map(id=>PATCHOK[id]||0).join('/'))+' y '+
+    (ids2.every(id=>camb(id).length===1)?'1 renglón':'renglones '+ids2.map(id=>camb(id).length).join('/'))+' cada una';
+  // «Ver completadas» del primer contratista: le damos dos cerradas en el 6A
+  const q0=primero(abiertas6A.find(a=>a.id===idC)||{});
+  ACTS.push({id:'cz1',descripcion:'Cerrada vieja 1',area:AREA,estado:'completado',porcentaje:'100',personal_nombre:q0,fecha_fin:'2026-09-01',fecha:'2026-08-01'},
+            {id:'cz2',descripcion:'Cerrada vieja 2',area:AREA,estado:'completado',porcentaje:'100',personal_nombre:q0,fecha_fin:'2026-09-02',fecha:'2026-08-01'});
+  const l0=LEC.length;
+  await G(q=>{ S.recorrido.abierto=q; pintarRecorrido(); return moVerCompletadas(q); }, q0); await p.waitForTimeout(800);
+  const gets=LEC.slice(l0).filter(x=>/estado=eq\.completado/.test(x)).length;
+  const filas=await G(()=>document.querySelectorAll('#rec-cuerpo .mo-comp').length);
+  const esperadas=ACTS.filter(a=>a.area===AREA&&a.estado==='completado'&&primero(a)===q0).length;
+  r.verCompletadas=gets+' GET · '+(filas===esperadas?'las justas':filas+' filas de '+esperadas);
+  r.ceroGet=LEC.filter(x=>!/estado=eq\.completado/.test(x)).length;
+  r._lecturas=LEC; r._escriturasAlGuardar=ESC.slice(e0);
+  // recargar: la que avanzó sale con su valor nuevo
+  contar=false; await arrancar();
+  r.recargaVeNuevo=await G(id=>{ const a=S.acts.find(x=>x.id===id); return a?String(a.porcentaje):'(no está)'; }, idA);
+  }catch(e){ r._error=String(e&&e.message||e).split('\n')[0].slice(0,160); }
+  for(const k of Object.keys(REC_ESPERADO)) if(!(k in r)) r[k]=null;
   await ctx.close(); srv.close();
   return r;
 }
@@ -556,7 +617,7 @@ for(const k of Object.keys(PEN_ESPERADO)){
 }
 console.log('  ↑ antes · después. '+(fallaDespues?fallaDespues+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
 let fallaRec=0;
-console.log('\nEL RECORRIDO — contra lo que tiene que dar (v136)\n');
+console.log('\nEL MODO OBRA — contra lo que tiene que dar (v137)\n');
 for(const k of Object.keys(REC_ESPERADO)){
   const e=REC_ESPERADO[k];
   const marca=res.map(r=>{ const v=r.recorrido[k]; return (v===e.v?'✓':'✗')+' '+JSON.stringify(v); });
@@ -565,6 +626,8 @@ for(const k of Object.keys(REC_ESPERADO)){
 }
 console.log('  ↑ antes · después. '+(fallaRec?fallaRec+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
 if(res[1].recorrido._escriturasAlGuardar) console.log('  escrituras al guardar: '+JSON.stringify(res[1].recorrido._escriturasAlGuardar.reduce((m,x)=>{m[x]=(m[x]||0)+1;return m;},{})));
+for(const [i,r] of res.entries()) if(r.recorrido._error) console.log('  ('+VERS[i]+' se cortó: '+r.recorrido._error+')');
+if(res[1].recorrido._botones) console.log('  botones de los tres primeros renglones: '+JSON.stringify(res[1].recorrido._botones));
 if(res[1].recorrido._lecturas&&res[1].recorrido._lecturas.length) console.log('  GET durante el recorrido: '+JSON.stringify(res[1].recorrido._lecturas));
 console.log('\nCANDADO: escrituras interceptadas '+res.map(r=>Object.values(r.propio.escrituras).reduce((s,x)=>s+x,0)).join(' / ')+
   ' · salidas cortadas (fuentes, fotos) '+res.map(r=>r.propio.salidasCortadas).join(' / ')+' · a la base real: 0');

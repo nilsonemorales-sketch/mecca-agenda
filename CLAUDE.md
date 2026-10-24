@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v136 — 14 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v137 — 24 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -253,7 +253,7 @@ mismos botones que cualquier otra.
 | **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
 | **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
 | **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
-| **CAMINAR un apartamento y marcar lo hecho** | **Recorrido** (v136) — el cajón y la barra lateral. Es el panel del apartamento (`_recPanelApto`) con la lista de ambientes delante (`abrirRecorrido`, `_recAmbientesHTML`), tocar = marcar (`recMarcar`) y «Guardar N cambios» (`recGuardar`). Ver «El Recorrido» abajo |
+| **CAMINAR un apartamento y marcar lo hecho** | **Modo Obra** (v136 «Recorrido», v137 con sus botones) — el cajón y la barra lateral. Es el panel del apartamento (`_recPanelApto`) con la lista de ambientes, el buscador y «Seguir donde estaba» delante (`abrirRecorrido`, `_recAmbientesHTML`). Cada renglón (`_moLineaHTML`): ✓ Completada · Avanzó 25/50/75 · Sin cambios (`moMarcar`), y «Guardar el recorrido» (`recGuardar`). Ver «El Modo Obra» abajo |
 | **Contar penalidades y registros de un ingeniero** | **Los ayudantes del libro** (v135) — `_penSituaciones()`, `_penRegistrosPorDia()`, `_penRegTexto()`. Toda pantalla que cuente `obra_penalidades` pasa por ahí. Ver «El libro de penalidades» en §8 |
 | **Crear o editar una actividad con el formulario corto** | **Los tres formularios** (Propio, Contratista, Ingeniero) — `showAddActPropio`, `showAddActContratista`, `showAddActIngeniero` (v133). Lo poco usado va plegado en «Más detalles» (`_formMasHTML`); prioridad (`_formPrioHTML`) y foto (`_formFotoHTML`) son nuevas |
 | **Ir marcando las piezas de tope que ya se identificaron** | **Topes** (v130) — en la ficha del resultado y en el catálogo. `tpMarcar()`, `tpMarcarGrupo()`, marcador `_tpMarcadorHTML()`. Son **108 piezas**, no 68 renglones. Vive en `obra_config`, clave `topes_identificadas` |
@@ -2833,6 +2833,67 @@ a la de Topes, que es de `obra_config`—, y cuenta como guardada.
 el «+ Anotar» de siempre, que abre el formulario entero), mantener el dedo para
 «a medias / trabada / como estaba», y la cámara en la actividad.
 
+### EL MODO OBRA (v137) — el Recorrido con sus tres botones
+
+El pedido llegó como una **pantalla nueva**, «Modo Obra». Ya existía dos veces:
+el módulo **Obra** (sitio → contratista → tarjetas con 25/50/75 · Completada ·
+Sin cambios, que guardan al momento) y el **Recorrido** de la v136. Preguntado
+con opciones, el dueño escogió **ampliar el Recorrido** y llamarlo Modo Obra:
+*«una cuarta pantalla que hace lo mismo sería ir para atrás»*.
+
+- **Cada renglón**: la descripción ENTERA, el avance, la entrega, «revisada
+  dd-mmm» o «nunca revisada», un 📷 y el › a la lista; debajo, **✓ Completada ·
+  Avanzó · Sin cambios** (48px; con los nombres que el dueño decidió el 16-sep,
+  de `PAL_COMPLETADA` y `PAL_SIN_CAMBIOS`). Avanzó abre **25 / 50 / 75**, y
+  bajar un avance que ya era mayor **pregunta antes**. Tocar otra vez la misma
+  marca la quita.
+- **El orden dentro de un contratista**: primero lo **nunca revisado** o lo
+  revisado hace más (`revisado_fecha`); el orden de antes desempata.
+- **Arriba de los ambientes**: el **buscador** (todas las palabras, sin
+  tildes, sobre lo ABIERTO de toda la obra; cae en el renglón con sus tres
+  botones) con la línea **«Busca solo en lo abierto. Lo que ya está completado
+  no sale aquí: no se borró.»** —la pidió el dueño—, **«Seguir donde estaba»**
+  (`mecca_modo_obra_ultimo`) y los ambientes con el **nivel como encabezado**:
+  un toque, no los dos del pedido.
+- **«Ver completadas»** en cada contratista abierto: **UNA lectura pequeña**,
+  solo las cerradas de ese contratista en ese sitio, seis columnas. Decisión
+  del dueño: traer lo cerrado de toda la obra son 2,6 MB, el gasto del 21-sep.
+
+**GUARDAR**: «Guardar el recorrido (N)» guarda **todo lo marcado**, también lo
+de otros sitios y lo del buscador, y dice «6 completadas, 2 con avance, 1 sin
+cambios — guardado». **Por el camino de siempre, decisión del dueño** —él mismo
+había escrito otra entidad en el pedido y dijo que la corrección era buena—:
+
+| marca | llamada | escribe | historial |
+|---|---|---|---|
+| ✓ Completada | `logEvento` + `Acciones.completar(id, extra, detalle)` | estado completado (el 100 lo pone la coherencia), la entrega de hoy **si no tenía**, `revisado_fecha` y `revisado_por` | 1 renglón `completado` |
+| Avanzó | `Acciones.setAvance(id, p, extra, detalle)` | el %, el inicio de hoy **si no tenía**, la revisión | 1 renglón `avance` |
+| Sin cambios | `Acciones.revisarEnObra(id, detalle)` | **solo** `revisado_fecha` y `revisado_por` | 1 renglón `revisado` |
+
+- **`completar` y `setAvance` ganaron `extra` y `detalle` OPCIONALES**: todo va
+  en el mismo PATCH, y quien las llamaba con `(id)` o `(id,pct)` no cambió.
+- **«Sin cambios» escribe las DOS cosas**, decisión del dueño, que había pedido
+  no dejar renglón: el refresco de los otros teléfonos, «Sin mirar» y las
+  pastillas por movimiento leen ese renglón; sin él, el teléfono de Moisés no
+  se entera hasta la recarga de 30 minutos. Y un recorrido son 7-8 renglones,
+  no 1.371.
+- **La entidad es `actividad`**, la de siempre. El pedido decía
+  `obra_actividades`: el refresco por delta y los contadores no lo leerían.
+- **LA FOTO ES OPCIONAL** —la pidió el dueño así—: el 📷 abre `abrirFotoUpload`
+  y **cerrar no la exige** (hoy `marcarActCompletada` no la pide).
+- **Sin señal** cada escritura va a la cola de `Acciones` (v91) con su renglón
+  armado al marcar, y sale **una sola vez** al volver la red. *Avisado:* el
+  «Actividad completada» del libro de penalidades **no** se encola —`logEvento`
+  nunca lo hizo—, así que un cierre sin señal se queda sin esa línea del libro.
+- **Las columnas `revisado_fecha` (date) y `revisado_por` (text) las creó el
+  dueño desde SQL**; la carga de arranque ya las trae porque pide la fila
+  entera. `sw.js` **no se tocó**: el `index.html` se pide a la red siempre.
+
+*Avisado y no es de esta versión:* el 24-oct había **62 renglones de
+`obra_cambios` con entidad `obra_actividades`** (31 crear, 16 editar, 11
+eliminar, 4 revisar) que **no salen del app** —alguien escribe por fuera—. El
+refresco de los otros teléfonos no los ve hasta la recarga de 30 minutos.
+
 ### El panel del apartamento se organiza POR CONTRATISTA
 
 Tocar un apartamento en la torre abre `_recPanelApto()`: sus cuatro números
@@ -3384,6 +3445,14 @@ mismo:**
   `tpMarcar` o `tpMarcarGrupo`: cero escrituras intentadas
 - **LA LISTA DE CHEQUEO DA TODO IGUAL** (v134): `node lista-chequeo.mjs`
   contra lo publicado, **cero DISTINTO** o el porqué en el commit
+- **EL MODO OBRA DA LO QUE TIENE QUE DAR** (v137), en su sección de la lista
+  (dieciséis comprobaciones): tres botones de 48px por renglón; Completada,
+  Avanzó 50 y Sin cambios escriben lo suyo **con UN renglón cada una y la
+  entidad `actividad`**; sin red el recorrido entra **completo y una sola vez**;
+  recargando, la que avanzó sale con 50; el buscador encuentra en otro sitio y
+  dice que solo mira lo abierto; «Ver completadas» es **un GET**; y fuera de
+  eso **cero `GET`**. Contra la v136 fallan todas menos la puerta y los
+  ambientes, que ya existían
 - **EL RECORRIDO DA LO QUE TIENE QUE DAR** (v136), en su sección de la lista:
   la puerta del cajón abre los ambientes; el 6A sale con un grupo por
   contratista, todos plegados; marcar tres **no escribe nada** y el botón dice
@@ -3747,6 +3816,7 @@ pertenece a ningún nivel.
 | **v135** — la sonda del Historial dio vacío en las DOS versiones: entrar al Historial no pide nada, lo pide `loadHistorial` al tocar un filtro. Y después dio 3 situaciones donde se esperaban 2: la propia prueba había escrito la inactividad de hoy. | Lo vacío en las dos versiones es la prueba, no el app (v88). Y lo de la v111 otra vez: **una sonda que escribe cambia lo que miden las de abajo** — se corrige lo ESPERADO, diciendo por qué, no el app. |
 | **v136** — el pedido traía una pantalla «Recorrido» nueva que ya existía casi entera: el panel del apartamento, por contratista, plegado, con abiertas y vencidas, al que se llegaba tocando la torre. Y pedía a la vez «una sola escritura» y «el mismo camino del botón de completar», que no caben juntos. | **Antes de construir, busca la pantalla en el mapa** —es la regla de la §3.5 y la lección de «Hoy»—: aquí bastaba con ampliarla. Y cuando dos condiciones del pedido se excluyen, **se dice cuál choca con cuál y decide el dueño**; no se escoge una en silencio. |
 | **v136** — la lista de chequeo dio DISTINTO en `vistas.lista` por 14 caracteres, siempre con los mismos dos valores y siempre en la versión que corría PRIMERO, con el navegador recién abierto. La v135 contra sí misma dio igual dos veces. | Era la prueba: medía la Lista antes de que llegara lo que el arranque pide aparte. Ahora espera a que la red se calme antes de medir. **Una prueba intermitente no vale nada** (v84): o se arregla o se borra, y nunca se publica «porque a la segunda dio igual». |
+| **v137** — el pedido del «Modo Obra» era la TERCERA pantalla para lo mismo (Obra, Recorrido), pedía que «Sin cambios» no dejara renglón y que el historial fuera con entidad `obra_actividades`. Las dos cosas habrían hecho que el teléfono de al lado no se enterara. Y los botones de 48px salían de 44: la regla `button:not(…):not(…):not(…)` de la línea ~100 pesa más que una clase sola. | Cuando el pedido trae el diseño del dato, **mira quién lee ese dato antes de escribirlo así** — aquí el refresco por delta y los contadores. Y si un tamaño no sale, **mira el peso de las reglas**, no solo el valor: colgarlo de un id (`#hoja-rec .mo-b`) lo arregló. |
 | **v133** — **el contenedor se reinició y se llevó el scratchpad entero**: los 22 arneses de regresión, sus fixtures —varios eran copias de la base— y el comparador. La v130 y la v131 quedaron sin publicar a mitad de su regresión. | Lo que vive en el scratchpad dura lo que dure el contenedor. La regresión se rehízo con **datos inventados** (`reg133.mjs`: 700 actividades con semilla fija, el mismo doble para las dos versiones, el candado en la ruta) — mide filtros, vistas, las ocho agrupaciones, renglones, Obra, Compras, Equipo, Reportes, Partidas, Topes y el alta/edición. **Decidido en la v134**: el dueño autorizó el archivo, y vive en el repo como `lista-chequeo.mjs`, con los datos y el candado dentro. |
 | **v131** — el tercer campo de una pieza en L decía «Largo del ala (o fondo total)»: son **dos medidas distintas**, y quien medía el pedazo que sobresale —unos 470, que es como Madesol dibuja el ala— se iba **± 647,6 mm** y no encontraba la pieza. El código estaba bien; el que no sabía de dónde a dónde medir era el ingeniero. | Cuando una entrada admite varias lecturas, **el arreglo no es el código: es decir dónde se pone la cinta**. Mídelo: aquí fueron cinco valores contra `tpDif`, y dos de los cinco fallaban. Y un croquis que dibuja la forma pero no las cotas no contesta la pregunta que la gente tiene delante. |
 | **v131** — el croquis se veía chiquito y nadie sabía por qué: `width="100%"` con un `height` FIJO y un viewBox de 200×92 hace que el navegador lo encaje en **200px de ancho** y deje el resto de la tarjeta en blanco. Llevaba así desde la v129. | Un `<svg>` con `viewBox` y `width:100%` necesita **`height:auto`**, no un número: con los dos puestos manda el que deja la caja más chica y el dibujo se encoge en silencio. Se ve midiendo el `getBoundingClientRect` del svg contra el de la tarjeta, no mirándolo. |
@@ -3806,10 +3876,11 @@ formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
 
-**Desde la v136 tiene una tercera parte, «EL RECORRIDO»**: entra por la puerta
-del cajón a 390, escoge el 6A, abre grupos y toca actividades de verdad, y
-comprueba once cosas contra lo que tienen que dar —incluido que guardar son
-tres `PATCH` y que no hay ni un `GET`—.
+**Desde la v136 tiene una tercera parte, hoy «EL MODO OBRA» (v137)**: entra por
+la puerta del cajón a 390, escoge el 6A, abre grupos y toca los botones de
+verdad en dos rondas —con señal y sin señal— y comprueba dieciséis cosas contra
+lo que tienen que dar. Si a una versión vieja le falta algo, **no tumba la
+lista**: corta esa parte y sus renglones salen en blanco, fallando.
 
 **Desde la v135 tiene una segunda parte, «EL LIBRO DE PENALIDADES»**, que no
 compara: COMPRUEBA contra lo que tiene que dar, con un reloj fijo en el último
