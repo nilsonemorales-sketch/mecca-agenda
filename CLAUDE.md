@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v142 — 25 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v143 — 25 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -254,6 +254,7 @@ mismos botones que cualquier otra.
 | **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
 | **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
 | **LO QUE VE UN INGENIERO al poner su PIN (Moisés, Karina)** | **El Modo Campo** — `debeAbrirCampo()`, `iniciarModoCampo()`, `renderCampo()`, `campoMarcar()`. Pantalla aparte, en cualquier aparato, para todo rol `ing`. **No estaba en este mapa hasta la v139.** Ver «El Modo Campo» abajo |
+| **AGREGAR UNA ACTIVIDAD DICTÁNDOLA (nota de voz)** | **Actividades → pestaña «Dictar»** y **Modo Campo → «Dictar una actividad»** (v143) — `dictarMic()`, `_dicMandar()`, `_dicTarjeta()`, `dicGuardar()`, `_dicLocal()`. Una nota, UNA actividad, siempre con tarjeta antes de guardar. Nilson guarda directo; un ingeniero propone. Ver «DICTAR» abajo |
 | **Dejar dicho que una partida NO se puede hacer todavía, y por qué** | **Modo Campo → «Trabada»** y **Modo Obra → el cuarto botón** (v139) — `moTrabaAbrir()`, `moTrabar()`, `Acciones.trabar()` / `destrabar()`, `TRABA_CAUSAS`. Ver «Trabadas y propuestas» abajo |
 | **Proponer una partida que no estaba en la lista** | **Modo Campo → «Proponer a Gerencia»** (`campoProponer()`) y **Modo Obra → un contratista abierto → «+ Proponer a Gerencia»** (v139, renombrado en la v140: `PAL_PROPONER`) — `_propFormHTML()`, `propEnviar()`, `Acciones.proponer()`. Entra como propuesta y no cuenta hasta que Gerencia la aprueba |
 | **Aprobar o rechazar lo que proponen los ingenieros, y ver las trabadas por causa** | **Gerencia, arriba** (v139) — `_gerPropuestasHTML()`, `_gerTrabadasHTML()`, `propAprobar()`, `propRechazar()`. El número va en la puerta de Gerencia (`_propBadge`) |
@@ -2949,6 +2950,65 @@ salía a media pantalla. **Un botón con el icono de plegar** (Lucide
 - **En el teléfono el logo se va** (`body.con-btn-cab`, ≤430px), solo en
   Actividades: con un botón más, «Mecca Residence» salía «Mecca Res…».
 
+### DICTAR (v143) — una nota de voz, UNA actividad
+
+Pedido del dueño: *«agregar actividades a través de nota de voz de manera
+práctica, interactiva y eficiente»*. Tercera pestaña de Actividades
+(`Actividades · Revisión · Dictar`, `S.obraVista='dictar'`, contenedor
+`#c-dictar`) y botón «Dictar una actividad» arriba del Modo Campo
+(`campoDictar`, `#cp-dictar`). **El mismo HTML en los dos** (`_dicHTML`).
+
+- **Tres toques**: el micrófono (132 px, icono Lucide `mic`) graba con contador
+  y anillo que sigue el volumen, corte a los **60 s**; otro toque para; sale la
+  **tarjeta**; «Guardar». **Nada se escribe sin la tarjeta.**
+- **USA EL MOTOR DE VOZ CON `VOZ_ACTIVA` EN false.** La bandera sigue apagando
+  la caja de órdenes (§9.6): sus tres problemas son de EJECUTAR órdenes sobre lo
+  que ya existe. Aquí lo entendido cae en una tarjeta que se mira y se corrige,
+  así que un mal entendido no escribe nada. `cargarVozApi` se llama **al entrar a
+  Dictar**, una vez por sesión (una lectura de dos filas de `obra_config`), no
+  al arrancar.
+- **El Worker: `/api/transcribir` con `modo:'crear_actividad'`** y un
+  `contexto` con las áreas y los nombres de `personal_nombre` de `S.acts` y la
+  fecha de hoy. Transcribe (Whisper, `es`) y en la MISMA llamada arma
+  `{descripcion, area, personal_nombre, fecha_fin, prioridad, notas}`
+  (`armarActividad` en `worker/worker.js`). El modelo solo escoge de las listas,
+  y **el Worker y el app lo vuelven a comprobar**: un área o un nombre que no
+  están en la lista se quedan en vacío. Va dentro de `/api/transcribir` **a
+  propósito**: un Worker viejo contesta `{texto}` y el app interpreta solo
+  (`_dicLocal`: el código del apartamento, «penthouse», el nombre del sitio, el
+  primer nombre de un contratista —si casan dos, ninguno—, hoy / mañana / el
+  día de la semana / la semana que viene, «urgente»).
+- **⚠️ EL WORKER HAY QUE PUBLICARLO A MANO** (`wrangler deploy` en `worker/`):
+  publicar el repo no lo publica. Mientras no se publique, Dictar funciona con
+  la interpretación del app.
+- **La tarjeta**: lo dicho en letra chica («Dijiste: …»), la descripción a
+  teclado, y lo demás con pastillas — **dónde** (nivel → sitio, con `_nivelArea`
+  como las pastillas de la v142), **quién** (primero los que tienen abiertas en
+  ese sitio, con su número; «Otros (N)» abre el resto), **para cuándo** (Hoy ·
+  Mañana · Viernes · Elegir, que abre el calendario del sistema) y **prioridad**
+  (Normal · Urgente). Lo vacío sale **en rojo** al tocar Guardar, y la pantalla
+  sube al primero.
+- **Posible repetida**: abierta, en el mismo sitio y con `Parecido` ≥
+  `FALTA_UMBRAL` (0,72) — más bajo que el 0,90 de `Acciones.validar`, porque
+  aquí se pregunta. «Ya existe en …» con **Crear igual** / **Ir a la
+  existente**; hasta «Crear igual» no se guarda.
+- **Guardar**: Nilson por **`Acciones.crear`** (renglón `creado`, entidad
+  `actividad`), con `fecha_inicio` hoy, el `tipo_personal` por mayoría
+  (`_propTipoDe`) y **`notas: 'Dictado: <lo que dijo>'`**. Un ingeniero por
+  **`Acciones.proponer`** —el botón dice «Proponer a Gerencia»—, que ganó
+  `fecha_inicio`, `fecha_fin`, `prioridad` y `notas` **opcionales**: «Proponer a
+  Gerencia» de la v140 no las manda y sigue igual. El audio no se guarda.
+- **Nunca se queda colgado**: sin micrófono, sin permiso, error de la
+  grabadora (`onerror`), Worker con error o **15 s sin respuesta**
+  (`DIC_ESPERA_MS`, `AbortController`) → la tarjeta se abre igual con lo que
+  haya y **el motivo en una línea**. Vigilante de **8 s** sobre `onstop`, solo
+  como red. «Llenarla a mano» está a la vista mientras se entiende el audio.
+- **iPhone**: `getUserMedia` se llama lo PRIMERO en el toque, sin esperar nada
+  antes — Safari deja de contarlo como gesto si hay una promesa en medio.
+  Salir de la pestaña grabando suelta el micrófono.
+- **Sin señal no se encola**: crear y proponer nunca se encolaron. Se dice y la
+  tarjeta se queda como estaba.
+
 ### TRABADAS Y PROPUESTAS (v139) — lo que pasa en la obra y no es «hecho»
 
 Medido el 25-oct: en 30 días casi todo el movimiento es del dueño. **Moisés no
@@ -3670,6 +3730,12 @@ mismo:**
   aprueba; Nilson ve el número; aprobar la mete; rechazar escribe el respaldo
   **antes** del `DELETE`; Gerencia cuenta por causa y se abre; sin Kanban ni
   Matriz a 390; y todo con la entidad `actividad`
+- **DICTAR DA LO QUE TIENE QUE DAR** (v143), en su sección de la lista
+  (diecisiete): nada se escribe hasta «Guardar»; Nilson son **1 POST
+  `obra_actividades` sin propuesta + 1 POST `obra_cambios` `creado`/`actividad`**
+  con `notas` «Dictado: …»; Karina, `propuesta=true` y **`S.acts` igual**; un
+  contratista o un área que no están en las listas **no se ponen**; y con el
+  Worker caído o mudo la tarjeta sale igual, a los 15 s como mucho
 - **LAS PASTILLAS TRAEN TODAS LAS UBICACIONES, POR NIVEL, Y TODOS LOS
   CONTRATISTAS** (v141, v142), comprobado en la sección de la cabecera: tantas
   pastillas de ubicación como áreas con algo abierto, cada una debajo del
@@ -4117,6 +4183,17 @@ formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
 
+**Desde la v143 tiene una sexta parte, «DICTAR»**: lanza su propio Chromium con
+el **micrófono falso** (`--use-fake-device-for-media-stream`) y contesta como un
+**Worker de mentira** en la ruta (`https://voz.prueba.invalid`, también la
+`voz_api_url` que da el doble de `obra_config`). Diecisiete comprobaciones: la
+pestaña, grabar/parar/tarjeta, lo que va al Worker, la tarjeta llena, cero
+escrituras sin confirmar, el payload de Nilson (directa, `Dictado:`,
+`creado`/`actividad`, dos escrituras), sin contratista en rojo, área inventada,
+Worker viejo, con error y mudo (15 s), el aviso de repetida, y Karina por el
+Modo Campo proponiendo sin contar. **Lo que dice Whisper de verdad no se prueba
+aquí.**
+
 **Desde la v139 tiene una quinta parte, «TRABADAS Y PROPUESTAS»**: entra como
 Karina —que cae en el Modo Campo—, traba dos, destraba una, propone otra y
 comprueba que no cuenta; después entra como Nilson, traba una en el Modo Obra,
@@ -4382,6 +4459,11 @@ hecha» sí. No es una regresión del renombrado; viene de antes.
 `Comandos` y sus patrones, `_cmdVoz`, `_cmdGrabar`, `_cmdAnalizar`,
 `dictarSobre` y `cargarVozApi`. Lo que hay son **diez guardias**, todas la
 misma línea.
+
+**Desde la v143, «Dictar» usa este motor con la bandera en `false`** (ver
+«DICTAR» en §3.5): crea UNA actividad a través de una tarjeta que se confirma,
+así que no le tocan los tres problemas de abajo, que son de ejecutar órdenes.
+La bandera sigue apagando todo lo de esta lista.
 
 **Qué apaga:** el botón de la cabecera (`#btn-cmd`, se oculta en el arranque
 porque es HTML fijo), la tecla `C`, `abrirComando()`, `#cmd-mic`,

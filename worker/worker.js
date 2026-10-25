@@ -25,8 +25,9 @@ const ORIGENES_PERMITIDOS = [
 const MODELO_VOZ   = '@cf/openai/whisper-large-v3-turbo';
 const MODELO_TEXTO = '@cf/mistralai/mistral-small-3.1-24b-instruct';
 
-/* Tope de audio. 30 segundos de voz comprimida no pasan de ~1 MB; mas que
-   esto es un error o un abuso, no una orden de obra. */
+/* Tope de audio. 30 segundos de voz comprimida no pasan de ~1 MB (Dictar, en
+   la v143, corta a los 60 s: ~2 MB); mas que esto es un error o un abuso, no
+   una orden de obra. */
 const MAX_AUDIO_BYTES = 6 * 1024 * 1024;
 
 const ACCIONES = ['completar','avance','iniciar','pausar','urgente','normal',
@@ -138,7 +139,74 @@ async function transcribir(peticion, env, cors){
   });
 
   const texto = (salida && salida.text || '').trim();
+
+  /* v143 · Modo «crear_actividad» (pestaña Dictar). En la MISMA llamada se
+     transcribe y se arman los campos de una actividad. Va dentro de
+     /api/transcribir a proposito: un app nuevo contra un Worker viejo recibe
+     {texto} y lo interpreta el app; un app viejo contra este Worker no manda
+     `modo` y recibe lo de siempre. Si el modelo falla, se devuelve el texto
+     igual: la tarjeta se llena a mano. */
+  if(cuerpo.modo === 'crear_actividad' && texto){
+    let actividad = null;
+    try{ actividad = await armarActividad(texto, cuerpo.contexto || {}, env); }catch(e){ actividad = null; }
+    return json({texto, actividad}, 200, cors);
+  }
   return json({texto}, 200, cors);
+}
+
+/* ── texto -> campos de una actividad nueva (modo crear_actividad) ────────
+   El modelo SOLO puede escoger el area y el contratista de las listas que
+   manda el app, que salen de la obra real. Si no esta seguro, deja el campo
+   vacio. Todo lo que devuelve se vuelve a comprobar aqui contra las listas:
+   nunca se confia en la forma cruda. */
+const DIAS_SEMANA = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
+
+async function armarActividad(texto, ctx, env){
+  const areas = Array.isArray(ctx.areas) ? ctx.areas.map(String).slice(0, 80) : [];
+  const personas = Array.isArray(ctx.personas) ? ctx.personas.map(String).slice(0, 80) : [];
+  const hoy = /^\d{4}-\d{2}-\d{2}$/.test(ctx.hoy || '') ? ctx.hoy : new Date().toISOString().slice(0,10);
+  const diaHoy = DIAS_SEMANA[new Date(hoy+'T12:00:00Z').getUTCDay()];
+
+  const sistema = `Eres el asistente de una app de seguimiento de obra en Republica Dominicana.
+Un ingeniero dicto UNA actividad nueva. La conviertes en un objeto JSON con estos campos:
+{"descripcion": texto, "area": texto, "personal_nombre": texto, "fecha_fin": "AAAA-MM-DD", "prioridad": "normal" o "urgente", "notas": texto}
+
+Devuelves SOLO el objeto JSON, sin explicacion y sin markdown.
+
+Reglas:
+- "area" tiene que ser EXACTAMENTE una de esta lista, copiada letra por letra, o "" si no la dijo o no estas seguro:
+${JSON.stringify(areas)}
+  «el 4A», «apartamento 4 A», «cuatro A» es "N4 — Apto 4A". «el penthouse» es el Penthouse. Si nombra un sitio que no esta en la lista, area = "".
+- "personal_nombre" tiene que ser EXACTAMENTE uno de esta lista, o "" si no lo dijo o no estas seguro. Nunca inventes un nombre:
+${JSON.stringify(personas)}
+- "descripcion": el trabajo, claro y corto, en espanol de obra, con la ubicacion PRECISA dentro del sitio y el apartamento entre parentesis al final. Ejemplo: «Rejillas de piso — baño principal (4A)». Sin el nombre del contratista ni la fecha.
+- "fecha_fin": hoy es ${hoy} (${diaHoy}). Convierte «hoy», «mañana», «el viernes», «la semana que viene», «el 30» a una fecha real AAAA-MM-DD, nunca anterior a hoy. Si no dijo fecha, "".
+- "prioridad": "urgente" solo si dijo urgente, ya, cuanto antes o prioridad. Si no, "normal".
+- "notas": lo que dijo que no cabe en lo anterior (materiales, aclaraciones). Si no hay nada, "".`;
+
+  const salida = await env.AI.run(MODELO_TEXTO, {
+    messages: [
+      {role:'system', content: sistema},
+      {role:'user',   content: texto.slice(0, 800)}
+    ],
+    max_tokens: 400,
+    temperature: 0.1
+  });
+  const bruto = salida && (salida.response !== undefined ? salida.response : salida.result);
+  const o = (bruto && typeof bruto === 'object') ? bruto : extraerJSON(bruto || '');
+  if(!o || typeof o !== 'object') return null;
+
+  const limpia = {
+    descripcion: String(o.descripcion || '').trim().slice(0, 300),
+    area: areas.indexOf(String(o.area || '').trim()) >= 0 ? String(o.area).trim() : '',
+    personal_nombre: personas.indexOf(String(o.personal_nombre || '').trim()) >= 0 ? String(o.personal_nombre).trim() : '',
+    fecha_fin: '',
+    prioridad: o.prioridad === 'urgente' ? 'urgente' : 'normal',
+    notas: String(o.notas || '').trim().slice(0, 300)
+  };
+  const f = String(o.fecha_fin || '').trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(f) && f >= hoy && !isNaN(new Date(f+'T12:00:00Z'))) limpia.fecha_fin = f;
+  return limpia;
 }
 
 /* ── texto -> orden ───────────────────────────────────────────────────── */
