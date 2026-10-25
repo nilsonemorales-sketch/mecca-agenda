@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v140 — 25 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v141 — 25 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -297,9 +297,15 @@ ofrece. El segundo argumento de `applyActFilters` **solo** salta el
 ordenado: ordenar 2.465 filas cinco veces por repintado costaba ~58 ms de
 cada toque.
 
-**Contratista y apartamento son pastillas de un toque**
-(`_actPillsRapidasHTML`), fuera del panel de Filtros. Los apartamentos salen
-con trabajo abierto, en `REC_ORDEN`. Filtran por `personas`, **no** por
+**Contratista y ubicación son pastillas de un toque**
+(`_actPillsRapidasHTML`), fuera del panel de Filtros. **Desde la v141 salen
+TODOS**, decisión del dueño («aquí quiero tener todos los contratistas y todas
+las ubicaciones»): todas las ubicaciones con algo abierto —los once
+apartamentos, las áreas comunes de cada nivel y después Parqueo, Fachada,
+General…— en el orden del edificio (`_revOrdenArea`), y todos los
+contratistas, los que se mueven primero. «Sin ubicación» **no** lleva pastilla:
+no es un sitio (v121), y `_actToggleUbicacion('')` además borra todos los de
+ubicación. Filtran por `personas`, **no** por
 `contratistas` — ese exige `tipo_personal` y no es de fiar.
 
 **LAS PASTILLAS DE CONTRATISTA SE ORDENAN POR MOVIMIENTO, NO POR DEUDA
@@ -316,6 +322,10 @@ gente con muchas abiertas y quietas.
   movimiento manda quien más abiertas tiene.
 - **Salen TODOS los que se han movido**, no seis; la fila se desliza de lado
   como la de apartamentos. Hoy son **16** contra las 6 de antes.
+  **Desde la v141 salen TODOS, punto**: primero los que se movieron (en ese
+  orden), después los quietos por cuántas abiertas tienen, y «Sin asignar» al
+  final. Ya no hay «los seis de siempre» de respaldo: sin historial todavía,
+  salen todos por abiertas.
 - **El número sigue siendo sus ABIERTAS**, que es lo que vas a ver al tocarla
   (la regla de la v87), y por eso se cuenta **igual que filtra
   `applyActFilters`** — por nombre y sin exigir tipo.
@@ -3652,8 +3662,12 @@ mismo:**
   aprueba; Nilson ve el número; aprobar la mete; rechazar escribe el respaldo
   **antes** del `DELETE`; Gerencia cuenta por causa y se abre; sin Kanban ni
   Matriz a 390; y todo con la entidad `actividad`
+- **LAS PASTILLAS TRAEN TODAS LAS UBICACIONES Y TODOS LOS CONTRATISTAS**
+  (v141), comprobado en la sección de la cabecera: tantas pastillas de
+  ubicación como áreas con algo abierto, la primera el 2A, y más de seis de
+  contratista. Contra la v140 falla (11 de 15)
 - **LA CABECERA SE PLIEGA Y NO CAMBIA NADA** (v138), en su sección de la
-  lista (diez comprobaciones, a 1280 y a 390): esconde pestañas, sub-barra y
+  lista (once comprobaciones desde la v141, a 1280 y a 390): esconde pestañas, sub-barra y
   `.act-cab` y deja título y barra verde; el botón sigue a la vista; con Apto 2A
   dice **1** y la línea «filtradas»; mismas filas y **mismo HTML** de `#c-act`
   antes, plegada y después; a 390 se toca, **no pisa ningún control** y el

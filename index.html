@@ -1133,7 +1133,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261025_140';
+const APP_VERSION='20261025_141';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -6525,29 +6525,37 @@ function _actPillsRapidasHTML(){
      que es justo lo que el dueño no quiere ver. `tipo_personal` no es de fiar
      (§8) y por eso se pregunta por la mayoría, no por el caso suelto. */
   Object.keys(otras).forEach(function(k){ if(otras[k]*2>g[k]) ofrece[k]=1; });
-  var gente;
-  if(_congeladasListo()){
-    gente=Object.keys(ofrece).filter(function(k){ return (mov[k]||0)>0; })
-      .sort(function(x,y){ return (mov[y]||0)-(mov[x]||0) || g[y]-g[x] || x.localeCompare(y,'es'); });
-    /* Si no se movió NADA en 15 días —una obra parada, o una sesión con el
-       historial vacío— la fila no se queda en blanco: vuelven los seis que más
-       deben. Una fila de filtros vacía parece un app roto. */
-    if(!gente.length) gente=Object.keys(ofrece).sort(function(x,y){return g[y]-g[x];}).slice(0,6);
-  }else{
-    /* El historial llega aparte y puede no estar todavia. Sin el no se inventa
-       un orden: se queda el de siempre —los seis que mas deben— y al llegar,
-       `renderActs` vuelve a pintar y salen ordenadas por movimiento. */
-    gente=Object.keys(ofrece).sort(function(x,y){return g[y]-g[x];}).slice(0,6);
-  }
+  /* v141 · SALEN TODOS LOS CONTRATISTAS, no solo los que se movieron (decisión
+     del dueño: «aquí quiero tener todos»). El orden de la v126 se queda: primero
+     los que se están moviendo —cuántas de sus abiertas se tocaron en 15 días—,
+     después los quietos por cuántas abiertas tienen, y «Sin asignar» al final.
+     Mientras el historial no ha llegado no hay movimiento que contar: salen
+     todos por abiertas, y al llegar `renderActs` repinta en el orden bueno. */
+  var conMov=_congeladasListo();
+  var gente=Object.keys(ofrece).sort(function(x,y){
+    var sx=(x==='Sin asignar'), sy=(y==='Sin asignar');
+    if(sx!==sy) return sx?1:-1;
+    return (conMov?((mov[y]||0)-(mov[x]||0)):0) || g[y]-g[x] || x.localeCompare(y,'es');
+  });
   /* Si hay uno elegido que no se ha movido, se añade al final: si no, el
      filtro estaria puesto y no habria pastilla para quitarlo. */
   sel.forEach(function(nm){ if(gente.indexOf(nm)<0) gente.push(nm); });
   var _etiq=_actPillEtiquetas(gente);
 
+  /* v141 · TODAS LAS UBICACIONES con algo abierto, no solo los once
+     apartamentos (decisión del dueño): después del Penthouse vienen las áreas
+     comunes de cada nivel y al final lo que no es de ningún nivel —Parqueo,
+     Fachada, General…—, en el orden del edificio (`_revOrdenArea`), el mismo
+     del Modo Obra. «Sin ubicación» no lleva pastilla: no es un sitio sino la
+     falta de uno (v121), y se sigue filtrando desde Filtros. */
   var u={};
   abiertas.forEach(function(a){ var k=a.area||''; if(k) u[k]=(u[k]||0)+1; });
-  var aptos=REC_ORDEN.filter(function(k){ return u[k]; });
-  selU.forEach(function(k){ if(aptos.indexOf(k)<0 && u[k]) aptos.push(k); });
+  var aptos=Object.keys(u).sort(function(x,y){
+    return (_revOrdenArea(x)-_revOrdenArea(y)) || x.localeCompare(y,'es');
+  });
+  /* Una puesta sin nada abierto se queda con su pastilla: si no, el filtro
+     estaría puesto y no habría dónde tocar para quitarlo. */
+  selU.forEach(function(k){ if(k && aptos.indexOf(k)<0) aptos.push(k); });
 
   var h='<div style="display:flex;gap:7px;margin-bottom:10px;overflow-x:auto;'+
         'scrollbar-width:none;padding-bottom:2px">';

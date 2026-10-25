@@ -804,6 +804,7 @@ const CAB_ESPERADO={
   recargaAbierta:{v:'abierta · abierta · nada guardado', d:'recargar y volver a entrar la abren; no se guarda nada en el teléfono'},
   soloActividades:{v:'Kanban no · Obra no', d:'en Kanban y en otra pestaña el botón no sale y nada queda plegado'},
   ceroEscrituras:{v:0, d:'ni una escritura ni un GET al plegar y desplegar'},
+  pastillas:{v:'todas las ubicaciones · más de seis contratistas', d:'v141: la fila de ubicaciones trae TODAS las que tienen algo abierto, en orden del edificio, y la de contratistas a todos, no solo los que se movieron'},
 };
 async function probarCabecera(nombreVer, html, b){
   const D=datos(); const {ACTS,PERS}=D;
@@ -854,6 +855,13 @@ async function probarCabecera(nombreVer, html, b){
       const filas=()=>G(()=>[...document.querySelectorAll('#c-act .act-item, #c-act tr[id^="act-"]')].filter(e=>e.checkVisibility()).map(e=>e.id).join(','));
       const html0=await G(()=>document.getElementById('c-act').innerHTML), est0=await estado(), filas0=await filas();
       const ls0=await G(()=>JSON.stringify(Object.keys(localStorage).sort()));
+      if(W>600){
+        const areas=[...new Set(ACTS.filter(a=>a.estado!=='completado'&&a.area).map(a=>a.area))].length;
+        const pp=await G(()=>({c:document.querySelectorAll('#c-act [onclick^="_actTogglePersona"]').length,
+          u:document.querySelectorAll('#c-act [onclick^="_actToggleUbicacion"]').length,
+          orden:[...document.querySelectorAll('#c-act [onclick^="_actToggleUbicacion"]')].map(b=>b.textContent).slice(0,2).join('|')}));
+        r.pastillas=(pp.u===areas&&/2A/.test(pp.orden.split('|')[0])?'todas las ubicaciones':'ubicaciones '+pp.u+' de '+areas+' ('+pp.orden+')')+' · '+(pp.c>6?'más de seis contratistas':pp.c+' contratistas');
+      }
       contar=true;
       await btn.click(); await p.waitForTimeout(300);
       if(W>600){
