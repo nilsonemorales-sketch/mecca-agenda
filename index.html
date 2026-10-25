@@ -183,8 +183,19 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .cp-ok{background:var(--green);color:#fff}
 .cp-mid{background:var(--amber);color:#231a05}
 .cp-no{background:var(--bg3);color:var(--text2);border:1.5px solid var(--border2)!important}
+/* v139 · Trabada en el Modo Campo */
+.cp-tr{color:#b45309!important;border-color:#d97706!important}
+.cp-trab-t{font-size:13px;font-weight:700;color:#b45309;margin-top:8px}
+.cp-card.cp-trab{border:1.5px dashed #d97706;background:var(--amber-light)}
+.cp-trab{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border2)}
+.cp-trab input{width:100%;box-sizing:border-box;padding:13px;border-radius:12px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--font);font-size:15px}
+.cp-trab-g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cp-trab-g button{min-height:52px;padding:8px;border-radius:12px;border:1.5px solid #d97706;background:var(--bg2);color:#b45309;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;line-height:1.2}
+.cp-trab-x{display:block;width:100%;margin-top:8px;min-height:44px;border-radius:12px;border:1.5px solid var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:14px;font-weight:650;cursor:pointer}
+.cp-falta{display:block;width:100%;margin-top:8px;min-height:50px;padding:12px;border-radius:14px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer}
+.cp-nv-nota{font-size:12.5px;color:var(--text3);margin-top:12px;line-height:1.4}
 .cp-lbl{font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.9px;text-transform:uppercase;margin:14px 0 7px}
-.cp-pcts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cp-pcts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .cp-pcts button{padding:14px 2px;border-radius:11px;border:1.5px solid var(--border2);background:var(--bg3);
   color:var(--text);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;min-height:52px}
 .cp-pcts button.on{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}
@@ -705,6 +716,26 @@ input.tp-in[type=search]{font-size:14px}
 /* v137 · La regla de la línea ~100 —button:not(...):not(...):not(...)— pesa más
    que una clase sola y dejaba estos botones en 44px. Colgados de la hoja, ganan. */
 #hoja-rec .mo-b,#hoja-rec .mo-seguir{min-height:48px}
+/* v139 · Cuatro botones en el renglón. Con flex:1 los cuatro iguales, a 390
+   «✓ Completada» se cortaba en «✓ Compl…» y los cortos sobraban: cada uno toma
+   lo que mide su palabra y el resto se reparte (la lección de la v122). */
+#hoja-rec .mo-bts .mo-b{flex:1 1 auto;padding:0 7px;font-size:12.5px}
+.mo-b.tr{color:#b45309}
+.mo-b.tr.on{background:#b45309;border-color:#b45309;color:#fff}
+.mo-lin.trabada{border-color:#d97706;border-style:dashed}
+.mo-lin.trabada.hecha,.mo-lin.trabada.avance{border-style:solid}
+.mo-lin.trabada:not(.hecha):not(.avance):not(.igual){background:var(--amber-light)}
+.mo-traba{font-size:11.5px;font-weight:700;color:#b45309;margin-top:3px}
+.mo-lin.destrabar .mo-est{color:var(--green)}
+.mo-lin.trabada .mo-est{color:#b45309}
+.mo-trab{margin-top:8px;padding-top:8px;border-top:1px dashed var(--border2)}
+.mo-trab-g{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#hoja-rec .mo-trab-g .mo-b{white-space:normal;line-height:1.2;padding:4px 8px;font-size:13px}
+.mo-prop{border:1.5px dashed var(--border2);border-radius:12px;padding:9px 10px;margin-bottom:7px;background:var(--bg2)}
+.mo-prop-t{font-size:13px;font-weight:600;color:var(--text)}
+.mo-prop-s{font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)}
+.mo-falta{width:100%;min-height:48px;margin:2px 0 6px;border:1.5px solid var(--accent);border-radius:10px;background:var(--accent-soft);
+  color:var(--accent);font-family:var(--font);font-size:13px;font-weight:800;cursor:pointer}
 #hoja-rec .rec-amb,#hoja-rec .rec-guardar{min-height:52px}
 .mo-nota{font-size:11.5px;color:var(--text3);margin:2px 0 8px}
 .mo-nivel{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);margin:12px 2px 6px}
@@ -1098,7 +1129,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261025_138';
+const APP_VERSION='20261025_139';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1119,6 +1150,15 @@ const APP_VERSION='20261025_138';
    demás — el botón se lee, la voz se habla, son dos cosas distintas. */
 var PAL_COMPLETADA='Completada';
 var PAL_SIN_CAMBIOS='Sin cambios';
+/* v139 · La tercera palabra del Modo Obra, decidida por el dueño: «Trabada» es
+   la que no se puede hacer todavía. Y sus causas, las cuatro que él confirmó
+   más «Otro». La CLAVE es lo que se guarda en `estancada_causa` y lo que se
+   cuenta en Gerencia; el texto es solo lo que se lee. No cambies una clave:
+   las trabas ya guardadas dejarían de contarse. */
+var PAL_TRABADA='Trabada';
+var TRABA_CAUSAS={material:'Falta material', otro_taller:'Espera otro taller',
+  gerencia:'Espera decisión de gerencia', contratista:'El contratista no vino', otro:'Otro'};
+var TRABA_ORDEN=['material','otro_taller','gerencia','contratista','otro'];
 /* Las actividades a las que nadie les puso `area` se llaman de UNA sola forma
    en todo el app. Son 17 hoy, y con dos nombres distintos —«Sin ubicación» en
    una pantalla y «(sin ubicación)» en otra— parecerían dos cosas. */
@@ -2335,6 +2375,16 @@ async function sb(path,opts={}){
        para que la cola lo guarde y lo reintente cuando vuelva la señal.
      — la base contestó y dijo que no (r.ok false): reintentarlo sería
        repetirlo para siempre. Ese sube tal cual, con el motivo. */
+  /* v139 · UNA PROPUESTA NO EXISTE PARA EL RESTO DEL APP. Mientras Gerencia no
+     la aprueba no cuenta en los totales, ni en un contratista, ni en el avance:
+     si contara, cualquiera podría inflarle los números a otro. Son veinte
+     lecturas de `obra_actividades` repartidas por el archivo (el arranque, el
+     refresco, el catálogo, los reportes, Gerencia…) y poner el filtro en cada
+     una era dejar la puerta a la que se olvide la próxima. Aquí va en UN
+     sitio. Quien SÍ quiere verlas lo dice en la consulta (`propuesta=`), y
+     entonces no se toca. Las escrituras no pasan por aquí. */
+  if(_m==='GET' && /^obra_actividades(\?|$)/.test(path) && path.indexOf('propuesta=')<0)
+    path+=(path.indexOf('?')<0?'?':'&')+'propuesta=not.is.true';
   let r;
   try{
     r=await fetch(SB+'/rest/v1/'+path,{
@@ -2850,6 +2900,9 @@ async function loadDriveUrl(){
 async function loadSecundario(){
   // Each call independent — failure of one doesn't break others
   loadDriveUrl().catch(function(){});
+  /* v139 · Las propuestas: pocas filas y aparte, para que si fallan no
+     tumben nada. Le dan el número a la bandeja de Gerencia. */
+  loadPropuestas().catch(function(){});
   /* Con la voz escondida no se pide la clave del Worker: seria una consulta
      a obra_config en cada carga, para nada. */
   if(vozActiva()) cargarVozApi().catch(function(){});
@@ -3110,6 +3163,7 @@ function updateUserUI(){
   // Gerencia: solo admin (tab superior + entrada del drawer)
   var tG=document.getElementById('tab-gerencia'); if(tG) tG.style.display=adminVal?'':'none';
   var dG=document.getElementById('dw-gerencia'); if(dG) dG.style.display=adminVal?'':'none';
+  try{ _propBadge(); }catch(e){}
   // Partidas (catalogo de prueba): mismo trato que Gerencia
   var tC=document.getElementById('tab-catalogo'); if(tC) tC.style.display=adminVal?'':'none';
   var dC=document.getElementById('dw-catalogo'); if(dC) dC.style.display=adminVal?'':'none';
@@ -4642,7 +4696,7 @@ function _moQ(id){ return String(id).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); 
 function moMarcar(id,t,p){
   if(!canEdit()){ showToast('Tu usuario no puede marcar','err'); return; }
   var m=_recMarcas(), cur=m[id];
-  var R=S.recorrido; if(R) R.avAbierto=null;
+  var R=S.recorrido; if(R){ R.avAbierto=null; R.trAbierto=null; }
   if(cur && cur.t===t && (t!=='avance' || cur.p===p)){ delete m[id]; }
   else{
     if(t==='avance'){
@@ -4658,8 +4712,45 @@ function moMarcar(id,t,p){
 function recMarcar(id){ moMarcar(id,'hecha'); }
 function moAvanzo(id){
   var R=S.recorrido; if(!R) return;
-  R.avAbierto=(R.avAbierto===id)?null:id;
+  R.avAbierto=(R.avAbierto===id)?null:id; R.trAbierto=null;
   pintarRecorrido();
+}
+/* v139 · «Trabada» abre las cinco causas debajo del renglón. Si ya estaba
+   marcada como trabada, el toque la desmarca, como los otros tres. */
+function moTrabaAbrir(id){
+  if(!canEdit()){ showToast('Tu usuario no puede marcar','err'); return; }
+  var R=S.recorrido; if(!R) return;
+  var mk=_recMarcas()[id];
+  if(mk && mk.t==='trabada'){ delete _recMarcas()[id]; _recMarcasGuardar(); R.trAbierto=null; pintarRecorrido(); return; }
+  R.trAbierto=(R.trAbierto===id)?null:id; R.avAbierto=null;
+  pintarRecorrido();
+  if(R.trAbierto){ var b=document.getElementById('mo-tr-'+_slug(id)); if(b&&b.scrollIntoView) b.scrollIntoView({block:'nearest'}); }
+}
+/* Una causa marca la traba con el detalle que haya escrito (opcional). «Otro»
+   sin texto no se marca: se pide el motivo, que es lo único que se pide. */
+function moTrabar(id,causa){
+  if(!canEdit()) return;
+  var inp=document.getElementById('mo-trd-'+_slug(id));
+  var det=inp?String(inp.value||'').trim():'';
+  if(causa==='otro' && !det){
+    if(inp){ inp.focus(); inp.style.borderColor='var(--red)'; }
+    showToast('Con «Otro», escribe cuál es el motivo','warn',4000);
+    return;
+  }
+  var m=_recMarcas();
+  m[id]={t:'trabada', c:causa, d:det, f:today()};
+  _recMarcasGuardar();
+  var R=S.recorrido; if(R) R.trAbierto=null;
+  pintarRecorrido();
+}
+/* La línea que dice que está trabada, de qué y desde cuándo. */
+function _trabaTexto(a){
+  var c=TRABA_CAUSAS[a.estancada_causa]||(a.estancada_motivo?'':'sin causa');
+  var t=[c, a.estancada_motivo||''].filter(Boolean).join(' — ');
+  var f=a.estancada_fecha?String(a.estancada_fecha).slice(0,10):'';
+  var dias=f?Math.max(0,Math.round((new Date(today()+'T12:00:00')-new Date(f+'T12:00:00'))/864e5)):null;
+  return PAL_TRABADA+': '+t+(dias!==null?' · '+(dias===0?'desde hoy':'hace '+dias+(dias===1?' día':' días')):'')+
+    (a.estancada_por?' · '+a.estancada_por:'');
 }
 /* UN renglón, el mismo en el panel y en el buscador. La descripción va entera:
    parado frente a la partida hay que leerla, no adivinarla. */
@@ -4675,14 +4766,18 @@ function _moLineaHTML(a,conArea){
   sub.push('<span style="color:'+col+'">'+(fv?'vence '+dm:'sin fecha')+'</span>');
   sub.push(a.revisado_fecha?('revisada '+esc(_nodoFecha(a.revisado_fecha))):'nunca revisada');
   var t=m?m.t:'';
+  var trabada=(a.estado==='pausada');
   var estado='';
   if(t==='hecha') estado=PAL_COMPLETADA+' · sin guardar';
   else if(t==='avance') estado='Avanzó a '+m.p+'% · sin guardar';
   else if(t==='igual') estado=PAL_SIN_CAMBIOS+' · sin guardar';
-  var h='<div class="mo-lin'+(t?' '+t:'')+'">'+
+  else if(t==='trabada') estado=PAL_TRABADA+': '+esc(TRABA_CAUSAS[m.c]||'')+(m.d?' — '+esc(m.d):'')+' · sin guardar';
+  else if(t==='destrabar') estado='Destrabada · sin guardar';
+  var h='<div class="mo-lin'+(t?' '+t:'')+(trabada&&!t?' trabada':'')+'">'+
     '<div class="mo-cab">'+
       '<div class="mo-txt"><div class="mo-desc">'+esc(a.descripcion||'(sin descripción)')+'</div>'+
         '<div class="mo-sub">'+sub.join(' · ')+'</div>'+
+        (trabada?'<div class="mo-traba">'+esc(_trabaTexto(a))+'</div>':'')+
         (estado?'<div class="mo-est">'+estado+'</div>':'')+'</div>'+
       '<button class="mo-ico" onclick="abrirFotoUpload(\''+sid+'\')" aria-label="Foto">📷</button>'+
       '<button class="mo-ico" onclick="recPreguntar(\''+sid+'\')" aria-label="Abrir en la lista">›</button>'+
@@ -4691,7 +4786,25 @@ function _moLineaHTML(a,conArea){
       '<button class="mo-b ok'+(t==='hecha'?' on':'')+'" onclick="moMarcar(\''+sid+'\',\'hecha\')">✓ '+PAL_COMPLETADA+'</button>'+
       '<button class="mo-b av'+(t==='avance'?' on':'')+'" onclick="moAvanzo(\''+sid+'\')">'+(t==='avance'?'Avanzó '+m.p+'%':'Avanzó')+'</button>'+
       '<button class="mo-b ig'+(t==='igual'?' on':'')+'" onclick="moMarcar(\''+sid+'\',\'igual\')">'+PAL_SIN_CAMBIOS+'</button>'+
+      /* v139 · El cuarto: «Trabada». Si ya lo está, el mismo sitio dice
+         «Destrabar»: soltarla importa tanto como trabarla. */
+      (trabada
+        ? '<button class="mo-b tr'+(t==='destrabar'?' on':'')+'" onclick="moMarcar(\''+sid+'\',\'destrabar\')">Destrabar</button>'
+        : '<button class="mo-b tr'+(t==='trabada'?' on':'')+'" onclick="moTrabaAbrir(\''+sid+'\')">'+PAL_TRABADA+'</button>')+
     '</div>';
+  if(R.trAbierto===a.id){
+    var sl=_slug(a.id);
+    h+='<div class="mo-trab" id="mo-tr-'+sl+'">'+
+      /* El detalle va ARRIBA: tocar la causa ya marca, así que debajo nadie
+         llegaría a escribirlo. Es opcional, salvo con «Otro». */
+      '<input id="mo-trd-'+sl+'" type="text" class="mo-q" style="margin:0 0 6px" maxlength="120" autocomplete="off" '+
+        'placeholder="Detalle, si quieres: qué material, qué taller…" value="'+esc((t==='trabada'&&m.d)||'')+'">'+
+      '<div class="mo-nota" style="margin:0 0 6px">¿Por qué no se puede hacer todavía? Toca la causa.</div>'+
+      '<div class="mo-trab-g">'+TRABA_ORDEN.map(function(c){
+        return '<button class="mo-b tr'+((t==='trabada'&&m.c===c)?' on':'')+'" onclick="moTrabar(\''+sid+'\',\''+c+'\')">'+esc(TRABA_CAUSAS[c])+'</button>';
+      }).join('')+'</div>'+
+    '</div>';
+  }
   if(R.avAbierto===a.id){
     h+='<div class="mo-bts">'+[25,50,75].map(function(v){
       return '<button class="mo-b av'+((t==='avance'&&m.p===v)?' on':'')+'" onclick="moMarcar(\''+sid+'\',\'avance\','+v+')">'+v+'%</button>';
@@ -4746,6 +4859,10 @@ function _recAmbientesHTML(){
      'value="'+esc(R.q||'')+'" oninput="moBuscar(this.value)">'+
      '<div class="mo-nota">Busca solo en lo abierto. Lo que ya está completado no sale aquí: no se borró.</div>'+
      '<div id="mo-res">'+_moResultadosHTML()+'</div>';
+  /* v139 · Al administrador, las propuestas que esperan, arriba de todo. */
+  var nProp=isAdmin()?(S.propuestas||[]).length:0;
+  if(nProp) h+='<button onclick="cerrarHojaApto();goTab(\'gerencia\')" class="mo-seguir" style="border-color:var(--amber);background:var(--amber-light);color:#b45309">'+
+    nProp+(nProp===1?' propuesta espera':' propuestas esperan')+' tu aprobación ›</button>';
   var ult=''; try{ ult=localStorage.getItem(MO_ULTIMO_LS)||''; }catch(e){}
   if(ult!=='' && m[ult]) h+='<button onclick="recIrAmbiente('+JSON.stringify(ult).replace(/"/g,'&quot;')+')" class="mo-seguir">Seguir donde estaba · '+esc(_recNom(ult)||ult)+' ›</button>';
   if(!orden.length) return h+'<div class="empty" style="padding:26px 10px">No hay nada abierto en la obra</div>';
@@ -4788,7 +4905,7 @@ async function recGuardar(){
   var ids=_recMarcadas(); if(!ids.length) return;
   R._guardando=true; pintarRecorrido();
   var m=_recMarcas(), hoy=today(), quien=(S.user&&S.user.nombre)||'';
-  var cuenta={hecha:0,avance:0,igual:0}, mal=[], total=ids.length, hechas=0;
+  var cuenta={hecha:0,avance:0,igual:0,trabada:0,destrabar:0}, mal=[], total=ids.length, hechas=0;
   setSS('syncing','Guardando 0 de '+total+'...');
   for(var i=0;i<ids.length;i+=5){
     await Promise.all(ids.slice(i,i+5).map(function(id){
@@ -4801,13 +4918,17 @@ async function recGuardar(){
         p=Acciones.setAvance(id, mk.p, ex, 'avance: '+antes+'% → '+mk.p+'% · desde Modo Obra');
       }else if(mk.t==='igual'){
         p=Acciones.revisarEnObra(id, PAL_SIN_CAMBIOS+' · desde Modo Obra');
+      }else if(mk.t==='trabada'){
+        p=Acciones.trabar(id, mk.c, mk.d, rev, 'desde Modo Obra');
+      }else if(mk.t==='destrabar'){
+        p=Acciones.destrabar(id, rev, 'desde Modo Obra');
       }else{
         var ex2=Object.assign({},rev); if(!String(a.fecha_fin||'').trim()) ex2.fecha_fin=hoy;
         // Lo mismo que el botón de completar (doMarcarCompletada): su registro y su cierre.
         logEvento('Actividad completada', 'Completó: '+(a.descripcion||'')+(a.area?' — '+a.area:''));
         p=Acciones.completar(id, ex2, PAL_COMPLETADA+' · desde Modo Obra');
       }
-      return p.then(function(){ cuenta[mk.t==='avance'?'avance':mk.t==='igual'?'igual':'hecha']++; delete m[id]; },
+      return p.then(function(){ cuenta[(mk.t in cuenta)?mk.t:'hecha']++; delete m[id]; },
               function(e){ mal.push((a.descripcion||id)+((e&&e.message)?' ('+e.message+')':'')); })
         .then(function(){ hechas++; setSS('syncing','Guardando '+hechas+' de '+total+'...'); });
     }));
@@ -4818,11 +4939,140 @@ async function recGuardar(){
   if(cuenta.hecha) partes.push(cuenta.hecha+(cuenta.hecha===1?' completada':' completadas'));
   if(cuenta.avance) partes.push(cuenta.avance+' con avance');
   if(cuenta.igual) partes.push(cuenta.igual+' '+PAL_SIN_CAMBIOS.toLowerCase());
+  if(cuenta.trabada) partes.push(cuenta.trabada+(cuenta.trabada===1?' trabada':' trabadas'));
+  if(cuenta.destrabar) partes.push(cuenta.destrabar+(cuenta.destrabar===1?' destrabada':' destrabadas'));
   setSS(mal.length?'err':'ok', mal.length?'No se guardaron '+mal.length:'✓ '+hhmm());
   if(mal.length) showToast((partes.length?partes.join(', ')+' — guardado. ':'')+'No se pudo: '+mal.slice(0,3).join(' · ')+(mal.length>3?'…':''),'err',9000);
   else showToast(partes.join(', ')+' — guardado.','ok',5000);
   pintarRecorrido();
   try{ if(typeof reRenderActs==='function') reRenderActs(); }catch(e){}
+}
+
+/* ══ v139 · LAS PROPUESTAS — «esto no estaba en la lista» ════════════════════
+   El que descubre lo que falta es el que está caminando: se propone DENTRO del
+   recorrido, con lo mínimo (qué es y de quién), y hereda el sitio. Entra como
+   PROPUESTA (decisión del dueño): no existe para el resto del app hasta que
+   Gerencia la aprueba — `sb()` la deja fuera de toda lectura de actividades.
+   Para verlas hay UNA lectura chica al arrancar (`loadPropuestas`), de pocas
+   filas y diez columnas, que también le da el número a la bandeja. */
+async function loadPropuestas(){
+  try{
+    var r=await sb('obra_actividades?propuesta=is.true&select=id,descripcion,area,personal_nombre,tipo_personal,'+
+      'propuesta_por,propuesta_fecha,ingeniero_nombre,ingeniero_id,fecha&order=propuesta_fecha.asc,id.asc&limit=200');
+    S.propuestas=Array.isArray(r)?r:[];
+  }catch(e){ if(!Array.isArray(S.propuestas)) S.propuestas=[]; }
+  _propBadge();
+  if(S.recorrido) pintarRecorrido();
+  if(S.currentTab==='gerencia' && typeof renderGerencia==='function') renderGerencia();
+  if(document.getElementById('campo-root')) renderCampo();
+  return S.propuestas;
+}
+/* El número va en la puerta de Gerencia (pestaña y cajón), solo para el
+   administrador: es quien las aprueba. */
+function _propBadge(){
+  var n=isAdmin()?(S.propuestas||[]).length:0;
+  var t=document.getElementById('tab-gerencia'); if(t) t.textContent='Gerencia'+(n?' ('+n+')':'');
+  var d=document.getElementById('dw-gerencia'); if(d) d.textContent='Gerencia — Panel ejecutivo'+(n?' · '+n+' por aprobar':'');
+  return n;
+}
+function _propFilaHTML(pr){
+  var sid=_moQ(pr.id);
+  var h='<div class="mo-prop"><div class="mo-prop-t">'+esc(pr.descripcion||'')+'</div>'+
+    '<div class="mo-prop-s">Propuesta · '+esc(_recNom(pr.area)||pr.area||PAL_SIN_UBIC)+' · '+esc(pr.personal_nombre||'Sin asignar')+
+    ' · la propuso '+esc(pr.propuesta_por||'?')+(pr.propuesta_fecha?' el '+esc(_nodoFecha(pr.propuesta_fecha)):'')+'</div>';
+  if(isAdmin()) h+='<div class="mo-bts">'+
+    '<button class="mo-b ok" onclick="propAprobar(\''+sid+'\')">Aprobar</button>'+
+    '<button class="mo-b" onclick="propRechazar(\''+sid+'\')">Rechazar</button></div>';
+  else h+='<div class="mo-prop-s" style="color:var(--amber)">Espera aprobación de Gerencia. Todavía no cuenta.</div>';
+  return h+'</div>';
+}
+function _propPendientesHTML(area,q){
+  var l=(S.propuestas||[]).filter(function(pr){
+    return (pr.area||'')===(area||'') && ((_responsables(pr.personal_nombre)[0])||'Sin asignar')===q;
+  });
+  return l.map(_propFilaHTML).join('');
+}
+function _propFormHTML(g){
+  if(!canEdit()) return '';
+  var R=S.recorrido||{}, qj=JSON.stringify(g.q).replace(/"/g,'&quot;');
+  if(!(R.prop && R.prop.q===g.q))
+    return '<button class="mo-falta" onclick="propAbrir('+qj+')">+ Falta una aquí</button>';
+  var quienes=_recGrupos(R.area).map(function(x){ return x.q; });
+  if(quienes.indexOf('Sin asignar')<0) quienes.push('Sin asignar');
+  var sel=R.prop.quien||g.q;
+  return '<div class="mo-prop" style="border-color:var(--accent)">'+
+    '<div class="mo-prop-t" style="margin-bottom:6px">Falta una aquí · '+esc(_recNom(R.area)||R.area||PAL_SIN_UBIC)+'</div>'+
+    '<div class="mo-nota" style="margin:0 0 4px">¿Qué es lo que falta?</div>'+
+    '<input id="prop-desc" type="text" class="mo-q" maxlength="200" autocomplete="off" placeholder="Ej.: resanar el hueco del registro del baño" '+
+      'value="'+esc(R.prop.desc||'')+'" oninput="if(S.recorrido&&S.recorrido.prop)S.recorrido.prop.desc=this.value">'+
+    '<div class="mo-nota" style="margin:6px 0 4px">¿De quién es?</div>'+
+    '<select id="prop-quien" class="mo-q" onchange="if(S.recorrido&&S.recorrido.prop)S.recorrido.prop.quien=this.value">'+
+      quienes.map(function(q){ return '<option'+(q===sel?' selected':'')+'>'+esc(q)+'</option>'; }).join('')+
+    '</select>'+
+    '<div class="mo-nota" style="margin:6px 0 0">Entra como propuesta: Gerencia la aprueba y le pone las fechas. Mientras tanto no cuenta.</div>'+
+    '<div class="mo-bts">'+
+      '<button class="mo-b ok" id="prop-enviar" onclick="propEnviar()"'+(R.prop.enviando?' disabled':'')+'>'+(R.prop.enviando?'Enviando…':'Proponer')+'</button>'+
+      '<button class="mo-b" onclick="propCancelar()">Cancelar</button>'+
+    '</div></div>';
+}
+/* El tipo de lo que se propone sale de lo que ese responsable ya tiene (la
+   MAYORÍA de sus filas): `tipo_personal` no es de fiar y una fila suelta no
+   define a nadie (v126). Sin responsable, contratista. */
+function _propTipoDe(quien,area){
+  var cuenta={};
+  (S.acts||[]).forEach(function(a){
+    if(area!==undefined && (a.area||'')!==area) return;
+    if(((_responsables(a.personal_nombre)[0])||'Sin asignar')!==(quien||'Sin asignar')) return;
+    var t=a.tipo_personal||'contratista'; cuenta[t]=(cuenta[t]||0)+1;
+  });
+  return Object.keys(cuenta).sort(function(x,y){ return cuenta[y]-cuenta[x]; })[0]||'contratista';
+}
+function propAbrir(q){
+  if(!canEdit()) return;
+  var R=S.recorrido; if(!R) return;
+  R.prop={q:q, quien:q, desc:''};
+  pintarRecorrido();
+  var i=document.getElementById('prop-desc'); if(i){ i.focus(); if(i.scrollIntoView) i.scrollIntoView({block:'center'}); }
+}
+function propCancelar(){ var R=S.recorrido; if(R){ R.prop=null; pintarRecorrido(); } }
+async function propEnviar(){
+  var R=S.recorrido; if(!R||!R.prop||R.prop.enviando) return;
+  var di=document.getElementById('prop-desc'), qi=document.getElementById('prop-quien');
+  var desc=String(di?di.value:R.prop.desc||'').trim(), quien=qi?qi.value:R.prop.quien;
+  if(!desc){ if(di){ di.focus(); di.style.borderColor='var(--red)'; } showToast('Escribe qué es lo que falta','warn'); return; }
+  var tipo=_propTipoDe(quien,R.area||'');
+  R.prop.desc=desc; R.prop.enviando=true; pintarRecorrido();
+  try{
+    await Acciones.proponer({descripcion:desc, area:R.area||'', personal_nombre:(quien==='Sin asignar'?'':quien), tipo_personal:tipo});
+    R.prop=null;
+    showToast('Propuesta enviada. La aprueba Gerencia; mientras tanto no cuenta.','ok',5000);
+    _propBadge();
+  }catch(e){
+    R.prop.enviando=false;
+    showToast(e&&e.sinRed?'Sin señal: no se pudo enviar. Lo escrito sigue ahí; vuelve a tocar «Proponer».':'No se pudo proponer: '+((e&&e.message)||''),'err',7000);
+  }
+  pintarRecorrido();
+}
+function _propRepintar(){
+  _propBadge();
+  if(document.getElementById('campo-root')) renderCampo();
+  if(S.recorrido) pintarRecorrido();
+  if(S.currentTab==='gerencia' && typeof renderGerencia==='function') renderGerencia();
+}
+async function propAprobar(id){
+  if(!isAdmin()) return;
+  try{ await Acciones.aprobarPropuesta(id); showToast('Aprobada: ya cuenta en la obra. Ponle sus fechas cuando puedas.','ok',5000); }
+  catch(e){ showToast('No se pudo aprobar: '+((e&&e.message)||''),'err',6000); }
+  _propRepintar();
+  try{ if(typeof reRenderActs==='function') reRenderActs(); }catch(e){}
+}
+async function propRechazar(id){
+  if(!isAdmin()) return;
+  var pr=(S.propuestas||[]).find(function(x){ return x.id===id; })||{};
+  if(!confirm('¿Rechazar «'+(pr.descripcion||'')+'»? Se borra; queda escrito en el historial quién la propuso.')) return;
+  try{ await Acciones.rechazarPropuesta(id); showToast('Rechazada y borrada. Queda en el historial.','ok',4500); }
+  catch(e){ showToast('No se pudo rechazar: '+((e&&e.message)||''),'err',6000); }
+  _propRepintar();
 }
 
 /* Lo que cuenta como "de esta semana": vence el viernes de esta semana o
@@ -5033,6 +5283,12 @@ function _recPanelApto(grupos){
 
       h+='<div style="padding:4px 0 2px">';
       g.items.forEach(function(a){ h+=_moLineaHTML(a,false); });   // v137
+      /* v139 · Lo que falta y no estaba en la lista: se PROPONE aquí mismo,
+         donde se está parado. Las ya propuestas de este sitio y este
+         contratista se ven debajo, en gris y sin contar, para que nadie la
+         proponga dos veces. */
+      h+=_propPendientesHTML(R.area,g.q);
+      h+=_propFormHTML(g);
       /* v137 · «Ver completadas»: lo cerrado NO está en memoria (S.acts solo
          trae lo abierto). Se piden solo las de ESTE contratista en ESTE sitio,
          seis columnas — unas pocas filas, no los 2,6 MB de la obra entera. */
@@ -7489,6 +7745,8 @@ function renderActs(){
   if(!S.actVista) S.actVista='edificio';
   _actCabAplicar();
   if(S.actVista==='apto'){ renderActsPorApto(); return; }
+  /* v139 · Sin Matriz en el teléfono (decisión del dueño): no se lee. */
+  if(S.actVista==='matriz' && _esTelefono()) S.actVista='lista';
   if(S.actVista==='matriz'){ renderActsMatriz(); return; }
   if(S.actVista==='edificio'){ renderActsEdificio(); return; }
   // El historial va aparte y sin esperarlo: la pantalla se pinta ya, y cuando
@@ -7945,6 +8203,9 @@ function renderActsMatriz(){
   el.innerHTML=h;
 }
 
+/* v139 · El teléfono es lo que tiene la barra de abajo: el mismo corte de 600 px
+   que esconde las pestañas de arriba. */
+function _esTelefono(){ return (window.innerWidth||1024)<=600; }
 function _actVistaToggle(){
   var v=S.actVista||'lista';
   var seg=function(val,label,color,bgOn){
@@ -7956,7 +8217,7 @@ function _actVistaToggle(){
   return '<div class="act-cab" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'+
     seg('lista','Lista','var(--blue)','var(--blue-light)')+
     seg('apto','Por Apto','var(--green)','var(--green-light)')+
-    seg('matriz','Matriz','var(--accent)','var(--accent-soft)')+
+    (_esTelefono()?'':seg('matriz','Matriz','var(--accent)','var(--accent-soft)'))+
     seg('edificio','Edificio','var(--amber)','var(--amber-light)')+
   '</div>';
 }
@@ -9757,6 +10018,15 @@ var Acciones = (function(){
     // el motivo de estancada solo sobrevive mientras está pausada
     if('estado' in p && p.estado!=='pausada' && (actual.estancada_motivo||''))
       p.estancada_motivo='';
+    /* v139 · Y lo mismo con la causa, la fecha y quién la trabó. Se sale de
+       «pausada» por muchos sitios —Destrabar, Completada, el ciclo del Kanban,
+       el formulario— y si la causa se quedara puesta, el conteo de Gerencia
+       seguiría diciendo «trabada por material» de algo que ya se mueve. */
+    if('estado' in p && p.estado!=='pausada' && (actual.estancada_causa||'')){
+      if(!('estancada_causa' in p)) p.estancada_causa='';
+      if(!('estancada_fecha' in p)) p.estancada_fecha=null;
+      if(!('estancada_por' in p))   p.estancada_por='';
+    }
 
     /* La marca de "falta la foto" se apaga al cerrar la partida.
        Se ponia y no se quitaba nunca: hay 766 partidas YA TERMINADAS que
@@ -9994,6 +10264,94 @@ var Acciones = (function(){
     async pausar(id,motivo){
       return _patch(id,{estado:'pausada',estancada_motivo:motivo||''},'editado',
                     'Pausada'+(motivo?': '+motivo:''));
+    },
+
+    /* v139 · TRABADA: no se puede hacer todavía, y por qué. Es `pausada` con la
+       causa en código (para contarla), el detalle en palabras, desde cuándo y
+       quién. EL PORCENTAJE NO SE TOCA. `extra` va en el mismo PATCH (la marca de
+       revisado del Modo Obra), igual que en `completar` y `setAvance`. */
+    async trabar(id,causa,detalle,extra,origen){
+      if(!TRABA_CAUSAS[causa]) throw _err('Causa de traba no válida: '+causa);
+      detalle=String(detalle||'').trim();
+      if(causa==='otro' && !detalle) throw _err('Con «Otro» hay que escribir el motivo','sin_motivo');
+      var p=Object.assign({},extra||{},{estado:'pausada', estancada_causa:causa,
+        estancada_motivo:detalle, estancada_fecha:today(),
+        estancada_por:(S.user&&S.user.nombre)||''});
+      return _patch(id,p,'trabada',
+        'Trabada: '+TRABA_CAUSAS[causa]+(detalle?' — '+detalle:'')+(origen?' · '+origen:''));
+    },
+
+    /* Destrabar la devuelve a como iba: con avance, en progreso; sin, pendiente.
+       El rastro dice de qué estaba trabada y cuántos días: se borra de la fila
+       y sin eso se perdería. */
+    async destrabar(id,extra,origen){
+      var a=_buscarLocal(id)||{};
+      var pct=_pct(a.porcentaje);
+      var causa=TRABA_CAUSAS[a.estancada_causa]||'sin causa';
+      var dias=a.estancada_fecha?Math.max(0,Math.round((new Date(today()+'T12:00:00')-new Date(String(a.estancada_fecha).slice(0,10)+'T12:00:00'))/864e5)):null;
+      var p=Object.assign({},extra||{},{estado:pct>0?'en-progreso':'pendiente',
+        estancada_causa:'', estancada_motivo:'', estancada_fecha:null, estancada_por:''});
+      return _patch(id,p,'destrabada',
+        'Destrabada (estaba: '+causa+(a.estancada_motivo?' — '+a.estancada_motivo:'')+
+        (dias!==null?', '+dias+(dias===1?' día':' días'):'')+')'+(origen?' · '+origen:''));
+    },
+
+    /* v139 · PROPONER una partida que no estaba en la lista. Entra con
+       propuesta=true y NO va a S.acts: mientras esté propuesta no existe para
+       el resto del app (ver `sb()`), así nadie infla los números de nadie.
+       Lo mínimo: qué es, de quién, y el sitio donde se está parado. Fechas,
+       unidades y cantidades las pone Gerencia al aprobarla. */
+    async proponer(datos){
+      var d=datos||{};
+      var desc=String(d.descripcion||'').trim();
+      if(!desc) throw _err('Escribe qué es lo que falta','sin_descripcion');
+      var hoy=today(), u=S.user||{};
+      var fila={id:uid(), descripcion:desc, area:d.area||'',
+        personal_nombre:String(d.personal_nombre||'').trim(),
+        tipo_personal:d.tipo_personal||'contratista',
+        estado:'pendiente', porcentaje:0, fecha:hoy, fecha_inicio:'', fecha_fin:'',
+        ingeniero_nombre:u.nombre||'', ingeniero_id:u.id||'',
+        foto_pendiente:false, fotos:'',
+        propuesta:true, propuesta_por:u.nombre||'', propuesta_fecha:hoy};
+      await sb('obra_actividades',{method:'POST',prefer:'return=minimal',body:JSON.stringify(fila)});
+      logCambio('propuesta','actividad',fila.id,desc+(fila.area?' — '+fila.area:''),
+        'Propuesta para '+(fila.personal_nombre||'sin asignar')+' — espera aprobación');
+      (S.propuestas=S.propuestas||[]).push(fila);
+      return {ok:true, propuesta:fila};
+    },
+
+    /* Aprobar: propuesta=false y ENTRA a la obra (a S.acts, a los conteos). */
+    async aprobarPropuesta(id){
+      if(!isAdmin()) throw _err('Solo el administrador aprueba propuestas','sin_permiso');
+      var pr=(S.propuestas||[]).find(function(x){ return x.id===id; });
+      await sb('obra_actividades?id=eq.'+encodeURIComponent(id),{method:'PATCH',prefer:'return=minimal',
+        body:JSON.stringify({propuesta:false})});
+      logCambio('aprobada','actividad',id,(pr&&pr.descripcion)||'',
+        'Propuesta aprobada'+(pr?' — la propuso '+(pr.propuesta_por||'?')+' el '+(pr.propuesta_fecha||'?'):''));
+      S.propuestas=(S.propuestas||[]).filter(function(x){ return x.id!==id; });
+      if(pr && !_buscarLocal(id)){
+        var a=Object.assign({},pr,{propuesta:false});
+        (S.acts=S.acts||[]).push(a);
+        if(Array.isArray(S.catActs)) S.catActs.push(a);
+        try{ _derivarAbiertas(); }catch(e){}
+      }
+      return {ok:true, id:id};
+    },
+
+    /* Rechazar: se BORRA, y el respaldo se escribe y se ESPERA antes del borrado
+       (regla de la v107). Si el respaldo no sale, no se borra nada. */
+    async rechazarPropuesta(id){
+      if(!isAdmin()) throw _err('Solo el administrador rechaza propuestas','sin_permiso');
+      var pr=(S.propuestas||[]).find(function(x){ return x.id===id; })||{id:id};
+      var rec=_logRec('rechazada','actividad',id,pr.descripcion||'',
+        'Propuesta rechazada y borrada — la propuso '+(pr.propuesta_por||'?')+' el '+(pr.propuesta_fecha||'?')+
+        ' · para '+(pr.personal_nombre||'sin asignar')+' · ubicación: '+(pr.area||'sin ubicación'));
+      await sb('obra_cambios',{method:'POST',prefer:'return=minimal',body:JSON.stringify(rec)});
+      if(S.cambios) S.cambios.unshift(rec);
+      await sb('obra_actividades?id=eq.'+encodeURIComponent(id)+'&propuesta=is.true',
+        {method:'DELETE',prefer:'return=minimal'});
+      S.propuestas=(S.propuestas||[]).filter(function(x){ return x.id!==id; });
+      return {ok:true, id:id};
     },
 
     async asignar(id,personal,detalle){
@@ -16837,6 +17195,44 @@ function _gerenciaMetrics(){
     niveles:niveles,semanas:semanas,riesgos:riesgos,contratistas:contratistas,logros:logros,proxima:proxima,asistProm:asistProm,quedanDias:quedanDias};
 }
 function _gerToggleNivel(n){ S.gerenciaNivelOpen[n]=!S.gerenciaNivelOpen[n]; renderGerencia(); }
+/* v139 · LO QUE MOISÉS Y KARINA DEJAN DICHO EN LA OBRA, para quien decide.
+   Dos bloques arriba del panel: las propuestas que esperan (con Aprobar y
+   Rechazar) y las trabadas contadas por causa. Las dos salen de lo que ya
+   está en memoria (`S.propuestas`, `S.acts`): cero lecturas nuevas. Y el
+   número se toca y enseña cuáles son — el dueño lo pide siempre. */
+function _gerPropuestasHTML(){
+  var l=S.propuestas||[];
+  var h='<div class="sec-title" style="margin:14px 0 8px">Propuestas por aprobar ('+l.length+')</div>';
+  if(!l.length) return h+'<div class="mo-nota" style="margin-bottom:14px">No hay ninguna esperando. Las proponen los ingenieros desde el Modo Obra, con «Falta una aquí».</div>';
+  return h+'<div style="margin-bottom:14px">'+l.map(_propFilaHTML).join('')+'</div>';
+}
+function _gerTrabadasHTML(){
+  var tr=(S.acts||[]).filter(function(a){ return a.estado==='pausada'; });
+  var por={}; tr.forEach(function(a){ var c=TRABA_CAUSAS[a.estancada_causa]?a.estancada_causa:'_sin'; (por[c]=por[c]||[]).push(a); });
+  var h='<div class="sec-title" style="margin:14px 0 8px">Trabadas hoy ('+tr.length+')</div>';
+  if(!tr.length) return h+'<div class="mo-nota" style="margin-bottom:14px">Ninguna. Se traban desde el Modo Obra con el botón «'+PAL_TRABADA+'».</div>';
+  var orden=TRABA_ORDEN.concat(['_sin']), ab=S.gerTrabAbierta||'';
+  h+='<div style="margin-bottom:14px">';
+  orden.forEach(function(c){
+    var l=por[c]; if(!l) return;
+    var nom=c==='_sin'?'Pausadas sin causa':TRABA_CAUSAS[c];
+    var pc=Math.round(l.length/tr.length*100);
+    h+='<button onclick="S.gerTrabAbierta=(S.gerTrabAbierta===\''+c+'\'?\'\':\''+c+'\');renderGerencia()" class="rec-amb" style="width:100%;margin-bottom:6px">'+
+      '<span style="flex:1;text-align:left;font-size:14px;font-weight:700;color:var(--text)">'+esc(nom)+'</span>'+
+      '<span style="font-size:12px;color:var(--text3);font-family:var(--mono);margin-right:8px">'+pc+'%</span>'+
+      '<span style="font-size:18px;font-weight:800;color:#b45309;min-width:28px;text-align:right">'+l.length+'</span>'+
+      '<span style="color:var(--text3);margin-left:6px">'+(ab===c?'▾':'▸')+'</span></button>';
+    if(ab===c){
+      /* Las que llevan más tiempo trabadas, primero. */
+      l.slice().sort(function(x,y){ return String(x.estancada_fecha||'9').localeCompare(String(y.estancada_fecha||'9')); }).forEach(function(a){
+        h+='<div class="mo-prop" style="margin-left:8px"><div class="mo-prop-t">'+esc(a.descripcion||'')+'</div>'+
+          '<div class="mo-prop-s">'+esc(_recNom(a.area)||a.area||PAL_SIN_UBIC)+' · '+esc(_responsables(a.personal_nombre)[0]||'Sin asignar')+'</div>'+
+          '<div class="mo-traba">'+esc(_trabaTexto(a))+'</div></div>';
+      });
+    }
+  });
+  return h+'</div>';
+}
 function renderGerencia(){
   var el=document.getElementById('c-gerencia'); if(!el) return;
   if(!S.gerencia){ el.innerHTML='<div class="empty" style="padding:40px 20px;text-align:center"><div style="font-size:13px;color:var(--text3)">Cargando panel…</div></div>'; return; }
@@ -16844,6 +17240,7 @@ function renderGerencia(){
   var h='<div style="max-width:900px;margin:0 auto;padding-bottom:28px">';
   h+='<div class="sec-title" style="margin:14px 0 4px">Gerencia — Estado de la obra</div>';
   h+='<div style="font-size:11px;color:var(--text3);margin-bottom:12px">Solo lectura · MECCA RESIDENCE 2026 · '+M.total+' actividades</div>';
+  h+=_gerPropuestasHTML()+_gerTrabadasHTML();
   // 1) KPIs
   var kpi=function(v,l,c){return '<div class="scard"><div class="v" style="color:'+c+';font-size:20px">'+v+'</div><div class="l">'+l+'</div></div>';};
   h+='<div class="stats-row">'+
@@ -26999,6 +27396,9 @@ function renderObra(){
   /* Restos de vistas ya retiradas: cualquier valor que no sea de los tres
      que quedan cae en la lista, que es la puerta del modulo. */
   if(['todas','kanban','revision'].indexOf(S.obraVista)<0) S.obraVista='todas';
+  /* v139 · En el teléfono no hay Kanban (decisión del dueño): cuatro columnas
+     a 390 px no se leen. Si se llega por otro camino, cae en la lista. */
+  if(_esTelefono() && S.obraVista==='kanban') S.obraVista='todas';
   var subnav = document.getElementById('c-obra-subnav');
   if(subnav){
     subnav.style.cssText = subNavStyle();
@@ -27012,7 +27412,7 @@ function renderObra(){
     subnav.style.display='flex';
     subnav.innerHTML =
       subNavBtn('Actividades', S.obraVista==='todas',    "S.obraVista='todas';renderObra()")+
-      subNavBtn('Kanban',      S.obraVista==='kanban',   "S.obraVista='kanban';renderObra()")+
+      (_esTelefono()?'':subNavBtn('Kanban',      S.obraVista==='kanban',   "S.obraVista='kanban';renderObra()"))+
       subNavBtn('Revisión',    S.obraVista==='revision', "S.obraVista='revision';renderObra()");
   }
   var act     = document.getElementById('c-act');
@@ -30600,21 +31000,39 @@ function renderCampo(){
     var etiqueta = d===null?'' : d>0?'<span class="cp-v">'+d+' días vencida</span>'
                  : d===0?'<span class="cp-h">para hoy</span>' : '';
     var pct=parseInt(a.porcentaje)||0;
-    return '<div class="cp-card" id="cp-'+esc(a.id)+'">'
+    var sid=_moQ(a.id), trab=(a.estado==='pausada'), sl=_slug(a.id);
+    /* v139 · Las palabras de la app (decisión del dueño): «Completada», no
+       «Terminada»; 25 · 50 · 75 como en Obra y en el Modo Obra (el 90% se fue);
+       y «No se pudo» pasó a ser «Trabada», con su causa. Una trabada dice de
+       qué y desde cuándo, y el mismo botón dice «Destrabar». */
+    var h='<div class="cp-card'+(trab?' cp-trab':'')+'" id="cp-'+esc(a.id)+'">'
       +'<div class="cp-d">'+esc(a.descripcion)+'</div>'
       +'<div class="cp-m">'+esc(a.area||'')+(a.personal_nombre?' · '+esc(a.personal_nombre):'')+'</div>'
-      +(etiqueta?'<div class="cp-tags">'+etiqueta+(pct?'<span class="cp-p">'+pct+'%</span>':'')+'</div>':'')
+      +(etiqueta||pct?'<div class="cp-tags">'+etiqueta+(pct?'<span class="cp-p">'+pct+'%</span>':'')+'</div>':'')
+      +(trab?'<div class="cp-trab-t">'+esc(_trabaTexto(a))+'</div>':'')
       +'<div class="cp-lbl">Avance</div>'
       +'<div class="cp-pcts">'
-        +[25,50,75,90].map(function(v){
-          return '<button class="'+(pct===v?'on':'')+'" onclick="campoMarcar(\''+esc(a.id)+'\',\'pct\','+v+')">'+v+'%</button>';
+        +[25,50,75].map(function(v){
+          return '<button class="'+(pct===v?'on':'')+'" onclick="campoMarcar(\''+sid+'\',\'pct\','+v+')">'+v+'%</button>';
         }).join('')
       +'</div>'
       +'<div class="cp-btns">'
-        +'<button class="cp-ok" onclick="campoMarcar(\''+esc(a.id)+'\',\'listo\')">Terminada</button>'
-        +'<button class="cp-no" onclick="campoMarcar(\''+esc(a.id)+'\',\'no\')">No se pudo</button>'
-      +'</div>'
-    +'</div>';
+        +'<button class="cp-ok" onclick="campoMarcar(\''+sid+'\',\'listo\')">✓ '+PAL_COMPLETADA+'</button>'
+        +(trab
+          ? '<button class="cp-no cp-tr" onclick="campoDestrabar(\''+sid+'\')">Destrabar</button>'
+          : '<button class="cp-no cp-tr" onclick="campoTrabaAbrir(\''+sid+'\')">'+PAL_TRABADA+'</button>')
+      +'</div>';
+    if(S._campoTr===a.id){
+      h+='<div class="cp-trab">'
+        +'<input id="cp-trd-'+sl+'" type="text" maxlength="120" autocomplete="off" placeholder="Detalle, si quieres: qué material, qué taller…">'
+        +'<div class="cp-lbl" style="margin-top:10px">¿Por qué no se puede hacer todavía? Toca la causa</div>'
+        +'<div class="cp-trab-g">'+TRABA_ORDEN.map(function(c){
+          return '<button onclick="campoTrabar(\''+sid+'\',\''+c+'\')">'+esc(TRABA_CAUSAS[c])+'</button>';
+        }).join('')+'</div>'
+        +'<button class="cp-trab-x" onclick="campoTrabaAbrir(\''+sid+'\')">Cancelar</button>'
+      +'</div>';
+    }
+    return h+'</div>';
   };
   var bloque=function(t,items,vacio){
     if(!items.length) return '<div class="cp-h2">'+t+'</div><div class="cp-vacio">'+vacio+'</div>';
@@ -30630,6 +31048,11 @@ function renderCampo(){
     +'</div>'
     +'<div class="cp-body">'
       +'<button class="cp-nueva" onclick="campoNueva()">+ Nueva actividad</button>'
+      /* v139 · «Falta una aquí» PROPONE (decisión del dueño): espera la
+         aprobación de Gerencia y mientras tanto no cuenta. «+ Nueva actividad»
+         sigue creando directo, también por decisión suya. */
+      +'<button class="cp-falta" onclick="campoProponer()">Falta una aquí · proponer a Gerencia</button>'
+      +_campoMisPropuestasHTML()
       +'<div class="cp-filtro">'
         +'<button class="'+(S._campoSoloMio?'':'on')+'" onclick="if(S._campoSoloMio)campoToggleMio()">Toda la obra</button>'
         +'<button class="'+(S._campoSoloMio?'on':'')+'" onclick="if(!S._campoSoloMio)campoToggleMio()">Solo lo mío</button>'
@@ -30644,6 +31067,96 @@ function renderCampo(){
 }
 
 
+/* ── v139 · TRABADA en el Modo Campo ──────────────────────────────────────
+   Aquí cada botón guarda al momento (así funciona esta pantalla desde
+   siempre); en el Modo Obra la misma traba es una marca que sale con «Guardar
+   el recorrido». Los dos escriben por `Acciones.trabar` / `destrabar`. */
+function campoTrabaAbrir(id){
+  if(!canEdit()) return;
+  S._campoTr=(S._campoTr===id)?null:id;
+  renderCampo();
+  if(S._campoTr){ var c=document.getElementById('cp-'+id); if(c&&c.scrollIntoView) c.scrollIntoView({block:'nearest'}); }
+}
+async function campoTrabar(id,causa){
+  var inp=document.getElementById('cp-trd-'+_slug(id));
+  var det=inp?String(inp.value||'').trim():'';
+  if(causa==='otro' && !det){
+    if(inp){ inp.focus(); inp.style.borderColor='var(--red)'; }
+    showToast('Con «Otro», escribe cuál es el motivo','warn',4000); return;
+  }
+  var card=document.getElementById('cp-'+id);
+  if(card){ card.style.opacity='.45'; card.style.pointerEvents='none'; }
+  try{
+    var r=await Acciones.trabar(id,causa,det,null,'desde el celular');
+    (S._campoHechas=S._campoHechas||{})[id]=1;
+    S._campoTr=null;
+    showToast(PAL_TRABADA+': '+TRABA_CAUSAS[causa]+(r&&r.encolado?' · se guarda al volver la señal':''),'ok',4000);
+  }catch(e){ showToast('No se pudo guardar: '+((e&&e.message)||'revisa la señal'),'err',5000); }
+  renderCampo();
+}
+async function campoDestrabar(id){
+  var card=document.getElementById('cp-'+id);
+  if(card){ card.style.opacity='.45'; card.style.pointerEvents='none'; }
+  try{
+    var r=await Acciones.destrabar(id,null,'desde el celular');
+    (S._campoHechas=S._campoHechas||{})[id]=1;
+    showToast('Destrabada'+(r&&r.encolado?' · se guarda al volver la señal':''),'ok',3500);
+  }catch(e){ showToast('No se pudo guardar: '+((e&&e.message)||'revisa la señal'),'err',5000); }
+  renderCampo();
+}
+/* ── v139 · PROPONER desde el Modo Campo ─────────────────────────────────
+   Aquí no hay un sitio donde se esté parado, así que se pregunta: qué, dónde y
+   de quién. Nada de fechas ni cantidades: eso lo pone Gerencia. */
+function campoProponer(){
+  if(!canEdit()) return;
+  var areas=[...new Set((S.acts||[]).map(function(a){return a.area||'';}).filter(Boolean))]
+    .sort(function(x,y){ return (_revOrdenArea(x)-_revOrdenArea(y)) || x.localeCompare(y,'es'); });
+  var quienes=[...new Set((S.acts||[]).map(function(a){return _responsables(a.personal_nombre)[0]||'';}).filter(Boolean))]
+    .sort(function(x,y){ return x.localeCompare(y,'es'); });
+  var host=document.getElementById('campo-root'); if(!host) return;
+  host.insertAdjacentHTML('afterbegin',
+    '<div id="cp-prop" class="cp-nv">'
+    +'<div class="cp-nv-box">'
+      +'<div class="cp-nv-t">Falta una aquí</div>'
+      +'<label>¿Qué es lo que falta?</label>'
+      +'<textarea id="cpp-desc" rows="2" placeholder="Ej.: resanar el hueco del registro del baño"></textarea>'
+      +'<label>¿Dónde?</label>'
+      +'<select id="cpp-area">'+areas.map(function(a){return '<option>'+esc(a)+'</option>';}).join('')+'</select>'
+      +'<label>¿De quién es?</label>'
+      +'<select id="cpp-quien"><option value="">Sin asignar</option>'+quienes.map(function(q){return '<option>'+esc(q)+'</option>';}).join('')+'</select>'
+      +'<div class="cp-nv-nota">Entra como propuesta: Gerencia la aprueba y le pone las fechas. Mientras tanto no cuenta.</div>'
+      +'<div class="cp-nv-btns">'
+        +'<button class="cp-nv-x" onclick="document.getElementById(\'cp-prop\').remove()">Cancelar</button>'
+        +'<button class="cp-nv-ok" id="cpp-ok" onclick="campoProponerEnviar()">Proponer</button>'
+      +'</div>'
+    +'</div></div>');
+  setTimeout(function(){ var d=document.getElementById('cpp-desc'); if(d) d.focus(); },100);
+}
+async function campoProponerEnviar(){
+  var desc=(document.getElementById('cpp-desc').value||'').trim();
+  var area=document.getElementById('cpp-area').value||'';
+  var quien=document.getElementById('cpp-quien').value||'';
+  if(!desc){ showToast('Escribe qué es lo que falta','warn'); return; }
+  var b=document.getElementById('cpp-ok'); if(b){ b.disabled=true; b.textContent='Enviando…'; }
+  try{
+    await Acciones.proponer({descripcion:desc, area:area, personal_nombre:quien, tipo_personal:_propTipoDe(quien)});
+    var w=document.getElementById('cp-prop'); if(w) w.remove();
+    showToast('Propuesta enviada. La aprueba Gerencia; mientras tanto no cuenta.','ok',5000);
+    renderCampo();
+  }catch(e){
+    if(b){ b.disabled=false; b.textContent='Proponer'; }
+    showToast(e&&e.sinRed?'Sin señal: no se pudo enviar. Lo escrito sigue ahí; vuelve a tocar «Proponer».':'No se pudo proponer: '+((e&&e.message)||''),'err',7000);
+  }
+}
+/* Las que propuso quien está mirando y esperan: para que sepa que llegaron y
+   no las vuelva a proponer. */
+function _campoMisPropuestasHTML(){
+  var yo=(S.user&&S.user.nombre)||'';
+  var l=(S.propuestas||[]).filter(function(p){ return isAdmin() || p.propuesta_por===yo; });
+  if(!l.length) return '';
+  return '<div class="cp-h2">'+(isAdmin()?'Propuestas por aprobar':'Tus propuestas esperando')+' <b>'+l.length+'</b></div>'+l.map(_propFilaHTML).join('');
+}
+
 async function campoMarcar(id, accion, pct){
   var a=(S.acts||[]).find(function(x){return x.id===id;}); if(!a) return;
   var card=document.getElementById('cp-'+id);
@@ -30654,7 +31167,7 @@ async function campoMarcar(id, accion, pct){
     else                      await Acciones.pausar(id,'reportada como no realizada desde el celular');
     (S._campoHechas=S._campoHechas||{})[id]=1;
     if(accion==='listo') S.acts=S.acts.filter(function(x){return x.id!==id;});
-    showToast(accion==='listo'?'Listo ✓':accion==='pct'?(pct+'% guardado ✓'):'Anotado');
+    showToast(accion==='listo'?PAL_COMPLETADA+' ✓':accion==='pct'?(pct+'% guardado ✓'):'Anotado');
     renderCampo();
   }catch(e){
     if(card){ card.style.opacity=''; card.style.pointerEvents=''; }
@@ -31738,6 +32251,11 @@ async function _refrescoDelta(desde){
         '&select=entidad_id,accion&limit=400';
   var filas=await sb(q)||[];
   if(!filas.length) return 0;
+  /* v139 · Una propuesta nueva, aprobada o rechazada en otro teléfono: la
+     bandeja se pone al día con su propia lectura chica. Las propuestas no
+     entran a S.acts por aquí: `sb()` las deja fuera. */
+  if(filas.some(function(r){ return r.accion==='propuesta'||r.accion==='aprobada'||r.accion==='rechazada'; }))
+    loadPropuestas().catch(function(){});
   var ids={}; filas.forEach(function(r){ if(r.entidad_id) ids[r.entidad_id]=1; });
   var lista=Object.keys(ids);
   if(!lista.length) return 0;

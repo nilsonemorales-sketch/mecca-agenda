@@ -514,7 +514,9 @@ async function probarRecorrido(nombreVer, html, b){
   await grupos.nth(0).click(); await p.waitForTimeout(300);
   r._botones=await G(()=>[...document.querySelectorAll('#rec-cuerpo .mo-lin')].slice(0,3).map(x=>[...x.querySelectorAll('.mo-b')].map(b=>b.textContent.trim()+':'+Math.round(b.getBoundingClientRect().height))));
   r.tresBotones=await G(()=>{ const l=document.querySelectorAll('#rec-cuerpo .mo-lin'); if(!l.length) return false;
-    return [...l].every(x=>{ const bs=[...x.querySelectorAll('.mo-b')]; return bs.length===3 && bs.every(b=>b.getBoundingClientRect().height>=48) &&
+    /* v139 · El renglón ganó un cuarto botón («Trabada»): se exigen los tres de
+       siempre en su sitio, y lo que venga detrás no tumba la prueba. */
+    return [...l].every(x=>{ const bs=[...x.querySelector('.mo-bts').querySelectorAll('.mo-b')].slice(0,3); return bs.length===3 && bs.every(b=>b.getBoundingClientRect().height>=48) &&
       /Completada/.test(bs[0].textContent) && /Avanzó/.test(bs[1].textContent) && /Sin cambios/.test(bs[2].textContent); }); });
   const ids=await G(()=>[...document.querySelectorAll('#rec-cuerpo .mo-lin .mo-b.ok')].map(b=>(b.getAttribute('onclick').match(/moMarcar\('([^']+)'/)||[])[1]));
   const [idC,idA,idI]=ids;
@@ -580,6 +582,178 @@ async function probarRecorrido(nombreVer, html, b){
   }catch(e){ r._error=String(e&&e.message||e).split('\n')[0].slice(0,160); }
   for(const k of Object.keys(REC_ESPERADO)) if(!(k in r)) r[k]=null;
   await ctx.close(); srv.close();
+  return r;
+}
+
+// ── TRABADAS Y PROPUESTAS (v139): lo que Moisés y Karina dejan dicho en obra ──
+/* Por DONDE ENTRAN: un ingeniero cae en el Modo Campo al poner su PIN, así que
+   Karina se prueba ahí; el Modo Obra y la bandeja, como Nilson. */
+const TRA_ESPERADO={
+  campoBotones:{v:'Completada · Trabada · 25 50 75', d:'Modo Campo: cada tarjeta dice «✓ Completada» y «Trabada», avance 25·50·75; ni «Terminada», ni «No se pudo», ni 90%'},
+  otroSinTexto:{v:'no escribe', d:'«Otro» sin escribir el motivo no guarda nada: lo pide'},
+  trabaMaterial:{v:'pausada·material·HOY·Ing. Karina Breton·pct igual·1 trabada', d:'Trabada por «Falta material» (Modo Campo): pausada, causa, hoy, quién, el % sin tocar y UN renglón'},
+  trabaOtro:{v:'otro·llueve en el patio', d:'Trabada por «Otro» con detalle: el detalle queda en estancada_motivo'},
+  trabadaSigue:{v:'en la lista · no completada · Destrabar a la vista', d:'una trabada sigue en S.acts, no cuenta como completada y su tarjeta ofrece «Destrabar»'},
+  destrabar:{v:'vuelve·sin causa·1 destrabada', d:'Destrabar la devuelve a como iba (pendiente o en progreso), limpia la causa y deja su renglón'},
+  propone:{v:'propuesta·Ing. Karina Breton·HOY·pendiente·0', d:'«Falta una aquí» guarda propuesta=true, quién, hoy, pendiente al 0%'},
+  noCuenta:{v:'S.acts igual · se ve como suya', d:'la propuesta NO entra a S.acts, y Karina la ve en «Tus propuestas esperando»'},
+  ingSinBandeja:{v:'sin bandeja · no aprueba', d:'Karina no tiene puerta a Gerencia ni puede aprobar llamando a la función'},
+  obraCuatro:{v:true, d:'Modo Obra: cada renglón lleva ✓ Completada · Avanzó · Sin cambios · Trabada, de 48px y sin cortarse'},
+  obraTraba:{v:'pausada·otro_taller·revisada HOY·1 trabada', d:'Modo Obra: la traba es una marca y sale con «Guardar el recorrido», con su revisión'},
+  adminVe:{v:'2 por aprobar · aviso en Modo Obra', d:'Nilson ve el número en la puerta de Gerencia y el aviso en el Modo Obra (la de Karina y una que deja el arnés)'},
+  ambienteSinProp:{v:true, d:'el conteo de abiertas del 6A en el Modo Obra no cuenta la propuesta'},
+  aprobar:{v:'propuesta=false · entra a S.acts', d:'Aprobar pone propuesta=false y ahí sí entra a los conteos'},
+  rechazar:{v:'respaldo antes · borrada', d:'Rechazar escribe su respaldo en obra_cambios ANTES del borrado, y la borra'},
+  gerTrabadas:{v:'Otro 1 · se abre', d:'Gerencia cuenta las trabadas por causa y el número se toca y enseña cuáles'},
+  sinKanbanMatriz:{v:'sin Kanban · sin Matriz', d:'a 390 no salen Kanban ni Matriz (decisión del dueño)'},
+  entidad:{v:'actividad', d:'todo el historial nuevo va con la entidad «actividad»'},
+};
+async function probarTrabas(nombreVer, html, b){
+  const D=datos(); const {ACTS,PERS}=D;
+  const AREA='N6 — Apto 6A';
+  const ESC=[], CAMBIOS=[];
+  const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
+  const ok=(q,body)=>q.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  const r={};
+  const ruta=async ctx=>ctx.route('**', q=>{
+    const u=q.request().url(), m=q.request().method();
+    if(u.startsWith(ORIGEN)) return q.continue();
+    if(!/\/rest\/v1\//.test(u)) return q.abort();
+    const pth=decodeURIComponent(u.split('/rest/v1/')[1]||''), base=pth.split('?')[0];
+    if(m!=='GET'){
+      const body=q.request().postData()||'';
+      ESC.push(m+' '+base);
+      try{ const d=body?JSON.parse(body):null;
+        if(base==='obra_actividades'&&m==='PATCH'){ const mm=pth.match(/id=eq\.([^&]+)/); if(mm) ACTS.filter(x=>x.id===mm[1]).forEach(x=>Object.assign(x,d)); }
+        if(base==='obra_actividades'&&m==='POST') (Array.isArray(d)?d:[d]).forEach(x=>ACTS.push(Object.assign({},x)));
+        if(base==='obra_actividades'&&m==='DELETE'){ const mm=pth.match(/id=eq\.([^&]+)/); if(mm){ const k=ACTS.findIndex(x=>x.id===mm[1]&&(!/propuesta=is\.true/.test(pth)||x.propuesta===true)); if(k>=0) ACTS.splice(k,1); } }
+        if(base==='obra_cambios'&&m==='POST') (Array.isArray(d)?d:[d]).forEach(x=>CAMBIOS.push(x));
+      }catch(e){}
+      return ok(q,[]);
+    }
+    let f=[];
+    if(base==='obra_actividades'){
+      f=ACTS;
+      if(/estado=neq\.completado/.test(pth)) f=f.filter(a=>a.estado!=='completado');
+      if(/propuesta=not\.is\.true/.test(pth)) f=f.filter(a=>a.propuesta!==true);
+      else if(/propuesta=is\.true/.test(pth)) f=f.filter(a=>a.propuesta===true);
+      const inn=pth.match(/id=in\.\(([^)]*)\)/); if(inn){const st=new Set(inn[1].split(',').map(x=>x.replace(/"/g,'')));f=f.filter(a=>st.has(a.id));}
+    }
+    else if(base==='obra_personal') f=PERS;
+    const rg=q.request().headers()['range']||''; if(rg){ const [d0,h]=rg.split('-').map(Number); f=f.slice(d0,h+1); }
+    return ok(q,f);
+  });
+  const abrir=async (usr)=>{
+    const ctx=await b.newContext({serviceWorkers:'block',viewport:{width:390,height:844}});
+    await ctx.addInitScript(()=>{ window.confirm=()=>true; window.alert=()=>{}; });
+    await ruta(ctx);
+    const p=await ctx.newPage(); p.setDefaultTimeout(6000);
+    const G=(f,...a)=>p.evaluate(f,...a);
+    await p.goto(ORIGEN+'/index.html',{waitUntil:'load'});
+    await G(u=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify(u)); }catch(e){} }, usr);
+    await p.reload({waitUntil:'load'});
+    for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S.acts&&S.acts.length).catch(()=>0)) break; await p.waitForTimeout(500); }
+    await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1200);
+    return {ctx,p,G};
+  };
+  const ac=id=>ACTS.find(a=>a.id===id);
+  const camb=(id,acc)=>CAMBIOS.filter(c=>c.entidad_id===id&&(!acc||c.accion===acc));
+  try{
+    // ── KARINA, ingeniera: cae en el Modo Campo ──
+    let {ctx,p,G}=await abrir({id:'karina',nombre:'Ing. Karina Breton',rol:'ing'});
+    const HOY=await G(()=>today());
+    const card=id=>p.locator('#campo-root .cp-card#cp-'+id);
+    r.campoBotones=await G(()=>{ const cs=[...document.querySelectorAll('#campo-root .cp-card')]; if(!cs.length) return 'sin Modo Campo';
+      const t=document.getElementById('campo-root').innerText;
+      const okC=cs.every(c=>/✓ Completada/.test(c.innerText)&&/Trabada|Destrabar/.test(c.innerText)&&c.querySelectorAll('.cp-pcts button').length===3);
+      if(/Terminada|No se pudo|90%/.test(t)) return 'quedan palabras viejas';
+      return okC?'Completada · Trabada · 25 50 75':'faltan botones'; });
+    const ids=await G(()=>[...document.querySelectorAll('#campo-root .cp-card')].filter(c=>/Trabada/.test(c.innerText)).map(c=>c.id.slice(3)));
+    const [i0,i1]=ids; const pct0=String(ac(i0).porcentaje);
+    await card(i0).locator('.cp-tr').click(); await p.waitForTimeout(200);
+    await card(i0).locator('.cp-trab-g button',{hasText:'Falta material'}).click(); await p.waitForTimeout(500);
+    { const x=ac(i0), c=camb(i0,'trabada');
+      r.trabaMaterial=x.estado+'·'+x.estancada_causa+'·'+(x.estancada_fecha===HOY?'HOY':x.estancada_fecha)+'·'+x.estancada_por+'·'+
+        (String(x.porcentaje)===pct0?'pct igual':'pct CAMBIÓ')+'·'+camb(i0).length+' '+(c[0]?'trabada':'?'); }
+    const e1=ESC.length;
+    await card(i1).locator('.cp-tr').click(); await p.waitForTimeout(200);
+    await card(i1).locator('.cp-trab-g button',{hasText:/^Otro$/}).click(); await p.waitForTimeout(300);
+    r.otroSinTexto=ESC.length===e1?'no escribe':'ESCRIBIÓ';
+    await card(i1).locator('.cp-trab input').fill('llueve en el patio');
+    await card(i1).locator('.cp-trab-g button',{hasText:/^Otro$/}).click(); await p.waitForTimeout(500);
+    { const x=ac(i1); r.trabaOtro=x.estancada_causa+'·'+x.estancada_motivo; }
+    { const st=await G(([a,b2])=>{ const x=S.acts.find(y=>y.id===a), y=S.acts.find(z=>z.id===b2);
+        const c=document.getElementById('cp-'+a); return [!!x&&!!y, !!x&&x.estado!=='completado'&&y.estado!=='completado', !!c&&/Destrabar/.test(c.innerText)]; },[i0,i1]);
+      r.trabadaSigue=(st[0]?'en la lista':'FUERA de la lista')+' · '+(st[1]?'no completada':'COMPLETADA')+' · '+(st[2]?'Destrabar a la vista':'sin Destrabar'); }
+    await card(i0).locator('.cp-tr',{hasText:'Destrabar'}).click(); await p.waitForTimeout(500);
+    { const x=ac(i0), esp=(parseInt(pct0,10)>0?'en-progreso':'pendiente');
+      r.destrabar=(x.estado===esp?'vuelve':'estado '+x.estado)+'·'+(!x.estancada_causa&&!x.estancada_fecha?'sin causa':'con causa')+'·'+camb(i0,'destrabada').length+' destrabada'; }
+    const nActs=await G(()=>S.acts.length);
+    await p.locator('#campo-root .cp-falta').click(); await p.waitForTimeout(300);
+    await p.locator('#cpp-desc').fill('Resanar el hueco del registro');
+    await p.locator('#cpp-area').selectOption(AREA);
+    await p.locator('#cpp-ok').click(); await p.waitForTimeout(800);
+    const pr=ACTS.find(a=>a.descripcion==='Resanar el hueco del registro');
+    r.propone=pr?[pr.propuesta?'propuesta':'NO propuesta',pr.propuesta_por,pr.propuesta_fecha===HOY?'HOY':pr.propuesta_fecha,pr.estado,pr.porcentaje].join('·'):'no se guardó';
+    { const enActs=await G(id=>!!S.acts.find(x=>x.id===id),pr&&pr.id);
+      const se=await G(()=>/tus propuestas esperando/i.test(document.getElementById('campo-root').innerText));
+      r.noCuenta=(!enActs&&await G(()=>S.acts.length)===nActs?'S.acts igual':'S.acts CAMBIÓ')+' · '+(se?'se ve como suya':'no se ve'); }
+    { const e2=ESC.length;
+      await G(id=>{ try{ propAprobar(id); }catch(e){} },pr&&pr.id); await p.waitForTimeout(400);
+      const btn=await G(()=>!!document.querySelector('#campo-root [onclick^="propAprobar"]'));
+      const vis=await G(()=>{ const d=document.getElementById('dw-gerencia'); return d&&getComputedStyle(d).display!=='none'; });
+      r.ingSinBandeja=(vis||btn?'CON bandeja':'sin bandeja')+' · '+(ESC.length===e2?'no aprueba':'APROBÓ'); }
+    await ctx.close();
+    // ── NILSON, administrador: app completa, Modo Obra y Gerencia ──
+    ACTS.push({id:'prop-rech',descripcion:'Propuesta para rechazar',area:AREA,personal_nombre:'Milo',tipo_personal:'contratista',estado:'pendiente',porcentaje:'0',fecha:HOY,fecha_inicio:'',fecha_fin:'',propuesta:true,propuesta_por:'Ing. Moises Jimenez',propuesta_fecha:HOY});
+    ({ctx,p,G}=await abrir({id:'nilson',nombre:'Ing. Nilson',rol:'admin'}));
+    await p.waitForTimeout(500);
+    r.sinKanbanMatriz=await G(()=>{ goTab('obra'); S.obraVista='todas'; S.actVista='lista'; renderObra();
+      const sub=document.getElementById('c-obra-subnav').innerText, v=document.getElementById('c-act').innerText;
+      return (/Kanban/.test(sub)?'CON Kanban':'sin Kanban')+' · '+(/Matriz/.test(v)?'CON Matriz':'sin Matriz'); });
+    { const t=await G(()=>(document.getElementById('dw-gerencia')||{}).textContent||'');
+      await p.locator('button[onclick*="toggleDrawer"]:visible').first().click(); await p.waitForTimeout(300);
+      await p.locator('#dw-recorrido').click(); await p.waitForTimeout(400);
+      const aviso=await G(()=>/propuestas esperan tu aprobación/.test(document.getElementById('hoja-rec').innerText));
+      const m=t.match(/(\d+) por aprobar/);
+      r.adminVe=(m?m[1]+' por aprobar':'puerta: '+t)+' · '+(aviso?'aviso en Modo Obra':'sin aviso');
+      const esp=ACTS.filter(a=>a.area===AREA&&a.estado!=='completado'&&a.propuesta!==true).length;
+      const dice=await G(a=>{ const b2=[...document.querySelectorAll('#hoja-rec .rec-amb')].find(x=>x.innerText.indexOf(a)>=0); return b2?+(b2.innerText.match(/(\d+) abierta/)||[])[1]:null; },AREA);
+      r.ambienteSinProp=(dice===esp); }
+    await p.locator('#hoja-rec .rec-amb',{hasText:AREA}).click(); await p.waitForTimeout(400);
+    await p.locator('#rec-cuerpo button[onclick^="recAbrir"]').nth(0).click(); await p.waitForTimeout(300);
+    r.obraCuatro=await G(()=>{ const l=[...document.querySelectorAll('#rec-cuerpo .mo-lin')]; if(!l.length) return false;
+      return l.every(x=>{ const bs=[...x.querySelector('.mo-bts').querySelectorAll('.mo-b')];
+        return bs.length===4 && bs.every(b2=>{ const rg=document.createRange(); rg.selectNodeContents(b2); return b2.getBoundingClientRect().height>=48 && rg.getBoundingClientRect().width<=b2.clientWidth+0.5; }) &&
+          /Completada/.test(bs[0].textContent)&&/Avanzó/.test(bs[1].textContent)&&/Sin cambios/.test(bs[2].textContent)&&/Trabada|Destrabar/.test(bs[3].textContent); }); });
+    const io=await G(()=>{ const x=[...document.querySelectorAll('#rec-cuerpo .mo-lin')].find(l=>/Trabada/.test(l.querySelector('.mo-bts').innerText)); return x?(x.querySelector('.mo-b.ok').getAttribute('onclick').match(/moMarcar\('([^']+)'/)||[])[1]:null; });
+    const lin=id=>p.locator('#rec-cuerpo .mo-lin',{has:p.locator(`[onclick="moMarcar('${id}','hecha')"]`)});
+    await lin(io).locator('.mo-b.tr').click(); await p.waitForTimeout(200);
+    await lin(io).locator('.mo-trab .mo-b',{hasText:'Espera otro taller'}).click(); await p.waitForTimeout(200);
+    const antesG=ESC.length;
+    await p.locator('#rec-guardar').click();
+    for(let t=0;t<20;t++){ await p.waitForTimeout(300); if(!(await G(()=>!!(S.recorrido&&S.recorrido._guardando)))) break; }
+    await p.waitForTimeout(400);
+    { const x=ac(io); r.obraTraba=x.estado+'·'+x.estancada_causa+'·'+(x.revisado_fecha===HOY?'revisada HOY':'sin revisar')+'·'+camb(io,'trabada').length+' trabada'+(ESC.length===antesG?' (NO ESCRIBIÓ)':''); }
+    await G(()=>{ cerrarHojaApto(); goTab('gerencia'); }); await p.waitForTimeout(800);
+    await p.locator('#c-gerencia .mo-prop',{hasText:'Resanar el hueco del registro'}).locator('.mo-b.ok').click(); await p.waitForTimeout(600);
+    r.aprobar=(pr&&ac(pr.id)&&ac(pr.id).propuesta===false?'propuesta=false':'propuesta sigue')+' · '+(await G(id=>!!S.acts.find(x=>x.id===id),pr&&pr.id)?'entra a S.acts':'NO entra');
+    const eR=ESC.length;
+    await p.locator('#c-gerencia .mo-prop',{hasText:'Propuesta para rechazar'}).locator('.mo-b',{hasText:'Rechazar'}).click(); await p.waitForTimeout(800);
+    { const tras=ESC.slice(eR); const iC=tras.indexOf('POST obra_cambios'), iD=tras.indexOf('DELETE obra_actividades');
+      const resp=camb('prop-rech','rechazada').length;
+      r.rechazar=(iC>=0&&iD>iC&&resp?'respaldo antes':'respaldo '+JSON.stringify(tras))+' · '+(ac('prop-rech')?'sigue':'borrada'); }
+    await p.locator('#c-gerencia .rec-amb',{hasText:/^Otro/}).click(); await p.waitForTimeout(400);
+    r.gerTrabadas=await G(()=>{ const t=document.getElementById('c-gerencia').innerText;
+      const n=([...document.querySelectorAll('#c-gerencia .rec-amb')].find(b2=>/^Otro/.test(b2.innerText.trim()))||{}).innerText||'';
+      const num=(n.replace(/\s+/g,' ').match(/(\d+)\s*[▾▸]?\s*$/)||[])[1];
+      return 'Otro '+(num||'?')+' · '+(/llueve en el patio/.test(t)?'se abre':'no se abre'); });
+    r.entidad=[...new Set(CAMBIOS.filter(c=>['trabada','destrabada','propuesta','aprobada','rechazada'].includes(c.accion)).map(c=>c.entidad))].join(',');
+    r._escrituras=ESC.slice();
+    await ctx.close();
+  }catch(e){ r._error=String(e&&e.message||e).split('\n').slice(0,3).join(' | ').slice(0,300); }
+  srv.close();
+  for(const k of Object.keys(TRA_ESPERADO)) if(!(k in r)) r[k]=null;
   return r;
 }
 
@@ -715,7 +889,8 @@ const res=[];
 for(const v of VERS){ process.stderr.write('· probando '+v+' …\n'); const nv=v.replace(/[^\w.-]/g,'_');
   const r=await probar(nv, leerVersion(v), b); r.libro=await probarLibro(nv, leerVersion(v), b);
   r.recorrido=await probarRecorrido(nv, leerVersion(v), b);
-  r.cabecera=await probarCabecera(nv, leerVersion(v), b); res.push(r); }
+  r.cabecera=await probarCabecera(nv, leerVersion(v), b);
+  r.trabas=await probarTrabas(nv, leerVersion(v), b); res.push(r); }
 await b.close();
 if(JSONOUT){ console.log(JSON.stringify(res,null,1)); process.exit(0); }
 
@@ -767,6 +942,17 @@ for(const k of Object.keys(CAB_ESPERADO)){
 console.log('  ↑ antes · después. '+(fallaCab?fallaCab+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
 for(const [i,r] of res.entries()) if(r.cabecera._error) console.log('  ('+VERS[i]+' se cortó: '+r.cabecera._error+')');
 if(res[1].cabecera._lecturas&&(res[1].cabecera._lecturas.length||res[1].cabecera._escrituras.length)) console.log('  al plegar: '+JSON.stringify(res[1].cabecera._lecturas.concat(res[1].cabecera._escrituras)));
+let fallaTra=0;
+console.log('\nTRABADAS Y PROPUESTAS — contra lo que tiene que dar (v139)\n');
+for(const k of Object.keys(TRA_ESPERADO)){
+  const e=TRA_ESPERADO[k];
+  const marca=res.map(r=>{ const v=r.trabas[k]; return (v===e.v?'✓':'✗')+' '+JSON.stringify(v); });
+  if(res[1].trabas[k]!==e.v) fallaTra++;
+  console.log('  '+marca[0].padEnd(14).slice(0,40)+'  '+marca[1]+'\n        (tiene que dar '+JSON.stringify(e.v)+')  '+e.d);
+}
+console.log('  ↑ antes · después. '+(fallaTra?fallaTra+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
+for(const [i,r] of res.entries()) if(r.trabas._error) console.log('  ('+VERS[i]+' se cortó: '+r.trabas._error+')');
+if(res[1].trabas._escrituras) console.log('  escrituras: '+JSON.stringify(res[1].trabas._escrituras.reduce((m,x)=>{m[x.split(' ').slice(0,2).join(' ')]=(m[x.split(' ').slice(0,2).join(' ')]||0)+1;return m;},{})));
 console.log('\nCANDADO: escrituras interceptadas '+res.map(r=>Object.values(r.propio.escrituras).reduce((s,x)=>s+x,0)).join(' / ')+
   ' · salidas cortadas (fuentes, fotos) '+res.map(r=>r.propio.salidasCortadas).join(' / ')+' · a la base real: 0');
-process.exit(dist||fallaDespues||fallaRec||fallaCab?1:0);
+process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra?1:0);

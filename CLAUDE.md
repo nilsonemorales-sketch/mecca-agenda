@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v138 — 25 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v139 — 25 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -253,6 +253,10 @@ mismos botones que cualquier otra.
 | **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
 | **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
 | **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
+| **LO QUE VE UN INGENIERO al poner su PIN (Moisés, Karina)** | **El Modo Campo** — `debeAbrirCampo()`, `iniciarModoCampo()`, `renderCampo()`, `campoMarcar()`. Pantalla aparte, en cualquier aparato, para todo rol `ing`. **No estaba en este mapa hasta la v139.** Ver «El Modo Campo» abajo |
+| **Dejar dicho que una partida NO se puede hacer todavía, y por qué** | **Modo Campo → «Trabada»** y **Modo Obra → el cuarto botón** (v139) — `moTrabaAbrir()`, `moTrabar()`, `Acciones.trabar()` / `destrabar()`, `TRABA_CAUSAS`. Ver «Trabadas y propuestas» abajo |
+| **Proponer una partida que no estaba en la lista** | **Modo Campo → «Falta una aquí · proponer a Gerencia»** (`campoProponer()`) y **Modo Obra → un contratista abierto → «+ Falta una aquí»** (v139) — `_propFormHTML()`, `propEnviar()`, `Acciones.proponer()`. Entra como propuesta y no cuenta hasta que Gerencia la aprueba |
+| **Aprobar o rechazar lo que proponen los ingenieros, y ver las trabadas por causa** | **Gerencia, arriba** (v139) — `_gerPropuestasHTML()`, `_gerTrabadasHTML()`, `propAprobar()`, `propRechazar()`. El número va en la puerta de Gerencia (`_propBadge`) |
 | **Esconder la cabecera de Actividades para ver más lista** | **El botón de plegar de la cabecera de arriba** (v138) — `actCabToggle()`, `_actCabAplicar()`. Solo una clase en el `<body>` (`act-plegada`); lo que se pliega lleva `.act-cab`. Ver «La cabecera se pliega» abajo |
 | **CAMINAR un apartamento y marcar lo hecho** | **Modo Obra** (v136 «Recorrido», v137 con sus botones) — el cajón y la barra lateral. Es el panel del apartamento (`_recPanelApto`) con la lista de ambientes, el buscador y «Seguir donde estaba» delante (`abrirRecorrido`, `_recAmbientesHTML`). Cada renglón (`_moLineaHTML`): ✓ Completada · Avanzó 25/50/75 · Sin cambios (`moMarcar`), y «Guardar el recorrido» (`recGuardar`). Ver «El Modo Obra» abajo |
 | **Contar penalidades y registros de un ingeniero** | **Los ayudantes del libro** (v135) — `_penSituaciones()`, `_penRegistrosPorDia()`, `_penRegTexto()`. Toda pantalla que cuente `obra_penalidades` pasa por ahí. Ver «El libro de penalidades» en §8 |
@@ -2927,6 +2931,124 @@ salía a media pantalla. **Un botón con el icono de plegar** (Lucide
 - **En el teléfono el logo se va** (`body.con-btn-cab`, ≤430px), solo en
   Actividades: con un botón más, «Mecca Residence» salía «Mecca Res…».
 
+### TRABADAS Y PROPUESTAS (v139) — lo que pasa en la obra y no es «hecho»
+
+Medido el 25-oct: en 30 días casi todo el movimiento es del dueño. **Moisés no
+registra un cambio desde el 23-sep y Karina hizo 4 el 13-oct.** La causa no era
+la pantalla: el app solo dejaba decir «hecho» o «no hecho», y lo que pasa en la
+obra es «no pude porque no llegó el material» o «esto no estaba en la lista». Eso
+se iba a WhatsApp. `estancada_motivo` existía hacía meses con **cero filas**.
+
+*Medido el 25-oct, una lectura agregada:* **0 propuestas, 0 pausadas, 1.640
+abiertas — y 20 con `estancada_motivo` puesto, no cero** como decía el pedido.
+Esas 20 no están pausadas: las escribió el panel viejo de «estancadas»
+(`estancSetMotivo`, `_EST_MOTIVOS`), que hace un `PATCH` directo sin `Acciones`.
+**`_coherencia` borra ese motivo en cuanto la partida cambia de estado** —regla
+de antes—. No se tocó; avisado.
+
+**Las seis columnas las creó el dueño desde SQL**: `estancada_causa`,
+`estancada_fecha`, `estancada_por`, `propuesta` (boolean, **nulable**, por eso se
+pregunta `not.is.true` y no `is.false`), `propuesta_por` y `propuesta_fecha`.
+
+#### LO PRIMERO: los ingenieros NO entran al Modo Obra — caen en el MODO CAMPO
+
+El pedido de la v139 daba por hecho que Moisés y Karina usaban el Modo Obra de la
+v137. **No:** `debeAbrirCampo()` manda a **todo rol `ing`**, al poner su PIN y
+en cualquier aparato, a otra pantalla —**el Modo Campo**, `renderCampo()`—: «Hola,
+Karina», tarjetas por Empezadas · Vencidas · Para hoy · Más adelante, avance y
+dos botones, «+ Nueva actividad» y «Abrir la app completa». **No salía en el
+mapa de la §3.5** y nadie lo tenía presente. Lo cazó la prueba al entrar como
+Karina: no había menú que abrir.
+
+Preguntado con opciones, el dueño decidió:
+
+- **Trabada y «Falta una aquí» van AL MODO CAMPO**, que es lo que ellos abren, y
+  **también** al Modo Obra, por el mismo camino (`Acciones`).
+- **«+ Nueva actividad» del Modo Campo SIGUE CREANDO DIRECTO**, sin aprobación.
+  Solo «Falta una aquí» propone. *Ese botón escribe con un `sb()` POST directo
+  (`campoGuardarNueva`), sin pasar por `Acciones.crear`: es de antes y no se tocó.*
+- **Las palabras de la app**: «✓ Completada» en vez de «Terminada», el aviso dice
+  «Completada ✓» y no «Listo ✓», y el avance es **25 · 50 · 75** — el 90% se fue.
+  «No se pudo» (que pausaba sin causa) **es ahora «Trabada»**.
+
+En el Modo Campo cada botón **guarda al momento**, como siempre en esa pantalla;
+en el Modo Obra la traba es una marca que sale con «Guardar el recorrido». Las dos
+escriben por `Acciones.trabar` / `destrabar`. El Modo Campo **no tiene «Sin
+cambios»**: no se pidió.
+
+#### Trabada
+
+- **En el Modo Campo, el segundo botón de la tarjeta** (`campoTrabaAbrir`,
+  `campoTrabar`, `campoDestrabar`), con las mismas causas en botones de dos en
+  dos. **En el Modo Obra, el cuarto botón del renglón**, con la palabra del dueño:
+  **«Trabada»** (`PAL_TRABADA`). Abre debajo el detalle (opcional, ARRIBA de las
+  causas: tocar la causa ya marca) y las cinco causas en botones de dos en dos:
+  **Falta material · Espera otro taller · Espera decisión de gerencia · El
+  contratista no vino · Otro**. «Otro» sin texto **no marca**: pide el motivo.
+- **Es una marca más del recorrido**, como las otras tres: nada se escribe hasta
+  «Guardar el recorrido». Guarda por **`Acciones.trabar`**: `estado='pausada'`,
+  la causa en CÓDIGO (`TRABA_CAUSAS`, la clave es lo que se cuenta — **no la
+  cambies**), el detalle en `estancada_motivo`, hoy y quién, y la revisión del
+  Modo Obra en el mismo PATCH. **El porcentaje no se toca.** Un renglón
+  `trabada` con la entidad `actividad`.
+- **Una trabada dice «Destrabar» en el mismo sitio** y su renglón lleva la línea
+  ámbar «Trabada: Falta material — cemento · hace 3 días · Karina».
+  `Acciones.destrabar` la devuelve a como iba —con avance, en progreso; sin,
+  pendiente— y deja en el historial de qué estaba trabada y cuántos días.
+- **`_coherencia` limpia la causa, la fecha y quién al salir de `pausada` por
+  CUALQUIER camino** (Completada, el Kanban, el formulario): si no, Gerencia
+  seguiría contando como trabada algo que ya se mueve.
+- **`pausada` no se pierde ni se cuela**: la carga es `estado=neq.completado`,
+  así que sigue en `S.acts`, en las listas y en el conteo de abiertas del sitio.
+
+#### Propuesta
+
+- **En el Modo Campo, «Falta una aquí · proponer a Gerencia»** debajo de «+
+  Nueva actividad» (`campoProponer`): ahí no hay un sitio donde se esté parado,
+  así que pregunta **qué, dónde y de quién**. Las que propuso quien mira salen en
+  «Tus propuestas esperando» (al admin, todas, con Aprobar y Rechazar).
+- **En el Modo Obra, «+ Falta una aquí»** al final de la lista del contratista
+  abierto. Pide lo mínimo: **qué es** y **de quién** (los responsables del sitio, el de ese
+  grupo puesto), y hereda el sitio. Ni fechas ni cantidades: las pone Gerencia.
+  *Ojo:* «Falta una aquí» también es el alta del Repaso de Revisión (v94), que
+  crea directo. Son dos pantallas y dos usuarios distintos; si el dueño quiere
+  una sola palabra, es una decisión suya.
+- **`Acciones.proponer`** escribe `propuesta=true`, quién, hoy, pendiente al 0%
+  y un renglón `propuesta`. **Sin fechas**: por eso no pasa por `_validar`, que
+  las exige a contratista e ingeniero. Sin señal NO se encola: se dice y lo
+  escrito se queda en el campo.
+- **UNA PROPUESTA NO EXISTE PARA EL RESTO DEL APP**, y eso vive en **un solo
+  sitio: `sb()`**. Toda lectura `GET obra_actividades` lleva
+  `propuesta=not.is.true` salvo que pida `propuesta=` ella misma. Eran veinte
+  consultas repartidas (arranque, refresco, catálogo, reportes, Gerencia…);
+  poner el filtro en cada una dejaba la puerta a la próxima que se olvide. Por
+  eso no cuenta en totales, contratistas ni avance.
+- **Para verlas, una lectura chica** (`loadPropuestas`, en `loadSecundario`):
+  las que esperan, diez columnas, pocas filas. Se ven en gris en su sitio y
+  contratista («Espera aprobación de Gerencia. Todavía no cuenta.») para que
+  nadie la proponga dos veces. El refresco por delta la repite si ve un renglón
+  `propuesta`, `aprobada` o `rechazada`.
+- **La bandeja es del administrador**: arriba de Gerencia, con **Aprobar**
+  (`propuesta=false`, entra a `S.acts` en el acto) y **Rechazar**. El número va
+  en la pestaña y el cajón de Gerencia y como aviso arriba del Modo Obra.
+  `aprobarPropuesta` y `rechazarPropuesta` miran `isAdmin()` ellas mismas.
+- **RECHAZAR ESPERA EL RESPALDO**: el renglón `rechazada` (quién la propuso,
+  cuándo, para quién, dónde) se manda y **se espera** antes del `DELETE`, que
+  lleva además `propuesta=is.true` — no puede borrar una actividad de verdad.
+  Si el respaldo no sale, no se borra.
+
+#### Gerencia: trabadas por causa
+
+**«Trabadas hoy (N)»** con una fila por causa, su número y su %, y **el número se
+toca y enseña cuáles**, las más viejas primero, con «hace N días». Sale de
+`S.acts`: **cero lecturas nuevas**. Las pausadas viejas sin causa salen aparte.
+
+#### Kanban y Matriz, fuera del teléfono
+
+Decisión del dueño: a 390 no se leen. `_esTelefono()` (≤600 px, el mismo corte de
+las pestañas) los quita de la sub-barra y de las vistas, y si se llega con uno
+puesto cae en la lista.
+
 ### El panel del apartamento se organiza POR CONTRATISTA
 
 Tocar un apartamento en la torre abre `_recPanelApto()`: sus cuatro números
@@ -3478,6 +3600,17 @@ mismo:**
   `tpMarcar` o `tpMarcarGrupo`: cero escrituras intentadas
 - **LA LISTA DE CHEQUEO DA TODO IGUAL** (v134): `node lista-chequeo.mjs`
   contra lo publicado, **cero DISTINTO** o el porqué en el commit
+- **TRABADAS Y PROPUESTAS DAN LO QUE TIENEN QUE DAR** (v139), en su sección de
+  la lista (dieciocho comprobaciones, como Karina **por el Modo Campo** y como
+  Nilson por el Modo Obra y Gerencia, a 390): el Modo Campo dice «✓ Completada»
+  y «Trabada» con 25·50·75 y ni «Terminada» ni «No se pudo» ni 90%; cuatro
+  botones de 48px sin cortarse en el Modo Obra; «Otro» sin texto no escribe; trabar escribe
+  pausada, causa, hoy, quién, **el % igual** y un renglón; destrabar la devuelve
+  y limpia; una trabada sigue en la lista y en el conteo; proponer escribe
+  `propuesta=true` y **no cambia `S.acts` ni el conteo del sitio**; Karina no
+  aprueba; Nilson ve el número; aprobar la mete; rechazar escribe el respaldo
+  **antes** del `DELETE`; Gerencia cuenta por causa y se abre; sin Kanban ni
+  Matriz a 390; y todo con la entidad `actividad`
 - **LA CABECERA SE PLIEGA Y NO CAMBIA NADA** (v138), en su sección de la
   lista (diez comprobaciones, a 1280 y a 390): esconde pestañas, sub-barra y
   `.act-cab` y deja título y barra verde; el botón sigue a la vista; con Apto 2A
@@ -3856,6 +3989,8 @@ pertenece a ningún nivel.
 | **v135** — la sonda del Historial dio vacío en las DOS versiones: entrar al Historial no pide nada, lo pide `loadHistorial` al tocar un filtro. Y después dio 3 situaciones donde se esperaban 2: la propia prueba había escrito la inactividad de hoy. | Lo vacío en las dos versiones es la prueba, no el app (v88). Y lo de la v111 otra vez: **una sonda que escribe cambia lo que miden las de abajo** — se corrige lo ESPERADO, diciendo por qué, no el app. |
 | **v136** — el pedido traía una pantalla «Recorrido» nueva que ya existía casi entera: el panel del apartamento, por contratista, plegado, con abiertas y vencidas, al que se llegaba tocando la torre. Y pedía a la vez «una sola escritura» y «el mismo camino del botón de completar», que no caben juntos. | **Antes de construir, busca la pantalla en el mapa** —es la regla de la §3.5 y la lección de «Hoy»—: aquí bastaba con ampliarla. Y cuando dos condiciones del pedido se excluyen, **se dice cuál choca con cuál y decide el dueño**; no se escoge una en silencio. |
 | **v136** — la lista de chequeo dio DISTINTO en `vistas.lista` por 14 caracteres, siempre con los mismos dos valores y siempre en la versión que corría PRIMERO, con el navegador recién abierto. La v135 contra sí misma dio igual dos veces. | Era la prueba: medía la Lista antes de que llegara lo que el arranque pide aparte. Ahora espera a que la red se calme antes de medir. **Una prueba intermitente no vale nada** (v84): o se arregla o se borra, y nunca se publica «porque a la segunda dio igual». |
+| **v139** — el pedido daba por hecho que Moisés y Karina usan el Modo Obra, y se construyó ahí entero. Al probar entrando como Karina no había menú: un ingeniero cae en el **Modo Campo**, una pantalla que no estaba en el mapa de la §3.5. Todo lo construido habría quedado donde ellos no entran. | **Prueba entrando COMO EL USUARIO del pedido, no como el dueño**: el rol cambia la pantalla de entrada. Y cuando una pantalla no está en el mapa, añádela: el mapa es lo que se lee antes de construir. |
+| **v139** — la prueba dijo que Karina no veía «Tus propuestas esperando», y sí la veía: el título va en mayúsculas por `text-transform` y la prueba buscaba con minúsculas. | Es «3 MARCADAS» de la v119 otra vez. **Busca sin distinguir mayúsculas** (`/…/i`) todo texto que pueda llevar `text-transform`. |
 | **v138** — el botón de plegar se puso en la cabecera y a 390 cortó el título en «Mecca Res…»: la cabecera del teléfono ya iba justa con cuatro botones, y el título es lo único que el dueño pidió que se quedara. | **Un botón más en una fila llena se cobra lo de al lado.** Mide el texto vecino (`scrollWidth > clientWidth`) a 390 antes y después; aquí se fue el logo, solo en Actividades y solo en el teléfono, y el título volvió entero. |
 | **v137** — el pedido del «Modo Obra» era la TERCERA pantalla para lo mismo (Obra, Recorrido), pedía que «Sin cambios» no dejara renglón y que el historial fuera con entidad `obra_actividades`. Las dos cosas habrían hecho que el teléfono de al lado no se enterara. Y los botones de 48px salían de 44: la regla `button:not(…):not(…):not(…)` de la línea ~100 pesa más que una clase sola. | Cuando el pedido trae el diseño del dato, **mira quién lee ese dato antes de escribirlo así** — aquí el refresco por delta y los contadores. Y si un tamaño no sale, **mira el peso de las reglas**, no solo el valor: colgarlo de un id (`#hoja-rec .mo-b`) lo arregló. |
 | **v133** — **el contenedor se reinició y se llevó el scratchpad entero**: los 22 arneses de regresión, sus fixtures —varios eran copias de la base— y el comparador. La v130 y la v131 quedaron sin publicar a mitad de su regresión. | Lo que vive en el scratchpad dura lo que dure el contenedor. La regresión se rehízo con **datos inventados** (`reg133.mjs`: 700 actividades con semilla fija, el mismo doble para las dos versiones, el candado en la ruta) — mide filtros, vistas, las ocho agrupaciones, renglones, Obra, Compras, Equipo, Reportes, Partidas, Topes y el alta/edición. **Decidido en la v134**: el dueño autorizó el archivo, y vive en el repo como `lista-chequeo.mjs`, con los datos y el candado dentro. |
@@ -3916,6 +4051,12 @@ contratistas y uno no registrado, y de personal propio), los `GET` de los
 formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
+
+**Desde la v139 tiene una quinta parte, «TRABADAS Y PROPUESTAS»**: entra como
+Karina —que cae en el Modo Campo—, traba dos, destraba una, propone otra y
+comprueba que no cuenta; después entra como Nilson, traba una en el Modo Obra,
+aprueba, rechaza y abre las trabadas de Gerencia. Su doble aplica `propuesta=not.is.true` / `is.true` como
+la base.
 
 **Desde la v138 tiene una cuarta parte, «LA CABECERA DE ACTIVIDADES»**: abre
 el app a 1280 y a 390, entra a Actividades por la pestaña y por el cajón, pone
