@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v137 — 24 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v138 — 25 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -253,6 +253,7 @@ mismos botones que cualquier otra.
 | **Clasificar una compra vieja sin abrir renglón por renglón** | **Compras → la orden → «Clasificar de una vez»** (v127) — `_ocAplicarATodos()`. Solo llena los que están en blanco |
 | **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
 | **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
+| **Esconder la cabecera de Actividades para ver más lista** | **El botón de plegar de la cabecera de arriba** (v138) — `actCabToggle()`, `_actCabAplicar()`. Solo una clase en el `<body>` (`act-plegada`); lo que se pliega lleva `.act-cab`. Ver «La cabecera se pliega» abajo |
 | **CAMINAR un apartamento y marcar lo hecho** | **Modo Obra** (v136 «Recorrido», v137 con sus botones) — el cajón y la barra lateral. Es el panel del apartamento (`_recPanelApto`) con la lista de ambientes, el buscador y «Seguir donde estaba» delante (`abrirRecorrido`, `_recAmbientesHTML`). Cada renglón (`_moLineaHTML`): ✓ Completada · Avanzó 25/50/75 · Sin cambios (`moMarcar`), y «Guardar el recorrido» (`recGuardar`). Ver «El Modo Obra» abajo |
 | **Contar penalidades y registros de un ingeniero** | **Los ayudantes del libro** (v135) — `_penSituaciones()`, `_penRegistrosPorDia()`, `_penRegTexto()`. Toda pantalla que cuente `obra_penalidades` pasa por ahí. Ver «El libro de penalidades» en §8 |
 | **Crear o editar una actividad con el formulario corto** | **Los tres formularios** (Propio, Contratista, Ingeniero) — `showAddActPropio`, `showAddActContratista`, `showAddActIngeniero` (v133). Lo poco usado va plegado en «Más detalles» (`_formMasHTML`); prioridad (`_formPrioHTML`) y foto (`_formFotoHTML`) son nuevas |
@@ -2894,6 +2895,38 @@ había escrito otra entidad en el pedido y dijo que la corrección era buena—:
 eliminar, 4 revisar) que **no salen del app** —alguien escribe por fuera—. El
 refresco de los otros teléfonos no los ve hasta la recarga de 30 minutos.
 
+### LA CABECERA SE PLIEGA (v138) — más lista en pantalla ancha
+
+En el iPad, entre pestañas, la sub-barra Actividades · Kanban · Revisión, la
+fila de filtros, las dos filas de pastillas y «Viendo», la primera actividad
+salía a media pantalla. **Un botón con el icono de plegar** (Lucide
+`fold-vertical` / `unfold-vertical`) en la cabecera de arriba, a la izquierda del
+↺, lo esconde todo y lo vuelve a sacar.
+
+- **SE QUEDAN el título y la barra verde**, decisión del dueño: dicen que está
+  conectado y en qué versión. **Y el botón vive en esa cabecera, que nunca se
+  esconde**: plegado no hay forma de quedarse atrapado. No flota sobre la lista,
+  así que no tapa ninguna fila (el `+` sí lo hace, y es de antes).
+- **NO SE REPINTA NADA.** `actCabToggle` solo pone `act-plegada` en el `<body>` y
+  el CSS esconde `.tabs`, `#c-obra-subnav` y todo lo que lleva **`.act-cab`**:
+  la fila de vistas (`_actVistaToggle`, en las cuatro vistas) y, en la Lista, el
+  bloque desde el buscador hasta el avance. `renderActs` (~1 s) no corre y los
+  filtros **ni se leen ni se escriben**: al desplegar vuelven los mismos chips
+  porque nunca se fueron. Medido: el HTML de `#c-act` es el MISMO byte a byte
+  antes, plegado y después.
+- **Quedan fuera del pliegue, a propósito**: el aviso de descuadre (un dato malo,
+  no un filtro), la barra del modo selección (la acción de lo marcado) y la línea
+  **«N actividades filtradas»** con su «Agrupar».
+- **CON UN FILTRO PUESTO, plegado, el botón lleva el NÚMERO en rojo** —lo que
+  cuenta la pastilla «Filtros» (`_actFiltrosActivos`) más la búsqueda— y la
+  línea dice «filtradas». Nadie lee una lista filtrada sin saberlo.
+- **NO SE RECUERDA**, decisión del dueño: vive en `S._actCabPlegada`, nada en el
+  teléfono, y `goTab` lo devuelve a abierto **cada vez que se entra**. Fuera de
+  la lista de Actividades (Kanban, Revisión, otra pestaña) el botón no sale y
+  `_actCabAplicar` suelta el pliegue.
+- **En el teléfono el logo se va** (`body.con-btn-cab`, ≤430px), solo en
+  Actividades: con un botón más, «Mecca Residence» salía «Mecca Res…».
+
 ### El panel del apartamento se organiza POR CONTRATISTA
 
 Tocar un apartamento en la torre abre `_recPanelApto()`: sus cuatro números
@@ -3445,6 +3478,13 @@ mismo:**
   `tpMarcar` o `tpMarcarGrupo`: cero escrituras intentadas
 - **LA LISTA DE CHEQUEO DA TODO IGUAL** (v134): `node lista-chequeo.mjs`
   contra lo publicado, **cero DISTINTO** o el porqué en el commit
+- **LA CABECERA SE PLIEGA Y NO CAMBIA NADA** (v138), en su sección de la
+  lista (diez comprobaciones, a 1280 y a 390): esconde pestañas, sub-barra y
+  `.act-cab` y deja título y barra verde; el botón sigue a la vista; con Apto 2A
+  dice **1** y la línea «filtradas»; mismas filas y **mismo HTML** de `#c-act`
+  antes, plegada y después; a 390 se toca, **no pisa ningún control** y el
+  título cabe; volver a entrar y recargar la abren; Kanban y otra pestaña no la
+  tienen; y **cero `GET` y cero escrituras** al plegar
 - **EL MODO OBRA DA LO QUE TIENE QUE DAR** (v137), en su sección de la lista
   (dieciséis comprobaciones): tres botones de 48px por renglón; Completada,
   Avanzó 50 y Sin cambios escriben lo suyo **con UN renglón cada una y la
@@ -3816,6 +3856,7 @@ pertenece a ningún nivel.
 | **v135** — la sonda del Historial dio vacío en las DOS versiones: entrar al Historial no pide nada, lo pide `loadHistorial` al tocar un filtro. Y después dio 3 situaciones donde se esperaban 2: la propia prueba había escrito la inactividad de hoy. | Lo vacío en las dos versiones es la prueba, no el app (v88). Y lo de la v111 otra vez: **una sonda que escribe cambia lo que miden las de abajo** — se corrige lo ESPERADO, diciendo por qué, no el app. |
 | **v136** — el pedido traía una pantalla «Recorrido» nueva que ya existía casi entera: el panel del apartamento, por contratista, plegado, con abiertas y vencidas, al que se llegaba tocando la torre. Y pedía a la vez «una sola escritura» y «el mismo camino del botón de completar», que no caben juntos. | **Antes de construir, busca la pantalla en el mapa** —es la regla de la §3.5 y la lección de «Hoy»—: aquí bastaba con ampliarla. Y cuando dos condiciones del pedido se excluyen, **se dice cuál choca con cuál y decide el dueño**; no se escoge una en silencio. |
 | **v136** — la lista de chequeo dio DISTINTO en `vistas.lista` por 14 caracteres, siempre con los mismos dos valores y siempre en la versión que corría PRIMERO, con el navegador recién abierto. La v135 contra sí misma dio igual dos veces. | Era la prueba: medía la Lista antes de que llegara lo que el arranque pide aparte. Ahora espera a que la red se calme antes de medir. **Una prueba intermitente no vale nada** (v84): o se arregla o se borra, y nunca se publica «porque a la segunda dio igual». |
+| **v138** — el botón de plegar se puso en la cabecera y a 390 cortó el título en «Mecca Res…»: la cabecera del teléfono ya iba justa con cuatro botones, y el título es lo único que el dueño pidió que se quedara. | **Un botón más en una fila llena se cobra lo de al lado.** Mide el texto vecino (`scrollWidth > clientWidth`) a 390 antes y después; aquí se fue el logo, solo en Actividades y solo en el teléfono, y el título volvió entero. |
 | **v137** — el pedido del «Modo Obra» era la TERCERA pantalla para lo mismo (Obra, Recorrido), pedía que «Sin cambios» no dejara renglón y que el historial fuera con entidad `obra_actividades`. Las dos cosas habrían hecho que el teléfono de al lado no se enterara. Y los botones de 48px salían de 44: la regla `button:not(…):not(…):not(…)` de la línea ~100 pesa más que una clase sola. | Cuando el pedido trae el diseño del dato, **mira quién lee ese dato antes de escribirlo así** — aquí el refresco por delta y los contadores. Y si un tamaño no sale, **mira el peso de las reglas**, no solo el valor: colgarlo de un id (`#hoja-rec .mo-b`) lo arregló. |
 | **v133** — **el contenedor se reinició y se llevó el scratchpad entero**: los 22 arneses de regresión, sus fixtures —varios eran copias de la base— y el comparador. La v130 y la v131 quedaron sin publicar a mitad de su regresión. | Lo que vive en el scratchpad dura lo que dure el contenedor. La regresión se rehízo con **datos inventados** (`reg133.mjs`: 700 actividades con semilla fija, el mismo doble para las dos versiones, el candado en la ruta) — mide filtros, vistas, las ocho agrupaciones, renglones, Obra, Compras, Equipo, Reportes, Partidas, Topes y el alta/edición. **Decidido en la v134**: el dueño autorizó el archivo, y vive en el repo como `lista-chequeo.mjs`, con los datos y el candado dentro. |
 | **v131** — el tercer campo de una pieza en L decía «Largo del ala (o fondo total)»: son **dos medidas distintas**, y quien medía el pedazo que sobresale —unos 470, que es como Madesol dibuja el ala— se iba **± 647,6 mm** y no encontraba la pieza. El código estaba bien; el que no sabía de dónde a dónde medir era el ingeniero. | Cuando una entrada admite varias lecturas, **el arreglo no es el código: es decir dónde se pone la cinta**. Mídelo: aquí fueron cinco valores contra `tpDif`, y dos de los cinco fallaban. Y un croquis que dibuja la forma pero no las cotas no contesta la pregunta que la gente tiene delante. |
@@ -3875,6 +3916,11 @@ contratistas y uno no registrado, y de personal propio), los `GET` de los
 formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
+
+**Desde la v138 tiene una cuarta parte, «LA CABECERA DE ACTIVIDADES»**: abre
+el app a 1280 y a 390, entra a Actividades por la pestaña y por el cajón, pone
+Apto 2A y toca el botón de plegar de verdad; comprueba diez cosas contra lo que
+tienen que dar. Contra la v137 fallan todas: no hay botón.
 
 **Desde la v136 tiene una tercera parte, hoy «EL MODO OBRA» (v137)**: entra por
 la puerta del cajón a 390, escoge el 6A, abre grupos y toca los botones de

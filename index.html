@@ -247,6 +247,16 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .body .ibtn.primary{background:var(--accent-fill);color:#fff;border-color:var(--accent)}
 
 /* ── SYNC BAR ── */
+/* v138 · el botón que pliega la cabecera de Actividades (actCabToggle). Va
+   colgado de su id: la regla global de los <button> pesa más que una clase. */
+#btn-cab{position:relative;align-items:center;justify-content:center;width:40px;height:40px;min-height:40px;padding:0;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;cursor:pointer;flex-shrink:0}
+#btn-cab.on{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.55)}
+#btn-cab .btn-cab-n{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:800;line-height:18px;font-family:var(--font);text-align:center;box-shadow:0 0 0 2px var(--bg)}
+body.act-plegada .tabs, body.act-plegada #c-obra-subnav, body.act-plegada .act-cab{display:none !important}
+/* En el teléfono, con el botón puesto, «Mecca Residence» salía cortado
+   («Mecca Res…»): faltaban sus 46px. Se va el logo, solo aquí y solo en
+   Actividades, y el título se lee entero. */
+@media(max-width:430px){body.con-btn-cab .hdr-l .logo-dot{display:none}}
 .sync{padding:4px 16px;font-size:11px;font-family:var(--mono);display:flex;align-items:center;gap:6px;flex-shrink:0;min-height:24px;transition:all .3s;letter-spacing:.2px}
 .sync.syncing{background:var(--amber-light);color:var(--amber);border-bottom:1px solid var(--amber)}
 .sync.ok{background:var(--green-light);color:var(--green);border-bottom:1px solid var(--green)}
@@ -861,6 +871,7 @@ input.tp-in[type=search]{font-size:14px}
     <div class="hdr-r">
       <button id="btn-undo" onclick="undoAction()" title="Deshacer (Ctrl+Z)" style="display:none;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↩</button>
       <button id="btn-redo" onclick="redoAction()" title="Rehacer (Ctrl+Shift+Z)" style="display:none;background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↪</button>
+      <button id="btn-cab" onclick="actCabToggle()" aria-label="Esconder la cabecera" title="Esconder la cabecera" style="display:none"></button>
       <button id="btn-refresh" onclick="refrescarApp()" title="Actualizar: busca versión nueva y recarga los datos" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:transform .4s ease,background .15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='transparent'">↺</button>
       <button id="btn-cmd" onclick="abrirComando()" title="Dar una orden por voz o texto (C)" style="background:transparent;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:#fff;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;transition:background .15s;flex-shrink:0" ><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg></button>
       <span class="ubadge guest" id="ubadge" onclick="showLogin()">Entrar</span>
@@ -1087,7 +1098,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261024_137';
+const APP_VERSION='20261025_138';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -7341,6 +7352,48 @@ async function cargarResumenObra(force){
 }
 
 // Cuántos filtros hay puestos ahora mismo
+/* ── v138 · ESCONDER LA CABECERA DE ACTIVIDADES ─────────────────────────────
+   En pantalla ancha, entre las pestañas, la sub-barra, los filtros, las dos
+   filas de pastillas y «Viendo», la primera actividad salía a media pantalla.
+   Un botón en la cabecera de arriba —que nunca se esconde, así que nunca deja
+   a nadie atrapado— lo pliega todo y lo vuelve a sacar.
+
+   · NO SE REPINTA NADA. Solo se pone o se quita `act-plegada` en el <body>, y
+     el CSS esconde .tabs, la sub-barra y lo que va en .act-cab. Los filtros
+     ni se leen ni se escriben: al desplegar vuelven los mismos chips porque
+     nunca se fueron. Y renderActs (~1 s) no corre.
+   · NO SE RECUERDA, decisión del dueño: vive en S, nada en el teléfono, y
+     goTab lo devuelve a abierto cada vez que se entra.
+   · CON UN FILTRO PUESTO, plegado, el botón lleva el NÚMERO de filtros en rojo
+     —los mismos que cuenta la pastilla «Filtros», más la búsqueda— y la línea
+     «N actividades filtradas» sigue a la vista. Nadie lee la lista sin saber
+     que está filtrada.
+   · Solo en Actividades (la lista, sus cuatro vistas). En Kanban, Revisión o
+     cualquier otra pestaña el botón no sale y la cabecera queda abierta. */
+var ICO_CAB_PLEGAR='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-6"/><path d="M12 8V2"/><path d="M4 12H2"/><path d="M10 12H8"/><path d="M16 12h-2"/><path d="M22 12h-2"/><path d="m15 19-3-3-3 3"/><path d="m15 5-3 3-3-3"/></svg>';
+var ICO_CAB_ABRIR='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-6"/><path d="M12 8V2"/><path d="M4 12H2"/><path d="M10 12H8"/><path d="M16 12h-2"/><path d="M22 12h-2"/><path d="m15 19-3 3-3-3"/><path d="m15 5-3-3-3 3"/></svg>';
+function actCabToggle(){
+  S._actCabPlegada=!S._actCabPlegada;
+  _actCabAplicar();
+}
+function _actCabAplicar(){
+  if(typeof S==='undefined') return;
+  var aqui=S.currentTab==='obra' && S.obraVista==='todas';
+  if(!aqui) S._actCabPlegada=false;
+  var pleg=aqui && !!S._actCabPlegada;
+  document.body.classList.toggle('act-plegada', pleg);
+  document.body.classList.toggle('con-btn-cab', aqui);
+  var b=document.getElementById('btn-cab'); if(!b) return;
+  b.style.display=aqui?'flex':'none';
+  if(!aqui) return;
+  var n=_actFiltrosActivos()+(S.actFiltroTexto?1:0);
+  var t=pleg?(n?'Mostrar la cabecera · '+n+' filtro'+(n>1?'s':'')+' puesto'+(n>1?'s':''):'Mostrar la cabecera'):'Esconder la cabecera';
+  b.title=t; b.setAttribute('aria-label',t);
+  b.classList.toggle('on',pleg);
+  b.innerHTML=(pleg?ICO_CAB_ABRIR:ICO_CAB_PLEGAR)+
+    (pleg&&n?'<span class="btn-cab-n">'+n+'</span>':'');
+}
+
 function _actFiltrosActivos(){
   var n=0;
   if((S.actFiltroRapidos||[]).length) n+=S.actFiltroRapidos.length;
@@ -7434,6 +7487,7 @@ function renderActs(){
      esta parado esto" y de ahi se entra. Basta tocar "Lista" para volver a
      lo de antes, y esa eleccion se queda puesta el resto de la sesion. */
   if(!S.actVista) S.actVista='edificio';
+  _actCabAplicar();
   if(S.actVista==='apto'){ renderActsPorApto(); return; }
   if(S.actVista==='matriz'){ renderActsMatriz(); return; }
   if(S.actVista==='edificio'){ renderActsEdificio(); return; }
@@ -7475,6 +7529,14 @@ function renderActs(){
     <!-- AVISO DE DESCUADRE — arriba del todo porque es un dato malo, no un
          filtro. Solo se ve si hay algo descuadrado; si no, no ocupa nada. -->
     ${descuadreHTML()}
+    <!-- v138 · LO QUE SE PLIEGA. Buscador, filtros, pastillas, plan, «Viendo»,
+         el panel de Filtros y el avance van dentro de .act-cab, y el botón de
+         la cabecera (actCabToggle) solo le pone una clase al <body>: no se
+         repinta nada y no se toca ningún filtro. Quedan fuera, a propósito, el
+         aviso de descuadre (es un dato malo, no un filtro), la barra del modo
+         selección (es la acción de lo marcado) y la línea «N actividades
+         filtradas», que sigue diciendo que hay un filtro puesto. -->
+    <div class="act-cab">
     <!-- BUSCADOR -->
     <div style="display:flex;align-items:center;gap:9px;background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r2);padding:11px 13px;margin-bottom:10px">
       <span style="color:var(--text3);display:flex">${ICO_LUPA}</span>
@@ -7538,6 +7600,7 @@ function renderActs(){
 
     <!-- CÓMO VA LA OBRA -->
     ${_panelAvanceHTML()}
+    </div>
 
     <!-- BARRA DE ACCIÓN DE LA SELECCIÓN -->
     ${_actSelBarraHTML()}
@@ -7890,7 +7953,7 @@ function _actVistaToggle(){
   };
   // Cuatro segmentos ya no caben siempre en una linea de telefono: se deja
   // envolver en vez de apretarlos hasta que el texto se corte.
-  return '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'+
+  return '<div class="act-cab" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'+
     seg('lista','Lista','var(--blue)','var(--blue-light)')+
     seg('apto','Por Apto','var(--green)','var(--green-light)')+
     seg('matriz','Matriz','var(--accent)','var(--accent-soft)')+
@@ -17012,6 +17075,8 @@ function goTab(tab){
     tab=legacyMap[tab];
   }
   S.currentTab=tab;
+  /* v138: cada vez que se entra, la cabecera de Actividades sale abierta. */
+  S._actCabPlegada=false; _actCabAplicar();
   var VIEWS=['obra','terreno','equipo','reportes','fotos','planos','compras','topes','plan','replan','bitacora','metodologia','gerencia','catalogo'];
   VIEWS.forEach(function(v){
     var el=document.getElementById('view-'+v);
@@ -26967,6 +27032,7 @@ function renderObra(){
     if(revis) revis.style.display='block';
     renderRevision();
   }
+  _actCabAplicar();
 }
 
 // ══════════════════════════════════════════════════════════════

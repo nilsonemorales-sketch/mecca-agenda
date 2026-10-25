@@ -583,12 +583,139 @@ async function probarRecorrido(nombreVer, html, b){
   return r;
 }
 
+// ── LA CABECERA DE ACTIVIDADES (v138): se pliega con un botón y no cambia nada ──
+const CAB_ESPERADO={
+  hayBoton:{v:true, d:'en Actividades está el botón de plegar, en la cabecera de arriba'},
+  pliega:{v:'pliega 3 · quedan título y sincronización', d:'esconde pestañas, sub-barra y filtros/pastillas/«Viendo»; título y barra verde se quedan'},
+  botonSigue:{v:true, d:'plegada, el botón sigue a la vista y dentro de la pantalla'},
+  filtroSeVe:{v:'1 en el botón · «filtradas»', d:'con Apto 2A puesto y plegada, el botón dice 1 y la línea dice «filtradas»'},
+  mismaLista:{v:true, d:'la lista no se repinta: mismas filas visibles antes, plegada y después'},
+  mismosChips:{v:true, d:'al desplegar vuelve todo igual: mismos filtros y mismo HTML de la cabecera'},
+  cero390:{v:'funciona · tapa 0 · título entero', d:'a 390 se toca con el dedo, no pisa ningún control y «Mecca Residence» cabe'},
+  recargaAbierta:{v:'abierta · abierta · nada guardado', d:'recargar y volver a entrar la abren; no se guarda nada en el teléfono'},
+  soloActividades:{v:'Kanban no · Obra no', d:'en Kanban y en otra pestaña el botón no sale y nada queda plegado'},
+  ceroEscrituras:{v:0, d:'ni una escritura ni un GET al plegar y desplegar'},
+};
+async function probarCabecera(nombreVer, html, b){
+  const D=datos(); const {ACTS,PERS}=D;
+  const ESC=[], LEC=[]; let contar=false;
+  const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
+  const r={};
+  const ok=(q,body)=>q.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  for(const W of [1280,390]){
+    const ctx=await b.newContext({serviceWorkers:'block',viewport:{width:W,height:W>600?900:844}});
+    await ctx.addInitScript(()=>{ window.confirm=()=>true; window.alert=()=>{}; });
+    await ctx.route('**', q=>{
+      const u=q.request().url(), m=q.request().method();
+      if(u.startsWith(ORIGEN)) return q.continue();
+      if(!/\/rest\/v1\//.test(u)) return q.abort();
+      const pth=decodeURIComponent(u.split('/rest/v1/')[1]||''), base=pth.split('?')[0];
+      if(m!=='GET'){ if(contar) ESC.push(m+' '+base); return ok(q,[]); }
+      if(contar) LEC.push(base);
+      let f=[];
+      if(base==='obra_actividades'){ f=ACTS; if(/estado=neq\.completado/.test(pth)) f=f.filter(a=>a.estado!=='completado'); }
+      else if(base==='obra_personal') f=PERS;
+      const rg=q.request().headers()['range']||''; if(rg){ const [d0,h]=rg.split('-').map(Number); f=f.slice(d0,h+1); }
+      return ok(q,f);
+    });
+    const p=await ctx.newPage(); p.setDefaultTimeout(6000);
+    const G=(f,...a)=>p.evaluate(f,...a);
+    const arrancar=async()=>{
+      await p.goto(ORIGEN+'/index.html',{waitUntil:'load'});
+      await G(()=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify({id:'nilson',nombre:'Ing. Nilson',rol:'admin'})); }catch(e){} });
+      await p.reload({waitUntil:'load'});
+      for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S.acts&&S.acts.length).catch(()=>0)) break; await p.waitForTimeout(500); }
+      await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1000);
+    };
+    try{
+      await arrancar();
+      // A Actividades como entra el dedo: la pestaña en ancho, el cajón en el teléfono.
+      if(W>600) await p.locator('.tabs .tab[data-tab="actividades"]').click();
+      else { await p.locator('button[onclick*="toggleDrawer"]:visible').first().click(); await p.waitForTimeout(300);
+             await p.locator('.dw-btn[onclick="goTabD(\'obra\')"]').first().click(); }
+      await p.waitForTimeout(400);
+      await G(()=>{ S.actVista='lista'; S.actFiltroAvanzado={ubicaciones:['N2 — Apto 2A']}; renderActs(); });
+      await p.waitForTimeout(600);
+      const btn=p.locator('#btn-cab');
+      const vis=sel=>G(sel=>[...document.querySelectorAll(sel)].some(e=>e.checkVisibility()),sel);
+      const hay=await btn.isVisible().catch(()=>false);
+      if(W>600) r.hayBoton=hay;
+      if(!hay){ await ctx.close(); continue; }
+      const estado=()=>G(()=>JSON.stringify([S.actFiltroRapidos,S.actFiltroAvanzado,S.actFiltroPlan,S.actFiltroTexto,S.actFiltro,S.actVista]));
+      const filas=()=>G(()=>[...document.querySelectorAll('#c-act .act-item, #c-act tr[id^="act-"]')].filter(e=>e.checkVisibility()).map(e=>e.id).join(','));
+      const html0=await G(()=>document.getElementById('c-act').innerHTML), est0=await estado(), filas0=await filas();
+      const ls0=await G(()=>JSON.stringify(Object.keys(localStorage).sort()));
+      contar=true;
+      await btn.click(); await p.waitForTimeout(300);
+      if(W>600){
+        const esc=[await vis('.tabs'), await vis('#c-obra-subnav'), await vis('#c-act .act-cab')].filter(x=>!x).length;
+        const quedan=(await vis('.hdr .hdr-title')) && (await vis('#sync'));
+        r.pliega='pliega '+esc+(quedan?' · quedan título y sincronización':' · SE FUE el título o la sincronización');
+        r.botonSigue=await G(()=>{ const b=document.getElementById('btn-cab'); const c=b.getBoundingClientRect();
+          return b.checkVisibility() && c.top>=0 && c.bottom<=innerHeight && c.right<=innerWidth; });
+        r.filtroSeVe=await G(()=>{ const n=document.querySelector('#btn-cab .btn-cab-n');
+          const lin=[...document.querySelectorAll('#c-act span')].find(x=>/actividad/.test(x.textContent)&&x.checkVisibility());
+          return (n&&n.checkVisibility()?n.textContent+' en el botón':'nada en el botón')+' · '+(lin&&/filtradas/.test(lin.textContent)?'«filtradas»':'sin «filtradas»'); });
+        const filas1=await filas(), html1=await G(()=>document.getElementById('c-act').innerHTML);
+        await btn.click(); await p.waitForTimeout(300);
+        const filas2=await filas(), html2=await G(()=>document.getElementById('c-act').innerHTML), est2=await estado();
+        r.mismaLista=!!filas0 && filas0===filas1 && filas1===filas2 && html0===html1;
+        r.mismosChips=est0===est2 && html0===html2 && (await vis('#c-act .act-cab')) && (await vis('.tabs')) && (await vis('#c-obra-subnav'));
+        // Volver a entrar y recargar: abierta las dos veces, y nada guardado.
+        await btn.click(); await p.waitForTimeout(200);
+        const ls1=await G(()=>JSON.stringify(Object.keys(localStorage).sort()));
+        await p.locator('.tabs .tab[data-tab="equipo"]').click().catch(()=>{});
+        await G(()=>goTab('equipo')); await p.waitForTimeout(200);
+        const fueraPleg=await G(()=>document.body.classList.contains('act-plegada'));
+        const fueraBtn=await btn.isVisible();
+        await G(()=>goTab('obra')); await p.waitForTimeout(300);
+        const reent=await G(()=>document.body.classList.contains('act-plegada'))?'plegada':'abierta';
+        await btn.click(); await p.waitForTimeout(200);
+        await G(()=>{ S.obraVista='kanban'; renderObra(); }); await p.waitForTimeout(200);
+        const kanBtn=await btn.isVisible(), kanPleg=await G(()=>document.body.classList.contains('act-plegada'));
+        r.soloActividades=(kanBtn||kanPleg?'Kanban SÍ':'Kanban no')+' · '+(fueraBtn||fueraPleg?'Obra SÍ':'Obra no');
+        contar=false;
+        await G(()=>{ S.obraVista='todas'; renderObra(); }); await p.waitForTimeout(200);
+        await btn.click(); await p.waitForTimeout(200);
+        await arrancar(); await G(()=>goTab('actividades')); await p.waitForTimeout(400);
+        const rec=await G(()=>document.body.classList.contains('act-plegada'))?'plegada':'abierta';
+        r.recargaAbierta=reent+' · '+rec+' · '+(ls0===ls1?'nada guardado':'GUARDÓ ALGO');
+        r.ceroEscrituras=ESC.length+LEC.length;
+        r._lecturas=LEC.slice(); r._escrituras=ESC.slice();
+      } else {
+        const pleg=await G(()=>document.body.classList.contains('act-plegada'));
+        const tapa=await G(()=>{ const b=document.getElementById('btn-cab').getBoundingClientRect();
+          /* Lo que no se puede tocar no cuenta: el velo del cajón cerrado cubre
+             la pantalla entera con opacity:0 y pointer-events:none. Y el centro
+             del botón tiene que ser el botón: si algo encima lo tapa, se cuenta. */
+          const tocable=e=>{ const cs=getComputedStyle(e); return cs.pointerEvents!=='none' && cs.opacity!=='0'; };
+          const enc=document.elementFromPoint((b.left+b.right)/2,(b.top+b.bottom)/2);
+          const encima=(enc&&enc.closest('#btn-cab'))?0:1;
+          return encima+[...document.querySelectorAll('button,input,select,a,[onclick]')].filter(e=>e.id!=='btn-cab'&&!e.closest('#btn-cab')&&e.checkVisibility()&&tocable(e)).filter(e=>{
+            const c=e.getBoundingClientRect(); return c.width&&c.height&&c.left<b.right-1&&c.right>b.left+1&&c.top<b.bottom-1&&c.bottom>b.top+1; }).length; });
+        const tit=await G(()=>{ const t=document.querySelector('.hdr .hdr-title'); return t.scrollWidth<=t.clientWidth; });
+        const dentro=await G(()=>{ const c=document.getElementById('btn-cab').getBoundingClientRect(); return c.left>=0&&c.right<=innerWidth&&c.height>=40; });
+        await btn.click(); await p.waitForTimeout(200);
+        const vuelve=!(await G(()=>document.body.classList.contains('act-plegada')));
+        r.cero390=(pleg&&vuelve&&dentro?'funciona':'NO funciona')+' · tapa '+tapa+' · '+(tit?'título entero':'título cortado');
+        contar=false;
+      }
+      if(FOTOS){ await btn.click(); await p.waitForTimeout(200); await p.screenshot({path:path.join(FOTOS,nombreVer+'-cabecera-'+W+'.png')}); }
+    }catch(e){ r._error=(r._error||'')+W+': '+String(e&&e.message||e).split('\n')[0].slice(0,140)+' '; }
+    await ctx.close();
+  }
+  srv.close();
+  for(const k of Object.keys(CAB_ESPERADO)) if(!(k in r)) r[k]=null;
+  return r;
+}
+
 // ── el comparador ─────────────────────────────────────────────────────────
 const b=await chromium.launch({executablePath:CHROME,args:['--no-sandbox']});
 const res=[];
 for(const v of VERS){ process.stderr.write('· probando '+v+' …\n'); const nv=v.replace(/[^\w.-]/g,'_');
   const r=await probar(nv, leerVersion(v), b); r.libro=await probarLibro(nv, leerVersion(v), b);
-  r.recorrido=await probarRecorrido(nv, leerVersion(v), b); res.push(r); }
+  r.recorrido=await probarRecorrido(nv, leerVersion(v), b);
+  r.cabecera=await probarCabecera(nv, leerVersion(v), b); res.push(r); }
 await b.close();
 if(JSONOUT){ console.log(JSON.stringify(res,null,1)); process.exit(0); }
 
@@ -629,6 +756,17 @@ if(res[1].recorrido._escriturasAlGuardar) console.log('  escrituras al guardar: 
 for(const [i,r] of res.entries()) if(r.recorrido._error) console.log('  ('+VERS[i]+' se cortó: '+r.recorrido._error+')');
 if(res[1].recorrido._botones) console.log('  botones de los tres primeros renglones: '+JSON.stringify(res[1].recorrido._botones));
 if(res[1].recorrido._lecturas&&res[1].recorrido._lecturas.length) console.log('  GET durante el recorrido: '+JSON.stringify(res[1].recorrido._lecturas));
+let fallaCab=0;
+console.log('\nLA CABECERA DE ACTIVIDADES — contra lo que tiene que dar (v138)\n');
+for(const k of Object.keys(CAB_ESPERADO)){
+  const e=CAB_ESPERADO[k];
+  const marca=res.map(r=>{ const v=r.cabecera[k]; return (v===e.v?'✓':'✗')+' '+JSON.stringify(v); });
+  if(res[1].cabecera[k]!==e.v) fallaCab++;
+  console.log('  '+marca[0].padEnd(14).slice(0,40)+'  '+marca[1]+'\n        (tiene que dar '+JSON.stringify(e.v)+')  '+e.d);
+}
+console.log('  ↑ antes · después. '+(fallaCab?fallaCab+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
+for(const [i,r] of res.entries()) if(r.cabecera._error) console.log('  ('+VERS[i]+' se cortó: '+r.cabecera._error+')');
+if(res[1].cabecera._lecturas&&(res[1].cabecera._lecturas.length||res[1].cabecera._escrituras.length)) console.log('  al plegar: '+JSON.stringify(res[1].cabecera._lecturas.concat(res[1].cabecera._escrituras)));
 console.log('\nCANDADO: escrituras interceptadas '+res.map(r=>Object.values(r.propio.escrituras).reduce((s,x)=>s+x,0)).join(' / ')+
   ' · salidas cortadas (fuentes, fotos) '+res.map(r=>r.propio.salidasCortadas).join(' / ')+' · a la base real: 0');
-process.exit(dist||fallaDespues||fallaRec?1:0);
+process.exit(dist||fallaDespues||fallaRec||fallaCab?1:0);
