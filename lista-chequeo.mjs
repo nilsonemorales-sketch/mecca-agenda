@@ -208,7 +208,16 @@ async function probar(nombreVer, html, b){
     C.agrupar[f]=await G(()=>__h(document.getElementById('c-act').innerText)); }
   await G(()=>{S.actFiltro='tipo';renderActs();}); await p.waitForTimeout(500);
   // 4 · los renglones de la lista
-  C.renglones=await G(()=>__h(Array.from(document.querySelectorAll('#c-act .act-item')).slice(0,8).map(x=>x.outerHTML).join('')));
+  /* v144 · Las ocho primeras ABIERTAS, como las abre el dedo: desde la v144 el
+     pliegue se arma al abrir la fila, así que cerradas ya no tienen el mismo
+     HTML escondido. Lo que tiene que dar igual es lo que se ve al tocarla. Y
+     se vuelven a cerrar, para no cambiarle nada a lo que se mide después. */
+  C.renglones=await G(()=>{ const fs=Array.from(document.querySelectorAll('#c-act .act-item')).slice(0,8);
+    const tocar=f=>{ const b=f.querySelector('[onclick^="toggleActDet"]'); if(b) b.click(); };
+    fs.forEach(tocar);
+    const h=__h(Array.from(document.querySelectorAll('#c-act .act-item')).slice(0,8).map(x=>x.outerHTML).join(''));
+    Array.from(document.querySelectorAll('#c-act .act-item')).slice(0,8).forEach(tocar);
+    return h; });
   // 5 · las otras pantallas
   for(const [k,tab,c] of [['obra','terreno','view-terreno'],['compras','compras','view-compras'],['equipo','equipo','view-equipo'],['reportes','reportes','view-reportes'],['partidas','catalogo','view-catalogo']]){
     await G(t=>goTab(t),tab); await p.waitForTimeout(k==='partidas'?1800:900);
@@ -938,195 +947,72 @@ async function probarCabecera(nombreVer, html, b){
   return r;
 }
 
-// ── DICTAR (v143): una nota de voz, una actividad ────────────────────────────
-/* El micrófono es el FALSO de Chromium (un pitido) y el Worker es de mentira, en
-   la ruta: contesta lo que cada caso necesita. Así se prueba todo el camino del
-   app —grabar, mandar, la tarjeta, guardar— sin gastar una neurona ni escribir
-   en la base. Lo que dice Whisper de verdad no se puede probar aquí. */
-const DIC_ESPERADO={
-  puerta:{v:'Actividades · Revisión · Dictar', d:'a 390, la sub-barra de Actividades trae la tercera pestaña «Dictar»'},
-  mic:{v:'132px · cabe a 390', d:'el botón del micrófono es grande y la pantalla no se desborda a 390'},
-  graba:{v:'graba · cuenta · tarjeta', d:'un toque graba (con el contador), otro para, y sale la tarjeta'},
-  alWorker:{v:'crear_actividad · listas reales · hoy', d:'al Worker va el audio con modo crear_actividad, las áreas y los contratistas de S.acts y la fecha de hoy'},
-  tarjeta:{v:'Apto 4A · Yelson Jimenez · viernes · se ve lo dicho', d:'la tarjeta sale llena con lo que armó el Worker y enseña la transcripción'},
-  nadaSinConfirmar:{v:0, d:'hasta tocar «Guardar» no se escribe nada'},
-  guardaAdmin:{v:'directa·N4 — Apto 4A·Yelson Jimenez·VIE·urgente·Dictado:·creado/actividad·2 escrituras', d:'Nilson: POST de la actividad SIN propuesta, con la nota «Dictado: …», y su renglón creado/actividad; nada más'},
-  otra:{v:'lista para otra', d:'después de guardar la pestaña queda lista para dictar otra'},
-  sinContratista:{v:'vacío · rojo · no escribe', d:'si no dijo contratista, el campo queda vacío, sale en rojo al guardar y no se escribe nada'},
-  areaInventada:{v:'no la inventa', d:'un área que no existe en la obra no se pone: queda vacía'},
-  workerViejo:{v:'Apto 4A · Yelson Jimenez · viernes', d:'si el Worker devuelve solo el texto, el app lo entiende con las mismas listas'},
-  workerError:{v:'tarjeta · con el motivo', d:'si el Worker falla, se abre la tarjeta igual y dice por qué en una línea'},
-  workerMudo:{v:'tarjeta a los 15 s · con el motivo', d:'si el Worker no contesta, a los 15 s se abre la tarjeta: nunca se queda colgado'},
-  duplicado:{v:'avisa · no guarda · Crear igual guarda', d:'una parecida abierta en el mismo sitio sale como «Ya existe», y hasta «Crear igual» no se guarda'},
-  campoPuerta:{v:'Dictar una actividad', d:'Karina, en el Modo Campo, tiene el botón «Dictar una actividad»'},
-  propone:{v:'Proponer a Gerencia·propuesta·Ing. Karina Breton·HOY·VIE·S.acts igual·propuesta/actividad', d:'Karina: el botón dice «Proponer a Gerencia», entra con propuesta=true, quién, hoy y la entrega, y NO cuenta'},
-  vozSigueApagada:{v:'caja de órdenes apagada', d:'VOZ_ACTIVA sigue en false: el botón de órdenes de la cabecera no sale'},
+// ── VELOCIDAD (v144): la lista no se repinta de balde ni arma lo que no se ve ──
+const VEL_ESPERADO={
+  pliegueVacio:{v:'cerrado vacío · al tocar lleno · se cierra', d:'v144: el pliegue de una fila cerrada nace vacío y se arma al tocarla, con sus botones; otro toque lo cierra'},
+  mismasFilas:{v:true, d:'la lista enseña exactamente las mismas actividades, en el mismo orden, que S.acts filtrado'},
+  refrescoQuieto:{v:'no repinta', d:'un refresco de 90 s en el que no cambió nada no vuelve a pintar la lista'},
+  refrescoConCambio:{v:'repinta', d:'si cambió algo (aquí, la asistencia), sí la vuelve a pintar'},
+  reportesOculto:{v:0, d:'con Reportes cerrado, ni el arranque ni el refresco pintan el tablero'},
+  ceroEscrituras:{v:0, d:'nada de esto escribe en la base'},
 };
-async function probarDictar(nombreVer, html){
+async function probarVelocidad(nombreVer, html, b){
   const D=datos(); const {ACTS,PERS}=D;
-  const ESC=[], CAMBIOS=[], WK=[];
-  const VOZ='https://voz.prueba.invalid';
-  let modo='bien', mudos=[];
+  const ESC=[]; const r={};
   const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
-  const r={};
-  const bD=await chromium.launch({executablePath:CHROME,args:['--no-sandbox','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
-  const ok=(q,body,h)=>q.fulfill({status:200,contentType:'application/json',headers:h||{},body:JSON.stringify(body)});
-  const nodoHoy=(()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
-  const vie=(()=>{ const d=new Date(nodoHoy+'T12:00:00'); d.setDate(d.getDate()+((5-d.getDay()+7)%7)); return d.toISOString().slice(0,10); })();
-  const DICHO='En el 4A, Yelson, rejillas del baño principal, para el viernes';
-  const DUP=ACTS.find(a=>a.area==='N4 — Apto 4A'&&a.estado!=='completado'&&a.personal_nombre==='Yelson Jimenez')||ACTS.find(a=>a.area==='N4 — Apto 4A'&&a.estado!=='completado');
-  const respuesta=()=>{
-    const base={descripcion:'Rejillas de piso — baño principal (4A)',area:'N4 — Apto 4A',personal_nombre:'Yelson Jimenez',fecha_fin:vie,prioridad:'urgente',notas:''};
-    if(modo==='bien') return {texto:DICHO, actividad:base};
-    if(modo==='sinCont') return {texto:'En el 4A, rejillas del baño principal, para el viernes', actividad:Object.assign({},base,{personal_nombre:''})};
-    if(modo==='inventada') return {texto:'En el 9Z, Yelson, rejillas', actividad:Object.assign({},base,{area:'N9 — Apto 9Z'})};
-    if(modo==='viejo') return {texto:DICHO};
-    if(modo==='campo') return {texto:'En el 4A, Yelson, sellar las juntas de la ducha de visitas, para el viernes', actividad:Object.assign({},base,{descripcion:'Sellar juntas de la ducha — baño de visitas (4A)',prioridad:'normal'})};
-    if(modo==='dup') return {texto:'lo mismo otra vez', actividad:Object.assign({},base,{descripcion:DUP.descripcion,personal_nombre:DUP.personal_nombre||'Yelson Jimenez'})};
-    return {texto:DICHO, actividad:base};
-  };
-  const CORS={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type, X-Clave','Access-Control-Allow-Methods':'POST, OPTIONS'};
-  const ruta=async ctx=>ctx.route('**', q=>{
+  const ok=(q,body)=>q.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  const ctx=await b.newContext({serviceWorkers:'block',viewport:{width:390,height:844}});
+  await ctx.addInitScript(()=>{ window.confirm=()=>true; window.alert=()=>{}; });
+  await ctx.route('**', q=>{
     const u=q.request().url(), m=q.request().method();
     if(u.startsWith(ORIGEN)) return q.continue();
-    if(u.startsWith(VOZ)){
-      if(m==='OPTIONS') return q.fulfill({status:204,headers:CORS,body:''});
-      let cuerpo={}; try{ cuerpo=JSON.parse(q.request().postData()||'{}'); }catch(e){}
-      WK.push({ruta:u.slice(VOZ.length), modo:cuerpo.modo, contexto:cuerpo.contexto, audio:(cuerpo.audio||'').length});
-      if(modo==='error') return q.fulfill({status:500,headers:CORS,contentType:'application/json',body:'{"error":"x"}'});
-      if(modo==='mudo'){ mudos.push(q); return; }          // no contesta nunca
-      return ok(q,respuesta(),CORS);
-    }
     if(!/\/rest\/v1\//.test(u)) return q.abort();
     const pth=decodeURIComponent(u.split('/rest/v1/')[1]||''), base=pth.split('?')[0];
-    if(m!=='GET'){
-      const body=q.request().postData()||'';
-      ESC.push({q:m+' '+base, d:body?JSON.parse(body):null});
-      try{ const d=body?JSON.parse(body):null;
-        if(base==='obra_actividades'&&m==='POST') (Array.isArray(d)?d:[d]).forEach(x=>ACTS.push(Object.assign({},x)));
-        if(base==='obra_cambios'&&m==='POST') (Array.isArray(d)?d:[d]).forEach(x=>CAMBIOS.push(x));
-      }catch(e){}
-      return ok(q,[]);
-    }
+    if(m!=='GET'){ ESC.push(m+' '+base); return ok(q,[]); }
     let f=[];
-    if(base==='obra_actividades'){
-      f=ACTS;
-      if(/estado=neq\.completado/.test(pth)) f=f.filter(a=>a.estado!=='completado');
-      if(/propuesta=not\.is\.true/.test(pth)) f=f.filter(a=>a.propuesta!==true);
-      else if(/propuesta=is\.true/.test(pth)) f=f.filter(a=>a.propuesta===true);
-    }
+    if(base==='obra_actividades'){ f=ACTS; if(/estado=neq\.completado/.test(pth)) f=f.filter(a=>a.estado!=='completado'); if(/propuesta=is\.true/.test(pth)) f=[]; }
     else if(base==='obra_personal') f=PERS;
-    else if(base==='obra_config' && /voz_api/.test(pth)) f=[{key:'voz_api_url',value:VOZ},{key:'voz_api_clave',value:'clave-de-prueba'}];
     const rg=q.request().headers()['range']||''; if(rg){ const [d0,h]=rg.split('-').map(Number); f=f.slice(d0,h+1); }
     return ok(q,f);
   });
-  const abrir=async (usr)=>{
-    const ctx=await bD.newContext({serviceWorkers:'block',viewport:{width:390,height:844},permissions:['microphone']});
-    await ctx.addInitScript(()=>{ window.confirm=()=>true; window.alert=()=>{}; });
-    await ruta(ctx);
-    const p=await ctx.newPage(); p.setDefaultTimeout(6000);
-    const G=(f,...a)=>p.evaluate(f,...a);
-    await p.goto(ORIGEN+'/index.html',{waitUntil:'load'});
-    await G(u=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify(u)); }catch(e){} }, usr);
-    await p.reload({waitUntil:'load'});
-    for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S.acts&&S.acts.length).catch(()=>0)) break; await p.waitForTimeout(500); }
-    await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1000);
-    return {ctx,p,G};
-  };
-  /* Dictar como el dedo: toque, hablar un rato, toque, y esperar la tarjeta. */
-  const dictar=async(p,G,host,espera)=>{
-    await p.locator(host+' .dic-mic').click();
-    let graba=false; for(let t=0;t<20;t++){ await p.waitForTimeout(150); if(await G(()=>_dic.fase==='grabando')){ graba=true; break; } }
-    await p.waitForTimeout(1300);
-    const cuenta=await G(()=>{ const e=document.getElementById('dic-seg'); return !!e && /de 1:00/.test(e.textContent); });
-    if(graba) await p.locator(host+' .dic-mic').click();
-    let tarjeta=false; for(let t=0;t<(espera||40);t++){ await p.waitForTimeout(500); if(await G(()=>_dic.fase==='tarjeta')){ tarjeta=true; break; } }
-    return {graba,cuenta,tarjeta};
-  };
-  const escDesde=n=>ESC.slice(n);
+  const p=await ctx.newPage(); p.setDefaultTimeout(8000);
+  const G=(f,...a)=>p.evaluate(f,...a);
   try{
-    // ── NILSON, administrador, a 390 ──
-    let {ctx,p,G}=await abrir({id:'nilson',nombre:'Ing. Nilson',rol:'admin'});
+    await p.goto(ORIGEN+'/index.html',{waitUntil:'load'});
+    await G(()=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify({id:'nilson',nombre:'Ing. Nilson',rol:'admin'})); }catch(e){} });
+    // El tablero de Reportes se cuenta desde ANTES del arranque.
+    await ctx.addInitScript(()=>{ window.__nRep=0; });
+    await p.reload({waitUntil:'load'});
+    await G(()=>{ var o=window.renderReportes; window.renderReportes=function(){ window.__nRep++; return o.apply(this,arguments); }; });
+    for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S.acts&&S.acts.length).catch(()=>0)) break; await p.waitForTimeout(500); }
+    await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1500);
     await p.locator('button[onclick*="toggleDrawer"]:visible').first().click(); await p.waitForTimeout(300);
-    await p.locator('.dw-btn[onclick="goTabD(\'obra\')"]').first().click(); await p.waitForTimeout(500);
-    r.puerta=await G(()=>[...document.querySelectorAll('#c-obra-subnav button')].map(b=>b.textContent.trim()).join(' · '));
-    const pest=p.locator('#c-obra-subnav button',{hasText:'Dictar'});
-    if(!(await pest.count())) throw new Error('no hay pestaña Dictar');
-    await pest.click(); await p.waitForTimeout(500);
-    r.mic=await G(()=>{ const b=document.querySelector('#c-dictar .dic-mic'); if(!b) return 'sin botón';
-      const c=b.getBoundingClientRect(); return Math.round(c.height)+'px · '+(document.documentElement.scrollWidth<=innerWidth?'cabe a 390':'se desborda'); });
-    let n0=ESC.length;
-    const g1=await dictar(p,G,'#c-dictar');
-    r.graba=[g1.graba?'graba':'no graba', g1.cuenta?'cuenta':'sin contador', g1.tarjeta?'tarjeta':'sin tarjeta'].join(' · ');
-    { const w=WK[WK.length-1]||{}; const cx=w.contexto||{};
-      r.alWorker=[w.modo||'sin modo', (cx.areas||[]).includes('N4 — Apto 4A')&&(cx.personas||[]).includes('Yelson Jimenez')&&w.audio>0?'listas reales':'listas MAL', cx.hoy===nodoHoy?'hoy':'hoy MAL '+cx.hoy].join(' · '); }
-    r.tarjeta=await G(v=>{ const c=_dic.c||{}; const t=document.getElementById('c-dictar').innerText;
-      return [_recNom(c.area)||'sin área', c.personal_nombre||'sin quién', c.fecha_fin===v?'viernes':(c.fecha_fin||'sin fecha'), /Dijiste/.test(t)&&/rejillas del baño/.test(t)?'se ve lo dicho':'no se ve lo dicho'].join(' · '); }, vie);
-    r.nadaSinConfirmar=escDesde(n0).length;
-    n0=ESC.length;
-    await p.locator('#c-dictar .dic-guardar').click(); await p.waitForTimeout(800);
-    { const e=escDesde(n0), a=(e.find(x=>x.q==='POST obra_actividades')||{}).d||{}, c=(e.find(x=>x.q==='POST obra_cambios')||{}).d||{};
-      r.guardaAdmin=[a.propuesta===true?'PROPUESTA':'directa', a.area, a.personal_nombre, a.fecha_fin===vie?'VIE':a.fecha_fin, a.prioridad,
-        /^Dictado: /.test(a.notas||'')?'Dictado:':'nota MAL', c.accion+'/'+c.entidad, e.length+' escrituras'].join('·'); }
-    r.otra=await G(()=>_dic.fase==='listo' && !!document.querySelector('#c-dictar .dic-mic') && /Lista para dictar otra/.test(document.getElementById('c-dictar').innerText)?'lista para otra':'no queda lista');
-    // sin contratista
-    modo='sinCont'; n0=ESC.length;
-    await dictar(p,G,'#c-dictar');
-    await p.locator('#c-dictar .dic-guardar').click(); await p.waitForTimeout(500);
-    r.sinContratista=await G(()=>{ const c=_dic.c||{}; const rojo=[...document.querySelectorAll('#c-dictar .dic-lbl.dic-falta')].some(l=>/Quién/i.test(l.textContent));
-      return [c.personal_nombre?'LLENO':'vacío', rojo?'rojo':'sin rojo'].join(' · '); })+' · '+(escDesde(n0).length?'ESCRIBIÓ':'no escribe');
-    await p.locator('#c-dictar .dic-dos button',{hasText:'Cancelar'}).click(); await p.waitForTimeout(200);
-    // área inventada
-    modo='inventada'; await dictar(p,G,'#c-dictar');
-    r.areaInventada=await G(()=>(_dic.c&&_dic.c.area)?'PUSO '+_dic.c.area:'no la inventa');
-    await p.locator('#c-dictar .dic-dos button',{hasText:'Cancelar'}).click(); await p.waitForTimeout(200);
-    // Worker viejo: solo el texto
-    modo='viejo'; await dictar(p,G,'#c-dictar');
-    r.workerViejo=await G(v=>{ const c=_dic.c||{}; return [_recNom(c.area)||'sin área', c.personal_nombre||'sin quién', c.fecha_fin===v?'viernes':(c.fecha_fin||'sin fecha')].join(' · '); }, vie);
-    await p.locator('#c-dictar .dic-dos button',{hasText:'Cancelar'}).click(); await p.waitForTimeout(200);
-    // Worker con error
-    modo='error'; { const g=await dictar(p,G,'#c-dictar');
-      r.workerError=(g.tarjeta?'tarjeta':'sin tarjeta')+' · '+(await G(()=>!!document.querySelector('#c-dictar .dic-motivo'))?'con el motivo':'sin motivo'); }
-    await p.locator('#c-dictar .dic-dos button',{hasText:'Cancelar'}).click(); await p.waitForTimeout(200);
-    // Worker mudo: a los 15 s
-    modo='mudo'; { const t0=Date.now(); const g=await dictar(p,G,'#c-dictar',50); const s=(Date.now()-t0)/1000;
-      r.workerMudo=(g.tarjeta&&s>=14&&s<30?'tarjeta a los 15 s':'tarjeta '+g.tarjeta+' en '+Math.round(s)+' s')+' · '+(await G(()=>/15 s/.test(((document.querySelector('#c-dictar .dic-motivo')||{}).textContent)||''))?'con el motivo':'sin motivo'); }
-    mudos.forEach(q=>q.abort().catch(()=>{})); mudos=[];
-    await p.locator('#c-dictar .dic-dos button',{hasText:'Cancelar'}).click(); await p.waitForTimeout(200);
-    // duplicado
-    modo='dup'; n0=ESC.length; await dictar(p,G,'#c-dictar');
-    { const avisa=await G(()=>/Ya existe/.test(document.getElementById('c-dictar').innerText));
-      await p.locator('#c-dictar .dic-guardar').click(); await p.waitForTimeout(400);
-      const noGuarda=escDesde(n0).length===0;
-      await p.locator('#c-dictar .dic-dup button',{hasText:'Crear igual'}).click(); await p.waitForTimeout(200);
-      await p.locator('#c-dictar .dic-guardar').click(); await p.waitForTimeout(700);
-      const guarda=escDesde(n0).some(x=>x.q==='POST obra_actividades');
-      r.duplicado=[avisa?'avisa':'NO avisa', noGuarda?'no guarda':'GUARDÓ sin preguntar', guarda?'Crear igual guarda':'Crear igual NO guarda'].join(' · '); }
-    r.vozSigueApagada=await G(()=>{ const b=document.getElementById('btn-cmd'); return (VOZ_ACTIVA===false && (!b||!b.checkVisibility()))?'caja de órdenes apagada':'caja de órdenes ENCENDIDA'; });
-    if(FOTOS) await p.screenshot({path:path.join(FOTOS,nombreVer+'-dictar-admin.png')});
-    await ctx.close();
-    // ── KARINA, ingeniera: Modo Campo ──
-    /* Otro trabajo: el de Nilson ya está en el 4A y la tarjeta, con razón, lo
-       avisaría como repetido. */
-    modo='campo';
-    ({ctx,p,G}=await abrir({id:'karina',nombre:'Ing. Karina Breton',rol:'ing'}));
-    r.campoPuerta=await G(()=>{ const b=document.querySelector('#campo-root .cp-dictar-btn'); return b?b.textContent.trim():'sin botón'; });
-    await p.locator('#campo-root .cp-dictar-btn').click(); await p.waitForTimeout(400);
-    const nActs=await G(()=>S.acts.length); n0=ESC.length;
-    await dictar(p,G,'#cp-dictar');
-    if(FOTOS) await p.screenshot({path:path.join(FOTOS,nombreVer+'-dictar-campo.png'),fullPage:false});
-    const txtBtn=await G(()=>{ const b=document.querySelector('#cp-dictar .dic-guardar'); return b?b.textContent.trim():''; });
-    await p.locator('#cp-dictar .dic-guardar').click(); await p.waitForTimeout(800);
-    { const e=escDesde(n0), a=(e.find(x=>x.q==='POST obra_actividades')||{}).d||{}, c=(e.find(x=>x.q==='POST obra_cambios')||{}).d||{};
-      const igual=await G(n=>S.acts.length===n,nActs);
-      r.propone=[txtBtn, a.propuesta===true?'propuesta':'NO propuesta', a.propuesta_por, a.propuesta_fecha===nodoHoy?'HOY':a.propuesta_fecha, a.fecha_fin===vie?'VIE':a.fecha_fin,
-        igual?'S.acts igual':'S.acts CAMBIÓ', c.accion+'/'+c.entidad].join('·'); }
-    r._escrituras=ESC.map(x=>x.q);
-    await ctx.close();
-  }catch(e){ r._error=String(e&&e.message||e).split('\n').slice(0,3).join(' | ').slice(0,300); }
-  mudos.forEach(q=>q.abort().catch(()=>{}));
-  await bD.close(); srv.close();
-  for(const k of Object.keys(DIC_ESPERADO)) if(!(k in r)) r[k]=null;
+    await p.locator('.dw-btn[onclick="goTabD(\'obra\')"]').first().click(); await p.waitForTimeout(400);
+    await G(()=>{ S.actVista='lista'; renderActs(); }); await p.waitForTimeout(800);
+    await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1000);
+    r.mismasFilas=await G(()=>{ const ids=[...document.querySelectorAll('#c-act .act-item')].map(e=>e.id.slice(4));
+      const gs=getActGroupsFromActs(applyActFilters(S.acts)); const esp=[]; gs.forEach(g=>g.items.forEach(a=>esp.push(a.id)));
+      return ids.length>0 && ids.join(',')===esp.join(','); });
+    const fila=p.locator('#c-act .act-item').first();
+    const id=(await fila.getAttribute('id')).slice(4);
+    const cerrado=await G(i=>{ const d=document.getElementById('det-'+i); return d.style.display==='none' && d.querySelectorAll('button').length===0; },id);
+    await fila.locator('[onclick^="toggleActDet"]').first().click(); await p.waitForTimeout(300);
+    const lleno=await G(i=>{ const d=document.getElementById('det-'+i); return d.checkVisibility() && d.querySelectorAll('button').length>3; },id);
+    await fila.locator('[onclick^="toggleActDet"]').first().click(); await p.waitForTimeout(300);
+    const cierra=await G(i=>document.getElementById('det-'+i).style.display==='none',id);
+    r.pliegueVacio=[cerrado?'cerrado vacío':'cerrado LLENO', lleno?'al tocar lleno':'al tocar VACÍO', cierra?'se cierra':'NO se cierra'].join(' · ');
+    // El refresco: se marca el primer renglón; si se repinta, el nodo cambia.
+    const tic=async()=>G(async()=>{ for(let i=0;i<100 && _refCorriendo;i++) await new Promise(x=>setTimeout(x,100));
+      const n0=document.querySelector('#c-act .act-item'); _refUltimo=Date.now()-60000; _refEntero=Date.now(); await _refrescoTick(true);
+      return document.querySelector('#c-act .act-item')===n0?'no repinta':'repinta'; });
+    r.refrescoQuieto=await tic();
+    await G(()=>{ S.asist=[{id:'x',estado:'presente'}]; });
+    r.refrescoConCambio=await tic();
+    r.reportesOculto=await G(()=>window.__nRep);
+    r.ceroEscrituras=ESC.length;
+  }catch(e){ r._error=String(e&&e.message||e).split('\n')[0].slice(0,200); }
+  await ctx.close(); srv.close();
+  for(const k of Object.keys(VEL_ESPERADO)) if(!(k in r)) r[k]=null;
   return r;
 }
 
@@ -1138,7 +1024,7 @@ for(const v of VERS){ process.stderr.write('· probando '+v+' …\n'); const nv=
   r.recorrido=await probarRecorrido(nv, leerVersion(v), b);
   r.cabecera=await probarCabecera(nv, leerVersion(v), b);
   r.trabas=await probarTrabas(nv, leerVersion(v), b);
-  r.dictar=await probarDictar(nv, leerVersion(v)); res.push(r); }
+  r.velocidad=await probarVelocidad(nv, leerVersion(v), b); res.push(r); }
 await b.close();
 if(JSONOUT){ console.log(JSON.stringify(res,null,1)); process.exit(0); }
 
@@ -1201,17 +1087,16 @@ for(const k of Object.keys(TRA_ESPERADO)){
 console.log('  ↑ antes · después. '+(fallaTra?fallaTra+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
 for(const [i,r] of res.entries()) if(r.trabas._error) console.log('  ('+VERS[i]+' se cortó: '+r.trabas._error+')');
 if(res[1].trabas._escrituras) console.log('  escrituras: '+JSON.stringify(res[1].trabas._escrituras.reduce((m,x)=>{m[x.split(' ').slice(0,2).join(' ')]=(m[x.split(' ').slice(0,2).join(' ')]||0)+1;return m;},{})));
-let fallaDic=0;
-console.log('\nDICTAR — contra lo que tiene que dar (v143)\n');
-for(const k of Object.keys(DIC_ESPERADO)){
-  const e=DIC_ESPERADO[k];
-  const marca=res.map(r=>{ const v=r.dictar[k]; return (v===e.v?'✓':'✗')+' '+JSON.stringify(v); });
-  if(res[1].dictar[k]!==e.v) fallaDic++;
+let fallaVel=0;
+console.log('\nVELOCIDAD — contra lo que tiene que dar (v144)\n');
+for(const k of Object.keys(VEL_ESPERADO)){
+  const e=VEL_ESPERADO[k];
+  const marca=res.map(r=>{ const v=r.velocidad[k]; return (v===e.v?'✓':'✗')+' '+JSON.stringify(v); });
+  if(res[1].velocidad[k]!==e.v) fallaVel++;
   console.log('  '+marca[0].padEnd(14).slice(0,40)+'  '+marca[1]+'\n        (tiene que dar '+JSON.stringify(e.v)+')  '+e.d);
 }
-console.log('  ↑ antes · después. '+(fallaDic?fallaDic+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
-for(const [i,r] of res.entries()) if(r.dictar._error) console.log('  ('+VERS[i]+' se cortó: '+r.dictar._error+')');
-if(res[1].dictar._escrituras) console.log('  escrituras: '+JSON.stringify(res[1].dictar._escrituras.reduce((m,x)=>{m[x]=(m[x]||0)+1;return m;},{})));
+console.log('  ↑ antes · después. '+(fallaVel?fallaVel+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
+for(const [i,r] of res.entries()) if(r.velocidad._error) console.log('  ('+VERS[i]+' se cortó: '+r.velocidad._error+')');
 console.log('\nCANDADO: escrituras interceptadas '+res.map(r=>Object.values(r.propio.escrituras).reduce((s,x)=>s+x,0)).join(' / ')+
   ' · salidas cortadas (fuentes, fotos) '+res.map(r=>r.propio.salidasCortadas).join(' / ')+' · a la base real: 0');
-process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra||fallaDic?1:0);
+process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra||fallaVel?1:0);

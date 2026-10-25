@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v143 — 25 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v144 — 25 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -254,7 +254,7 @@ mismos botones que cualquier otra.
 | **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
 | **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
 | **LO QUE VE UN INGENIERO al poner su PIN (Moisés, Karina)** | **El Modo Campo** — `debeAbrirCampo()`, `iniciarModoCampo()`, `renderCampo()`, `campoMarcar()`. Pantalla aparte, en cualquier aparato, para todo rol `ing`. **No estaba en este mapa hasta la v139.** Ver «El Modo Campo» abajo |
-| **AGREGAR UNA ACTIVIDAD DICTÁNDOLA (nota de voz)** | **Actividades → pestaña «Dictar»** y **Modo Campo → «Dictar una actividad»** (v143) — `dictarMic()`, `_dicMandar()`, `_dicTarjeta()`, `dicGuardar()`, `_dicLocal()`. Una nota, UNA actividad, siempre con tarjeta antes de guardar. Nilson guarda directo; un ingeniero propone. Ver «DICTAR» abajo |
+| ~~Agregar una actividad dictándola~~ | **Se retiró en la v144** (decisión del dueño). Ver «DICTAR (v143) — RETIRADO EN LA v144» abajo. **No la vuelvas a construir sin que él lo pida** |
 | **Dejar dicho que una partida NO se puede hacer todavía, y por qué** | **Modo Campo → «Trabada»** y **Modo Obra → el cuarto botón** (v139) — `moTrabaAbrir()`, `moTrabar()`, `Acciones.trabar()` / `destrabar()`, `TRABA_CAUSAS`. Ver «Trabadas y propuestas» abajo |
 | **Proponer una partida que no estaba en la lista** | **Modo Campo → «Proponer a Gerencia»** (`campoProponer()`) y **Modo Obra → un contratista abierto → «+ Proponer a Gerencia»** (v139, renombrado en la v140: `PAL_PROPONER`) — `_propFormHTML()`, `propEnviar()`, `Acciones.proponer()`. Entra como propuesta y no cuenta hasta que Gerencia la aprueba |
 | **Aprobar o rechazar lo que proponen los ingenieros, y ver las trabadas por causa** | **Gerencia, arriba** (v139) — `_gerPropuestasHTML()`, `_gerTrabadasHTML()`, `propAprobar()`, `propRechazar()`. El número va en la puerta de Gerencia (`_propBadge`) |
@@ -2950,64 +2950,85 @@ salía a media pantalla. **Un botón con el icono de plegar** (Lucide
 - **En el teléfono el logo se va** (`body.con-btn-cab`, ≤430px), solo en
   Actividades: con un botón más, «Mecca Residence» salía «Mecca Res…».
 
-### DICTAR (v143) — una nota de voz, UNA actividad
+### DICTAR (v143) — RETIRADO EN LA v144
 
-Pedido del dueño: *«agregar actividades a través de nota de voz de manera
-práctica, interactiva y eficiente»*. Tercera pestaña de Actividades
-(`Actividades · Revisión · Dictar`, `S.obraVista='dictar'`, contenedor
-`#c-dictar`) y botón «Dictar una actividad» arriba del Modo Campo
-(`campoDictar`, `#cp-dictar`). **El mismo HTML en los dos** (`_dicHTML`).
+La v143 metió una pestaña «Dictar» (Actividades) y un botón «Dictar una
+actividad» (Modo Campo): una nota de voz → el Worker transcribía y armaba los
+campos → una tarjeta para confirmar → guardar o proponer. **Al día siguiente el
+dueño lo probó en la obra con una raya de señal** y salió «el servidor de voz
+no contestó en 15 s». Las métricas de Cloudflare decían otra cosa: 0 errores,
+P50 de 1 s. **Lo que no cupo fue SUBIR el audio en base64 por una raya de
+señal**, y el aviso culpaba al servidor. Preguntado cómo seguir, contestó:
+**«Olvida lo del dictado, quítalo».**
 
-- **Tres toques**: el micrófono (132 px, icono Lucide `mic`) graba con contador
-  y anillo que sigue el volumen, corte a los **60 s**; otro toque para; sale la
-  **tarjeta**; «Guardar». **Nada se escribe sin la tarjeta.**
-- **USA EL MOTOR DE VOZ CON `VOZ_ACTIVA` EN false.** La bandera sigue apagando
-  la caja de órdenes (§9.6): sus tres problemas son de EJECUTAR órdenes sobre lo
-  que ya existe. Aquí lo entendido cae en una tarjeta que se mira y se corrige,
-  así que un mal entendido no escribe nada. `cargarVozApi` se llama **al entrar a
-  Dictar**, una vez por sesión (una lectura de dos filas de `obra_config`), no
-  al arrancar.
-- **El Worker: `/api/transcribir` con `modo:'crear_actividad'`** y un
-  `contexto` con las áreas y los nombres de `personal_nombre` de `S.acts` y la
-  fecha de hoy. Transcribe (Whisper, `es`) y en la MISMA llamada arma
-  `{descripcion, area, personal_nombre, fecha_fin, prioridad, notas}`
-  (`armarActividad` en `worker/worker.js`). El modelo solo escoge de las listas,
-  y **el Worker y el app lo vuelven a comprobar**: un área o un nombre que no
-  están en la lista se quedan en vacío. Va dentro de `/api/transcribir` **a
-  propósito**: un Worker viejo contesta `{texto}` y el app interpreta solo
-  (`_dicLocal`: el código del apartamento, «penthouse», el nombre del sitio, el
-  primer nombre de un contratista —si casan dos, ninguno—, hoy / mañana / el
-  día de la semana / la semana que viene, «urgente»).
-- **⚠️ EL WORKER HAY QUE PUBLICARLO A MANO** (`wrangler deploy` en `worker/`):
-  publicar el repo no lo publica. Mientras no se publique, Dictar funciona con
-  la interpretación del app.
-- **La tarjeta**: lo dicho en letra chica («Dijiste: …»), la descripción a
-  teclado, y lo demás con pastillas — **dónde** (nivel → sitio, con `_nivelArea`
-  como las pastillas de la v142), **quién** (primero los que tienen abiertas en
-  ese sitio, con su número; «Otros (N)» abre el resto), **para cuándo** (Hoy ·
-  Mañana · Viernes · Elegir, que abre el calendario del sistema) y **prioridad**
-  (Normal · Urgente). Lo vacío sale **en rojo** al tocar Guardar, y la pantalla
-  sube al primero.
-- **Posible repetida**: abierta, en el mismo sitio y con `Parecido` ≥
-  `FALTA_UMBRAL` (0,72) — más bajo que el 0,90 de `Acciones.validar`, porque
-  aquí se pregunta. «Ya existe en …» con **Crear igual** / **Ir a la
-  existente**; hasta «Crear igual» no se guarda.
-- **Guardar**: Nilson por **`Acciones.crear`** (renglón `creado`, entidad
-  `actividad`), con `fecha_inicio` hoy, el `tipo_personal` por mayoría
-  (`_propTipoDe`) y **`notas: 'Dictado: <lo que dijo>'`**. Un ingeniero por
-  **`Acciones.proponer`** —el botón dice «Proponer a Gerencia»—, que ganó
-  `fecha_inicio`, `fecha_fin`, `prioridad` y `notas` **opcionales**: «Proponer a
-  Gerencia» de la v140 no las manda y sigue igual. El audio no se guarda.
-- **Nunca se queda colgado**: sin micrófono, sin permiso, error de la
-  grabadora (`onerror`), Worker con error o **15 s sin respuesta**
-  (`DIC_ESPERA_MS`, `AbortController`) → la tarjeta se abre igual con lo que
-  haya y **el motivo en una línea**. Vigilante de **8 s** sobre `onstop`, solo
-  como red. «Llenarla a mano» está a la vista mientras se entiende el audio.
-- **iPhone**: `getUserMedia` se llama lo PRIMERO en el toque, sin esperar nada
-  antes — Safari deja de contarlo como gesto si hay una promesa en medio.
-  Salir de la pestaña grabando suelta el micrófono.
-- **Sin señal no se encola**: crear y proponer nunca se encolaron. Se dice y la
-  tarjeta se queda como estaba.
+- **Se quitó entero del app** (`index.html` volvió a lo de la v142 en esa
+  parte), con su sección de la lista de chequeo. `Acciones.proponer` volvió a
+  no aceptar fechas, prioridad ni nota.
+- **El Worker NO se tocó**: está publicado con el modo `crear_actividad` de
+  `/api/transcribir` (`armarActividad` en `worker/worker.js`). Queda dormido —
+  sin `modo`, la puerta contesta `{texto}` como siempre— y no gasta nada si
+  nadie lo llama.
+- **La lección, para cuando vuelva:** en la obra la señal es lo que falla, no
+  el servidor. Un aviso tiene que distinguir «no salió el audio», «el servidor
+  dijo que no» y «el servidor no contestó»; el reloj no puede arrancar antes de
+  que el audio salga del teléfono; y el audio tiene que ir pequeño (mono, 16
+  kHz, opus a 16-24 kbps) o no sale.
+
+### EL APP IBA LENTO (v144) — se midió antes de tocar, y la causa no era la que parecía
+
+El dueño dijo que el app iba lento. **Se midió primero**, con los datos con la
+forma real (1.648 abiertas de 3.198, las 48 columnas con su llenado real,
+medido por SQL) en Chromium a 390, con el procesador frenado a 4× y dos redes:
+«una raya» (400 kbps, 800 ms por petición) y buena (20 Mbps, 60 ms). El
+medidor no está en el repo; los números, sí:
+
+| | v142/v143 | v144 |
+|---|---|---|
+| Primera lista tocable, una raya | **19,6 s** | 18,9 s |
+| Primera lista tocable, buena señal | 2,7 s | 2,0 s |
+| Repintar la Lista de Actividades (1.648 filas, 4×) | **10–23 s** | **2,4–3,3 s** |
+| Refresco de 90 s **sin cambios**, con la Lista delante: pantalla trabada | **7,9–9,6 s** de un tirón | **0,3–0,4 s** |
+| Lo mismo en el iPad (tabla, 1024) | **16,4 s** | 0,5 s |
+| HTML de la Lista | 24,1 MB · 148.000 elementos · 28.000 botones | 7,8 MB · 36.000 · 5.000 |
+
+**Lo que se descarga al arrancar**, medido: el **propio app**, 2,15 MB
+(**611 KB comprimido**), y los datos, ~2 MB de JSON en 12 peticiones, de los que
+**1,95 MB son las actividades abiertas** (SQL, 25-oct). Comprimidos, los datos
+son unos 140-300 KB. **Las completadas NO se bajan** (`estado=neq.completado`,
+desde siempre) y **`obra_cambios` tampoco entera**: 174 filas de 15 días. El
+refresco de 90 s **ya iba por lo que cambió** desde la v125: la asistencia del
+día y unos bytes de `obra_cambios`. Una vez por sesión, al entrar a
+Actividades, se piden la torre (5 columnas de las 3.198) y el avance de la obra
+(2 columnas).
+
+**Dos causas, y ninguna era el volumen de datos:**
+
+1. **En la Lista, PINTAR.** Cada renglón llevaba su pliegue entero escondido
+   —68% del HTML, 76% de los elementos— y el refresco de 90 s repintaba la
+   lista **aunque no hubiera cambiado nada**, y el tablero de Reportes aunque
+   nadie estuviera en Reportes. Arreglado en la v144:
+   - **el pliegue se arma al abrirlo** (`actHTML` lo deja vacío con
+     `data-vacio`, `toggleActDet` lo llena con `_actDetLlenarCaja`, que llama a
+     la MISMA `actHTML`): un solo dueño del pliegue, como pide la v79;
+   - **el refresco solo repinta si cambió algo** —la asistencia o alguna
+     actividad— y solo lo que se ve: la lista si se está en Actividades, el
+     tablero si se está en Reportes (`_renderReportesSiSeVe`, que también usa el
+     arranque).
+   De paso: las miniaturas de fotos de los pliegues cerrados ya no se piden a
+   la red hasta que se abre la fila.
+2. **Con mala señal, BAJAR EL APP.** De los 19,6 s con una raya, **13 s son
+   bajar los 611 KB del propio `index.html`**, y se bajan **en cada apertura**:
+   `sw.js` pide la navegación con `cache:'reload'`, que salta toda caché.
+   **NO SE ARREGLÓ, a propósito: es `sw.js`** (§5), y lo decide el dueño. Lo
+   que lo arreglaría: servir el HTML guardado al instante y bajar el nuevo por
+   detrás (la versión nueva entra en la apertura siguiente).
+
+**Lo que se midió y NO valía la pena:** quitar de la consulta de arranque las
+18 columnas que hoy vienen vacías en todas las abiertas baja el JSON un 30%,
+pero **comprimido solo un 10%** — los `null` repetidos casi no pesan por la
+red—, y es lo que la §5 marca como lo más arriesgado. Pedir las páginas de
+actividades a la vez ahorraría una espera (~0,8 s con una raya), no el
+volumen.
 
 ### TRABADAS Y PROPUESTAS (v139) — lo que pasa en la obra y no es «hecho»
 
@@ -3730,12 +3751,10 @@ mismo:**
   aprueba; Nilson ve el número; aprobar la mete; rechazar escribe el respaldo
   **antes** del `DELETE`; Gerencia cuenta por causa y se abre; sin Kanban ni
   Matriz a 390; y todo con la entidad `actividad`
-- **DICTAR DA LO QUE TIENE QUE DAR** (v143), en su sección de la lista
-  (diecisiete): nada se escribe hasta «Guardar»; Nilson son **1 POST
-  `obra_actividades` sin propuesta + 1 POST `obra_cambios` `creado`/`actividad`**
-  con `notas` «Dictado: …»; Karina, `propuesta=true` y **`S.acts` igual**; un
-  contratista o un área que no están en las listas **no se ponen**; y con el
-  Worker caído o mudo la tarjeta sale igual, a los 15 s como mucho
+- **LA LISTA NO SE REPINTA DE BALDE NI ARMA LO QUE NO SE VE** (v144), en su
+  sección de la lista: pliegue cerrado vacío y lleno al tocarlo; mismas filas;
+  refresco sin cambios **no repinta**, con cambios sí; Reportes **cero** veces
+  con la pestaña cerrada. Contra la v143 fallan tres de seis, a propósito
 - **LAS PASTILLAS TRAEN TODAS LAS UBICACIONES, POR NIVEL, Y TODOS LOS
   CONTRATISTAS** (v141, v142), comprobado en la sección de la cabecera: tantas
   pastillas de ubicación como áreas con algo abierto, cada una debajo del
@@ -4129,6 +4148,7 @@ pertenece a ningún nivel.
 | **v131** — el croquis se veía chiquito y nadie sabía por qué: `width="100%"` con un `height` FIJO y un viewBox de 200×92 hace que el navegador lo encaje en **200px de ancho** y deje el resto de la tarjeta en blanco. Llevaba así desde la v129. | Un `<svg>` con `viewBox` y `width:100%` necesita **`height:auto`**, no un número: con los dos puestos manda el que deja la caja más chica y el dibujo se encoge en silencio. Se ve midiendo el `getBoundingClientRect` del svg contra el de la tarjeta, no mirándolo. |
 | **v130** — la marca iba a ser un sí/no. Un renglón como `LAVA-02` son **cinco** lavamanos: con una casilla, el ingeniero identifica uno y el app habría apuntado cinco. Y el contador iba a decir 68, que son RENGLONES — las piezas son **108**, y contar `B6-07` y `B345-08` además de sus mitades `-A`/`-B` lo habría subido a 112, con el 100% inalcanzable para siempre. | **Antes de poner un contador, pregunta qué cuenta una fila.** Aquí una fila son de 1 a 9 piezas, así que la unidad del marcador y la unidad de la marca tienen que ser la misma o el número miente desde el primer día. Lo cazó el dueño leyendo el array, no el código. |
 | **v129** — la caja de buscar del catálogo de topes decía de ejemplo «B6, **lavamanos**, 1778…» y esa palabra **no está en nada de lo que se busca**: el grupo se llama `LAV-A` y el ambiente `Baño`. Escribir el ejemplo que el propio campo sugiere contestaba «Nada con ese texto». | Un `placeholder` es una promesa. **Prueba los ejemplos que escribes**: los tres de ahora devuelven 14, 9 y 1 renglones. Un buscador que falla con su propia sugerencia es el que nadie vuelve a usar. |
+| **v144** — «el app va lento» llegó con cuatro sospechas: bajar las completadas, la fila entera de 45 columnas, el refresco de 90 s bajándolo todo y `obra_cambios` entera. **Medido, ninguna era la causa**: las completadas no se bajan, el refresco ya iba por delta desde la v125, `obra_cambios` son 174 filas, y quitar columnas ahorra un 10% comprimido. Las causas eran **pintar 24 MB de HTML** en la Lista —y volver a pintarlos cada 90 s sin que nada cambiara— y **bajar el propio app** en cada apertura. | **Mide antes de arreglar, y mide el TIEMPO, no solo los bytes**: el volumen de datos era la sospecha natural después del 21-sep y no era. Y mide **comprimido**: lo que cruza la red no es lo que pesa el JSON. Lo mismo con Dictar en la v143: el aviso culpó al servidor y el servidor contestaba en 1 s. |
 
 **El patrón de todos los bugs graves:** las pruebas pasaron y el app se
 cayó igual. **Lo que los cazó fue abrir el app publicado con la base
@@ -4183,16 +4203,13 @@ formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
 
-**Desde la v143 tiene una sexta parte, «DICTAR»**: lanza su propio Chromium con
-el **micrófono falso** (`--use-fake-device-for-media-stream`) y contesta como un
-**Worker de mentira** en la ruta (`https://voz.prueba.invalid`, también la
-`voz_api_url` que da el doble de `obra_config`). Diecisiete comprobaciones: la
-pestaña, grabar/parar/tarjeta, lo que va al Worker, la tarjeta llena, cero
-escrituras sin confirmar, el payload de Nilson (directa, `Dictado:`,
-`creado`/`actividad`, dos escrituras), sin contratista en rojo, área inventada,
-Worker viejo, con error y mudo (15 s), el aviso de repetida, y Karina por el
-Modo Campo proponiendo sin contar. **Lo que dice Whisper de verdad no se prueba
-aquí.**
+**Desde la v144 tiene una sexta parte, «VELOCIDAD»** (la de «DICTAR» de la
+v143 se fue con Dictar): a 390, en la Lista de Actividades, comprueba que el
+pliegue de una fila cerrada nace vacío y se llena al tocarla, que la lista
+enseña las mismas actividades que `S.acts` filtrado, que un refresco sin
+cambios **no repinta** y uno con cambios sí, que Reportes no se pinta a
+escondidas y que nada escribe. Y el renglón `renglones` del comparador abre las
+ocho primeras filas antes de compararlas: cerradas ya no llevan el pliegue.
 
 **Desde la v139 tiene una quinta parte, «TRABADAS Y PROPUESTAS»**: entra como
 Karina —que cae en el Modo Campo—, traba dos, destraba una, propone otra y
@@ -4459,11 +4476,6 @@ hecha» sí. No es una regresión del renombrado; viene de antes.
 `Comandos` y sus patrones, `_cmdVoz`, `_cmdGrabar`, `_cmdAnalizar`,
 `dictarSobre` y `cargarVozApi`. Lo que hay son **diez guardias**, todas la
 misma línea.
-
-**Desde la v143, «Dictar» usa este motor con la bandera en `false`** (ver
-«DICTAR» en §3.5): crea UNA actividad a través de una tarjeta que se confirma,
-así que no le tocan los tres problemas de abajo, que son de ejecutar órdenes.
-La bandera sigue apagando todo lo de esta lista.
 
 **Qué apaga:** el botón de la cabecera (`#btn-cmd`, se oculta en el arranque
 porque es HTML fijo), la tecla `C`, `abrirComando()`, `#cmd-mic`,
