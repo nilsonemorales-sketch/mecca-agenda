@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v139 — 25 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v140 — 25 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -255,7 +255,7 @@ mismos botones que cualquier otra.
 | **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
 | **LO QUE VE UN INGENIERO al poner su PIN (Moisés, Karina)** | **El Modo Campo** — `debeAbrirCampo()`, `iniciarModoCampo()`, `renderCampo()`, `campoMarcar()`. Pantalla aparte, en cualquier aparato, para todo rol `ing`. **No estaba en este mapa hasta la v139.** Ver «El Modo Campo» abajo |
 | **Dejar dicho que una partida NO se puede hacer todavía, y por qué** | **Modo Campo → «Trabada»** y **Modo Obra → el cuarto botón** (v139) — `moTrabaAbrir()`, `moTrabar()`, `Acciones.trabar()` / `destrabar()`, `TRABA_CAUSAS`. Ver «Trabadas y propuestas» abajo |
-| **Proponer una partida que no estaba en la lista** | **Modo Campo → «Falta una aquí · proponer a Gerencia»** (`campoProponer()`) y **Modo Obra → un contratista abierto → «+ Falta una aquí»** (v139) — `_propFormHTML()`, `propEnviar()`, `Acciones.proponer()`. Entra como propuesta y no cuenta hasta que Gerencia la aprueba |
+| **Proponer una partida que no estaba en la lista** | **Modo Campo → «Proponer a Gerencia»** (`campoProponer()`) y **Modo Obra → un contratista abierto → «+ Proponer a Gerencia»** (v139, renombrado en la v140: `PAL_PROPONER`) — `_propFormHTML()`, `propEnviar()`, `Acciones.proponer()`. Entra como propuesta y no cuenta hasta que Gerencia la aprueba |
 | **Aprobar o rechazar lo que proponen los ingenieros, y ver las trabadas por causa** | **Gerencia, arriba** (v139) — `_gerPropuestasHTML()`, `_gerTrabadasHTML()`, `propAprobar()`, `propRechazar()`. El número va en la puerta de Gerencia (`_propBadge`) |
 | **Esconder la cabecera de Actividades para ver más lista** | **El botón de plegar de la cabecera de arriba** (v138) — `actCabToggle()`, `_actCabAplicar()`. Solo una clase en el `<body>` (`act-plegada`); lo que se pliega lleva `.act-cab`. Ver «La cabecera se pliega» abajo |
 | **CAMINAR un apartamento y marcar lo hecho** | **Modo Obra** (v136 «Recorrido», v137 con sus botones) — el cajón y la barra lateral. Es el panel del apartamento (`_recPanelApto`) con la lista de ambientes, el buscador y «Seguir donde estaba» delante (`abrirRecorrido`, `_recAmbientesHTML`). Cada renglón (`_moLineaHTML`): ✓ Completada · Avanzó 25/50/75 · Sin cambios (`moMarcar`), y «Guardar el recorrido» (`recGuardar`). Ver «El Modo Obra» abajo |
@@ -2995,9 +2995,11 @@ cambios»**: no se pidió.
   ámbar «Trabada: Falta material — cemento · hace 3 días · Karina».
   `Acciones.destrabar` la devuelve a como iba —con avance, en progreso; sin,
   pendiente— y deja en el historial de qué estaba trabada y cuántos días.
-- **`_coherencia` limpia la causa, la fecha y quién al salir de `pausada` por
-  CUALQUIER camino** (Completada, el Kanban, el formulario): si no, Gerencia
-  seguiría contando como trabada algo que ya se mueve.
+  **Desde la v140 no borra nada de la fila**: solo cambia el estado.
+- ~~`_coherencia` limpia la causa, la fecha y quién al salir de `pausada`~~ —
+  **así fue en la v139 y el dueño lo revirtió en la v140**: el rastro se queda
+  siempre, y trabada hoy es `estado='pausada'`. Ver «Lo que decidió el dueño
+  después».
 - **`pausada` no se pierde ni se cuela**: la carga es `estado=neq.completado`,
   así que sigue en `S.acts`, en las listas y en el conteo de abiertas del sitio.
 
@@ -3036,6 +3038,39 @@ cambios»**: no se pidió.
   cuándo, para quién, dónde) se manda y **se espera** antes del `DELETE`, que
   lleva además `propuesta=is.true` — no puede borrar una actividad de verdad.
   Si el respaldo no sale, no se borra.
+
+#### LO QUE DECIDIÓ EL DUEÑO DESPUÉS (v140)
+
+Las tres cosas que la v139 dejó para él:
+
+1. **«Proponer a Gerencia»** (`PAL_PROPONER`) es el nombre del botón de
+   proponer, en el Modo Campo y en el Modo Obra, con una línea debajo: «No entra
+   a la obra hasta que Gerencia la apruebe». **«Falta una aquí» se queda solo
+   para el alta de Revisión**, que crea directo. Un nombre para dos cosas
+   enseña lo contrario la segunda vez.
+2. **El Modo Campo tiene «Sin cambios»**, y sus botones son los cuatro del Modo
+   Obra con las mismas palabras: **✓ Completada · Avanzó · Sin cambios ·
+   Trabada**, de dos en dos (cuatro en una fila de 326 px cortan «✓
+   Completada»). «Avanzó» (`PAL_AVANZO`) abre 25 · 50 · 75 debajo, así que el
+   avance pasó de un toque a dos — es el precio de que los dos modos se lean
+   igual. «Sin cambios» guarda al momento por `Acciones.revisarEnObra`: solo
+   `revisado_fecha` y `revisado_por`, y un renglón `revisado`.
+3. **EL RASTRO DE LA TRABA NO SE BORRA NUNCA.** `_coherencia` ya no vacía
+   `estancada_motivo` ni nada de la traba al salir de `pausada`, y
+   `Acciones.destrabar` solo cambia el estado. Destrabar, mover el % o completar
+   deja la causa, el motivo, la fecha y quién en la fila. **Trabada HOY es
+   `estado='pausada'`**, y eso es lo único que cuentan Gerencia y las tarjetas.
+   Si se vuelve a trabar por otra causa, la fila queda con la nueva y **el
+   renglón `trabada` del historial dice la anterior** («antes: Falta material —
+   … (desde …, quién)»).
+
+**El panel viejo de «estancadas» se retiró entero** (`_EST_MOTIVOS`,
+`_estMotMap`, `estancSetMotivo`): escribía `estancada_motivo` con un `PATCH`
+directo, sin `Acciones` ni renglón, y **no lo llamaba ninguna pantalla**. Las 20
+filas que dejó escritas —todas del Penthouse B, «Espera el piso (Yelson) y el
+cierre de techos de sheetrock (Secre)», vencidas desde que se cerraron los techos
+el 25-oct— **no se tocaron desde el código**: las revisa el dueño por
+contratista. Como no están en `pausada`, no salen como trabadas en ningún sitio.
 
 #### Gerencia: trabadas por causa
 
@@ -3600,8 +3635,14 @@ mismo:**
   `tpMarcar` o `tpMarcarGrupo`: cero escrituras intentadas
 - **LA LISTA DE CHEQUEO DA TODO IGUAL** (v134): `node lista-chequeo.mjs`
   contra lo publicado, **cero DISTINTO** o el porqué en el commit
-- **TRABADAS Y PROPUESTAS DAN LO QUE TIENEN QUE DAR** (v139), en su sección de
-  la lista (dieciocho comprobaciones, como Karina **por el Modo Campo** y como
+- **TRABADAS Y PROPUESTAS DAN LO QUE TIENEN QUE DAR** (v139, v140), en su
+  sección de la lista (veinticuatro comprobaciones desde la v140: los cuatro
+  botones del Modo Campo con sus nombres exactos; «Sin cambios» del Modo Campo
+  escribe solo la revisión y un renglón; el rastro de la traba **sigue en la
+  fila** al destrabar y al completar; trabar otra vez deja la nueva y el renglón
+  dice la anterior; «Proponer a Gerencia» en los dos modos y «Falta una aquí»
+  solo en Revisión; y el panel viejo de estancadas ya no existe. Antes eran
+  dieciocho, como Karina **por el Modo Campo** y como
   Nilson por el Modo Obra y Gerencia, a 390): el Modo Campo dice «✓ Completada»
   y «Trabada» con 25·50·75 y ni «Terminada» ni «No se pudo» ni 90%; cuatro
   botones de 48px sin cortarse en el Modo Obra; «Otro» sin texto no escribe; trabar escribe
@@ -3990,6 +4031,7 @@ pertenece a ningún nivel.
 | **v136** — el pedido traía una pantalla «Recorrido» nueva que ya existía casi entera: el panel del apartamento, por contratista, plegado, con abiertas y vencidas, al que se llegaba tocando la torre. Y pedía a la vez «una sola escritura» y «el mismo camino del botón de completar», que no caben juntos. | **Antes de construir, busca la pantalla en el mapa** —es la regla de la §3.5 y la lección de «Hoy»—: aquí bastaba con ampliarla. Y cuando dos condiciones del pedido se excluyen, **se dice cuál choca con cuál y decide el dueño**; no se escoge una en silencio. |
 | **v136** — la lista de chequeo dio DISTINTO en `vistas.lista` por 14 caracteres, siempre con los mismos dos valores y siempre en la versión que corría PRIMERO, con el navegador recién abierto. La v135 contra sí misma dio igual dos veces. | Era la prueba: medía la Lista antes de que llegara lo que el arranque pide aparte. Ahora espera a que la red se calme antes de medir. **Una prueba intermitente no vale nada** (v84): o se arregla o se borra, y nunca se publica «porque a la segunda dio igual». |
 | **v139** — el pedido daba por hecho que Moisés y Karina usan el Modo Obra, y se construyó ahí entero. Al probar entrando como Karina no había menú: un ingeniero cae en el **Modo Campo**, una pantalla que no estaba en el mapa de la §3.5. Todo lo construido habría quedado donde ellos no entran. | **Prueba entrando COMO EL USUARIO del pedido, no como el dueño**: el rol cambia la pantalla de entrada. Y cuando una pantalla no está en el mapa, añádela: el mapa es lo que se lee antes de construir. |
+| **v140** — la v139 vaciaba la causa y el motivo de la traba al salir de `pausada`, «para que Gerencia no contara como trabada algo que ya se mueve». Con eso se borraba justo el dato que se venía a recoger: por qué estuvo parada. Y había una segunda puerta escribiendo la misma columna sin `Acciones` (el panel viejo de estancadas) que nadie llamaba. | **Lo que dice si algo está así AHORA es el estado, no que la columna esté vacía.** Borrar un dato para que un contador no lo cuente es tirar historia para arreglar una consulta: cuenta por el estado y deja el dato. Y antes de dar por buena una columna, busca **todas** las puertas que la escriben. |
 | **v139** — la prueba dijo que Karina no veía «Tus propuestas esperando», y sí la veía: el título va en mayúsculas por `text-transform` y la prueba buscaba con minúsculas. | Es «3 MARCADAS» de la v119 otra vez. **Busca sin distinguir mayúsculas** (`/…/i`) todo texto que pueda llevar `text-transform`. |
 | **v138** — el botón de plegar se puso en la cabecera y a 390 cortó el título en «Mecca Res…»: la cabecera del teléfono ya iba justa con cuatro botones, y el título es lo único que el dueño pidió que se quedara. | **Un botón más en una fila llena se cobra lo de al lado.** Mide el texto vecino (`scrollWidth > clientWidth`) a 390 antes y después; aquí se fue el logo, solo en Actividades y solo en el teléfono, y el título volvió entero. |
 | **v137** — el pedido del «Modo Obra» era la TERCERA pantalla para lo mismo (Obra, Recorrido), pedía que «Sin cambios» no dejara renglón y que el historial fuera con entidad `obra_actividades`. Las dos cosas habrían hecho que el teléfono de al lado no se enterara. Y los botones de 48px salían de 44: la regla `button:not(…):not(…):not(…)` de la línea ~100 pesa más que una clase sola. | Cuando el pedido trae el diseño del dato, **mira quién lee ese dato antes de escribirlo así** — aquí el refresco por delta y los contadores. Y si un tamaño no sale, **mira el peso de las reglas**, no solo el valor: colgarlo de un id (`#hoja-rec .mo-b`) lo arregló. |

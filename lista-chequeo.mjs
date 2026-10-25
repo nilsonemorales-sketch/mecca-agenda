@@ -589,13 +589,19 @@ async function probarRecorrido(nombreVer, html, b){
 /* Por DONDE ENTRAN: un ingeniero cae en el Modo Campo al poner su PIN, así que
    Karina se prueba ahí; el Modo Obra y la bandeja, como Nilson. */
 const TRA_ESPERADO={
-  campoBotones:{v:'Completada · Trabada · 25 50 75', d:'Modo Campo: cada tarjeta dice «✓ Completada» y «Trabada», avance 25·50·75; ni «Terminada», ni «No se pudo», ni 90%'},
+  campoBotones:{v:'✓ Completada · Avanzó · Sin cambios · Trabada', d:'Modo Campo (v140): los cuatro del Modo Obra con sus nombres exactos, de 44px o más y sin cortarse a 390; ni «Terminada», ni «No se pudo», ni 90%'},
+  campoAvanzo:{v:'25 50 75', d:'Modo Campo: «Avanzó» abre 25 · 50 · 75'},
+  campoIgual:{v:'revisada HOY·Ing. Karina Breton·pct igual·estado igual·1 revisado', d:'Modo Campo: «Sin cambios» escribe revisado_fecha y revisado_por, deja UN renglón y no toca % ni estado'},
   otroSinTexto:{v:'no escribe', d:'«Otro» sin escribir el motivo no guarda nada: lo pide'},
   trabaMaterial:{v:'pausada·material·HOY·Ing. Karina Breton·pct igual·1 trabada', d:'Trabada por «Falta material» (Modo Campo): pausada, causa, hoy, quién, el % sin tocar y UN renglón'},
   trabaOtro:{v:'otro·llueve en el patio', d:'Trabada por «Otro» con detalle: el detalle queda en estancada_motivo'},
   trabadaSigue:{v:'en la lista · no completada · Destrabar a la vista', d:'una trabada sigue en S.acts, no cuenta como completada y su tarjeta ofrece «Destrabar»'},
-  destrabar:{v:'vuelve·sin causa·1 destrabada', d:'Destrabar la devuelve a como iba (pendiente o en progreso), limpia la causa y deja su renglón'},
-  propone:{v:'propuesta·Ing. Karina Breton·HOY·pendiente·0', d:'«Falta una aquí» guarda propuesta=true, quién, hoy, pendiente al 0%'},
+  destrabar:{v:'vuelve·rastro entero·1 destrabada', d:'Destrabar la devuelve a como iba y deja su renglón; el motivo, la causa, la fecha y quién SIGUEN en la fila (v140)'},
+  retrabar:{v:'contratista·el renglón dice la anterior', d:'trabar otra vez por otra causa deja la nueva, y el renglón del historial dice la anterior'},
+  trabaCompletar:{v:'completado·otro_taller·cemento gris·rastro entero', d:'trabar y luego completar: el rastro de la traba sigue en la fila'},
+  propone:{v:'propuesta·Ing. Karina Breton·HOY·pendiente·0', d:'«Proponer a Gerencia» guarda propuesta=true, quién, hoy, pendiente al 0%'},
+  nombres:{v:'Proponer a Gerencia ×2 · dice que no entra · Revisión sigue «Falta una aquí»', d:'el botón de proponer se llama «Proponer a Gerencia» en el Modo Campo y en el Modo Obra y dice que no entra hasta que se apruebe; el alta de Revisión sigue «Falta una aquí»'},
+  panelViejo:{v:'retirado', d:'el panel viejo de «estancadas» (estancSetMotivo) ya no existe: nadie más escribe estancada_motivo por fuera'},
   noCuenta:{v:'S.acts igual · se ve como suya', d:'la propuesta NO entra a S.acts, y Karina la ve en «Tus propuestas esperando»'},
   ingSinBandeja:{v:'sin bandeja · no aprueba', d:'Karina no tiene puerta a Gerencia ni puede aprobar llamando a la función'},
   obraCuatro:{v:true, d:'Modo Obra: cada renglón lleva ✓ Completada · Avanzó · Sin cambios · Trabada, de 48px y sin cortarse'},
@@ -665,11 +671,21 @@ async function probarTrabas(nombreVer, html, b){
     const card=id=>p.locator('#campo-root .cp-card#cp-'+id);
     r.campoBotones=await G(()=>{ const cs=[...document.querySelectorAll('#campo-root .cp-card')]; if(!cs.length) return 'sin Modo Campo';
       const t=document.getElementById('campo-root').innerText;
-      const okC=cs.every(c=>/✓ Completada/.test(c.innerText)&&/Trabada|Destrabar/.test(c.innerText)&&c.querySelectorAll('.cp-pcts button').length===3);
       if(/Terminada|No se pudo|90%/.test(t)) return 'quedan palabras viejas';
-      return okC?'Completada · Trabada · 25 50 75':'faltan botones'; });
+      let nombres=null, mal=0;
+      cs.forEach(c=>{ const bs=[...c.querySelectorAll('.cp-btns button')]; const n=bs.map(b=>b.textContent.trim()).join(' · ');
+        if(nombres===null) nombres=n; else if(n!==nombres && !/Destrabar/.test(n)) mal++;
+        bs.forEach(b=>{ const rg=document.createRange(); rg.selectNodeContents(b); if(b.getBoundingClientRect().height<44 || rg.getBoundingClientRect().width>b.clientWidth+0.5) mal++; }); });
+      return mal?('mal en '+mal+' · '+nombres):nombres; });
     const ids=await G(()=>[...document.querySelectorAll('#campo-root .cp-card')].filter(c=>/Trabada/.test(c.innerText)).map(c=>c.id.slice(3)));
-    const [i0,i1]=ids; const pct0=String(ac(i0).porcentaje);
+    const [i0,i1,i2,i3]=ids; const pct0=String(ac(i0).porcentaje);
+    await card(i2).locator('.cp-av').click(); await p.waitForTimeout(200);
+    r.campoAvanzo=await G(id=>[...document.querySelectorAll('#cp-'+id+' .cp-pcts button')].map(b=>b.textContent.replace('%','')).join(' '),i2);
+    { const antes=JSON.parse(JSON.stringify(ac(i2)));
+      await card(i2).locator('.cp-ig').click(); await p.waitForTimeout(500);
+      const x=ac(i2), c=camb(i2,'revisado');
+      r.campoIgual=(x.revisado_fecha===HOY?'revisada HOY':'sin revisar')+'·'+x.revisado_por+'·'+(String(x.porcentaje)===String(antes.porcentaje)?'pct igual':'pct CAMBIÓ')+'·'+
+        (x.estado===antes.estado?'estado igual':'estado CAMBIÓ')+'·'+camb(i2).length+' '+(c[0]?'revisado':'?'); }
     await card(i0).locator('.cp-tr').click(); await p.waitForTimeout(200);
     await card(i0).locator('.cp-trab-g button',{hasText:'Falta material'}).click(); await p.waitForTimeout(500);
     { const x=ac(i0), c=camb(i0,'trabada');
@@ -687,8 +703,21 @@ async function probarTrabas(nombreVer, html, b){
       r.trabadaSigue=(st[0]?'en la lista':'FUERA de la lista')+' · '+(st[1]?'no completada':'COMPLETADA')+' · '+(st[2]?'Destrabar a la vista':'sin Destrabar'); }
     await card(i0).locator('.cp-tr',{hasText:'Destrabar'}).click(); await p.waitForTimeout(500);
     { const x=ac(i0), esp=(parseInt(pct0,10)>0?'en-progreso':'pendiente');
-      r.destrabar=(x.estado===esp?'vuelve':'estado '+x.estado)+'·'+(!x.estancada_causa&&!x.estancada_fecha?'sin causa':'con causa')+'·'+camb(i0,'destrabada').length+' destrabada'; }
+      const entero=x.estancada_causa==='material'&&x.estancada_fecha===HOY&&x.estancada_por==='Ing. Karina Breton';
+      r.destrabar=(x.estado===esp?'vuelve':'estado '+x.estado)+'·'+(entero?'rastro entero':'rastro BORRADO '+JSON.stringify([x.estancada_causa,x.estancada_fecha,x.estancada_por]))+'·'+camb(i0,'destrabada').length+' destrabada'; }
+    // trabar otra vez, por otra causa
+    await card(i0).locator('.cp-tr').click(); await p.waitForTimeout(200);
+    await card(i0).locator('.cp-trab-g button',{hasText:'El contratista no vino'}).click(); await p.waitForTimeout(500);
+    { const x=ac(i0), ult=camb(i0,'trabada').slice(-1)[0]||{};
+      r.retrabar=x.estancada_causa+'·'+(/antes: Falta material/.test(ult.detalle||'')?'el renglón dice la anterior':'el renglón NO dice la anterior: '+(ult.detalle||'')); }
+    // trabar y completar: el rastro se queda
+    await card(i3).locator('.cp-tr').click(); await p.waitForTimeout(200);
+    await card(i3).locator('.cp-trab input').fill('cemento gris');
+    await card(i3).locator('.cp-trab-g button',{hasText:'Espera otro taller'}).click(); await p.waitForTimeout(500);
+    await card(i3).locator('.cp-ok').click(); await p.waitForTimeout(500);
+    { const x=ac(i3); r.trabaCompletar=x.estado+'·'+x.estancada_causa+'·'+x.estancada_motivo+'·'+(x.estancada_fecha===HOY&&x.estancada_por?'rastro entero':'rastro BORRADO'); }
     const nActs=await G(()=>S.acts.length);
+    const nomCampo=await G(()=>{ const b=document.querySelector('#campo-root .cp-falta'); return b?b.innerText.replace(/\s+/g,' ').trim():''; });
     await p.locator('#campo-root .cp-falta').click(); await p.waitForTimeout(300);
     await p.locator('#cpp-desc').fill('Resanar el hueco del registro');
     await p.locator('#cpp-area').selectOption(AREA);
@@ -726,6 +755,12 @@ async function probarTrabas(nombreVer, html, b){
       return l.every(x=>{ const bs=[...x.querySelector('.mo-bts').querySelectorAll('.mo-b')];
         return bs.length===4 && bs.every(b2=>{ const rg=document.createRange(); rg.selectNodeContents(b2); return b2.getBoundingClientRect().height>=48 && rg.getBoundingClientRect().width<=b2.clientWidth+0.5; }) &&
           /Completada/.test(bs[0].textContent)&&/Avanzó/.test(bs[1].textContent)&&/Sin cambios/.test(bs[2].textContent)&&/Trabada|Destrabar/.test(bs[3].textContent); }); });
+    { const nomObra=await G(()=>{ const b=document.querySelector('#rec-cuerpo .mo-falta'); return b?b.innerText.replace(/\s+/g,' ').trim():''; });
+      const rev=await G(()=>typeof revPartidaAbierta==='function'&&String(revPartidaAbierta).indexOf('+ Falta una aquí</button>')>=0&&typeof revAltaPantalla==='function'&&String(revAltaPantalla).indexOf('>Falta una aquí<')>=0);
+      const n=[nomCampo,nomObra].filter(t=>/^\+? ?Proponer a Gerencia/.test(t)).length;
+      const dice=[nomCampo,nomObra].every(t=>/No entra a la obra hasta que Gerencia la apruebe/.test(t));
+      r.nombres='Proponer a Gerencia ×'+n+' · '+(dice?'dice que no entra':'NO dice que no entra')+' · '+(rev?'Revisión sigue «Falta una aquí»':'Revisión CAMBIÓ');
+      r.panelViejo=await G(()=>(typeof estancSetMotivo==='undefined'&&typeof _EST_MOTIVOS==='undefined')?'retirado':'sigue ahí'); }
     const io=await G(()=>{ const x=[...document.querySelectorAll('#rec-cuerpo .mo-lin')].find(l=>/Trabada/.test(l.querySelector('.mo-bts').innerText)); return x?(x.querySelector('.mo-b.ok').getAttribute('onclick').match(/moMarcar\('([^']+)'/)||[])[1]:null; });
     const lin=id=>p.locator('#rec-cuerpo .mo-lin',{has:p.locator(`[onclick="moMarcar('${id}','hecha')"]`)});
     await lin(io).locator('.mo-b.tr').click(); await p.waitForTimeout(200);

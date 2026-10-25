@@ -185,6 +185,10 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .cp-no{background:var(--bg3);color:var(--text2);border:1.5px solid var(--border2)!important}
 /* v139 · Trabada en el Modo Campo */
 .cp-tr{color:#b45309!important;border-color:#d97706!important}
+/* v140 · los cuatro botones de la tarjeta, de dos en dos */
+.cp-btns.cp-btns4{grid-template-columns:1fr 1fr}
+.cp-av.on{background:var(--accent-fill)!important;color:#fff!important;border-color:var(--accent-fill)!important}
+.cp-falta span,.mo-falta-s{display:block;font-size:12px;font-weight:600;opacity:.85;margin-top:2px}
 .cp-trab-t{font-size:13px;font-weight:700;color:#b45309;margin-top:8px}
 .cp-card.cp-trab{border:1.5px dashed #d97706;background:var(--amber-light)}
 .cp-trab{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border2)}
@@ -1129,7 +1133,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261025_139';
+const APP_VERSION='20261025_140';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1156,6 +1160,10 @@ var PAL_SIN_CAMBIOS='Sin cambios';
    cuenta en Gerencia; el texto es solo lo que se lee. No cambies una clave:
    las trabas ya guardadas dejarían de contarse. */
 var PAL_TRABADA='Trabada';
+/* v140 · Proponer una partida para que Gerencia la apruebe. NO es «Falta una
+   aquí», que es el alta de Revisión y crea directo (decisión del dueño). */
+var PAL_PROPONER='Proponer a Gerencia';
+var PAL_AVANZO='Avanzó';
 var TRABA_CAUSAS={material:'Falta material', otro_taller:'Espera otro taller',
   gerencia:'Espera decisión de gerencia', contratista:'El contratista no vino', otro:'Otro'};
 var TRABA_ORDEN=['material','otro_taller','gerencia','contratista','otro'];
@@ -3257,29 +3265,13 @@ function _matchIngId(ingeniero_id,uid_){ return !uid_ || _ingIds(ingeniero_id).i
 function _ingPrimero(a){ return _ingenieros(a&&a.ingeniero_nombre)[0]||''; }
 function _ingIdsFromNombres(str){return _ingenieros(str).map(function(nm){var e=Object.entries(USERS).find(function(x){return x[1].nombre===nm;});return e?e[0]:'';}).filter(Boolean).join(',');}
 
-// ══════════════════════════════════════════════════════════════
-// ACTIVIDADES ESTANCADAS (en-progreso sin cambios en 3+ días)
-// ══════════════════════════════════════════════════════════════
-// Calcula estancadas: en-progreso cuyo último cambio (obra_cambios) es > 3 días.
-var _EST_MOTIVOS=[
-  {k:'sin-actualizar',ic:'📵',short:'Sin actualizar',lbl:'Sin actualizar — el ing. debe registrar',color:'var(--blue)',bg:'var(--blue-light)'},
-  {k:'falta-material',ic:'🧱',short:'Falta material',lbl:'Falta material',color:'#b45309',bg:'var(--amber-light)'},
-  {k:'falta-personal',ic:'👷',short:'Falta personal',lbl:'Falta contratista/personal',color:'#b45309',bg:'var(--amber-light)'},
-  {k:'bloqueada',ic:'⛓',short:'Bloqueada',lbl:'Bloqueada por otra tarea',color:'var(--red)',bg:'var(--red-light)'},
-  {k:'decision',ic:'🤔',short:'En espera',lbl:'En espera de decisión',color:'#b45309',bg:'var(--amber-light)'},
-  {k:'otro',ic:'📝',short:'Otro',lbl:'Otro motivo',color:'#6b7280',bg:'#f9fafb'}
-];
-function _estMotMap(){var m={};_EST_MOTIVOS.forEach(function(x){m[x.k]=x;});return m;}
-async function estancSetMotivo(id,motivo){
-  if(!canEdit())return;
-  var a=(S.acts||[]).find(function(x){return x.id===id;});
-  var e=(S.estancadas||[]).find(function(x){return x.id===id;});
-  if(e) e.motivo=motivo;
-  if(a) a.estancada_motivo=motivo;
-  try{
-    await sb('obra_actividades?id=eq.'+id,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({estancada_motivo:motivo})});
-  }catch(err){showToast('Error: '+err.message,'err');}
-}
+/* v140 · Aquí vivía el panel viejo de «estancadas» (`_EST_MOTIVOS`,
+   `_estMotMap`, `estancSetMotivo`). Escribía `estancada_motivo` con un PATCH
+   directo, sin `Acciones` y sin dejar renglón, y ya no lo llamaba ninguna
+   pantalla: era una segunda puerta a la columna que ahora guarda la causa de
+   las trabadas. Se retiró entero (la regla de la v113: una función que no llama
+   nadie no se esconde, se borra). Lo que escribió —20 filas del Penthouse B—
+   se queda en la base; lo revisa el dueño. */
 
 // ══════════════════════════════════════════════════════════════
 // HOY: Planificadas para hoy · pendientes de marcar
@@ -4784,7 +4776,7 @@ function _moLineaHTML(a,conArea){
     '</div>'+
     '<div class="mo-bts">'+
       '<button class="mo-b ok'+(t==='hecha'?' on':'')+'" onclick="moMarcar(\''+sid+'\',\'hecha\')">✓ '+PAL_COMPLETADA+'</button>'+
-      '<button class="mo-b av'+(t==='avance'?' on':'')+'" onclick="moAvanzo(\''+sid+'\')">'+(t==='avance'?'Avanzó '+m.p+'%':'Avanzó')+'</button>'+
+      '<button class="mo-b av'+(t==='avance'?' on':'')+'" onclick="moAvanzo(\''+sid+'\')">'+(t==='avance'?PAL_AVANZO+' '+m.p+'%':PAL_AVANZO)+'</button>'+
       '<button class="mo-b ig'+(t==='igual'?' on':'')+'" onclick="moMarcar(\''+sid+'\',\'igual\')">'+PAL_SIN_CAMBIOS+'</button>'+
       /* v139 · El cuarto: «Trabada». Si ya lo está, el mismo sitio dice
          «Destrabar»: soltarla importa tanto como trabarla. */
@@ -4996,12 +4988,16 @@ function _propFormHTML(g){
   if(!canEdit()) return '';
   var R=S.recorrido||{}, qj=JSON.stringify(g.q).replace(/"/g,'&quot;');
   if(!(R.prop && R.prop.q===g.q))
-    return '<button class="mo-falta" onclick="propAbrir('+qj+')">+ Falta una aquí</button>';
+    /* v140 · «Proponer a Gerencia», no «Falta una aquí»: ése es el alta de
+       Revisión, que crea directo. Mismo nombre para dos cosas distintas enseña
+       lo contrario la segunda vez. Y la línea de abajo dice qué va a pasar. */
+    return '<button class="mo-falta" onclick="propAbrir('+qj+')">+ '+PAL_PROPONER+
+      '<span class="mo-falta-s">No entra a la obra hasta que Gerencia la apruebe</span></button>';
   var quienes=_recGrupos(R.area).map(function(x){ return x.q; });
   if(quienes.indexOf('Sin asignar')<0) quienes.push('Sin asignar');
   var sel=R.prop.quien||g.q;
   return '<div class="mo-prop" style="border-color:var(--accent)">'+
-    '<div class="mo-prop-t" style="margin-bottom:6px">Falta una aquí · '+esc(_recNom(R.area)||R.area||PAL_SIN_UBIC)+'</div>'+
+    '<div class="mo-prop-t" style="margin-bottom:6px">'+PAL_PROPONER+' · '+esc(_recNom(R.area)||R.area||PAL_SIN_UBIC)+'</div>'+
     '<div class="mo-nota" style="margin:0 0 4px">¿Qué es lo que falta?</div>'+
     '<input id="prop-desc" type="text" class="mo-q" maxlength="200" autocomplete="off" placeholder="Ej.: resanar el hueco del registro del baño" '+
       'value="'+esc(R.prop.desc||'')+'" oninput="if(S.recorrido&&S.recorrido.prop)S.recorrido.prop.desc=this.value">'+
@@ -10015,18 +10011,13 @@ var Acciones = (function(){
     if(estadoFinal==='completado' && !actual.hora_fin && !p.hora_fin)
       p.hora_fin=nowHHMM();
 
-    // el motivo de estancada solo sobrevive mientras está pausada
-    if('estado' in p && p.estado!=='pausada' && (actual.estancada_motivo||''))
-      p.estancada_motivo='';
-    /* v139 · Y lo mismo con la causa, la fecha y quién la trabó. Se sale de
-       «pausada» por muchos sitios —Destrabar, Completada, el ciclo del Kanban,
-       el formulario— y si la causa se quedara puesta, el conteo de Gerencia
-       seguiría diciendo «trabada por material» de algo que ya se mueve. */
-    if('estado' in p && p.estado!=='pausada' && (actual.estancada_causa||'')){
-      if(!('estancada_causa' in p)) p.estancada_causa='';
-      if(!('estancada_fecha' in p)) p.estancada_fecha=null;
-      if(!('estancada_por' in p))   p.estancada_por='';
-    }
+    /* v140 · EL RASTRO DE LA TRABA NO SE BORRA NUNCA (decisión del dueño). Hasta
+       la v139 aquí se vaciaban el motivo, la causa, la fecha y quién la trabó en
+       cuanto la partida salía de «pausada» —al destrabarla, al moverle el %, al
+       completarla—, y con eso se perdía justo lo que se quiere recoger: por qué
+       estuvo parada. Ahora se quedan en la fila; lo que dice si está trabada HOY
+       es el estado (`pausada`), y eso es lo único que cuentan Gerencia y las
+       tarjetas. */
 
     /* La marca de "falta la foto" se apaga al cerrar la partida.
        Se ponia y no se quitaba nunca: hay 766 partidas YA TERMINADAS que
@@ -10277,8 +10268,14 @@ var Acciones = (function(){
       var p=Object.assign({},extra||{},{estado:'pausada', estancada_causa:causa,
         estancada_motivo:detalle, estancada_fecha:today(),
         estancada_por:(S.user&&S.user.nombre)||''});
+      /* v140 · Si ya tenía una traba escrita, la nueva la sobrescribe en la fila
+         y la anterior queda dicha en este renglón del historial. */
+      var a=_buscarLocal(id)||{}, ant='';
+      if(a.estancada_causa||a.estancada_motivo)
+        ant=' · antes: '+([TRABA_CAUSAS[a.estancada_causa]||a.estancada_causa||'', a.estancada_motivo||''].filter(Boolean).join(' — '))+
+          (a.estancada_fecha?' (desde '+String(a.estancada_fecha).slice(0,10)+(a.estancada_por?', '+a.estancada_por:'')+')':'');
       return _patch(id,p,'trabada',
-        'Trabada: '+TRABA_CAUSAS[causa]+(detalle?' — '+detalle:'')+(origen?' · '+origen:''));
+        'Trabada: '+TRABA_CAUSAS[causa]+(detalle?' — '+detalle:'')+ant+(origen?' · '+origen:''));
     },
 
     /* Destrabar la devuelve a como iba: con avance, en progreso; sin, pendiente.
@@ -10289,8 +10286,9 @@ var Acciones = (function(){
       var pct=_pct(a.porcentaje);
       var causa=TRABA_CAUSAS[a.estancada_causa]||'sin causa';
       var dias=a.estancada_fecha?Math.max(0,Math.round((new Date(today()+'T12:00:00')-new Date(String(a.estancada_fecha).slice(0,10)+'T12:00:00'))/864e5)):null;
-      var p=Object.assign({},extra||{},{estado:pct>0?'en-progreso':'pendiente',
-        estancada_causa:'', estancada_motivo:'', estancada_fecha:null, estancada_por:''});
+      /* v140 · Solo cambia el estado: la causa, el motivo, la fecha y quién la
+         trabó SE QUEDAN en la fila (decisión del dueño). */
+      var p=Object.assign({},extra||{},{estado:pct>0?'en-progreso':'pendiente'});
       return _patch(id,p,'destrabada',
         'Destrabada (estaba: '+causa+(a.estancada_motivo?' — '+a.estancada_motivo:'')+
         (dias!==null?', '+dias+(dias===1?' día':' días'):'')+')'+(origen?' · '+origen:''));
@@ -17203,7 +17201,7 @@ function _gerToggleNivel(n){ S.gerenciaNivelOpen[n]=!S.gerenciaNivelOpen[n]; ren
 function _gerPropuestasHTML(){
   var l=S.propuestas||[];
   var h='<div class="sec-title" style="margin:14px 0 8px">Propuestas por aprobar ('+l.length+')</div>';
-  if(!l.length) return h+'<div class="mo-nota" style="margin-bottom:14px">No hay ninguna esperando. Las proponen los ingenieros desde el Modo Obra, con «Falta una aquí».</div>';
+  if(!l.length) return h+'<div class="mo-nota" style="margin-bottom:14px">No hay ninguna esperando. Las proponen los ingenieros desde el Modo Campo y el Modo Obra, con «'+PAL_PROPONER+'».</div>';
   return h+'<div style="margin-bottom:14px">'+l.map(_propFilaHTML).join('')+'</div>';
 }
 function _gerTrabadasHTML(){
@@ -31010,18 +31008,24 @@ function renderCampo(){
       +'<div class="cp-m">'+esc(a.area||'')+(a.personal_nombre?' · '+esc(a.personal_nombre):'')+'</div>'
       +(etiqueta||pct?'<div class="cp-tags">'+etiqueta+(pct?'<span class="cp-p">'+pct+'%</span>':'')+'</div>':'')
       +(trab?'<div class="cp-trab-t">'+esc(_trabaTexto(a))+'</div>':'')
-      +'<div class="cp-lbl">Avance</div>'
-      +'<div class="cp-pcts">'
-        +[25,50,75].map(function(v){
-          return '<button class="'+(pct===v?'on':'')+'" onclick="campoMarcar(\''+sid+'\',\'pct\','+v+')">'+v+'%</button>';
-        }).join('')
-      +'</div>'
-      +'<div class="cp-btns">'
+      /* v140 · LOS CUATRO DEL MODO OBRA, con las mismas palabras (decisión del
+         dueño): ✓ Completada · Avanzó · Sin cambios · Trabada. De dos en dos:
+         cuatro en una fila de 326 px dejan «✓ Completada» cortado. «Avanzó»
+         abre 25 · 50 · 75 debajo, como en el Modo Obra; aquí cada uno guarda al
+         momento, como siempre en esta pantalla. */
+      +'<div class="cp-btns cp-btns4">'
         +'<button class="cp-ok" onclick="campoMarcar(\''+sid+'\',\'listo\')">✓ '+PAL_COMPLETADA+'</button>'
+        +'<button class="cp-no cp-av'+(S._campoAv===a.id?' on':'')+'" onclick="campoAvAbrir(\''+sid+'\')">'+PAL_AVANZO+'</button>'
+        +'<button class="cp-no cp-ig" onclick="campoMarcar(\''+sid+'\',\'igual\')">'+PAL_SIN_CAMBIOS+'</button>'
         +(trab
           ? '<button class="cp-no cp-tr" onclick="campoDestrabar(\''+sid+'\')">Destrabar</button>'
           : '<button class="cp-no cp-tr" onclick="campoTrabaAbrir(\''+sid+'\')">'+PAL_TRABADA+'</button>')
-      +'</div>';
+      +'</div>'
+      +(S._campoAv===a.id
+        ? '<div class="cp-pcts" style="margin-top:8px">'+[25,50,75].map(function(v){
+            return '<button class="'+(pct===v?'on':'')+'" onclick="campoMarcar(\''+sid+'\',\'pct\','+v+')">'+v+'%</button>';
+          }).join('')+'</div>'
+        : '');
     if(S._campoTr===a.id){
       h+='<div class="cp-trab">'
         +'<input id="cp-trd-'+sl+'" type="text" maxlength="120" autocomplete="off" placeholder="Detalle, si quieres: qué material, qué taller…">'
@@ -31048,10 +31052,10 @@ function renderCampo(){
     +'</div>'
     +'<div class="cp-body">'
       +'<button class="cp-nueva" onclick="campoNueva()">+ Nueva actividad</button>'
-      /* v139 · «Falta una aquí» PROPONE (decisión del dueño): espera la
+      /* v139/v140 · «Proponer a Gerencia» PROPONE (decisión del dueño): espera la
          aprobación de Gerencia y mientras tanto no cuenta. «+ Nueva actividad»
          sigue creando directo, también por decisión suya. */
-      +'<button class="cp-falta" onclick="campoProponer()">Falta una aquí · proponer a Gerencia</button>'
+      +'<button class="cp-falta" onclick="campoProponer()">'+PAL_PROPONER+'<span>No entra a la obra hasta que Gerencia la apruebe</span></button>'
       +_campoMisPropuestasHTML()
       +'<div class="cp-filtro">'
         +'<button class="'+(S._campoSoloMio?'':'on')+'" onclick="if(S._campoSoloMio)campoToggleMio()">Toda la obra</button>'
@@ -31071,9 +31075,14 @@ function renderCampo(){
    Aquí cada botón guarda al momento (así funciona esta pantalla desde
    siempre); en el Modo Obra la misma traba es una marca que sale con «Guardar
    el recorrido». Los dos escriben por `Acciones.trabar` / `destrabar`. */
+function campoAvAbrir(id){
+  if(!canEdit()) return;
+  S._campoAv=(S._campoAv===id)?null:id; S._campoTr=null;
+  renderCampo();
+}
 function campoTrabaAbrir(id){
   if(!canEdit()) return;
-  S._campoTr=(S._campoTr===id)?null:id;
+  S._campoTr=(S._campoTr===id)?null:id; S._campoAv=null;
   renderCampo();
   if(S._campoTr){ var c=document.getElementById('cp-'+id); if(c&&c.scrollIntoView) c.scrollIntoView({block:'nearest'}); }
 }
@@ -31117,7 +31126,7 @@ function campoProponer(){
   host.insertAdjacentHTML('afterbegin',
     '<div id="cp-prop" class="cp-nv">'
     +'<div class="cp-nv-box">'
-      +'<div class="cp-nv-t">Falta una aquí</div>'
+      +'<div class="cp-nv-t">'+PAL_PROPONER+'</div>'
       +'<label>¿Qué es lo que falta?</label>'
       +'<textarea id="cpp-desc" rows="2" placeholder="Ej.: resanar el hueco del registro del baño"></textarea>'
       +'<label>¿Dónde?</label>'
@@ -31164,10 +31173,14 @@ async function campoMarcar(id, accion, pct){
   try{
     if(accion==='listo')      await Acciones.completar(id);
     else if(accion==='pct')   await Acciones.setAvance(id,pct);
-    else                      await Acciones.pausar(id,'reportada como no realizada desde el celular');
+    /* v140 · «Sin cambios»: la misma escritura del Modo Obra. Solo
+       revisado_fecha y revisado_por, y su renglón; ni % ni estado. */
+    else if(accion==='igual') await Acciones.revisarEnObra(id, PAL_SIN_CAMBIOS+' · desde el celular');
+    else return;
     (S._campoHechas=S._campoHechas||{})[id]=1;
+    S._campoAv=null;
     if(accion==='listo') S.acts=S.acts.filter(function(x){return x.id!==id;});
-    showToast(accion==='listo'?PAL_COMPLETADA+' ✓':accion==='pct'?(pct+'% guardado ✓'):'Anotado');
+    showToast(accion==='listo'?PAL_COMPLETADA+' ✓':accion==='pct'?(pct+'% guardado ✓'):PAL_SIN_CAMBIOS+' ✓');
     renderCampo();
   }catch(e){
     if(card){ card.style.opacity=''; card.style.pointerEvents=''; }
