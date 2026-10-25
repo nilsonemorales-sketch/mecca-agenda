@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v141 — 25 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v142 — 25 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -303,7 +303,15 @@ TODOS**, decisión del dueño («aquí quiero tener todos los contratistas y tod
 las ubicaciones»): todas las ubicaciones con algo abierto —los once
 apartamentos, las áreas comunes de cada nivel y después Parqueo, Fachada,
 General…— en el orden del edificio (`_revOrdenArea`), y todos los
-contratistas, los que se mueven primero. «Sin ubicación» **no** lleva pastilla:
+contratistas, los que se mueven primero. **Desde la v142 las ubicaciones van
+POR NIVEL**, con un rótulo delante de cada grupo (`.pil-nivel`, no se toca):
+NIVEL 1 · Parqueo │ NIVEL 2 · Apto 2A · Apto 2B · Áreas Comunes │ … NIVEL 7 ·
+Penthouse B · Áreas Comunes · GYM │ TODA LA TORRE · escaleras, fachadas,
+terraza, techo, General. Lo decide `_nivelArea`: `N#` es ese piso, **Parqueo
+es el 1** (en la base no hay ninguna ubicación «N1»; el presupuesto lo llama
+«Primer nivel — Parqueos generales») y lo demás es 0, «Toda la torre», al final.
+Dentro del nivel, primero los apartamentos. «Áreas Comunes N2» se lee «Áreas
+Comunes» bajo su rótulo. «Sin ubicación» **no** lleva pastilla:
 no es un sitio (v121), y `_actToggleUbicacion('')` además borra todos los de
 ubicación. Filtran por `personas`, **no** por
 `contratistas` — ese exige `tipo_personal` y no es de fiar.
@@ -3662,10 +3670,11 @@ mismo:**
   aprueba; Nilson ve el número; aprobar la mete; rechazar escribe el respaldo
   **antes** del `DELETE`; Gerencia cuenta por causa y se abre; sin Kanban ni
   Matriz a 390; y todo con la entidad `actividad`
-- **LAS PASTILLAS TRAEN TODAS LAS UBICACIONES Y TODOS LOS CONTRATISTAS**
-  (v141), comprobado en la sección de la cabecera: tantas pastillas de
-  ubicación como áreas con algo abierto, la primera el 2A, y más de seis de
-  contratista. Contra la v140 falla (11 de 15)
+- **LAS PASTILLAS TRAEN TODAS LAS UBICACIONES, POR NIVEL, Y TODOS LOS
+  CONTRATISTAS** (v141, v142), comprobado en la sección de la cabecera: tantas
+  pastillas de ubicación como áreas con algo abierto, cada una debajo del
+  rótulo de SU nivel (calculado aparte en la prueba), los rótulos en orden, y
+  más de seis de contratista. Contra la v141 falla: no hay rótulos
 - **LA CABECERA SE PLIEGA Y NO CAMBIA NADA** (v138), en su sección de la
   lista (once comprobaciones desde la v141, a 1280 y a 390): esconde pestañas, sub-barra y
   `.act-cab` y deja título y barra verde; el botón sigue a la vista; con Apto 2A

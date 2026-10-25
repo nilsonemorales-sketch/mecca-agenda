@@ -804,7 +804,7 @@ const CAB_ESPERADO={
   recargaAbierta:{v:'abierta · abierta · nada guardado', d:'recargar y volver a entrar la abren; no se guarda nada en el teléfono'},
   soloActividades:{v:'Kanban no · Obra no', d:'en Kanban y en otra pestaña el botón no sale y nada queda plegado'},
   ceroEscrituras:{v:0, d:'ni una escritura ni un GET al plegar y desplegar'},
-  pastillas:{v:'todas las ubicaciones · más de seis contratistas', d:'v141: la fila de ubicaciones trae TODAS las que tienen algo abierto, en orden del edificio, y la de contratistas a todos, no solo los que se movieron'},
+  pastillas:{v:'todas las ubicaciones · por nivel · más de seis contratistas', d:'v141/v142: la fila de ubicaciones trae TODAS las que tienen algo abierto, agrupadas bajo el rótulo de su nivel (Parqueo en el 1, lo que no es de un piso en «Toda la torre», al final), y la de contratistas a todos'},
 };
 async function probarCabecera(nombreVer, html, b){
   const D=datos(); const {ACTS,PERS}=D;
@@ -857,10 +857,22 @@ async function probarCabecera(nombreVer, html, b){
       const ls0=await G(()=>JSON.stringify(Object.keys(localStorage).sort()));
       if(W>600){
         const areas=[...new Set(ACTS.filter(a=>a.estado!=='completado'&&a.area).map(a=>a.area))].length;
-        const pp=await G(()=>({c:document.querySelectorAll('#c-act [onclick^="_actTogglePersona"]').length,
-          u:document.querySelectorAll('#c-act [onclick^="_actToggleUbicacion"]').length,
-          orden:[...document.querySelectorAll('#c-act [onclick^="_actToggleUbicacion"]')].map(b=>b.textContent).slice(0,2).join('|')}));
-        r.pastillas=(pp.u===areas&&/2A/.test(pp.orden.split('|')[0])?'todas las ubicaciones':'ubicaciones '+pp.u+' de '+areas+' ('+pp.orden+')')+' · '+(pp.c>6?'más de seis contratistas':pp.c+' contratistas');
+        const pp=await G(()=>{
+          const bs=[...document.querySelectorAll('#c-act [onclick^="_actToggleUbicacion"]')];
+          const fila=bs.length?bs[0].parentElement:null;
+          // El nivel, calculado aquí por su cuenta: N# es ese piso, Parqueo el 1, lo demás «Toda la torre» (99).
+          const niv=a=>{ const m=/^N(\d+)\b/.exec(a); return m?+m[1]:(/^parqueo/i.test(a)?1:99); };
+          let rot=null, ant=0, mal=0, rotulos=0;
+          [...(fila?fila.children:[])].forEach(el=>{
+            if(el.classList.contains('pil-nivel')){ rotulos++; const t=el.textContent.trim(); const n=/^nivel (\d+)$/i.exec(t)?+/(\d+)/.exec(t)[1]:(/toda la torre/i.test(t)?99:-1);
+              if(n<=ant) mal++; rot=n; ant=n; return; }
+            const a=JSON.parse((el.getAttribute('onclick').match(/_actToggleUbicacion\((.*)\)$/)||[])[1].replace(/&quot;/g,'"'));
+            if(niv(a)!==rot) mal++;
+          });
+          return {c:document.querySelectorAll('#c-act [onclick^="_actTogglePersona"]').length, u:bs.length, mal, rotulos};
+        });
+        r.pastillas=(pp.u===areas?'todas las ubicaciones':'ubicaciones '+pp.u+' de '+areas)+' · '+
+          (pp.rotulos&&!pp.mal?'por nivel':(pp.rotulos?pp.mal+' fuera de su nivel':'sin rótulos de nivel'))+' · '+(pp.c>6?'más de seis contratistas':pp.c+' contratistas');
       }
       contar=true;
       await btn.click(); await p.waitForTimeout(300);

@@ -187,6 +187,11 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .cp-tr{color:#b45309!important;border-color:#d97706!important}
 /* v140 · los cuatro botones de la tarjeta, de dos en dos */
 .cp-btns.cp-btns4{grid-template-columns:1fr 1fr}
+/* v142 · el rótulo de nivel entre las pastillas de ubicación: no se toca, solo
+   separa; raya a la izquierda y letra de rótulo, como el «NIVEL 2» del Modo Obra */
+.pil-nivel{flex-shrink:0;align-self:center;padding:0 2px 0 10px;margin-left:4px;border-left:2px solid var(--border2);
+  font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);white-space:nowrap;line-height:30px}
+.pil-nivel:first-child{border-left:none;margin-left:0;padding-left:2px}
 .cp-av.on{background:var(--accent-fill)!important;color:#fff!important;border-color:var(--accent-fill)!important}
 .cp-falta span,.mo-falta-s{display:block;font-size:12px;font-weight:600;opacity:.85;margin-top:2px}
 .cp-trab-t{font-size:13px;font-weight:700;color:#b45309;margin-top:8px}
@@ -1133,7 +1138,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261025_141';
+const APP_VERSION='20261025_142';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -6550,12 +6555,24 @@ function _actPillsRapidasHTML(){
      falta de uno (v121), y se sigue filtrando desde Filtros. */
   var u={};
   abiertas.forEach(function(a){ var k=a.area||''; if(k) u[k]=(u[k]||0)+1; });
-  var aptos=Object.keys(u).sort(function(x,y){
-    return (_revOrdenArea(x)-_revOrdenArea(y)) || x.localeCompare(y,'es');
-  });
   /* Una puesta sin nada abierto se queda con su pastilla: si no, el filtro
      estaría puesto y no habría dónde tocar para quitarlo. */
-  selU.forEach(function(k){ if(k && aptos.indexOf(k)<0) aptos.push(k); });
+  var claves=Object.keys(u);
+  selU.forEach(function(k){ if(k && claves.indexOf(k)<0) claves.push(k); });
+  /* v142 · POR NIVEL, con su rótulo delante (decisión del dueño: «todo lo de
+     primer nivel, después todo lo de segundo…, con una división que se
+     identifique fácil»). Dentro del nivel, primero los apartamentos y después
+     lo demás de ese piso (áreas comunes, GYM). Hasta la v141 iban los once
+     apartamentos seguidos y las áreas comunes de cada piso al final, lejos de
+     su nivel. */
+  var aptos=claves.sort(function(x,y){
+    var nx=_nivelArea(x), ny=_nivelArea(y);
+    var ox=nx===0?99:nx, oy=ny===0?99:ny;
+    if(ox!==oy) return ox-oy;
+    var ix=REC_ORDEN.indexOf(x), iy=REC_ORDEN.indexOf(y);
+    if((ix>=0)!==(iy>=0)) return ix>=0?-1:1;
+    return (ix-iy) || x.localeCompare(y,'es');
+  });
 
   var h='<div style="display:flex;gap:7px;margin-bottom:10px;overflow-x:auto;'+
         'scrollbar-width:none;padding-bottom:2px">';
@@ -6565,11 +6582,27 @@ function _actPillsRapidasHTML(){
   });
   h+='</div><div style="display:flex;gap:7px;margin-bottom:14px;overflow-x:auto;'+
      'scrollbar-width:none;padding-bottom:2px">';
+  var nivAnt=null;
   aptos.forEach(function(k){
-    h+=pil(_recNom(k), u[k], selU.indexOf(k)>=0,
+    var nv=_nivelArea(k);
+    if(nv!==nivAnt){ h+='<span class="pil-nivel">'+(nv?'Nivel '+nv:'Toda la torre')+'</span>'; nivAnt=nv; }
+    /* Dentro de su nivel, «Áreas Comunes N2» se lee «Áreas Comunes»: el N2 ya
+       lo dice el rótulo. */
+    var et=_recNom(k); if(nv) et=et.replace(new RegExp('\\s*N'+nv+'$'),'')||et;
+    h+=pil(et, u[k], selU.indexOf(k)>=0,
            "_actToggleUbicacion("+JSON.stringify(k).replace(/"/g,'&quot;')+")");
   });
   return h+'</div>';
+}
+/* v142 · El nivel de una ubicación, para agrupar las pastillas. «N2 — …» es el
+   2; el PARQUEO es el 1 —en el presupuesto, «Primer nivel — Parqueos
+   generales»—. Lo que no es de un piso (escaleras, fachadas, terraza, techo,
+   General, Toda la obra) devuelve 0 y va al final, como «Toda la torre». */
+function _nivelArea(area){
+  var m=/^N(\d+)\b/.exec(String(area||''));
+  if(m) return parseInt(m[1],10);
+  if(/^parqueo/i.test(String(area||'').trim())) return 1;
+  return 0;
 }
 
 /* Vuelve al panel del apartamento del que saliste, con su filtro ya soltado:
