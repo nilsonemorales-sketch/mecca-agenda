@@ -841,6 +841,109 @@ input.tp-in[type=search]{font-size:14px}
   padding:7px 9px;margin-top:6px;line-height:1.5}
 .tp-decide div{margin:2px 0 0 4px}
 </style>
+<!-- v147 · La hoja de reporte de un contratista o de una ubicación. Va en su
+     propio bloque porque la ventana de Imprimir copia ESTE texto tal cual: la
+     hoja en pantalla y la de papel se dibujan con las mismas reglas, y lo único
+     que cambia al imprimir son los colores (blanco, letra negra). -->
+<style id="hj-css">
+.hj{--hj-mor:#833088;--hj-ver:#346837;--hj-nar:#c2410c;--hj-neg:var(--text);
+  background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px;font-family:var(--font);color:var(--text)}
+.hj button{font-family:inherit}
+.hj-cab{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:10px;border-bottom:4px solid var(--hj-mor);margin-bottom:12px}
+.hj-logo{width:74px;height:auto;background:#fff;border-radius:8px;padding:3px;flex-shrink:0}
+.hj-cab-d{text-align:right;min-width:0}
+.hj-tit{font-size:22px;font-weight:800;color:var(--hj-mor);line-height:1.1}
+.hj-proy{font-size:13px;font-weight:700;color:var(--text);margin-top:3px}
+.hj-fecha{font-size:11.5px;color:var(--text3);margin-top:2px}
+.hj-et{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--text3)}
+.hj-pie{font-size:10.5px;color:var(--text3);margin-top:2px;line-height:1.25}
+.hj-tira{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden}
+.hj-dato{padding:8px 10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-width:0}
+.hj-dato:nth-child(3n){border-right:none}
+.hj-dato:nth-last-child(-n+3){border-bottom:none}
+.hj-v{font-size:14px;font-weight:800;color:var(--text);margin-top:2px;line-height:1.2;overflow-wrap:anywhere}
+.hj-cuadros{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.hj-cuadro{min-width:0;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;text-align:left;border:1.5px solid var(--border2);background:var(--bg3);border-radius:10px;padding:9px 10px;color:var(--text)}
+button.hj-cuadro{cursor:pointer;min-height:84px}
+.hj-cifra{font-size:28px;font-weight:800;line-height:1.1;margin:3px 0 1px;font-family:var(--font)}
+.hj-barras{display:grid;gap:9px;margin-bottom:12px}
+.hj-barra-t{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:700;margin-bottom:4px}
+.hj-barra-f{height:12px;border:1px solid var(--border2);border-radius:99px;overflow:hidden;background:var(--bg3)}
+.hj-barra-f i{display:block;height:100%;border-radius:99px}
+.hj-banda{display:flex;border:2px solid var(--hj-mor);border-radius:10px;overflow:hidden;margin-bottom:12px}
+.hj-banda-izq{background:var(--hj-mor);color:#fff;padding:10px 12px;font-size:13px;font-weight:800;display:flex;flex-direction:column;justify-content:center;min-width:112px}
+.hj-banda-izq small{font-size:10.5px;font-weight:600;opacity:.9;margin-top:3px}
+.hj-banda-cas{flex:1;padding:8px 10px;border-left:1px solid var(--border);min-width:0;display:flex;flex-direction:column;justify-content:center}
+.hj-banda-cas .hj-cifra{font-size:22px}
+.hj-banda-fin .hj-cifra{font-size:30px;color:var(--hj-ver)}
+.hj-banda-vacia{flex:1;padding:12px;font-size:14px;font-weight:800;color:var(--text);display:flex;align-items:center}
+.hj-paneles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.hj-panel{border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+.hj-panel-t{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--hj-mor);margin-bottom:5px}
+.hj-r{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;min-height:30px;border-bottom:1px dotted var(--border)}
+.hj-r:last-child{border-bottom:none}
+.hj-r-sub{padding-left:12px;font-size:12px;color:var(--text2)}
+.hj-r-tot{border-top:2px solid var(--text);border-bottom:none;font-weight:800;margin-top:3px;padding-top:3px}
+.hj-r-prop{color:var(--text3);font-style:italic}
+.hj-n{min-width:44px;min-height:40px;padding:0 8px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg3);color:inherit;font-size:13.5px;font-weight:800;cursor:pointer;text-align:right}
+.hj-n0{min-width:44px;padding:0 9px;text-align:right;color:var(--text3);font-weight:700;font-size:13.5px}
+.hj-cifra .hj-n,.hj-cifra .hj-n0{font-size:inherit;color:inherit;font-weight:800;padding:0 10px;text-align:left}
+.hj-res{border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+.hj-tb{overflow-x:auto;max-width:100%}
+.hj-tb table{border-collapse:collapse;width:100%;font-size:12.5px}
+.hj-tb th{font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text3);text-align:right;padding:4px 4px;border-bottom:2px solid var(--text);white-space:nowrap}
+.hj-tb th:first-child,.hj-tb td:first-child{text-align:left}
+.hj-tb td{padding:3px 4px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}
+.hj-tb td:first-child{font-weight:700;min-width:110px}
+.hj-tb tr.hj-tot td{border-top:2px solid var(--text);border-bottom:none;font-weight:800}
+.hj-tb .hj-n,.hj-tb .hj-n0{min-width:38px}
+.hj-nota{font-size:11px;color:var(--text3);margin-top:8px;line-height:1.35}
+.hj-volver{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.hj-volver button{min-height:44px;padding:0 14px;border-radius:10px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:800;font-family:var(--font);cursor:pointer}
+.ra-hoja-b{flex-shrink:0;min-height:40px;padding:0 12px;border-radius:10px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:800;font-family:var(--font);cursor:pointer;white-space:nowrap}
+@media(max-width:600px){
+  .hj{padding:11px}
+  .hj-tit{font-size:18px}
+  .hj-logo{width:58px}
+  .hj-tira{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hj-dato:nth-child(3n){border-right:1px solid var(--border)}
+  .hj-dato:nth-child(2n){border-right:none}
+  .hj-dato:nth-last-child(-n+3){border-bottom:1px solid var(--border)}
+  .hj-dato:nth-last-child(-n+2){border-bottom:none}
+  .hj-cuadros{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hj-paneles{grid-template-columns:1fr}
+  .hj-banda{flex-wrap:wrap}
+  .hj-banda-izq{flex-basis:100%;flex-direction:row;align-items:baseline;gap:8px;padding:7px 10px}
+  .hj-banda-c1{border-left:none}
+  .hj-res{padding:8px 6px}
+  .hj-tb table{font-size:12px}
+  .hj-tb th{font-size:9px;letter-spacing:0;padding:4px 2px}
+  .hj-tb td{padding:3px 2px}
+  .hj-tb td:first-child{min-width:0;max-width:96px;overflow-wrap:anywhere}
+  .hj-tb .hj-n,.hj-tb .hj-n0{min-width:34px;padding:0 5px}
+}
+/* La hoja en papel: blanco, letra negra, nada que dependa del fondo. Lleva
+   `.hj-papel` y gana sobre lo del teléfono aunque la ventana sea de 390 px
+   (en el iPhone la ventana de imprimir ES del ancho del teléfono). */
+.hj.hj-papel{border:none;border-radius:0;padding:0;background:#fff;color:#111}
+.hj-papel .hj-tira{grid-template-columns:repeat(3,minmax(0,1fr))}
+.hj-papel .hj-dato{border-right:1px solid #ccc;border-bottom:1px solid #ccc}
+.hj-papel .hj-dato:nth-child(3n){border-right:none}
+.hj-papel .hj-dato:nth-last-child(-n+3){border-bottom:none}
+.hj-papel .hj-cuadros{grid-template-columns:repeat(4,minmax(0,1fr))}
+.hj-papel .hj-paneles{grid-template-columns:1fr 1fr}
+.hj-papel .hj-banda{flex-wrap:nowrap}
+.hj-papel .hj-banda-izq{flex-basis:auto;flex-direction:column;align-items:flex-start;background:#fff;color:var(--hj-mor);border-right:2px solid var(--hj-mor)}
+.hj-papel .hj-cuadro,.hj-papel .hj-n{background:#fff}
+.hj-papel .hj-n{border:none;min-height:0;padding:0}
+.hj-papel .hj-n,.hj-papel .hj-n0{font-size:inherit}
+.hj-papel .hj-cifra .hj-n,.hj-papel .hj-cifra .hj-n0{padding:0}
+.hj-papel .hj-r{min-height:20px;font-size:12px}
+.hj-papel .hj-tb table{font-size:11px}
+.hj-papel .hj-tb td{padding:2px 4px}
+.hj-papel .hj-tb{overflow:visible}
+.hj-papel .hj-barra-f i{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+</style>
 
 </head>
 <body>
@@ -1194,7 +1297,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261026_146';
+const APP_VERSION='20261026_147';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -30791,6 +30894,14 @@ function _raPasa(a, met, causa){
   if(met==='venc')  return isRetrasada(a);
   if(met==='comp')  return a.estado==='completado';
   if(met==='trab')  return a.estado==='pausada' && (causa==null || (a.estancada_causa||'')===causa);
+  /* v147 · El movimiento de los últimos 7 días (`_raCargarMov`). «Avanzó» es
+     movió el porcentaje y NO se cerró: así las dos casillas no cuentan la
+     misma partida dos veces. */
+  var M=S._raMov, id=String(a.id);
+  if(met==='mcerr') return !!(M && M.cerr.has(id));
+  if(met==='mav')   return !!(M && M.av.has(id) && !M.cerr.has(id));
+  if(met==='mtoc')  return !!(M && M.toc.has(id));
+  if(met==='prop')  return a.propuesta===true;
   return false;
 }
 function _raEn(a, ref, propios){
@@ -30855,7 +30966,8 @@ function _raNumBtn(n, etiqueta, ref, met, causa, color){
 function _raFilaHTML(nombre, s, ref, completas, extraIzq){
   var av=completas ? Math.round(s.sumPct/Math.max(1,s.total))+'%' : '…';
   var h='<div class="ra-fila'+(ref.dim==='nivel'||ref.dim==='todo'?' ra-fila-n':'')+'">'
-    +'<div class="ra-nom">'+(extraIzq||'')+'<span class="ra-nom-t">'+esc(nombre)+'</span><span class="ra-tot">'+s.total+' en total</span></div>'
+    +'<div class="ra-nom">'+(extraIzq||'')+'<span class="ra-nom-t">'+esc(nombre)+'</span><span class="ra-tot">'+s.total+' en total</span>'
+      +(ref.dim==='area'||ref.dim==='quien'?'<button class="ra-hoja-b" onclick="raHoja('+_raRef({dim:ref.dim,k:ref.k,nombre:ref.nombre})+')">Hoja ›</button>':'')+'</div>'
     +'<div class="ra-nums">'
       +_raNumBtn(s.ab,'abiertas',ref,'ab')
       +_raNumBtn(s.venc,'vencidas',ref,'venc',null,'var(--red)')
@@ -30889,6 +31001,7 @@ function renderAvanceRep(){
     +(nProp?'<div class="ra-prop">'+nProp+' propuesta'+(nProp>1?'s':'')+' esperando aprobación de Gerencia — no cuentan en estos números.</div>':'')
     +'</div><div class="ra-acc"><button onclick="raImprimir()">Imprimir</button><button onclick="raActualizar()">Actualizar</button></div></div>';
   if(R.det){ el.innerHTML=h+_raDetalleHTML(filas, propios)+'</div>'; return; }
+  if(R.hoja){ el.innerHTML=h+_raHojaHTML(filas, propios, F.completas)+'</div>'; return; }
   h+='<div class="ra-vistas">'+RA_VISTAS.map(function(v){
     return '<button class="'+(R.vista===v[0]?'on':'')+'" onclick="raVista(\''+v[0]+'\')">'+v[1]+'</button>';
   }).join('')+'</div>';
@@ -30897,7 +31010,7 @@ function renderAvanceRep(){
   else h+=_raUbicHTML(filas, propios, F.completas);
   el.innerHTML=h+'</div>';
 }
-function raVista(v){ var R=S.ra; R.vista=v; R.det=null; renderAvanceRep(); }
+function raVista(v){ var R=S.ra; R.vista=v; R.det=null; R.hoja=null; renderAvanceRep(); }
 function raNivelToggle(n){ var R=S.ra; R.abiertos[n]=!R.abiertos[n]; renderAvanceRep(); }
 
 function _raUbicHTML(filas, propios, completas){
@@ -30967,7 +31080,9 @@ function _raMatrizHTML(filas, propios){
 }
 
 /* ── El desglose de un número ── */
-var RA_MET_NOMBRE={total:'todas',ab:'abiertas',venc:'vencidas',comp:'completadas',trab:'trabadas'};
+var RA_MET_NOMBRE={total:'todas',ab:'abiertas',venc:'vencidas',comp:'completadas',trab:'trabadas',
+  mcerr:'cerradas en los últimos 7 días',mav:'avanzaron en los últimos 7 días, sin cerrar',mtoc:'con movimiento en los últimos 7 días',
+  prop:'propuestas esperando aprobación (no cuentan)'};
 function raVer(i){
   var ref=_raReg[i]; if(!ref) return;
   S.ra.det=Object.assign({},ref); S.ra.detN=100;
@@ -30987,7 +31102,8 @@ function _raDiasVencida(a){
 }
 function _raDetalleLista(filas, propios){
   var d=S.ra.det;
-  var l=filas.filter(function(a){ return _raEn(a,d,propios) && _raPasa(a,d.met,d.causa); });
+  var fuente=d.met==='prop' ? _raPropuestas() : filas;   // las propuestas no están en las filas: no cuentan
+  var l=fuente.filter(function(a){ return _raEn(a,d,propios) && _raPasa(a,d.met,d.causa); });
   /* Lo más vencido arriba; después por entrega, y lo que no tiene al final. */
   l.sort(function(x,y){
     return (_raDiasVencida(y)-_raDiasVencida(x)) || String(x.fecha_fin||'9').localeCompare(String(y.fecha_fin||'9')) || String(x.descripcion||'').localeCompare(String(y.descripcion||''),'es');
@@ -30997,12 +31113,12 @@ function _raDetalleLista(filas, propios){
 function _raDetalleHTML(filas, propios){
   var d=S.ra.det, l=_raDetalleLista(filas, propios);
   var tit=d.nombre+' · '+(d.met==='trab'&&d.causa!=null?'trabadas por «'+(TRABA_CAUSAS[d.causa]||'sin causa')+'»':RA_MET_NOMBRE[d.met]);
-  var h='<div class="ra-det-cab"><button class="ra-volver" onclick="raVolver()">‹ Volver al resumen</button>'
+  var h='<div class="ra-det-cab"><button class="ra-volver" onclick="raVolver()">‹ Volver '+(S.ra.hoja?'a la hoja':'al resumen')+'</button>'
     +'<div class="ra-det-t">'+esc(tit)+' <b>'+l.length+'</b></div></div>';
   if(!l.length) return h+'<div class="empty">No hay ninguna.</div>';
   h+=l.slice(0,S.ra.detN).map(function(a){
-    var dias=_raDiasVencida(a), abierta=a.estado!=='completado';
-    var est=a.estado==='completado'?PAL_COMPLETADA:a.estado==='pausada'?PAL_TRABADA:(_raPct(a)?_raPct(a)+'%':'sin empezar');
+    var dias=_raDiasVencida(a), abierta=a.estado!=='completado' && a.propuesta!==true;
+    var est=a.propuesta===true?'propuesta · espera a Gerencia':a.estado==='completado'?PAL_COMPLETADA:a.estado==='pausada'?PAL_TRABADA:(_raPct(a)?_raPct(a)+'%':'sin empezar');
     var traba=a.estado==='pausada'?(TRABA_CAUSAS[a.estancada_causa]||'Sin causa')+(a.estancada_motivo?' — '+a.estancada_motivo:''):'';
     return '<div class="ra-act"'+(abierta?' role="button" tabindex="0" onclick="editAct(\''+String(a.id).replace(/'/g,"\\'")+'\')"':'')+'>'
       +'<div class="ra-act-d">'+esc(a.descripcion||'')+'</div>'
@@ -31021,6 +31137,7 @@ function _raDetalleHTML(filas, propios){
    como «Por Apto» (`printAptoReport`): ventana nueva con una tabla limpia y
    `window.print()`. En el iPhone sale la hoja de compartir, que guarda PDF. */
 function raImprimir(){
+  if(S.ra && S.ra.hoja && !S.ra.det) return raHojaImprimir();
   var R=S.ra||{}, F=_raFilas(), filas=F.filas, propios=_raPropios(), c=F.completas;
   var td=function(v){ return '<td>'+v+'</td>'; };
   var fila=function(nom,s,cls){
@@ -31068,6 +31185,286 @@ function raImprimir(){
     +'<h1>Mecca Residence — '+esc(titulo)+'</h1><div class="s">'+_nodoFecha(today())+(c?'':' · sin las completadas: no se pudieron traer')
     +' · Las propuestas esperando aprobación no cuentan.</div>'+cuerpo
     +'<script>window.onload=function(){window.print();}<\/script></body></html>');
+  win.document.close();
+}
+
+/* ══ LA HOJA DE REPORTE — un contratista o una ubicación (v147) ═══════════
+   Pedido del dueño: que el reporte se vea como el «Reporte de cubicación» de
+   la Mecca App de su PC, y sacar de aquí la hoja de UN contratista o de UNA
+   ubicación para mandársela. Se copia LA FORMA, no el contenido: cabecera
+   Bridex, tira de datos, cuatro cuadros, dos barras, la banda destacada, dos
+   paneles y el resumen de abajo.
+
+   · NADA DE DINERO. Decisión suya, sin vueltas: contratos, cubicaciones,
+     pagos y retenciones se quedan en la Mecca App. Ni `precio_unitario` ni
+     `valor` de `obra_partidas`: los tienen 273 de 1.303 y el resto saldría en
+     cero, que es peor que no ponerlos.
+   · Se abre con «Hoja ›» en una fila de Por contratista o Por ubicación
+     (`S.ra.hoja`). Las tres vistas de la v146 no cambian.
+   · Cuenta con las MISMAS piezas de la v146 (`_raEn`, `_raPasa`, `_raStats`,
+     `_raQuien`, `_raArea`) y cada número abre su desglose por `raVer`: el
+     número y la lista no pueden decir cosas distintas. Un cero no se toca.
+   · El resumen de abajo se arma con `_raQuien` / `_raArea`, que ponen cada
+     partida en UNA sola fila: la suma de las filas ES el total de arriba.
+   · El movimiento de 7 días sale de `obra_cambios` (`_raCargarMov`): tres
+     lecturas de solo `entidad_id` —las cerradas, las que movieron el % y las
+     tocadas—, ~66 KB medidos el 26-oct. Se pide una vez cada 10 minutos y
+     solo con una hoja abierta.
+   · Las propuestas no suman: salen en su renglón aparte, marcadas.
+   · NO ESCRIBE NADA. */
+var RA_MOV_DIAS=7, RA_MOV_FRESCO_MS=10*60*1000;
+var RA_MESES_LARGOS=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+function _raFechaLarga(iso){
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||''));
+  return m ? parseInt(m[3],10)+' de '+RA_MESES_LARGOS[parseInt(m[2],10)-1]+' de '+m[1] : '';
+}
+/* Las propuestas que esperan, en la forma de una fila más (la lectura chica de
+   `loadPropuestas` no trae la columna `propuesta`). Solo para su renglón. */
+function _raPropuestas(){
+  return (S.propuestas||[]).map(function(p){ return Object.assign({}, p, {propuesta:true, estado:'pendiente'}); });
+}
+
+/* El movimiento de los últimos 7 días, contando hoy. Lo que se pide: los
+   `entidad_id` de lo que se cerró (Acciones.completar escribe `completado`;
+   cambiar el estado a mano escribe «estado → completado») y de lo que movió
+   el % (Acciones.setAvance escribe `avance`; una edición con el % dentro
+   escribe «avance: 25% → 50%»), unos 6 KB; y de lo que tuvo cualquier
+   renglón, ~60 KB.
+   LAS TOCADAS NO SALEN DE `S.ultimoCambio` (el historial de las congeladas),
+   aunque ya esté cargado: el 26-oct se corrigió la ubicación de 209 partidas
+   (el Lobby nuevo y el Penthouse) y cada una dejó su renglón «Ubicacion
+   corregida: …». Contándolo, la hoja del Penthouse decía 201 de 201 tocadas en
+   la semana —falso como avance de obra, en un papel que va al contratista—.
+   Arreglar el dato no es mover la obra, así que esos renglones no cuentan. */
+async function _raCargarMov(forzar){
+  var M=S._raMov;
+  if(S._raMovCargando) return;
+  if(!forzar && M && M.hasta===today() && (Date.now()-M.en)<RA_MOV_FRESCO_MS) return;
+  S._raMovCargando=true;
+  var hasta=today(), desde=_isoAddDias(hasta,-(RA_MOV_DIAS-1));
+  /* Por `sbTodo`, de 1.000 en 1.000: la base no devuelve más de 1.000 filas
+     por pedido y la semana del 26-oct ya tenía 1.660 renglones. Con un `sb`
+     solo, la hoja de Daniel decía 334 tocadas y eran 378. */
+  var base='obra_cambios?entidad=eq.actividad&fecha=gte.'+desde+'&select=entidad_id&or=';
+  var ids=function(rows){ var s=new Set(); (rows||[]).forEach(function(r){ if(r&&r.entidad_id) s.add(String(r.entidad_id)); }); return s; };
+  try{
+    var r=await Promise.all([
+      sbTodo(base+encodeURIComponent('(accion.eq.completado,detalle.ilike.*→ completado*)')),
+      sbTodo(base+encodeURIComponent('(accion.eq.avance,detalle.ilike.*avance:*)')),
+      sbTodo(base+encodeURIComponent('(detalle.is.null,detalle.not.ilike.Ubicaci_n corregida*)'))
+    ]);
+    var cerr=ids(r[0]), av=ids(r[1]), toc=ids(r[2]);
+    cerr.forEach(function(id){ toc.add(id); }); av.forEach(function(id){ toc.add(id); });
+    S._raMov={cerr:cerr, av:av, toc:toc, desde:desde, hasta:hasta, en:Date.now(), err:''};
+  }catch(e){
+    S._raMov={cerr:new Set(), av:new Set(), toc:new Set(), desde:desde, hasta:hasta, en:Date.now(),
+              err:(e&&e.sinRed)?'Sin señal':'No contestó la base'};
+  }
+  S._raMovCargando=false;
+  if(S.currentTab==='reportes' && S.reportesVista==='avance' && S.ra && S.ra.hoja && !S.ra.det) renderAvanceRep();
+}
+
+function raHoja(i){
+  var ref=_raReg[i]; if(!ref) return;
+  S.ra.hoja={dim:ref.dim, k:ref.k, nombre:ref.nombre};
+  S.ra.det=null;
+  S.ra._scrollLista=(document.scrollingElement||document.documentElement).scrollTop;
+  renderAvanceRep();
+  var el=document.getElementById('c-ra'); if(el && el.scrollIntoView) el.scrollIntoView({block:'start'});
+}
+function raHojaCerrar(){
+  var y=S.ra._scrollLista||0; S.ra.hoja=null; S.ra.det=null; renderAvanceRep();
+  try{ (document.scrollingElement||document.documentElement).scrollTop=y; }catch(e){}
+}
+
+/* Un número de la hoja: botón si hay algo detrás, texto gris si es cero. */
+function _hjNum(n, met, causa, ref){
+  if(!n) return '<span class="hj-n0">0</span>';
+  var h=ref||S.ra.hoja;
+  return '<button class="hj-n" onclick="raVer('+_raRef({dim:h.dim,k:h.k,k2:h.k2,nombre:h.nombre,met:met,causa:causa})+')">'+n+'</button>';
+}
+function _hjCuadro(et, n, met, color, pie){
+  var dentro='<div class="hj-et">'+et+'</div><div class="hj-cifra" style="color:'+color+'">'+n+'</div><div class="hj-pie">'+pie+'</div>';
+  if(!n || n==='…') return '<div class="hj-cuadro">'+dentro+'</div>';
+  var h=S.ra.hoja;
+  return '<button class="hj-cuadro" onclick="raVer('+_raRef({dim:h.dim,k:h.k,nombre:h.nombre,met:met})+')">'+dentro+'</button>';
+}
+function _hjPct(n, d){ return d ? Math.round(100*n/d)+'%' : '0%'; }
+function _hjDato(et, v, pie){
+  return '<div class="hj-dato"><div class="hj-et">'+et+'</div><div class="hj-v">'+(v===0?'0':(v||'—'))+'</div><div class="hj-pie">'+(pie||'&nbsp;')+'</div></div>';
+}
+function _hjRenglon(nombre, valor, cls){
+  return '<div class="hj-r'+(cls?' '+cls:'')+'"><span>'+nombre+'</span>'+valor+'</div>';
+}
+
+function _raHojaHTML(filas, propios, completas){
+  var H=S.ra.hoja, esCont=H.dim==='quien';
+  if(!S._raMov || S._raMov.hasta!==today() || (Date.now()-S._raMov.en)>=RA_MOV_FRESCO_MS) _raCargarMov(false);
+  var lista=filas.filter(function(a){ return _raEn(a,H,propios); });
+  var s=_raStats(lista, function(){ return ['x']; }, propios).x || {total:0,ab:0,venc:0,comp:0,sumPct:0,trab:0,causas:{},rev:null};
+  var av=completas ? Math.round(s.sumPct/Math.max(1,s.total)) : null;
+  var hoy=today(), M=S._raMov, movListo=!!(M && !S._raMovCargando && M.hasta===hoy);
+
+  var h='<div class="hj-volver"><button onclick="raHojaCerrar()">‹ Volver a '+(esCont?'los contratistas':'las ubicaciones')+'</button></div>';
+  h+='<div class="hj" id="hj-hoja">';
+
+  /* 1 · Cabecera */
+  h+='<div class="hj-cab"><img class="hj-logo" src="./bridex-logo.png" alt="Bridex">'
+    +'<div class="hj-cab-d"><div class="hj-tit">Reporte de avance</div><div class="hj-proy">Proyecto Mecca Residence</div>'
+    +'<div class="hj-fecha">Emitido el '+_raFechaLarga(hoy)+'</div></div></div>';
+
+  /* 2 · Tira de datos */
+  var areas={}, quienes={};
+  lista.forEach(function(a){ areas[_raArea(a)]=1; quienes[_raQuien(a,propios)]=1; });
+  var nAreas=Object.keys(areas).length, nQuien=Object.keys(quienes).length;
+  var causaTop='', cMax=0;
+  Object.keys(s.causas).forEach(function(c){ if(s.causas[c]>cMax){ cMax=s.causas[c]; causaTop=c; } });
+  var revTxt=s.rev?_nodoFecha(s.rev.f):'Nunca', revPor=s.rev&&s.rev.por?esc(s.rev.por):'';
+  var trabPie=s.trab ? 'más repetida: '+esc(TRABA_CAUSAS[causaTop]||'sin causa') : '';
+  var emite=esc((S.user&&S.user.nombre)||'');
+  h+='<div class="hj-tira">';
+  if(esCont){
+    var per=(S.personal||[]).find(function(p){ return p && String(p.nombre||'').trim()===H.k; });
+    var ini='', fin='';
+    lista.forEach(function(a){
+      var fi=String(a.fecha_inicio||'').slice(0,10), ff=String(a.fecha_fin||'').slice(0,10);
+      if(fi && (!ini || fi<ini)) ini=fi;
+      if(ff && (!fin || ff>fin)) fin=ff;
+    });
+    h+=_hjDato('Contratista', esc(H.nombre), H.k===PAL_PROPIO?'personal de la casa':esc((per&&per.oficio)||''))
+      +_hjDato('Partidas', s.total, nAreas+' ubicaci'+(nAreas===1?'ón':'ones'))
+      +_hjDato('Última revisión', revTxt, revPor)
+      +_hjDato('Periodo', ini||fin ? (ini?_nodoFecha(ini):'—')+' al '+(fin?_nodoFecha(fin):'—') : '—', 'primer inicio · última entrega')
+      +_hjDato('Trabadas', s.trab, trabPie)
+      +_hjDato('Emitido por', emite, '');
+  }else{
+    var niv=_raNivel(H.k), hermanas=Object.keys(_raStats(filas, function(a){ return [_raArea(a)]; }, propios))
+      .filter(function(a){ return _raNivel(a)===niv && a!==H.k; }).sort(_raOrdenAreas);
+    h+=_hjDato('Ubicación', esc(H.nombre), '')
+      +_hjDato('Nivel', esc(_raNivelNombre(niv)), hermanas.length?'también: '+esc(hermanas.map(function(a){ return _recNom(a).replace(/\s+N\d+$/,''); }).join(' · ')):'')
+      +_hjDato('Partidas', s.total, nQuien+' contratista'+(nQuien===1?'':'s'))
+      +_hjDato('Última revisión', revTxt, revPor)
+      +_hjDato('Trabadas', s.trab, trabPie)
+      +_hjDato('Emitido por', emite, '');
+  }
+  h+='</div>';
+
+  /* 3 · Los cuatro cuadros. Negro, verde, morado y naranja, en ese orden. */
+  h+='<div class="hj-cuadros">'
+    +_hjCuadro('Contratadas', s.total, 'total', 'var(--hj-neg)', s.total+' ítem'+(s.total===1?'':'s')+(esCont?' · '+nAreas+' ubicaci'+(nAreas===1?'ón':'ones'):''))
+    +_hjCuadro('Completadas', completas?s.comp:'…', 'comp', 'var(--hj-ver)', completas?_hjPct(s.comp,s.total)+' del total':'trayendo…')
+    +_hjCuadro('Abiertas', s.ab, 'ab', 'var(--hj-mor)', _hjPct(s.ab,s.total)+' del total')
+    +_hjCuadro('Vencidas', s.venc, 'venc', 'var(--hj-nar)', _hjPct(s.venc,s.ab)+' de las abiertas')
+    +'</div>';
+
+  /* 4 · Las dos barras. Son dos números distintos A PROPÓSITO: mucho
+     empezado y poco cerrado es justo lo que hay que ver. */
+  var pCerr=completas ? Math.round(100*s.comp/Math.max(1,s.total)) : null;
+  var barra=function(nom, pct, color, met){
+    var num=pct==null ? '<span class="hj-n0">…</span>' : (pct ? '<button class="hj-n" onclick="raVer('+_raRef({dim:H.dim,k:H.k,nombre:H.nombre,met:met})+')">'+pct+'%</button>' : '<span class="hj-n0">0%</span>');
+    return '<div class="hj-barra"><div class="hj-barra-t"><span>'+nom+'</span>'+num+'</div>'
+      +'<div class="hj-barra-f"><i style="width:'+(pct||0)+'%;background:'+color+'"></i></div></div>';
+  };
+  h+='<div class="hj-barras">'+barra('Avance (promedio)', av, 'var(--hj-ver)', 'total')+barra('Partidas cerradas', pCerr, 'var(--hj-mor)', 'comp')+'</div>';
+
+  /* 5 · La banda: MOVIMIENTO RECIENTE, en el sitio del pago. */
+  var desde=M?M.desde:_isoAddDias(hoy,-(RA_MOV_DIAS-1));
+  h+='<div class="hj-banda"><div class="hj-banda-izq">ÚLTIMOS 7 DÍAS<small>'+_nodoFecha(desde)+' al '+_nodoFecha(hoy)+'</small></div>';
+  if(!movListo){
+    h+='<div class="hj-banda-vacia" style="color:var(--text3)">Trayendo el movimiento…</div>';
+  }else if(M.err){
+    h+='<div class="hj-banda-vacia" style="color:var(--red)">'+esc(M.err)+': no se pudo leer el movimiento.</div>';
+  }else{
+    var cuenta=function(met){ return lista.filter(function(a){ return _raPasa(a,met); }).length; };
+    var mc=cuenta('mcerr'), ma=cuenta('mav'), mt=cuenta('mtoc');
+    if(!mt) h+='<div class="hj-banda-vacia">Sin movimiento en los últimos 7 días.</div>';
+    else h+='<div class="hj-banda-cas hj-banda-c1"><div class="hj-et">Cerradas</div><div class="hj-cifra">'+_hjNum(mc,'mcerr')+'</div><div class="hj-pie">se completaron</div></div>'
+      +'<div class="hj-banda-cas"><div class="hj-et">Avanzaron</div><div class="hj-cifra">'+_hjNum(ma,'mav')+'</div><div class="hj-pie">movieron el %, sin cerrar</div></div>'
+      +'<div class="hj-banda-cas hj-banda-fin"><div class="hj-et">Partidas tocadas</div><div class="hj-cifra">'+_hjNum(mt,'mtoc')+'</div><div class="hj-pie">con algún movimiento</div></div>';
+  }
+  h+='</div>';
+
+  /* 6 · Los dos paneles */
+  var masVieja=0;
+  lista.forEach(function(a){ var d=_raDiasVencida(a); if(d>masVieja) masVieja=d; });
+  var props=_raPropuestas().filter(function(a){ return _raEn(a,H,propios); }).length;
+  h+='<div class="hj-paneles"><div class="hj-panel"><div class="hj-panel-t">'+(esCont?'Este contratista':'Esta ubicación')+'</div>'
+    +_hjRenglon('Partidas totales', _hjNum(s.total,'total'))
+    +_hjRenglon('Completadas', completas?_hjNum(s.comp,'comp'):'<span class="hj-n0">…</span>')
+    +_hjRenglon('Abiertas', _hjNum(s.ab,'ab'))
+    +_hjRenglon('Vencidas', _hjNum(s.venc,'venc'))
+    +_hjRenglon('Trabadas', _hjNum(s.trab,'trab'))
+    +_hjRenglon('Avance promedio', av==null?'<span class="hj-n0">…</span>':_hjNum(av?av+'%':0,'total'), 'hj-r-tot')
+    +'</div>';
+  h+='<div class="hj-panel"><div class="hj-panel-t">Estado al '+_nodoFecha(hoy)+'</div>'
+    +_hjRenglon('Abiertas', _hjNum(s.ab,'ab'))
+    +_hjRenglon('De ellas, vencidas', _hjNum(s.venc,'venc'))
+    +_hjRenglon('Días de atraso de la más vieja', _hjNum(masVieja,'venc'))
+    +_hjRenglon('Trabadas', _hjNum(s.trab,'trab'))
+    +Object.keys(TRABA_CAUSAS).concat(s.causas['']?['']:[]).map(function(c){
+      return _hjRenglon(esc(TRABA_CAUSAS[c]||'Sin causa'), _hjNum(s.causas[c]||0,'trab',c), 'hj-r-sub');
+    }).join('')
+    +_hjRenglon('Propuestas esperando aprobación<br><small>no cuentan en ningún total</small>', _hjNum(props,'prop'), 'hj-r-tot hj-r-prop')
+    +'</div></div>';
+
+  /* 7 · El resumen de abajo: por área en la del contratista, por contratista
+     en la de la ubicación (la que más debe arriba). Cada celda es el cruce. */
+  var porFila=_raStats(lista, function(a){ return [esCont?_raArea(a):_raQuien(a,propios)]; }, propios);
+  var ks=Object.keys(porFila).sort(esCont ? _raOrdenAreas : function(x,y){
+    return (porFila[y].ab-porFila[x].ab) || (porFila[y].total-porFila[x].total) || x.localeCompare(y,'es');
+  });
+  var celda=function(k){ return esCont ? {dim:'celda',k:k,k2:H.k,nombre:k+' · '+H.nombre} : {dim:'celda',k:H.k,k2:k,nombre:H.nombre+' · '+k}; };
+  var fila=function(nom, st, ref, cls){
+    var avf=completas ? Math.round(st.sumPct/Math.max(1,st.total)) : null;
+    return '<tr'+(cls?' class="'+cls+'"':'')+'><td>'+esc(nom)+'</td><td>'+_hjNum(st.total,'total',null,ref)+'</td>'
+      +'<td>'+(completas?_hjNum(st.comp,'comp',null,ref):'…')+'</td><td>'+_hjNum(st.ab,'ab',null,ref)+'</td>'
+      +'<td>'+_hjNum(st.venc,'venc',null,ref)+'</td><td>'+(avf==null?'…':_hjNum(avf?avf+'%':0,'total',null,ref))+'</td></tr>';
+  };
+  h+='<div class="hj-res"><div class="hj-panel-t">Resumen por '+(esCont?'área':'contratista')+'</div>';
+  if(!ks.length) h+='<div class="hj-nota">No tiene partidas.</div>';
+  else h+='<div class="hj-tb"><table><thead><tr><th>'+(esCont?'Ubicación':'Contratista')+'</th><th>Total</th><th>Complet.</th><th>Abiertas</th><th>Vencidas</th><th>Avance</th></tr></thead><tbody>'
+    +ks.map(function(k){ return fila(esCont?_recNom(k):k, porFila[k], celda(k)); }).join('')
+    +fila('Total', s, H, 'hj-tot')+'</tbody></table></div>';
+  h+='<div class="hj-nota">Avance = promedio del % de cada partida (la completada vale 100). Vencida = abierta con la entrega ya pasada. '
+    +'Las propuestas que esperan a Gerencia no suman.</div>';
+  h+='</div>';
+  return h+'</div>';
+}
+
+/* Imprimir la hoja: la misma hoja, con el mismo CSS (`#hj-css`), en blanco y
+   letra negra aunque el app esté en oscuro, y en UNA página: si no cabe en el
+   A4 se encoge entera (`zoom`) en vez de partirse. Se abre en ventana aparte,
+   como `raImprimir`, y en el iPhone sale la hoja de compartir, que guarda PDF. */
+function raHojaImprimir(){
+  var el=document.getElementById('hj-hoja'), css=document.getElementById('hj-css');
+  if(!el){ showToast('Abre primero la hoja','warn',3000); return; }
+  var logo=new URL('bridex-logo.png', location.href).href;
+  var cuerpo=el.outerHTML.replace('class="hj"','class="hj hj-papel"')
+    .replace(/src="\.\/bridex-logo\.png"/,'src="'+logo+'"')
+    .replace(/\sonclick="[^"]*"/g,'');
+  var H=S.ra.hoja||{};
+  var win=window.open('','_blank','width=900,height=1100');
+  if(!win){ showToast('El navegador no dejó abrir la hoja para imprimir','warn',5000); return; }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=760">'
+    +'<title>Reporte de avance — '+esc(H.nombre||'')+' — '+today()+'</title><style>'
+    +':root{--bg:#fff;--bg2:#fff;--bg3:#fff;--text:#111;--text2:#333;--text3:#555;--border:#c8c8c8;--border2:#b5b5b5;--red:#b91c1c;'
+    +'--accent:#833088;--accent-soft:#fff;--font:Arial,Helvetica,sans-serif}'
+    +'html,body{margin:0;background:#fff;color:#111}body{width:720px;padding:0}'
+    /* Sin las reglas del teléfono: la ventana mide la hoja con SU ancho (en el
+       iPhone, 390 px, y se apilaba todo) y el papel la dibuja con el de la hoja.
+       Medida y papel tienen que ser la misma hoja, o el ajuste a una página
+       calcula sobre otra y sale en dos. */
+    +(css?css.textContent.replace(/@media\(max-width:600px\)\{[\s\S]*?\n\}/,''):'')
+    +'@page{size:A4 portrait;margin:9mm}'
+    +'</style></head><body>'+cuerpo
+    +'<script>(function(){var ya=0;function ir(){if(ya)return;ya=1;'
+    +'var alto=document.body.scrollHeight, cabe=990;'           // A4 con 9 mm de margen ≈ 1.054 px a 96 ppp; lo demás es holgura
+    +'if(alto>cabe) document.body.style.zoom=(cabe/alto).toFixed(3);'
+    +'setTimeout(function(){window.print();},60);}'
+    +'var im=document.querySelector(".hj-logo");'
+    +'if(im&&!im.complete){im.onload=ir;im.onerror=ir;setTimeout(ir,2500);}else window.onload=ir;'
+    +'if(document.readyState==="complete")ir();})();<\/script></body></html>');
   win.document.close();
 }
 

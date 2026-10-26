@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v146 — 26 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v147 — 26 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -255,6 +255,7 @@ mismos botones que cualquier otra.
 | **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
 | **LO QUE VE UN INGENIERO al poner su PIN (Moisés, Karina)** | **El Modo Campo** — `debeAbrirCampo()`, `iniciarModoCampo()`, `renderCampo()`, `campoMarcar()`. Pantalla aparte, en cualquier aparato, para todo rol `ing`. **No estaba en este mapa hasta la v139.** Ver «El Modo Campo» abajo |
 | **EL AVANCE POR UBICACIÓN, POR CONTRATISTA Y CRUZADO, con cada número tocable** | **Reportes → «Avance»** (v146), la primera de la sub-barra, y en el cajón «Reportes — Avance por ubicación y contratista» — `renderAvanceRep()`, `_raFilas()`, `_raPasa()`, `_raEn()`, `raVer()`, `raImprimir()`. Solo lectura. Ver «AVANCE (v146)» abajo |
+| **LA HOJA DE UN CONTRATISTA O DE UNA UBICACIÓN, para imprimir y mandar** | **Reportes → Avance → «Hoja ›»** en una fila de Por contratista o de un área (v147) — `raHoja()`, `_raHojaHTML()`, `_raCargarMov()`, `raHojaImprimir()`, CSS en `<style id="hj-css">`. Sin dinero. Ver «LA HOJA DE REPORTE (v147)» abajo |
 | ~~Agregar una actividad dictándola~~ | **Se retiró en la v144** (decisión del dueño). Ver «DICTAR (v143) — RETIRADO EN LA v144» abajo. **No la vuelvas a construir sin que él lo pida** |
 | **Dejar dicho que una partida NO se puede hacer todavía, y por qué** | **Modo Campo → «Trabada»** y **Modo Obra → el cuarto botón** (v139) — `moTrabaAbrir()`, `moTrabar()`, `Acciones.trabar()` / `destrabar()`, `TRABA_CAUSAS`. Ver «Trabadas y propuestas» abajo |
 | **Proponer una partida que no estaba en la lista** | **Modo Campo → «Proponer a Gerencia»** (`campoProponer()`) y **Modo Obra → un contratista abierto → «+ Proponer a Gerencia»** (v139, renombrado en la v140: `PAL_PROPONER`) — `_propFormHTML()`, `propEnviar()`, `Acciones.proponer()`. Entra como propuesta y no cuenta hasta que Gerencia la aprueba |
@@ -310,8 +311,11 @@ POR NIVEL**, con un rótulo delante de cada grupo (`.pil-nivel`, no se toca):
 NIVEL 1 · Parqueo │ NIVEL 2 · Apto 2A · Apto 2B · Áreas Comunes │ … NIVEL 7 ·
 Penthouse B · Áreas Comunes · GYM │ TODA LA TORRE · escaleras, fachadas,
 terraza, techo, General. Lo decide `_nivelArea`: `N#` es ese piso, **Parqueo
-es el 1** (en la base no hay ninguna ubicación «N1»; el presupuesto lo llama
-«Primer nivel — Parqueos generales») y lo demás es 0, «Toda la torre», al final.
+es el 1** (el presupuesto lo llama «Primer nivel — Parqueos generales») y lo
+demás es 0, «Toda la torre», al final. **Desde el 26-oct SÍ hay una «N1 —
+Lobby»** (24 partidas sacadas del Parqueo, la Terraza y la Fachada Frontal):
+el Nivel 1 tiene dos áreas, Parqueo y Lobby, y `_nivelArea` las junta sin
+cambiar nada (el `N1` entra por la regla `N#`). Comprobado en la v147.
 Dentro del nivel, primero los apartamentos. «Áreas Comunes N2» se lee «Áreas
 Comunes» bajo su rótulo. «Sin ubicación» **no** lleva pastilla:
 no es un sitio (v121), y `_actToggleUbicacion('')` además borra todos los de
@@ -2998,6 +3002,67 @@ Parqueo, «Toda la torre» lo que no es de un piso, y «Sin ubicación» al fina
 - **NO ESCRIBE NADA.** El refresco de 90 s lo repinta si está a la vista y no
   hay un desglose abierto (`_renderReportesSiSeVe`).
 
+### LA HOJA DE REPORTE (v147) — la forma de la cubicación, sin el dinero
+
+Pedido del dueño: que el reporte se vea como el «Reporte de cubicación» de la
+Mecca App de su PC, y sacar fácil la hoja de **un contratista** o de **una
+ubicación** para mandarla. **Decisión suya, sin vueltas: el formato SÍ, el
+dinero NO.** Contratos, cubicaciones, pagos y retenciones se quedan en la Mecca
+App. Ni `precio_unitario` ni `valor` de `obra_partidas` (los tienen 273 de
+1.303: el resto saldría en cero, que es peor que no ponerlos). La lista de
+chequeo comprueba que en la hoja no aparece «RD$», «precio», «monto» ni
+«cubicación».
+
+- **Se abre con «Hoja ›»** en cada fila de Por contratista y de las áreas de
+  Por ubicación (no en los niveles). `S.ra.hoja={dim,k,nombre}`; «‹ Volver a los
+  contratistas / las ubicaciones» la cierra y devuelve al mismo sitio de la
+  lista. **Las tres vistas de la v146 no cambiaron.**
+- **De arriba abajo, como la de cubicación**: cabecera (logo Bridex, «Reporte de
+  avance», «Proyecto Mecca Residence», «Emitido el …», línea morada `#833088`);
+  tira de seis datos; cuatro cuadros — Contratadas (negro), Completadas (verde
+  `#346837`), Abiertas (morado), Vencidas (naranja) —; dos barras, **Avance
+  (promedio)** y **Partidas cerradas**, distintas a propósito (mucho empezado y
+  poco cerrado es lo que hay que ver); la banda **«MOVIMIENTO RECIENTE»** en el
+  sitio del pago; dos paneles («Este contratista / Esta ubicación» y «Estado al
+  …»), y abajo **Resumen por área** (hoja de contratista, en orden del edificio)
+  o **por contratista** (hoja de ubicación, el que más abiertas debe arriba).
+- **Cuenta con las piezas de la v146** (`_raEn`, `_raPasa`, `_raStats`,
+  `_raQuien`, `_raArea`) y **todo número abre su desglose por `raVer`**, con
+  «‹ Volver a la hoja». Un cero no se toca. El resumen usa `_raQuien`/`_raArea`,
+  que ponen cada partida en UNA fila: **la suma del resumen es el total de
+  arriba** (comprobado columna por columna). Las celdas del resumen son el cruce
+  (`dim:'celda'`).
+- **La banda de 7 días** (`_raCargarMov`, hoy y los seis de antes): **Cerradas**
+  (`accion=completado` o «→ completado» en el detalle), **Avanzaron** (`avance` o
+  «avance:» en el detalle, **y no cerradas**: así no cuentan la misma dos veces)
+  y **Partidas tocadas** (cualquier renglón). Si no hubo nada: **«Sin movimiento
+  en los últimos 7 días.»** — con todas sus letras. Mientras carga dice
+  «Trayendo el movimiento…», y si falla lo dice: nunca «sin movimiento» por un
+  error.
+  - **Tres lecturas de solo `entidad_id` por `sbTodo`, ~66 KB** medidos el 26-oct,
+    una vez cada 10 minutos y solo con una hoja abierta. **Por `sbTodo` y no
+    `sb`**: la base no da más de 1.000 filas por pedido y la semana ya tenía
+    1.660 renglones; la primera versión decía 334 tocadas de Daniel y eran 378.
+  - **Los renglones «Ubicacion corregida: …» NO cuentan como tocadas.** El
+    26-oct se corrigió la ubicación de 209 partidas (el Lobby y el Penthouse), y
+    con ellos la hoja del Penthouse decía 201 de 201 tocadas en la semana.
+    Arreglar el dato no es mover la obra. **Por eso no sale de
+    `S.ultimoCambio`**, que no distingue.
+- **Las propuestas no suman**: renglón aparte al final del segundo panel, en
+  cursiva, «no cuentan en ningún total». Su desglose sale de `S.propuestas`
+  (`_raPropuestas`), no de las filas, y no abre la ficha.
+- **Imprimir** (`raHojaImprimir`, desde el mismo botón cuando hay una hoja
+  abierta): ventana nueva con **el mismo CSS** —el bloque `<style id="hj-css">`,
+  que existe aparte para eso— y la clase `.hj-papel`: **blanco y letra negra
+  aunque el app esté en oscuro**, la banda con borde morado en vez de bloque
+  sólido (sin fondo no se perdería nada), sin `onclick`. **Una página A4**: si
+  no cabe, se encoge entera con `zoom`. **La ventana de imprimir quita las reglas
+  del teléfono** del CSS: en el iPhone la ventana mide 390 y la hoja se medía
+  apilada mientras el papel la dibujaba ancha — salía en dos páginas.
+- **A 390**: tira de dos en dos, cuadros de dos en dos, paneles uno debajo del
+  otro, y el resumen cabe sin deslizarse (320 de 320 px).
+- **NO ESCRIBE NADA.**
+
 ### DICTAR (v143) — RETIRADO EN LA v144
 
 La v143 metió una pestaña «Dictar» (Actividades) y un botón «Dictar una
@@ -4256,6 +4321,23 @@ formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
 
+**Desde la v147 tiene una octava parte, «LA HOJA DE REPORTE»**: catorce
+comprobaciones a 390 y con el app en oscuro. Abre la hoja de Daniel, Yelson y
+el personal propio, y del Apto 2A, Apto 4A y N1 — Lobby, y compara contra una
+cuenta en Node **y** contra la fila de la v146; que el resumen sume el total;
+cinco desgloses del mismo tamaño que su número; la banda con un `obra_cambios`
+inventado (un renglón de hace 10 días, una «Ubicacion corregida» y 1.100
+renglones delante — **el doble corta en 1.000 por pedido, como la base**); la
+frase de sin movimiento; la propuesta aparte; y **la impresión de verdad**: lo
+que se manda a la impresora se vuelve PDF A4 y se cuentan las páginas (una).
+Con `--fotos` deja además la hoja, el HTML y el PDF impresos.
+
+*Al correrla en Windows (v147):* `RAIZ` sale de `import.meta.url` con forma de
+Linux y Chromium está en `/opt`; se corrió una copia con `RAIZ` y `CHROME`
+puestos a mano y Playwright instalado aparte. La fila de VELOCIDAD «el pliegue
+… se arma al tocarla» sale ✗ en esa máquina **también contra la v146
+publicada**: es del entorno, no de la versión.
+
 **Desde la v146 tiene una séptima parte, «AVANCE»**: entra por el cajón a 390
 y compara los números de Apto 2A, Apto 4A y Parqueo, y de Daniel, Yelson y el
 personal propio, contra una cuenta hecha en Node con las reglas del pedido;
@@ -4348,6 +4430,12 @@ orden de magnitud.
   inventes otra lista:
   `N2 — Apto 2A`, `2B`, `N3 — 3A`, `3B`, `N4 — 4A`, `4B`, `N5 — 5A`,
   `5B`, `N6 — 6A`, `6B`, `N7 — Penthouse B`.
+  **⚠ PENDIENTE desde el 26-oct:** en la base el N7 se llama ahora **«N7 —
+  Penthouse»** (un solo apartamento, 201 partidas), pero `REC_ORDEN` y otros
+  sitios del código (`_ubicApartamentos`/la lista por nivel con «Penthouse A» y
+  «Penthouse B», el nombre del nivel 7 al tocar la torre, las etiquetas cortas)
+  siguen con «Penthouse B». Hasta que se arregle, **las pantallas de «solo
+  apartamentos» no ven el Penthouse**. La v147 no lo tocó: avisado.
   Hay otras áreas que **no** son apartamentos: `Parqueo`, `Fachada
   Frontal`, `Fachada Posterior`, `Escalera Principal`, `Escalera de
   Emergencia`, `Terraza`, `General`, `Toda la obra`, y las áreas comunes

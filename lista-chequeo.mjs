@@ -27,7 +27,7 @@
    Si un renglón sale DISTINTO a propósito, se dice en el commit por qué. */
 import { createRequire } from 'module';
 import { execFileSync } from 'child_process';
-import { readFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import http from 'http';
 import path from 'path';
 
@@ -1153,6 +1153,211 @@ async function probarAvance(nombreVer, html, b){
   return r;
 }
 
+// ── LA HOJA DE REPORTE (v147): la de un contratista y la de una ubicación ──
+/* Como AVANCE: los números se comparan contra una cuenta hecha AQUÍ, en Node,
+   con las reglas del pedido. Y además contra la fila de la v146 de la misma
+   persona o sitio: si no cuadran, uno de los dos está mal. El movimiento de 7
+   días sale de un `obra_cambios` inventado, con un renglón viejo que NO puede
+   contar. La impresión se comprueba de verdad: la hoja que se manda a la
+   impresora se vuelve PDF A4 y se cuentan las páginas. */
+const HOJA_ESPERADO={
+  cuadraCont:{v:'cuadran 3 de 3', d:'total, completadas, abiertas, vencidas y trabadas de la hoja de Daniel, Yelson y el personal propio = la cuenta directa'},
+  cuadraUbic:{v:'cuadran 3 de 3', d:'lo mismo para la hoja del Apto 2A, del Apto 4A y del N1 — Lobby'},
+  igualV146:{v:'iguales 6 de 6', d:'abiertas, vencidas y completadas de cada hoja = lo que dice su fila en la vista de la v146'},
+  resumenSuma:{v:'suma exacto 2 de 2', d:'las filas del resumen de abajo (por área / por contratista) suman exactamente el total de arriba, columna por columna'},
+  desglose:{v:'exacto 5 de 5', d:'tocar vencidas, una celda del resumen, «tocadas» de la banda, una causa de traba y la propuesta enseña una lista del MISMO tamaño'},
+  movimiento:{v:'cerradas 2 · avanzaron 2 · tocadas 6', d:'la banda de Daniel cuenta lo de los últimos 7 días y deja fuera el renglón de hace 10 y la corrección de ubicación, aunque la semana pase de 1.000 renglones'},
+  sinMovimiento:{v:'dice la frase', d:'un contratista sin nada en 7 días dice «Sin movimiento en los últimos 7 días.», no una banda vacía'},
+  propuesta:{v:'no suma · renglón 1', d:'la propuesta del 2A no cambia ningún total de la hoja y sale en su renglón aparte'},
+  nivel1:{v:'Parqueo · N1 — Lobby · las dos con hoja', d:'el Nivel 1 enseña el Parqueo y el Lobby, y cada uno abre su hoja por separado'},
+  telefono:{v:'2 por fila · paneles apilados · página no', d:'a 390 los cuadros van de dos en dos, los paneles uno debajo del otro y nada se desborda'},
+  dedos:{v:0, d:'nada de lo que se toca en la hoja mide menos de 40 px'},
+  imprimir:{v:'1 página · fondo blanco · sin botones vivos · logo', d:'la hoja impresa sale en UNA página A4, en blanco aunque el app esté oscuro, sin onclick y con la cabecera Bridex'},
+  sinDinero:{v:'sin montos', d:'ni RD$, ni precio, ni monto, ni cubicación en la hoja'},
+  ceroEscrituras:{v:0, d:'la hoja no escribe nada'},
+};
+async function probarHoja(nombreVer, html, b){
+  const D=datos(); const {ACTS,PERS}=D;
+  const ESC=[]; const r={};
+  const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
+  const ok=(q,body)=>q.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  const hoyNode=(()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
+  const menos=(iso,n)=>{ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); };
+  // El Lobby nuevo del Nivel 1 (26-oct), dos trabadas de Daniel y una propuesta en el 2A.
+  for(let i=0;i<6;i++) ACTS.push({id:'lob'+i,descripcion:'Lobby partida '+i,area:'N1 — Lobby',estado:i<2?'completado':'pendiente',porcentaje:i<2?'100':'25',
+    tipo_personal:'contratista',personal_nombre:i%2?'Daniel Espinal':'Milo',fecha:menos(hoyNode,20),fecha_inicio:menos(hoyNode,20),fecha_fin:menos(hoyNode,i<4?3:-9),prioridad:'normal'});
+  ACTS.push({id:'tr1',descripcion:'Trabada por material',area:'N2 — Apto 2A',estado:'pausada',porcentaje:'50',tipo_personal:'contratista',personal_nombre:'Daniel Espinal',
+    fecha:menos(hoyNode,15),fecha_inicio:menos(hoyNode,15),fecha_fin:menos(hoyNode,2),estancada_causa:'material',estancada_motivo:'cemento',prioridad:'normal'});
+  ACTS.push({id:'tr2',descripcion:'Trabada por otro taller',area:'N4 — Apto 4A',estado:'pausada',porcentaje:'0',tipo_personal:'contratista',personal_nombre:'Daniel Espinal',
+    fecha:menos(hoyNode,15),fecha_inicio:menos(hoyNode,15),fecha_fin:menos(hoyNode,-5),estancada_causa:'otro_taller',prioridad:'normal'});
+  ACTS.push({id:'prop1',descripcion:'Propuesta que no cuenta',area:'N2 — Apto 2A',estado:'pendiente',porcentaje:'0',tipo_personal:'contratista',personal_nombre:'Milo',
+    fecha:hoyNode,fecha_inicio:'',fecha_fin:'',propuesta:true,propuesta_por:'Ing. Karina Breton',propuesta_fecha:hoyNode});
+  // El historial: cinco de Daniel en la semana y uno de hace 10 días que NO cuenta. Yelson, nada.
+  const dan=ACTS.filter(a=>a.personal_nombre==='Daniel Espinal'&&a.tipo_personal!=='propio'&&a.propuesta!==true).map(a=>a.id);
+  const CAMB=[
+    {entidad_id:dan[0],accion:'completado',detalle:'Marcada como completada',fecha:hoyNode},
+    {entidad_id:dan[1],accion:'editado',detalle:'estado: en_progreso → completado',fecha:menos(hoyNode,2)},
+    {entidad_id:dan[1],accion:'avance',detalle:'75%',fecha:menos(hoyNode,3)},
+    {entidad_id:dan[2],accion:'avance',detalle:'50%',fecha:menos(hoyNode,1)},
+    {entidad_id:dan[3],accion:'editado',detalle:'avance: 25% → 50%',fecha:menos(hoyNode,6)},
+    {entidad_id:dan[4],accion:'revisado',detalle:'Revisada sin cambios',fecha:hoyNode},
+    {entidad_id:dan[5],accion:'completado',detalle:'Marcada como completada',fecha:menos(hoyNode,10)},
+    // Arreglar el dato no es mover la obra: la corrección de ubicación del 26-oct no cuenta.
+    {entidad_id:dan[6],accion:'editado',detalle:'Ubicacion corregida: Terraza -> N1 - Lobby',fecha:hoyNode},
+  ].map(c=>Object.assign({entidad:'actividad'},c));
+  // 1.100 renglones de UNA partida delante de todo: la base no da más de 1.000
+  // por pedido, y sin paginar se perdería lo de detrás (pasó con la primera v147).
+  for(let i=0;i<1100;i++) CAMB.unshift({entidad:'actividad',entidad_id:dan[7],accion:'editado',detalle:'notas',fecha:hoyNode});
+  const ctx=await b.newContext({serviceWorkers:'block',viewport:{width:390,height:844},colorScheme:'dark'});
+  await ctx.addInitScript(()=>{ window.confirm=()=>true; window.alert=()=>{};
+    // La ventana de imprimir: se guarda lo que el app escribe en ella.
+    window.open=()=>{ const w={_html:'', document:{write:t=>{w._html+=t;}, close:()=>{}}}; window.__impresa=w; return w; }; });
+  await ctx.route('**', q=>{
+    const u=q.request().url(), m=q.request().method();
+    if(u.startsWith(ORIGEN)) return q.continue();
+    if(!/\/rest\/v1\//.test(u)) return q.abort();
+    const pth=decodeURIComponent(u.split('/rest/v1/')[1]||''), base=pth.split('?')[0];
+    if(m!=='GET'){ ESC.push(m+' '+base); return ok(q,[]); }
+    let f=[];
+    if(base==='obra_actividades'){ f=ACTS;
+      if(/estado=neq\.completado/.test(pth)) f=f.filter(a=>a.estado!=='completado');
+      if(/estado=eq\.completado/.test(pth)) f=f.filter(a=>a.estado==='completado');
+      if(/propuesta=not\.is\.true/.test(pth)) f=f.filter(a=>a.propuesta!==true);
+      else if(/propuesta=is\.true/.test(pth)) f=f.filter(a=>a.propuesta===true); }
+    else if(base==='obra_personal') f=PERS;
+    else if(base==='obra_cambios'){ f=CAMB;
+      const g=/fecha=gte\.(\d{4}-\d{2}-\d{2})/.exec(pth); if(g) f=f.filter(c=>c.fecha>=g[1]);
+      if(/accion\.eq\.completado/.test(pth)) f=f.filter(c=>c.accion==='completado'||/→ completado/.test(c.detalle));
+      else if(/accion\.eq\.avance/.test(pth)) f=f.filter(c=>c.accion==='avance'||/avance:/.test(c.detalle));
+      else if(/detalle\.not\.ilike\.Ubicaci/.test(pth)) f=f.filter(c=>!/^Ubicaci.n corregida/i.test(c.detalle||''));
+      if(!(q.request().headers()['range'])) f=f.slice(0,1000); }   // como la base: 1.000 por pedido
+    const rg=q.request().headers()['range']||''; if(rg){ const [d0,h]=rg.split('-').map(Number); f=f.slice(d0,h+1); }
+    return ok(q,f);
+  });
+  const p=await ctx.newPage(); p.setDefaultTimeout(8000);
+  const G=(f,...a)=>p.evaluate(f,...a);
+  const PROP=new Set(PERS.filter(x=>x.tipo==='propio').map(x=>x.nombre));
+  const quien=a=>{ const tp=a.tipo_personal||'', n=String(a.personal_nombre||'').trim();
+    if(tp==='propio') return 'Personal x la casa'; if(tp==='ingeniero') return 'Ingeniería'; if(!n) return 'Sin asignar';
+    const ns=n.split(',').map(x=>x.trim()).filter(Boolean); return ns.every(x=>PROP.has(x))?'Personal x la casa':n; };
+  const vivas=ACTS.filter(a=>a.propuesta!==true);
+  const cuenta=pred=>{ const l=vivas.filter(pred);
+    return {total:l.length, comp:l.filter(a=>a.estado==='completado').length, ab:l.filter(a=>a.estado!=='completado').length,
+      venc:l.filter(a=>a.estado!=='completado'&&a.fecha_fin&&a.fecha_fin<hoyNode).length, trab:l.filter(a=>a.estado==='pausada').length}; };
+  // Lo que dice la hoja abierta: los cuatro cuadros y el renglón «Trabadas» del primer panel.
+  const leerHoja=()=>G(()=>{ const h=document.getElementById('hj-hoja'); if(!h) return null;
+    const c=[...h.querySelectorAll('.hj-cuadro .hj-cifra')].map(x=>+x.textContent);
+    const tr=[...h.querySelectorAll('.hj-panel')][0].querySelectorAll('.hj-r')[4].lastElementChild.textContent;
+    return {total:c[0],comp:c[1],ab:c[2],venc:c[3],trab:+tr}; });
+  const leerFila=nom=>G(n=>{ const f=[...document.querySelectorAll('#c-ra .ra-fila')].find(x=>x.querySelector('.ra-nom-t').textContent===n); if(!f) return null;
+    const v=[...f.querySelectorAll('.ra-num b')].map(x=>x.textContent); return {ab:+v[0],venc:+v[1],comp:+v[2]}; },nom);
+  const abrirHoja=async nom=>{ await p.locator('#c-ra .ra-fila',{has:p.locator('.ra-nom-t',{hasText:new RegExp('^'+nom.replace(/[()]/g,'\\$&')+'$')})}).locator('.ra-hoja-b').click(); await p.waitForTimeout(300);
+    for(let t=0;t<20;t++){ if(await G(()=>!/Trayendo el movimiento/.test(document.getElementById('c-ra').innerText))) break; await p.waitForTimeout(200); } };
+  const cerrarHoja=async()=>{ await p.locator('#c-ra .hj-volver button').click(); await p.waitForTimeout(200); };
+  // El tamaño de la lista que abre un botón de la hoja.
+  const tocar=async(loc,numLoc)=>{ const n=parseInt(await (numLoc||loc).textContent(),10); await loc.click(); await p.waitForTimeout(300);
+    for(let i=0;i<30 && await p.locator('#c-ra .ra-mas').count();i++){ await p.locator('#c-ra .ra-mas').click(); await p.waitForTimeout(100); }
+    const l=await p.locator('#c-ra .ra-act').count(), dice=+(await p.locator('#c-ra .ra-det-t b').textContent());
+    await p.locator('#c-ra .ra-volver').click(); await p.waitForTimeout(200);
+    return {n,l,dice,ok:n===l&&l===dice}; };
+  const resumenSuma=()=>G(()=>{ const h=document.getElementById('hj-hoja');
+    const filas=[...h.querySelectorAll('.hj-tb tbody tr')], tot=filas.pop();
+    const num=td=>parseInt(td.textContent,10)||0;
+    return [1,2,3,4].every(c=>filas.reduce((s,f)=>s+num(f.children[c]),0)===num(tot.children[c]))
+      && num(tot.children[1])===+h.querySelector('.hj-cuadro .hj-cifra').textContent; });
+  try{
+    await p.goto(ORIGEN+'/index.html',{waitUntil:'load'});
+    await G(()=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify({id:'nilson',nombre:'Ing. Nilson',rol:'admin'})); }catch(e){} });
+    await p.reload({waitUntil:'load'});
+    for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S.acts&&S.acts.length).catch(()=>0)) break; await p.waitForTimeout(500); }
+    await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1500);
+    await p.locator('button[onclick*="toggleDrawer"]:visible').first().click(); await p.waitForTimeout(300);
+    await p.locator('.dw-btn',{hasText:'Avance por ubicación'}).click(); await p.waitForTimeout(500);
+    for(let t=0;t<20;t++){ if(await G(()=>!/trayendo/.test(document.getElementById('c-ra').innerText))) break; await p.waitForTimeout(300); }
+    let desg=0, iguales=0, sumas=0, chicos=0;
+    const contarChicos=()=>G(()=>[...document.querySelectorAll('#c-ra button, #c-ra [role="button"]')].filter(e=>e.checkVisibility()&&!e.disabled&&e.getBoundingClientRect().height<40).length);
+    // ── Por ubicación: el Nivel 1 con sus dos áreas.
+    await p.locator('#c-ra .ra-fila',{has:p.locator('.ra-nom-t',{hasText:/^Nivel 1$/})}).locator('.ra-plg').click(); await p.waitForTimeout(150);
+    r.nivel1=await G(()=>{ const hijos=[...document.querySelectorAll('#c-ra .ra-hijos')][0]; if(!hijos) return 'no se abre';
+      const fs=[...hijos.querySelectorAll('.ra-fila')]; return fs.map(f=>f.querySelector('.ra-nom-t').textContent).sort((x,y)=>x==='Parqueo'?-1:y==='Parqueo'?1:x.localeCompare(y)).join(' · ')
+        +(fs.length&&fs.every(f=>f.querySelector('.ra-hoja-b'))?' · las dos con hoja':' · SIN hoja'); });
+    for(const n of ['Nivel 2','Nivel 4']){ await p.locator('#c-ra .ra-fila',{has:p.locator('.ra-nom-t',{hasText:new RegExp('^'+n+'$')})}).locator('.ra-plg').click(); await p.waitForTimeout(150); }
+    let bien=0;
+    for(const ar of ['N2 — Apto 2A','N4 — Apto 4A','N1 — Lobby']){
+      const fila=await leerFila(ar); await abrirHoja(ar); const v=await leerHoja(), e=cuenta(a=>(a.area||'').trim()===ar);
+      if(v&&['total','comp','ab','venc','trab'].every(k=>v[k]===e[k])) bien++; else r['_ubic_'+ar]={hoja:v,cuenta:e};
+      if(v&&fila&&fila.ab===v.ab&&fila.venc===v.venc&&fila.comp===v.comp) iguales++; else r['_v146_'+ar]={hoja:v,fila};
+      if(ar==='N2 — Apto 2A'){
+        if(await resumenSuma()) sumas++; else r._sumaApto=true;
+        const pr=await G(()=>{ const x=[...document.querySelectorAll('#hj-hoja .hj-r-prop')][0]; return x?parseInt(x.lastElementChild.textContent,10):-1; });
+        r.propuesta=(v&&v.total===e.total?'no suma':'SUMA')+' · renglón '+pr;
+        { const t=await tocar(p.locator('#hj-hoja .hj-r-prop .hj-n')); if(t.ok) desg++; else r._desProp=t; }
+        { const t=await tocar(p.locator('#hj-hoja .hj-tb tbody tr:first-child td:nth-child(2) .hj-n')); if(t.ok) desg++; else r._desCelda=t; }
+        r.sinDinero=await G(()=>/RD\$|precio|monto|cubicaci|\$\s?\d/i.test(document.getElementById('hj-hoja').innerText)?'HAY MONTOS':'sin montos');
+        r.telefono=await G(()=>{ const c=[...document.querySelectorAll('#hj-hoja .hj-cuadro')].map(e=>Math.round(e.getBoundingClientRect().top));
+          const ps=[...document.querySelectorAll('#hj-hoja .hj-panel')].map(e=>e.getBoundingClientRect());
+          return [(c[0]===c[1]&&c[1]!==c[2]&&c[2]===c[3])?'2 por fila':'cuadros: '+c.join(','),
+            ps.length===2&&ps[1].top>=ps[0].bottom-1?'paneles apilados':'paneles lado a lado',
+            document.documentElement.scrollWidth<=innerWidth?'página no':'la página se desborda'].join(' · '); });
+        chicos+=await contarChicos();
+        if(FOTOS) await p.locator('#hj-hoja').screenshot({path:path.join(FOTOS,nombreVer+'-hoja-2A.png')});
+      }
+      await cerrarHoja();
+    }
+    r.cuadraUbic='cuadran '+bien+' de 3';
+    // ── Por contratista.
+    await p.locator('#c-ra .ra-vistas button',{hasText:'Por contratista'}).click(); await p.waitForTimeout(300);
+    bien=0;
+    for(const q of ['Daniel Espinal','Yelson Jimenez','Personal x la casa']){
+      const fila=await leerFila(q); await abrirHoja(q); const v=await leerHoja(), e=cuenta(a=>quien(a)===q);
+      if(v&&['total','comp','ab','venc','trab'].every(k=>v[k]===e[k])) bien++; else r['_cont_'+q]={hoja:v,cuenta:e};
+      if(v&&fila&&fila.ab===v.ab&&fila.venc===v.venc&&fila.comp===v.comp) iguales++; else r['_v146_'+q]={hoja:v,fila};
+      if(q==='Daniel Espinal'){
+        if(await resumenSuma()) sumas++; else r._sumaDaniel=true;
+        r.movimiento=await G(()=>{ const c=[...document.querySelectorAll('#hj-hoja .hj-banda-cas .hj-cifra')].map(x=>x.textContent.trim());
+          return c.length===3?'cerradas '+c[0]+' · avanzaron '+c[1]+' · tocadas '+c[2]:document.querySelector('#hj-hoja .hj-banda').innerText.replace(/\s+/g,' '); });
+        { const cv=p.locator('#hj-hoja .hj-cuadro',{hasText:'Vencidas'}); const t=await tocar(cv,cv.locator('.hj-cifra')); if(t.ok) desg++; else r._desVenc=t; }
+        { const t=await tocar(p.locator('#hj-hoja .hj-banda-fin .hj-n')); if(t.ok) desg++; else r._desToc=t; }
+        { const t=await tocar(p.locator('#hj-hoja .hj-r-sub .hj-n').first()); if(t.ok) desg++; else r._desCausa=t; }
+        chicos+=await contarChicos();
+        // A la impresora, con el app en oscuro.
+        await G(()=>raImprimir());
+        const imp=await G(()=>window.__impresa?window.__impresa._html:'');
+        if(FOTOS) writeFileSync(path.join(FOTOS,nombreVer+'-hoja-impresa.html'),imp);
+        const pg=await b.newPage(); await pg.setViewportSize({width:390,height:844});
+        await pg.route('**',q=>q.request().url().startsWith(ORIGEN)?q.continue():q.abort());
+        await pg.goto(ORIGEN+'/index.html',{waitUntil:'domcontentloaded'}).catch(()=>{});
+        await pg.setContent(imp.replace(/window\.print\(\)/g,'0'),{waitUntil:'load'}); await pg.waitForTimeout(900);
+        await pg.emulateMedia({media:'print'});
+        const pdf=await pg.pdf({preferCSSPageSize:true,printBackground:false});
+        // Las páginas, del árbol del PDF (/Type /Pages … /Count N).
+        const txt=pdf.toString('latin1');
+        const cnt=[...txt.matchAll(/\/Count\s+(\d+)/g)].map(m=>+m[1]);
+        const paginas=cnt.length?Math.max(...cnt):(txt.match(/\/Type\s*\/Page[^s]/g)||[]).length;
+        const fondo=await pg.evaluate(()=>getComputedStyle(document.querySelector('.hj')).backgroundColor);
+        if(FOTOS){ writeFileSync(path.join(FOTOS,nombreVer+'-hoja-impresa.pdf'),pdf);
+          await pg.emulateMedia({media:'screen'}); await pg.setViewportSize({width:760,height:1100});
+          await pg.screenshot({path:path.join(FOTOS,nombreVer+'-hoja-impresa.png'),fullPage:true}); }
+        await pg.close();
+        r.imprimir=[paginas===1?'1 página':paginas+' páginas', /rgb\(255, 255, 255\)/.test(fondo)?'fondo blanco':'fondo '+fondo,
+          /onclick=/.test(imp)?'CON onclick':'sin botones vivos', /hj-logo[^>]*src="http[^"]*bridex-logo\.png"|src="http[^"]*bridex-logo\.png"[^>]*hj-logo/.test(imp)?'logo':'SIN logo'].join(' · ');
+        if(FOTOS) await p.locator('#hj-hoja').screenshot({path:path.join(FOTOS,nombreVer+'-hoja-daniel.png')});
+      }
+      if(q==='Yelson Jimenez') r.sinMovimiento=await G(()=>/Sin movimiento en los últimos 7 días\./.test(document.querySelector('#hj-hoja .hj-banda').innerText)?'dice la frase':document.querySelector('#hj-hoja .hj-banda').innerText.replace(/\s+/g,' '));
+      await cerrarHoja();
+    }
+    r.cuadraCont='cuadran '+bien+' de 3';
+    r.igualV146='iguales '+iguales+' de 6';
+    r.resumenSuma='suma exacto '+sumas+' de 2';
+    r.desglose='exacto '+desg+' de 5';
+    r.dedos=chicos;
+    r.ceroEscrituras=ESC.length;
+  }catch(e){ r._error=String(e&&e.message||e).split('\n')[0].slice(0,200); }
+  await ctx.close(); srv.close();
+  for(const k of Object.keys(HOJA_ESPERADO)) if(!(k in r)) r[k]=null;
+  return r;
+}
+
 // ── el comparador ─────────────────────────────────────────────────────────
 const b=await chromium.launch({executablePath:CHROME,args:['--no-sandbox']});
 const res=[];
@@ -1162,7 +1367,8 @@ for(const v of VERS){ process.stderr.write('· probando '+v+' …\n'); const nv=
   r.cabecera=await probarCabecera(nv, leerVersion(v), b);
   r.trabas=await probarTrabas(nv, leerVersion(v), b);
   r.velocidad=await probarVelocidad(nv, leerVersion(v), b);
-  r.avance=await probarAvance(nv, leerVersion(v), b); res.push(r); }
+  r.avance=await probarAvance(nv, leerVersion(v), b);
+  r.hoja=await probarHoja(nv, leerVersion(v), b); res.push(r); }
 await b.close();
 if(JSONOUT){ console.log(JSON.stringify(res,null,1)); process.exit(0); }
 
@@ -1247,6 +1453,17 @@ console.log('  ↑ antes · después. '+(fallaAva?fallaAva+' FALLAN en '+VERS[1]
 for(const [i,r] of res.entries()){ if(r.avance._error) console.log('  ('+VERS[i]+' se cortó: '+r.avance._error+')');
   const ex=Object.keys(r.avance).filter(k=>/^_(ubic|cont|des)/.test(k)); if(ex.length) console.log('  ('+VERS[i]+' detalle: '+JSON.stringify(ex.reduce((m,k)=>{m[k]=r.avance[k];return m;},{}))+')'); }
 if(res[1].avance._msUbic!=null) console.log('  pintar (ms, sin frenar): por ubicación '+res[1].avance._msUbic+' · por contratista '+res[1].avance._msCont+' · matriz '+res[1].avance._msMatriz);
+let fallaHoja=0;
+console.log('\nLA HOJA DE REPORTE — contra lo que tiene que dar (v147)\n');
+for(const k of Object.keys(HOJA_ESPERADO)){
+  const e=HOJA_ESPERADO[k];
+  const marca=res.map(r=>{ const v=r.hoja[k]; return (v===e.v?'✓':'✗')+' '+JSON.stringify(v); });
+  if(res[1].hoja[k]!==e.v) fallaHoja++;
+  console.log('  '+marca[0].padEnd(14).slice(0,40)+'  '+marca[1]+'\n        (tiene que dar '+JSON.stringify(e.v)+')  '+e.d);
+}
+console.log('  ↑ antes · después. '+(fallaHoja?fallaHoja+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
+for(const [i,r] of res.entries()){ if(r.hoja._error) console.log('  ('+VERS[i]+' se cortó: '+r.hoja._error+')');
+  const ex=Object.keys(r.hoja).filter(k=>/^_/.test(k)&&k!=='_error'); if(ex.length) console.log('  ('+VERS[i]+' detalle: '+JSON.stringify(ex.reduce((m,k)=>{m[k]=r.hoja[k];return m;},{}))+')'); }
 console.log('\nCANDADO: escrituras interceptadas '+res.map(r=>Object.values(r.propio.escrituras).reduce((s,x)=>s+x,0)).join(' / ')+
   ' · salidas cortadas (fuentes, fotos) '+res.map(r=>r.propio.salidasCortadas).join(' / ')+' · a la base real: 0');
-process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra||fallaVel||fallaAva?1:0);
+process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra||fallaVel||fallaAva||fallaHoja?1:0);
