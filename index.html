@@ -158,6 +158,60 @@ html[data-campo] .app,html[data-campo] #app-lock,html[data-campo] .add-fab,
 html[data-campo] .bottom-nav,html[data-campo] #sidebar,html[data-campo] .drawer{display:none!important}
 html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!important;background:var(--bg)}
 #campo-root{max-width:520px;margin:0 auto;padding-bottom:40px}
+/* ── v146 · Reportes → Avance por ubicación y contratista ── */
+.ra{padding:0 0 100px;font-family:var(--font)}
+.ra-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin:4px 0 12px;flex-wrap:wrap}
+.ra-tit{font-size:17px;font-weight:800;color:var(--text)}
+.ra-sub{font-size:12px;color:var(--text3);margin-top:2px}
+.ra-err{font-size:12px;color:var(--red);font-weight:700;margin-top:6px}
+.ra-err button{min-height:40px;margin-left:6px;border:1.5px solid var(--red);background:var(--red-light);color:var(--red);border-radius:9px;padding:0 10px;font-weight:700;font-family:var(--font)}
+.ra-prop{font-size:12px;color:var(--amber);font-weight:700;margin-top:6px}
+.ra-acc{display:flex;gap:6px}
+.ra-acc button{min-height:44px;padding:0 13px;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:13px;font-weight:700;font-family:var(--font);cursor:pointer}
+.ra-vistas{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto}
+.ra-vistas button{flex:1 0 auto;min-height:44px;padding:0 12px;border-radius:99px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:13px;font-weight:700;font-family:var(--font);cursor:pointer;white-space:nowrap}
+.ra-vistas button.on{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}
+.ra-fila{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 10px 8px;margin-bottom:8px}
+.ra-fila-n{border-color:var(--accent);border-width:1.5px}
+.ra-hijos{margin:-2px 0 10px 14px;border-left:2px solid var(--border2);padding-left:8px}
+.ra-nom{display:flex;align-items:center;gap:8px;margin-bottom:8px;min-width:0}
+.ra-nom-t{flex:1;min-width:0;font-size:14px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ra-tot{font-size:11px;color:var(--text3);white-space:nowrap}
+.ra-plg{flex-shrink:0;width:44px;min-height:44px;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text);font-size:16px;cursor:pointer}
+.ra-nums{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.ra-num{min-width:0;min-height:52px;padding:4px 2px;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-family:var(--font)}
+.ra-num b{font-size:17px;font-weight:800;line-height:1.1}
+.ra-num span{font-size:9.5px;color:var(--text3);font-weight:700;letter-spacing:-.1px}
+.ra-num.ra-cero{opacity:.45;cursor:default}
+.ra-causas{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.ra-causa{min-height:40px;padding:0 10px;border-radius:99px;border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber);font-size:12px;font-weight:700;font-family:var(--font);cursor:pointer}
+.ra-rev{font-size:11px;color:var(--text3);margin-top:6px}
+.ra-mx-ayuda{font-size:12px;color:var(--text3);margin-bottom:8px}
+.ra-mx{overflow-x:auto;max-width:100%;border:1px solid var(--border);border-radius:12px}
+.ra-mx table{border-collapse:separate;border-spacing:0;font-size:12px}
+.ra-mx th{background:var(--bg3);color:var(--text3);font-size:10.5px;font-weight:700;padding:6px 4px;min-width:52px;max-width:72px;white-space:normal;line-height:1.2;border-bottom:1px solid var(--border)}
+.ra-mx td{padding:2px;text-align:center;border-bottom:1px solid var(--border)}
+.ra-mx .ra-mx-f{position:sticky;left:0;z-index:1;background:var(--bg2);text-align:left;min-width:118px;max-width:118px;padding:6px 8px;font-weight:700;color:var(--text);white-space:normal;line-height:1.2;border-right:1px solid var(--border)}
+.ra-mx th.ra-mx-f{background:var(--bg3);z-index:2}
+.ra-mx-niv td{background:var(--accent-soft)!important;color:var(--accent);font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:4px 8px}
+.ra-mx-0{color:var(--text3);opacity:.5}
+.ra-mx-c{width:100%;min-width:44px;min-height:40px;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:800;font-family:var(--font);cursor:pointer}
+.ra-mx-ct{background:var(--bg3)!important;color:var(--text)!important}
+.ra-mx-t{background:var(--bg3)}
+.ra-mx-pie td{border-top:2px solid var(--border2)}
+.ra-det-cab{position:sticky;top:0;z-index:3;background:var(--bg);padding:4px 0 8px;margin-bottom:6px}
+.ra-volver{min-height:44px;padding:0 14px;border-radius:10px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:800;font-family:var(--font);cursor:pointer}
+.ra-det-t{font-size:14px;font-weight:800;color:var(--text);margin-top:8px}
+.ra-det-t b{color:var(--accent)}
+.ra-act{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:6px;cursor:pointer}
+.ra-act-d{font-size:13.5px;font-weight:700;color:var(--text);line-height:1.3}
+.ra-act-m{font-size:11.5px;color:var(--accent);font-weight:700;margin-top:3px}
+.ra-act-f{font-size:11.5px;color:var(--text3);margin-top:3px;font-family:var(--mono)}
+.ra-venc{color:var(--red)}
+.ra-est{color:var(--text2);font-weight:700}
+.ra-est-t{color:var(--amber)}
+.ra-act-t{font-size:12px;color:var(--amber);font-weight:700;margin-top:4px}
+.ra-mas{width:100%;min-height:48px;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-size:13px;font-weight:700;font-family:var(--font);cursor:pointer;margin-top:6px}
 .cp-top{background:var(--hdr-grad);color:#fff;padding:calc(20px + var(--st)) 18px 18px}
 .cp-hola{font-size:23px;font-weight:800;letter-spacing:-.4px}
 .cp-fecha{font-size:13px;opacity:.75;margin-top:2px;font-family:var(--mono)}
@@ -978,6 +1032,7 @@ input.tp-in[type=search]{font-size:14px}
     <!-- REPORTES: Dashboard + Semana + Historial -->
     <div class="view" id="view-reportes">
       <div id="c-rep-subnav"></div>
+      <div id="c-ra" style="display:none"></div>
       <div id="c-rep"></div>
       <div id="c-proy" style="display:none"></div>
       <div id="c-apto" style="display:none"></div>
@@ -1089,6 +1144,7 @@ input.tp-in[type=search]{font-size:14px}
     <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='personal'">Equipo — Personal</button>
     <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='penalidades'">Equipo — Penalidades</button>
     <button class="dw-btn" onclick="goTabD('equipo');S.equipoVista='bonificaciones';renderEquipo()">Equipo — Bonificaciones</button>
+    <button class="dw-btn" onclick="S.reportesVista='avance';goTabD('reportes')">Reportes — Avance por ubicación y contratista</button>
     <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='dashboard'">Reportes — Dashboard</button>
     <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='semana'">Reportes — Plan semanal</button>
     <button class="dw-btn" onclick="goTabD('reportes');S.reportesVista='historial'">Reportes — Historial</button>
@@ -1138,7 +1194,7 @@ input.tp-in[type=search]{font-size:14px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261025_144';
+const APP_VERSION='20261026_146';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -13120,6 +13176,9 @@ function toggleRepRend(){ S.repRendOpen=!S.repRendOpen; renderReportes(); }
    oculto. Al entrar, `renderReportesHub` lo pinta igual que siempre. */
 function _renderReportesSiSeVe(){
   if(S.currentTab!=='reportes') return;
+  /* v146 · El Avance se repinta si se está viendo su resumen (no un desglose:
+     repintarlo a media lectura cambiaría la lista debajo del dedo). */
+  if(S.reportesVista==='avance'){ if(!(S.ra&&S.ra.det)) renderAvanceRep(); return; }
   var c=document.getElementById('c-rep');
   if(c && c.style.display==='none') return;
   renderReportes();
@@ -30665,11 +30724,359 @@ async function generarPDFPorApto(selectedAreas){
   }catch(e){console.error(e);setSS('err','Error al generar PDF');}
 }
 
+/* ══ AVANCE POR UBICACIÓN Y POR CONTRATISTA (v146) ═══════════════════════
+   Pedido del dueño: el reporte de las actividades por ubicación —apartamento
+   por apartamento—, por contratista, y el cruce de las dos. Es lo que hace
+   falta para proyectar la entrega. «Por Apto» ya existía, pero enseña UNA
+   ubicación a la vez y ningún número se toca: esto es el resumen de todas.
+
+   · TODO NÚMERO SE TOCA y enseña EXACTAMENTE lo que cuenta: el conteo y el
+     desglose pasan por la MISMA función (`_raPasa` + `_raEn`), así que no
+     pueden decir cosas distintas. Un cero no se toca: no hay nada detrás.
+   · CADA ACTIVIDAD VA A UNA SOLA FILA (`_raQuien`, `_raArea`), así que las
+     filas SUMAN el total de arriba. El personal propio es UNA fila
+     (`PAL_PROPIO`), aunque en la base lleve la lista de nombres; las tareas de
+     ingeniero son UNA fila, «Ingeniería» (en la base van con uno o con cuatro
+     ingenieros separados por coma, y repartirlas contaría la misma tarea dos
+     y cuatro veces); y lo vacío es «Sin asignar» / «Sin ubicación», a la
+     vista: son justo las que hay que repartir. Lo sucio de `area` («techo»,
+     «Fachada» suelta) sale tal cual, como su propia fila.
+   · LAS COMPLETADAS NO ESTÁN EN `S.acts` (v102, v123, v124). Se piden UNA vez
+     por sesión al entrar, con once columnas: 554 KB de JSON por las 1.551 del
+     25-oct, medido por SQL. Si la copia del catálogo está fresca se usa esa y
+     no se pide nada. Mientras no lleguen, «Completadas» y «Avance» dicen «…»,
+     no un cero que mentiría.
+   · Las propuestas (`propuesta=true`) no cuentan: `sb()` ya las deja fuera de
+     toda lectura, y aquí se filtran además por si alguna está en memoria.
+   · NO ESCRIBE NADA. Es solo lectura.
+   · La matriz pinta números, no listas: el detalle de un cuadro se arma
+     cuando se toca (la lección de los 24 MB de la v144). */
+var RA_VISTAS=[['ubic','Por ubicación'],['cont','Por contratista'],['matriz','Matriz']];
+var RA_INGENIERIA='Ingeniería', RA_SIN_ASIGNAR='Sin asignar';
+var RA_COLS_CERRADAS='id,descripcion,area,personal_nombre,tipo_personal,estado,porcentaje,fecha_inicio,fecha_fin,revisado_fecha,revisado_por';
+var _raReg=[];   // las llaves de lo que se puede tocar, por número: así no hay comillas en un onclick
+
+function _raRef(o){ _raReg.push(o); return _raReg.length-1; }
+function _raArea(a){ return String((a&&a.area)||'').trim() || PAL_SIN_UBIC; }
+function _raNivel(area){ return area===PAL_SIN_UBIC ? 'sin' : String(_nivelArea(area)); }
+function _raNivelNombre(n){ return n==='sin' ? PAL_SIN_UBIC : n==='0' ? 'Toda la torre' : 'Nivel '+n; }
+function _raNivelOrden(n){ return n==='sin' ? 99 : n==='0' ? 98 : (parseInt(n,10)||97); }
+function _raOrdenAreas(x,y){
+  return (_raNivelOrden(_raNivel(x))-_raNivelOrden(_raNivel(y))) || (_revOrdenArea(x)-_revOrdenArea(y)) || x.localeCompare(y,'es');
+}
+/* Quién es de la casa: por `tipo_personal`, o porque TODOS los nombres son
+   del personal propio (hay una fila marcada «contratista» con la lista entera
+   de la casa: `tipo_personal` no es de fiar, §8). */
+function _raPropios(){
+  var s={}; (S.personal||[]).forEach(function(p){ if(p && p.tipo==='propio' && p.nombre) s[p.nombre.trim()]=1; });
+  return s;
+}
+function _raQuien(a, propios){
+  var tp=a.tipo_personal||'', nom=String(a.personal_nombre||'').trim();
+  if(tp==='propio') return PAL_PROPIO;
+  if(tp==='ingeniero') return RA_INGENIERIA;
+  if(!nom) return RA_SIN_ASIGNAR;
+  var ns=_responsables(nom);
+  if(ns.length && ns.every(function(n){ return !!(propios||{})[n]; })) return PAL_PROPIO;
+  return nom;
+}
+function _raPct(a){
+  if(a.estado==='completado') return 100;
+  var n=parseFloat(a.porcentaje); return isNaN(n)?0:Math.max(0,Math.min(100,n));
+}
+/* EL criterio de cada número. Contar y desglosar pasan por aquí. */
+function _raPasa(a, met, causa){
+  if(met==='total') return true;
+  if(met==='ab')    return a.estado!=='completado';
+  if(met==='venc')  return isRetrasada(a);
+  if(met==='comp')  return a.estado==='completado';
+  if(met==='trab')  return a.estado==='pausada' && (causa==null || (a.estancada_causa||'')===causa);
+  return false;
+}
+function _raEn(a, ref, propios){
+  if(ref.dim==='todo')   return true;
+  if(ref.dim==='area')   return _raArea(a)===ref.k;
+  if(ref.dim==='nivel')  return _raNivel(_raArea(a))===ref.k;
+  if(ref.dim==='quien')  return _raQuien(a,propios)===ref.k;
+  if(ref.dim==='celda')  return _raArea(a)===ref.k && _raQuien(a,propios)===ref.k2;
+  return false;
+}
+
+/* Las filas del reporte: lo abierto de `S.acts` (lo más fresco) encima de
+   las completadas. Por id, para que una que se cerró o se reabrió en esta
+   sesión no cuente dos veces. */
+function _raCerradasFuente(){
+  if(Array.isArray(S.catActs) && S.catActs.length && typeof _catDatosViejos==='function' && !_catDatosViejos())
+    return S.catActs.filter(function(a){ return a.estado==='completado'; });
+  return Array.isArray(S._raCerradas) ? S._raCerradas : null;
+}
+function _raFilas(){
+  var cerr=_raCerradasFuente(), m={}, out=[];
+  (cerr||[]).forEach(function(a){ if(a && a.id) m[a.id]=a; });
+  (S.acts||[]).forEach(function(a){ if(a && a.id) m[a.id]=a; });
+  Object.keys(m).forEach(function(id){ var a=m[id]; if(a.propuesta!==true) out.push(a); });
+  return {filas:out, completas:!!cerr};
+}
+async function _raCargarCerradas(forzar){
+  if(S._raCargando) return;
+  if(!forzar && _raCerradasFuente()) return;
+  S._raCargando=true; S._raErr='';
+  try{
+    S._raCerradas=await sbTodo('obra_actividades?estado=eq.completado&select='+RA_COLS_CERRADAS)||[];
+    S._raCerradasEn=Date.now();
+  }catch(e){ S._raErr=(e&&e.sinRed)?'Sin señal':'No contestó la base'; }
+  S._raCargando=false;
+  if(S.currentTab==='reportes' && S.reportesVista==='avance') renderAvanceRep();
+}
+function raActualizar(){ _raCargarCerradas(true); renderAvanceRep(); }
+
+function _raStats(filas, refFn, propios){
+  var st={}, nuevo=function(){ return {total:0,ab:0,venc:0,comp:0,sumPct:0,trab:0,causas:{},rev:null}; };
+  filas.forEach(function(a){
+    refFn(a).forEach(function(k){
+      var s=st[k]||(st[k]=nuevo());
+      s.total++; s.sumPct+=_raPct(a);
+      if(_raPasa(a,'ab'))   s.ab++;
+      if(_raPasa(a,'venc')) s.venc++;
+      if(_raPasa(a,'comp')) s.comp++;
+      if(_raPasa(a,'trab')){ s.trab++; var c=a.estancada_causa||''; s.causas[c]=(s.causas[c]||0)+1; }
+      var rf=String(a.revisado_fecha||'').slice(0,10);
+      if(rf && (!s.rev || rf>s.rev.f)) s.rev={f:rf, por:a.revisado_por||''};
+    });
+  });
+  return st;
+}
+
+function _raNumBtn(n, etiqueta, ref, met, causa, color){
+  var cero=!n;
+  return '<button class="ra-num'+(cero?' ra-cero':'')+'"'+(cero?' disabled':' onclick="raVer('+_raRef({dim:ref.dim,k:ref.k,k2:ref.k2,nombre:ref.nombre,met:met,causa:causa})+')"')+'>'+
+    '<b'+(color&&!cero?' style="color:'+color+'"':'')+'>'+n+'</b><span>'+etiqueta+'</span></button>';
+}
+function _raFilaHTML(nombre, s, ref, completas, extraIzq){
+  var av=completas ? Math.round(s.sumPct/Math.max(1,s.total))+'%' : '…';
+  var h='<div class="ra-fila'+(ref.dim==='nivel'||ref.dim==='todo'?' ra-fila-n':'')+'">'
+    +'<div class="ra-nom">'+(extraIzq||'')+'<span class="ra-nom-t">'+esc(nombre)+'</span><span class="ra-tot">'+s.total+' en total</span></div>'
+    +'<div class="ra-nums">'
+      +_raNumBtn(s.ab,'abiertas',ref,'ab')
+      +_raNumBtn(s.venc,'vencidas',ref,'venc',null,'var(--red)')
+      +(completas?_raNumBtn(s.comp,'completadas',ref,'comp',null,'var(--green)'):'<button class="ra-num ra-cero" disabled><b>…</b><span>completadas</span></button>')
+      +(completas?'<button class="ra-num" onclick="raVer('+_raRef({dim:ref.dim,k:ref.k,k2:ref.k2,nombre:ref.nombre,met:'total'})+')"><b>'+av+'</b><span>avance</span></button>'
+                 :'<button class="ra-num ra-cero" disabled><b>…</b><span>avance</span></button>')
+      +_raNumBtn(s.trab,'trabadas',ref,'trab',null,'var(--amber)')
+    +'</div>';
+  if(s.trab){
+    h+='<div class="ra-causas">'+Object.keys(s.causas).map(function(c){
+      return '<button class="ra-causa" onclick="raVer('+_raRef({dim:ref.dim,k:ref.k,k2:ref.k2,nombre:ref.nombre,met:'trab',causa:c})+')">'
+        +esc(TRABA_CAUSAS[c]||'Sin causa')+' <b>'+s.causas[c]+'</b></button>';
+    }).join('')+'</div>';
+  }
+  h+='<div class="ra-rev">'+(s.rev?'Última revisión: '+_nodoFecha(s.rev.f)+(s.rev.por?' · '+esc(s.rev.por):''):'Nunca revisada')+'</div>';
+  return h+'</div>';
+}
+
+function renderAvanceRep(){
+  var el=document.getElementById('c-ra'); if(!el) return;
+  var R=S.ra||(S.ra={vista:'ubic', abiertos:{}, det:null, detN:100});
+  _raReg=[];
+  var F=_raFilas(), filas=F.filas, propios=_raPropios();
+  if(!F.completas && !S._raCargando && !S._raErr) _raCargarCerradas(false);
+  var nProp=(S.propuestas||[]).length;
+  var h='<div class="ra">';
+  h+='<div class="ra-cab"><div><div class="ra-tit">Avance de la obra</div>'
+    +'<div class="ra-sub">'+_nodoFecha(today())+' · '+filas.filter(function(a){return _raPasa(a,'ab');}).length+' abiertas'
+    +(F.completas?' · '+filas.filter(function(a){return _raPasa(a,'comp');}).length+' completadas':' · trayendo las completadas…')+'</div>'
+    +(S._raErr?'<div class="ra-err">'+esc(S._raErr)+': no se pudieron traer las completadas. <button onclick="raActualizar()">Reintentar</button></div>':'')
+    +(nProp?'<div class="ra-prop">'+nProp+' propuesta'+(nProp>1?'s':'')+' esperando aprobación de Gerencia — no cuentan en estos números.</div>':'')
+    +'</div><div class="ra-acc"><button onclick="raImprimir()">Imprimir</button><button onclick="raActualizar()">Actualizar</button></div></div>';
+  if(R.det){ el.innerHTML=h+_raDetalleHTML(filas, propios)+'</div>'; return; }
+  h+='<div class="ra-vistas">'+RA_VISTAS.map(function(v){
+    return '<button class="'+(R.vista===v[0]?'on':'')+'" onclick="raVista(\''+v[0]+'\')">'+v[1]+'</button>';
+  }).join('')+'</div>';
+  if(R.vista==='cont') h+=_raContHTML(filas, propios, F.completas);
+  else if(R.vista==='matriz') h+=_raMatrizHTML(filas, propios);
+  else h+=_raUbicHTML(filas, propios, F.completas);
+  el.innerHTML=h+'</div>';
+}
+function raVista(v){ var R=S.ra; R.vista=v; R.det=null; renderAvanceRep(); }
+function raNivelToggle(n){ var R=S.ra; R.abiertos[n]=!R.abiertos[n]; renderAvanceRep(); }
+
+function _raUbicHTML(filas, propios, completas){
+  var porArea=_raStats(filas, function(a){ return [_raArea(a)]; }, propios);
+  var porNivel=_raStats(filas, function(a){ return [_raNivel(_raArea(a))]; }, propios);
+  var todo=_raStats(filas, function(){ return ['todo']; }, propios).todo;
+  var R=S.ra, h='';
+  if(todo) h+=_raFilaHTML('Toda la obra', todo, {dim:'todo',k:'',nombre:'Toda la obra'}, completas);
+  var areas=Object.keys(porArea).sort(_raOrdenAreas), niveles=[];
+  areas.forEach(function(a){ var n=_raNivel(a); if(niveles.indexOf(n)<0) niveles.push(n); });
+  niveles.forEach(function(n){
+    var ab=!!R.abiertos[n], nom=_raNivelNombre(n);
+    h+=_raFilaHTML(nom, porNivel[n], {dim:'nivel',k:n,nombre:nom}, completas,
+      '<button class="ra-plg" onclick="raNivelToggle(\''+n+'\')" aria-label="'+(ab?'Cerrar':'Abrir')+' '+esc(nom)+'">'+(ab?'▾':'▸')+'</button>');
+    if(ab){
+      h+='<div class="ra-hijos">'+areas.filter(function(a){ return _raNivel(a)===n; }).map(function(a){
+        return _raFilaHTML(a, porArea[a], {dim:'area',k:a,nombre:a}, completas);
+      }).join('')+'</div>';
+    }
+  });
+  return h;
+}
+function _raContHTML(filas, propios, completas){
+  var st=_raStats(filas, function(a){ return [_raQuien(a,propios)]; }, propios);
+  var ks=Object.keys(st).sort(function(x,y){
+    var fx=(x===RA_SIN_ASIGNAR?1:0), fy=(y===RA_SIN_ASIGNAR?1:0);
+    return (fx-fy) || (st[y].ab-st[x].ab) || (st[y].total-st[x].total) || x.localeCompare(y,'es');
+  });
+  return ks.map(function(k){ return _raFilaHTML(k, st[k], {dim:'quien',k:k,nombre:k}, completas); }).join('');
+}
+/* La matriz: ubicaciones × contratistas, con lo ABIERTO. Solo números. */
+function _raMatrizHTML(filas, propios){
+  var ab=filas.filter(function(a){ return _raPasa(a,'ab'); });
+  var celda={}, porQ={}, porA={};
+  ab.forEach(function(a){
+    var ar=_raArea(a), q=_raQuien(a,propios), k=ar+'\u0001'+q;
+    celda[k]=(celda[k]||0)+1; porQ[q]=(porQ[q]||0)+1; porA[ar]=(porA[ar]||0)+1;
+  });
+  var qs=Object.keys(porQ).sort(function(x,y){
+    var fx=(x===RA_SIN_ASIGNAR?1:0), fy=(y===RA_SIN_ASIGNAR?1:0);
+    return (fx-fy) || (porQ[y]-porQ[x]) || x.localeCompare(y,'es');
+  });
+  var areas=Object.keys(porA).sort(_raOrdenAreas);
+  if(!areas.length) return '<div class="empty">No hay nada abierto.</div>';
+  var maxC=0; Object.keys(celda).forEach(function(k){ if(celda[k]>maxC) maxC=celda[k]; });
+  var corto=function(q){ return String(q).replace(/^(Ing\.|Arq\.)\s*/,'').replace(/\s*\(.*\)\s*$/,''); };
+  var h='<div class="ra-mx-ayuda">Partidas abiertas de cada contratista en cada ubicación. Toca un número para ver cuáles son.</div>';
+  h+='<div class="ra-mx"><table><thead><tr><th class="ra-mx-f">Ubicación</th>'
+    +qs.map(function(q){ return '<th title="'+esc(q)+'">'+esc(corto(q))+'</th>'; }).join('')+'<th class="ra-mx-t">Total</th></tr></thead><tbody>';
+  var nivAnt=null;
+  areas.forEach(function(a){
+    var n=_raNivel(a);
+    if(n!==nivAnt){ h+='<tr class="ra-mx-niv"><td class="ra-mx-f">'+esc(_raNivelNombre(n))+'</td><td colspan="'+(qs.length+1)+'"></td></tr>'; nivAnt=n; }
+    h+='<tr><td class="ra-mx-f">'+esc(_recNom(a).replace(/\s+N\d+$/,''))+'</td>';
+    qs.forEach(function(q){
+      var c=celda[a+'\u0001'+q]||0;
+      if(!c){ h+='<td class="ra-mx-0">·</td>'; return; }
+      var al=(0.18+0.62*Math.min(1,c/Math.max(1,maxC))).toFixed(2);
+      h+='<td><button class="ra-mx-c" style="background:rgba(124,58,237,'+al+')" onclick="raVer('+_raRef({dim:'celda',k:a,k2:q,nombre:_recNom(a)+' · '+q,met:'ab'})+')">'+c+'</button></td>';
+    });
+    h+='<td class="ra-mx-t"><button class="ra-mx-c ra-mx-ct" onclick="raVer('+_raRef({dim:'area',k:a,nombre:a,met:'ab'})+')">'+porA[a]+'</button></td></tr>';
+  });
+  h+='<tr class="ra-mx-pie"><td class="ra-mx-f">Total</td>'+qs.map(function(q){
+    return '<td><button class="ra-mx-c ra-mx-ct" onclick="raVer('+_raRef({dim:'quien',k:q,nombre:q,met:'ab'})+')">'+porQ[q]+'</button></td>';
+  }).join('')+'<td class="ra-mx-t"><b>'+ab.length+'</b></td></tr>';
+  return h+'</tbody></table></div>';
+}
+
+/* ── El desglose de un número ── */
+var RA_MET_NOMBRE={total:'todas',ab:'abiertas',venc:'vencidas',comp:'completadas',trab:'trabadas'};
+function raVer(i){
+  var ref=_raReg[i]; if(!ref) return;
+  S.ra.det=Object.assign({},ref); S.ra.detN=100;
+  S.ra._scroll=(document.scrollingElement||document.documentElement).scrollTop;
+  renderAvanceRep();
+  var el=document.getElementById('c-ra'); if(el && el.scrollIntoView) el.scrollIntoView({block:'start'});
+}
+function raVolver(){
+  var y=S.ra._scroll||0; S.ra.det=null; renderAvanceRep();
+  try{ (document.scrollingElement||document.documentElement).scrollTop=y; }catch(e){}
+}
+function raMas(){ S.ra.detN+=100; renderAvanceRep(); }
+function _raDiasVencida(a){
+  var f=String(a.fecha_fin||'').slice(0,10);
+  if(!isRetrasada(a) || !f) return 0;
+  return Math.round((new Date(today()+'T12:00:00')-new Date(f+'T12:00:00'))/864e5);
+}
+function _raDetalleLista(filas, propios){
+  var d=S.ra.det;
+  var l=filas.filter(function(a){ return _raEn(a,d,propios) && _raPasa(a,d.met,d.causa); });
+  /* Lo más vencido arriba; después por entrega, y lo que no tiene al final. */
+  l.sort(function(x,y){
+    return (_raDiasVencida(y)-_raDiasVencida(x)) || String(x.fecha_fin||'9').localeCompare(String(y.fecha_fin||'9')) || String(x.descripcion||'').localeCompare(String(y.descripcion||''),'es');
+  });
+  return l;
+}
+function _raDetalleHTML(filas, propios){
+  var d=S.ra.det, l=_raDetalleLista(filas, propios);
+  var tit=d.nombre+' · '+(d.met==='trab'&&d.causa!=null?'trabadas por «'+(TRABA_CAUSAS[d.causa]||'sin causa')+'»':RA_MET_NOMBRE[d.met]);
+  var h='<div class="ra-det-cab"><button class="ra-volver" onclick="raVolver()">‹ Volver al resumen</button>'
+    +'<div class="ra-det-t">'+esc(tit)+' <b>'+l.length+'</b></div></div>';
+  if(!l.length) return h+'<div class="empty">No hay ninguna.</div>';
+  h+=l.slice(0,S.ra.detN).map(function(a){
+    var dias=_raDiasVencida(a), abierta=a.estado!=='completado';
+    var est=a.estado==='completado'?PAL_COMPLETADA:a.estado==='pausada'?PAL_TRABADA:(_raPct(a)?_raPct(a)+'%':'sin empezar');
+    var traba=a.estado==='pausada'?(TRABA_CAUSAS[a.estancada_causa]||'Sin causa')+(a.estancada_motivo?' — '+a.estancada_motivo:''):'';
+    return '<div class="ra-act"'+(abierta?' role="button" tabindex="0" onclick="editAct(\''+String(a.id).replace(/'/g,"\\'")+'\')"':'')+'>'
+      +'<div class="ra-act-d">'+esc(a.descripcion||'')+'</div>'
+      +'<div class="ra-act-m">'+esc(_raArea(a))+' · '+esc(_raQuien(a,propios))+'</div>'
+      +'<div class="ra-act-f">Inicio '+(a.fecha_inicio?_nodoFecha(a.fecha_inicio):'—')+' · Entrega '+(a.fecha_fin?_nodoFecha(a.fecha_fin):'—')
+        +(dias?' · <b class="ra-venc">vencida '+dias+' día'+(dias===1?'':'s')+'</b>':'')
+        +' · <span class="ra-est'+(a.estado==='pausada'?' ra-est-t':'')+'">'+esc(est)+'</span></div>'
+      +(traba?'<div class="ra-act-t">'+esc(traba)+'</div>':'')
+    +'</div>';
+  }).join('');
+  if(l.length>S.ra.detN) h+='<button class="ra-mas" onclick="raMas()">Ver '+Math.min(100,l.length-S.ra.detN)+' más (quedan '+(l.length-S.ra.detN)+')</button>';
+  return h;
+}
+
+/* ── Imprimir: la vista que esté abierta, en papel. Se hace con el navegador,
+   como «Por Apto» (`printAptoReport`): ventana nueva con una tabla limpia y
+   `window.print()`. En el iPhone sale la hoja de compartir, que guarda PDF. */
+function raImprimir(){
+  var R=S.ra||{}, F=_raFilas(), filas=F.filas, propios=_raPropios(), c=F.completas;
+  var td=function(v){ return '<td>'+v+'</td>'; };
+  var fila=function(nom,s,cls){
+    return '<tr'+(cls?' class="'+cls+'"':'')+'><td class="n">'+esc(nom)+'</td>'+td(s.ab)+td(s.venc)+td(c?s.comp:'…')
+      +td(c?Math.round(s.sumPct/Math.max(1,s.total))+'%':'…')
+      +td(s.trab?s.trab+' ('+Object.keys(s.causas).map(function(k){return (TRABA_CAUSAS[k]||'sin causa')+' '+s.causas[k];}).join(', ')+')':'0')
+      +td(s.rev?_nodoFecha(s.rev.f)+(s.rev.por?' · '+esc(s.rev.por):''):'—')+'</tr>';
+  };
+  var cab='<tr><th>'+(R.vista==='cont'?'Contratista':'Ubicación')+'</th><th>Abiertas</th><th>Vencidas</th><th>Completadas</th><th>Avance</th><th>Trabadas</th><th>Última revisión</th></tr>';
+  var titulo, cuerpo='';
+  if(R.det){
+    var l=_raDetalleLista(filas, propios), d=R.det;
+    titulo=d.nombre+' — '+(d.met==='trab'&&d.causa!=null?'trabadas por «'+(TRABA_CAUSAS[d.causa]||'sin causa')+'»':RA_MET_NOMBRE[d.met])+' ('+l.length+')';
+    cuerpo='<table><tr><th>#</th><th>Actividad</th><th>Ubicación</th><th>Contratista</th><th>Inicio</th><th>Entrega</th><th>Días vencida</th><th>Estado</th></tr>'
+      +l.map(function(a,i){ var dv=_raDiasVencida(a);
+        return '<tr><td>'+(i+1)+'</td><td class="n">'+esc(a.descripcion||'')+(a.estado==='pausada'?'<br><i>'+esc((TRABA_CAUSAS[a.estancada_causa]||'Sin causa')+(a.estancada_motivo?' — '+a.estancada_motivo:''))+'</i>':'')+'</td>'
+          +td(esc(_raArea(a)))+td(esc(_raQuien(a,propios)))+td(a.fecha_inicio?_nodoFecha(a.fecha_inicio):'—')+td(a.fecha_fin?_nodoFecha(a.fecha_fin):'—')
+          +td(dv||'')+td(esc(a.estado==='completado'?PAL_COMPLETADA:a.estado==='pausada'?PAL_TRABADA:_raPct(a)+'%'))+'</tr>'; }).join('')+'</table>';
+  }else if(R.vista==='cont'){
+    titulo='Avance por contratista';
+    var st=_raStats(filas, function(a){ return [_raQuien(a,propios)]; }, propios);
+    cuerpo='<table>'+cab+Object.keys(st).sort(function(x,y){ return (x===RA_SIN_ASIGNAR)-(y===RA_SIN_ASIGNAR) || st[y].ab-st[x].ab; })
+      .map(function(k){ return fila(k,st[k]); }).join('')+'</table>';
+  }else if(R.vista==='matriz'){
+    titulo='Matriz — partidas abiertas por ubicación y contratista';
+    var tmp=document.createElement('div'); tmp.innerHTML=_raMatrizHTML(filas, propios);
+    var t=tmp.querySelector('table'); cuerpo=t?t.outerHTML.replace(/<button[^>]*>/g,'').replace(/<\/button>/g,''):'';
+  }else{
+    titulo='Avance por ubicación';
+    var pa=_raStats(filas, function(a){ return [_raArea(a)]; }, propios);
+    var pn=_raStats(filas, function(a){ return [_raNivel(_raArea(a))]; }, propios);
+    var areas=Object.keys(pa).sort(_raOrdenAreas), niv=[];
+    areas.forEach(function(a){ var n=_raNivel(a); if(niv.indexOf(n)<0) niv.push(n); });
+    cuerpo='<table>'+cab+niv.map(function(n){
+      return fila(_raNivelNombre(n),pn[n],'niv')+areas.filter(function(a){ return _raNivel(a)===n; }).map(function(a){ return fila('   '+a,pa[a]); }).join('');
+    }).join('')+'</table>';
+  }
+  var win=window.open('','_blank','width=1100,height=800');
+  if(!win){ showToast('El navegador no dejó abrir la hoja para imprimir','warn',5000); return; }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+esc(titulo)+'</title><style>'
+    +'body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:12px}h1{font-size:16px;margin:0 0 2px}.s{color:#555;margin-bottom:10px}'
+    +'table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:3px 5px;text-align:center;vertical-align:top}'
+    +'th{background:#eee}td.n,.n{text-align:left}tr.niv td,tr.ra-mx-niv td{background:#f3f0ff;font-weight:bold}.ra-mx-0{color:#bbb}'
+    +'@media print{@page{size:A4 landscape;margin:6mm}}</style></head><body>'
+    +'<h1>Mecca Residence — '+esc(titulo)+'</h1><div class="s">'+_nodoFecha(today())+(c?'':' · sin las completadas: no se pudieron traer')
+    +' · Las propuestas esperando aprobación no cuentan.</div>'+cuerpo
+    +'<script>window.onload=function(){window.print();}<\/script></body></html>');
+  win.document.close();
+}
+
 function renderReportesHub(){
   var subnav = document.getElementById('c-rep-subnav');
   if(subnav){
     subnav.style.cssText = subNavStyle();
     subnav.innerHTML =
+      subNavBtn('Avance',      S.reportesVista==='avance',      "S.reportesVista='avance';renderReportesHub()")+
       subNavBtn('Dashboard',   S.reportesVista==='dashboard',   "S.reportesVista='dashboard';renderReportesHub()")+
       subNavBtn('Reporte',     S.reportesVista==='custom',      "S.reportesVista='custom';renderReportesHub()")+
       subNavBtn('Proyección',  S.reportesVista==='proyeccion',  "S.reportesVista='proyeccion';renderReportesHub()")+
@@ -30692,10 +31099,14 @@ function renderReportesHub(){
   var camb = document.getElementById('c-cambios');
   var cierreD = document.getElementById('c-cierre-dia');
   var notif = document.getElementById('c-notif');
+  var ra = document.getElementById('c-ra');
   function hideAll(){
-    [rep,proy,apto,sem,hist,urg,cust,camb,cierreD,notif].forEach(function(e){if(e)e.style.display='none';});
+    [rep,proy,apto,sem,hist,urg,cust,camb,cierreD,notif,ra].forEach(function(e){if(e)e.style.display='none';});
   }
-  if(S.reportesVista==='proyeccion'){
+  if(S.reportesVista==='avance'){
+    hideAll(); if(ra) ra.style.display='block';
+    renderAvanceRep();
+  } else if(S.reportesVista==='proyeccion'){
     hideAll(); if(proy) proy.style.display='block';
     renderProyeccion();
   } else if(S.reportesVista==='apto'){

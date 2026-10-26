@@ -1016,6 +1016,143 @@ async function probarVelocidad(nombreVer, html, b){
   return r;
 }
 
+// ── AVANCE (v146): el reporte por ubicación, por contratista y la matriz ──
+/* Los números se comparan contra una cuenta hecha AQUÍ, en Node, con las reglas
+   escritas otra vez desde el pedido —no llamando al código del app—: si las
+   dos dicen lo mismo, el app cuenta lo que se pidió. */
+const AVA_ESPERADO={
+  ubicaciones:{v:'cuadran 3 de 3', d:'abiertas, vencidas y completadas de Apto 2A, Apto 4A y Parqueo = la cuenta directa'},
+  contratistas:{v:'cuadran 3 de 3', d:'lo mismo para Daniel Espinal, Yelson Jimenez y el personal propio'},
+  propio:{v:'una fila · sin nombres sueltos', d:'el personal propio sale como «Personal x la casa», sin una fila por cada nombre de la casa'},
+  vacios:{v:'Sin ubicación · Sin asignar', d:'lo que no tiene ubicación o contratista sale en su fila, no se pierde'},
+  propuesta:{v:'no suma · se avisa', d:'una propuesta en el 2A no cambia ningún número, y arriba se dice que hay una esperando'},
+  desglose:{v:'exacto 4 de 4', d:'tocar abiertas, vencidas, completadas y un cuadro de la matriz enseña una lista del MISMO tamaño que el número'},
+  vencidaOrden:{v:'la más vieja arriba', d:'las vencidas de Dimedes van ordenadas por días de atraso, la más vieja primero'},
+  dias30:{v:'vencida 30 días', d:'una partida con entrega de hace 30 días dice 30'},
+  matriz390:{v:'se desliza · primera columna fija · página no', d:'a 390 la matriz se desliza dentro de su caja, la columna de ubicaciones no se mueve y la página no se desborda'},
+  dedos:{v:0, d:'nada de lo que se toca en el reporte mide menos de 40 px'},
+  ceroEscrituras:{v:0, d:'el reporte no escribe nada'},
+};
+async function probarAvance(nombreVer, html, b){
+  const D=datos(); const {ACTS,PERS}=D;
+  const ESC=[]; const r={};
+  const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
+  const ok=(q,body)=>q.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  const hoyNode=(()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
+  const menos=(iso,n)=>{ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); };
+  // Una vencida de hace exactamente 30 días, y una propuesta en el 2A que no puede contar.
+  ACTS.push({id:'v30',descripcion:'Partida vencida hace treinta días',area:'N2 — Apto 2A',estado:'pendiente',porcentaje:'0',tipo_personal:'contratista',personal_nombre:'Milo',fecha:menos(hoyNode,40),fecha_inicio:menos(hoyNode,40),fecha_fin:menos(hoyNode,30),prioridad:'normal'});
+  ACTS.push({id:'prop1',descripcion:'Propuesta que no cuenta',area:'N2 — Apto 2A',estado:'pendiente',porcentaje:'0',tipo_personal:'contratista',personal_nombre:'Milo',fecha:hoyNode,fecha_inicio:'',fecha_fin:menos(hoyNode,5),propuesta:true,propuesta_por:'Ing. Karina Breton',propuesta_fecha:hoyNode});
+  const ctx=await b.newContext({serviceWorkers:'block',viewport:{width:390,height:844}});
+  await ctx.addInitScript(()=>{ window.confirm=()=>true; window.alert=()=>{}; window.open=()=>null; });
+  await ctx.route('**', q=>{
+    const u=q.request().url(), m=q.request().method();
+    if(u.startsWith(ORIGEN)) return q.continue();
+    if(!/\/rest\/v1\//.test(u)) return q.abort();
+    const pth=decodeURIComponent(u.split('/rest/v1/')[1]||''), base=pth.split('?')[0];
+    if(m!=='GET'){ ESC.push(m+' '+base); return ok(q,[]); }
+    let f=[];
+    if(base==='obra_actividades'){ f=ACTS;
+      if(/estado=neq\.completado/.test(pth)) f=f.filter(a=>a.estado!=='completado');
+      if(/estado=eq\.completado/.test(pth)) f=f.filter(a=>a.estado==='completado');
+      if(/propuesta=not\.is\.true/.test(pth)) f=f.filter(a=>a.propuesta!==true);
+      else if(/propuesta=is\.true/.test(pth)) f=f.filter(a=>a.propuesta===true); }
+    else if(base==='obra_personal') f=PERS;
+    const rg=q.request().headers()['range']||''; if(rg){ const [d0,h]=rg.split('-').map(Number); f=f.slice(d0,h+1); }
+    return ok(q,f);
+  });
+  const p=await ctx.newPage(); p.setDefaultTimeout(8000);
+  const G=(f,...a)=>p.evaluate(f,...a);
+  // La cuenta directa, con las reglas del pedido.
+  const PROP=new Set(PERS.filter(x=>x.tipo==='propio').map(x=>x.nombre));
+  const quien=a=>{ const tp=a.tipo_personal||'', n=String(a.personal_nombre||'').trim();
+    if(tp==='propio') return 'Personal x la casa'; if(tp==='ingeniero') return 'Ingeniería'; if(!n) return 'Sin asignar';
+    const ns=n.split(',').map(x=>x.trim()).filter(Boolean); return ns.every(x=>PROP.has(x))?'Personal x la casa':n; };
+  const vivas=ACTS.filter(a=>a.propuesta!==true);
+  const cuenta=(pred)=>{ const l=vivas.filter(pred);
+    return {ab:l.filter(a=>a.estado!=='completado').length, venc:l.filter(a=>a.estado!=='completado'&&a.fecha_fin&&a.fecha_fin<hoyNode).length, comp:l.filter(a=>a.estado==='completado').length}; };
+  // Lo que dice la fila de la pantalla con ese nombre.
+  const leer=nom=>G(n=>{ const f=[...document.querySelectorAll('#c-ra .ra-fila')].find(x=>x.querySelector('.ra-nom-t').textContent===n); if(!f) return null;
+    const v=[...f.querySelectorAll('.ra-num b')].map(x=>x.textContent); return {ab:+v[0],venc:+v[1],comp:+v[2]}; },nom);
+  try{
+    await p.goto(ORIGEN+'/index.html',{waitUntil:'load'});
+    await G(()=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify({id:'nilson',nombre:'Ing. Nilson',rol:'admin'})); }catch(e){} });
+    await p.reload({waitUntil:'load'});
+    for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S.acts&&S.acts.length).catch(()=>0)) break; await p.waitForTimeout(500); }
+    await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1500);
+    // Entrar como el dedo: el cajón del teléfono.
+    await p.locator('button[onclick*="toggleDrawer"]:visible').first().click(); await p.waitForTimeout(300);
+    await p.locator('.dw-btn',{hasText:'Avance por ubicación'}).click(); await p.waitForTimeout(500);
+    for(let t=0;t<20;t++){ if(await G(()=>!/trayendo/.test(document.getElementById('c-ra').innerText))) break; await p.waitForTimeout(300); }
+    r._msUbic=await G(()=>{ const a=performance.now(); renderAvanceRep(); return Math.round(performance.now()-a); });
+    // Por ubicación: se abren los niveles 1, 2 y 4.
+    for(const n of ['Nivel 1','Nivel 2','Nivel 4']){
+      await p.locator('#c-ra .ra-fila',{has:p.locator('.ra-nom-t',{hasText:new RegExp('^'+n+'$')})}).locator('.ra-plg').click(); await p.waitForTimeout(150); }
+    let bien=0;
+    for(const ar of ['N2 — Apto 2A','N4 — Apto 4A','Parqueo']){
+      const e=cuenta(a=>(a.area||'').trim()===ar), v=await leer(ar);
+      if(v&&v.ab===e.ab&&v.venc===e.venc&&v.comp===e.comp) bien++; else r['_ubic_'+ar]={pantalla:v,cuenta:e}; }
+    r.ubicaciones='cuadran '+bien+' de 3';
+    const sinUbic=!!(await leer('Sin ubicación'))||await G(()=>/Sin ubicación/.test(document.getElementById('c-ra').innerText));
+    const nProp=await G(()=>/1 propuesta esperando/.test(document.getElementById('c-ra').innerText));
+    // La partida de hace 30 días, desde las vencidas del 2A.
+    await p.locator('#c-ra .ra-fila',{has:p.locator('.ra-nom-t',{hasText:/^N2 — Apto 2A$/})}).locator('.ra-num',{hasText:'vencidas'}).click(); await p.waitForTimeout(300);
+    r.dias30=await G(()=>{ const x=[...document.querySelectorAll('#c-ra .ra-act')].find(e=>/treinta días/.test(e.innerText)); const m=x&&x.innerText.match(/vencida \d+ días?/); return m?m[0]:'no está'; });
+    await p.locator('#c-ra .ra-volver').click(); await p.waitForTimeout(200);
+    // Por contratista.
+    await p.locator('#c-ra .ra-vistas button',{hasText:'Por contratista'}).click(); await p.waitForTimeout(300);
+    r._msCont=await G(()=>{ const a=performance.now(); renderAvanceRep(); return Math.round(performance.now()-a); });
+    bien=0;
+    for(const q of ['Daniel Espinal','Yelson Jimenez','Personal x la casa']){
+      const e=cuenta(a=>quien(a)===q), v=await leer(q);
+      if(v&&v.ab===e.ab&&v.venc===e.venc&&v.comp===e.comp) bien++; else r['_cont_'+q]={pantalla:v,cuenta:e}; }
+    r.contratistas='cuadran '+bien+' de 3';
+    const nombres=await G(()=>[...document.querySelectorAll('#c-ra .ra-nom-t')].map(x=>x.textContent));
+    const sueltos=nombres.filter(n=>['Antonio','Gregory','Maison','Bienvenido','Carlos','Elvin','Fausto'].includes(n)||/Antonio, Gregory/.test(n));
+    r.propio=(nombres.filter(n=>n==='Personal x la casa').length===1?'una fila':'filas: '+nombres.filter(n=>n==='Personal x la casa').length)+' · '+(sueltos.length?'sueltos: '+sueltos.join('|'):'sin nombres sueltos');
+    r.vacios=[sinUbic?'Sin ubicación':'SIN «Sin ubicación»', nombres.includes('Sin asignar')?'Sin asignar':'SIN «Sin asignar»'].join(' · ');
+    { const e2a=cuenta(a=>(a.area||'').trim()==='N2 — Apto 2A');
+      const conProp=ACTS.filter(a=>(a.area||'')==='N2 — Apto 2A'&&a.estado!=='completado').length;
+      r.propuesta=(e2a.ab!==conProp && !r['_ubic_N2 — Apto 2A']?'no suma':'SUMA o no se probó')+' · '+(nProp?'se avisa':'no se avisa'); }
+    // El desglose es del mismo tamaño que el número.
+    let exactos=0;
+    const tocar=async(fila,etq)=>{ const loc=p.locator('#c-ra .ra-fila',{has:p.locator('.ra-nom-t',{hasText:new RegExp('^'+fila.replace(/[()]/g,'\\$&')+'$')})}).locator('.ra-num',{hasText:etq});
+      const n=+(await loc.locator('b').textContent()); await loc.click(); await p.waitForTimeout(300);
+      for(let i=0;i<30 && await p.locator('#c-ra .ra-mas').count();i++){ await p.locator('#c-ra .ra-mas').click(); await p.waitForTimeout(100); }
+      const l=await p.locator('#c-ra .ra-act').count(); const dice=+(await p.locator('#c-ra .ra-det-t b').textContent());
+      return {n,l,dice}; };
+    for(const [f,e] of [['Daniel Espinal','abiertas'],['Yelson Jimenez','completadas']]){
+      const t=await tocar(f,e); if(t.n===t.l&&t.l===t.dice) exactos++; else r['_des_'+f]=t;
+      await p.locator('#c-ra .ra-volver').click(); await p.waitForTimeout(200); }
+    { const t=await tocar('Dimedes Estebez (Niño)','vencidas'); if(t.n===t.l&&t.l===t.dice) exactos++; else r._desDim=t;
+      const dias=await G(()=>[...document.querySelectorAll('#c-ra .ra-act')].map(e=>{ const m=e.innerText.match(/vencida (\d+)/); return m?+m[1]:-1; }));
+      r.vencidaOrden=(dias.length>1&&dias.every((d,i)=>i===0||d<=dias[i-1])&&dias.every(d=>d>0))?'la más vieja arriba':'desordenadas: '+dias.slice(0,8).join(',');
+      await p.locator('#c-ra .ra-volver').click(); await p.waitForTimeout(200); }
+    // La matriz, a 390.
+    await p.locator('#c-ra .ra-vistas button',{hasText:'Matriz'}).click(); await p.waitForTimeout(300);
+    r._msMatriz=await G(()=>{ const a=performance.now(); renderAvanceRep(); return Math.round(performance.now()-a); });
+    r.matriz390=await G(()=>{ const c=document.querySelector('#c-ra .ra-mx'); const f=c.querySelector('tbody tr:not(.ra-mx-niv) .ra-mx-f');
+      const x0=f.getBoundingClientRect().left, puede=c.scrollWidth>c.clientWidth+20; c.scrollLeft=300; const x1=f.getBoundingClientRect().left; c.scrollLeft=0;
+      return [puede?'se desliza':'NO se desliza', Math.abs(x1-x0)<1?'primera columna fija':'la columna se movió '+Math.round(x1-x0), document.documentElement.scrollWidth<=innerWidth?'página no':'la página se desborda'].join(' · '); });
+    { const cel=p.locator('#c-ra .ra-mx-c:not(.ra-mx-ct)').first(); await cel.scrollIntoViewIfNeeded(); const n=+(await cel.textContent()); await cel.click(); await p.waitForTimeout(300);
+      const l=await p.locator('#c-ra .ra-act').count(); if(n===l) exactos++; else r._desCelda={n,l}; await p.locator('#c-ra .ra-volver').click(); await p.waitForTimeout(200); }
+    r.desglose='exacto '+exactos+' de 4';
+    // Los dedos: todo lo que se toca, en las tres vistas y en un desglose.
+    let chicos=0;
+    for(const v of ['Por ubicación','Por contratista','Matriz']){
+      await p.locator('#c-ra .ra-vistas button',{hasText:v}).click(); await p.waitForTimeout(200);
+      chicos+=await G(()=>[...document.querySelectorAll('#c-ra button, #c-ra [role="button"]')].filter(e=>e.checkVisibility()&&!e.disabled&&e.getBoundingClientRect().height<40).length); }
+    r.dedos=chicos;
+    r.ceroEscrituras=ESC.length;
+    if(FOTOS){ await p.screenshot({path:path.join(FOTOS,nombreVer+'-avance-matriz.png')});
+      await p.locator('#c-ra .ra-vistas button',{hasText:'Por ubicación'}).click(); await p.waitForTimeout(200);
+      await p.screenshot({path:path.join(FOTOS,nombreVer+'-avance-ubic.png')}); }
+  }catch(e){ r._error=String(e&&e.message||e).split('\n')[0].slice(0,200); }
+  await ctx.close(); srv.close();
+  for(const k of Object.keys(AVA_ESPERADO)) if(!(k in r)) r[k]=null;
+  return r;
+}
+
 // ── el comparador ─────────────────────────────────────────────────────────
 const b=await chromium.launch({executablePath:CHROME,args:['--no-sandbox']});
 const res=[];
@@ -1024,7 +1161,8 @@ for(const v of VERS){ process.stderr.write('· probando '+v+' …\n'); const nv=
   r.recorrido=await probarRecorrido(nv, leerVersion(v), b);
   r.cabecera=await probarCabecera(nv, leerVersion(v), b);
   r.trabas=await probarTrabas(nv, leerVersion(v), b);
-  r.velocidad=await probarVelocidad(nv, leerVersion(v), b); res.push(r); }
+  r.velocidad=await probarVelocidad(nv, leerVersion(v), b);
+  r.avance=await probarAvance(nv, leerVersion(v), b); res.push(r); }
 await b.close();
 if(JSONOUT){ console.log(JSON.stringify(res,null,1)); process.exit(0); }
 
@@ -1097,6 +1235,18 @@ for(const k of Object.keys(VEL_ESPERADO)){
 }
 console.log('  ↑ antes · después. '+(fallaVel?fallaVel+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
 for(const [i,r] of res.entries()) if(r.velocidad._error) console.log('  ('+VERS[i]+' se cortó: '+r.velocidad._error+')');
+let fallaAva=0;
+console.log('\nAVANCE POR UBICACIÓN Y CONTRATISTA — contra lo que tiene que dar (v146)\n');
+for(const k of Object.keys(AVA_ESPERADO)){
+  const e=AVA_ESPERADO[k];
+  const marca=res.map(r=>{ const v=r.avance[k]; return (v===e.v?'✓':'✗')+' '+JSON.stringify(v); });
+  if(res[1].avance[k]!==e.v) fallaAva++;
+  console.log('  '+marca[0].padEnd(14).slice(0,40)+'  '+marca[1]+'\n        (tiene que dar '+JSON.stringify(e.v)+')  '+e.d);
+}
+console.log('  ↑ antes · después. '+(fallaAva?fallaAva+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
+for(const [i,r] of res.entries()){ if(r.avance._error) console.log('  ('+VERS[i]+' se cortó: '+r.avance._error+')');
+  const ex=Object.keys(r.avance).filter(k=>/^_(ubic|cont|des)/.test(k)); if(ex.length) console.log('  ('+VERS[i]+' detalle: '+JSON.stringify(ex.reduce((m,k)=>{m[k]=r.avance[k];return m;},{}))+')'); }
+if(res[1].avance._msUbic!=null) console.log('  pintar (ms, sin frenar): por ubicación '+res[1].avance._msUbic+' · por contratista '+res[1].avance._msCont+' · matriz '+res[1].avance._msMatriz);
 console.log('\nCANDADO: escrituras interceptadas '+res.map(r=>Object.values(r.propio.escrituras).reduce((s,x)=>s+x,0)).join(' / ')+
   ' · salidas cortadas (fuentes, fotos) '+res.map(r=>r.propio.salidasCortadas).join(' / ')+' · a la base real: 0');
-process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra||fallaVel?1:0);
+process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra||fallaVel||fallaAva?1:0);

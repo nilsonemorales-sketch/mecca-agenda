@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v144 — 25 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v146 — 26 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -254,6 +254,7 @@ mismos botones que cualquier otra.
 | **Saber qué pieza de tope es la que tengo delante** | **Topes** (v129) — `renderTopes()`, `tpRun()`. Se escriben las medidas y contesta la pieza, el apartamento y el material. El catálogo de piezas va congelado en `TP_PIEZAS` y no pide NADA a la base |
 | **Escoger contratistas o trabajadores en el formulario** | **Una línea que abre un buscador** (v134) — `_quienHTML()`, `qpTog()`, `qpPintar()`, `qpPoner()`. Varios a la vez, primero los que ya trabajan en esa ubicación. Escribe en el `#a-pers` oculto de siempre |
 | **LO QUE VE UN INGENIERO al poner su PIN (Moisés, Karina)** | **El Modo Campo** — `debeAbrirCampo()`, `iniciarModoCampo()`, `renderCampo()`, `campoMarcar()`. Pantalla aparte, en cualquier aparato, para todo rol `ing`. **No estaba en este mapa hasta la v139.** Ver «El Modo Campo» abajo |
+| **EL AVANCE POR UBICACIÓN, POR CONTRATISTA Y CRUZADO, con cada número tocable** | **Reportes → «Avance»** (v146), la primera de la sub-barra, y en el cajón «Reportes — Avance por ubicación y contratista» — `renderAvanceRep()`, `_raFilas()`, `_raPasa()`, `_raEn()`, `raVer()`, `raImprimir()`. Solo lectura. Ver «AVANCE (v146)» abajo |
 | ~~Agregar una actividad dictándola~~ | **Se retiró en la v144** (decisión del dueño). Ver «DICTAR (v143) — RETIRADO EN LA v144» abajo. **No la vuelvas a construir sin que él lo pida** |
 | **Dejar dicho que una partida NO se puede hacer todavía, y por qué** | **Modo Campo → «Trabada»** y **Modo Obra → el cuarto botón** (v139) — `moTrabaAbrir()`, `moTrabar()`, `Acciones.trabar()` / `destrabar()`, `TRABA_CAUSAS`. Ver «Trabadas y propuestas» abajo |
 | **Proponer una partida que no estaba en la lista** | **Modo Campo → «Proponer a Gerencia»** (`campoProponer()`) y **Modo Obra → un contratista abierto → «+ Proponer a Gerencia»** (v139, renombrado en la v140: `PAL_PROPONER`) — `_propFormHTML()`, `propEnviar()`, `Acciones.proponer()`. Entra como propuesta y no cuenta hasta que Gerencia la aprueba |
@@ -2950,6 +2951,53 @@ salía a media pantalla. **Un botón con el icono de plegar** (Lucide
 - **En el teléfono el logo se va** (`body.con-btn-cab`, ≤430px), solo en
   Actividades: con un botón más, «Mecca Residence» salía «Mecca Res…».
 
+### AVANCE POR UBICACIÓN Y POR CONTRATISTA (v146) — todo número se toca
+
+Pedido del dueño: el reporte por ubicación, por contratista y el cruce, para
+proyectar la entrega. **Reportes ya existía**, y «Por Apto» enseñaba UNA
+ubicación a la vez sin números que se tocaran; esto es una **subvista nueva,
+«Avance»**, la primera de la sub-barra (`#c-ra`, `S.reportesVista='avance'`),
+con tres vistas: **Por ubicación** (por nivel, que se abre: Nivel 1 es el
+Parqueo, «Toda la torre» lo que no es de un piso, y «Sin ubicación» al final),
+**Por contratista** y **Matriz** (ubicaciones × contratistas, lo abierto).
+
+- **Cada fila**: abiertas · vencidas · completadas · avance (promedio de
+  `porcentaje`, la cerrada vale 100) · trabadas, con sus causas debajo
+  (`TRABA_CAUSAS`), y la última revisión (`revisado_fecha` / `revisado_por`).
+- **TODO NÚMERO SE TOCA** y enseña la lista detrás: contar y desglosar pasan por
+  las MISMAS dos funciones, **`_raPasa`** (qué es «abierta», «vencida» —
+  `isRetrasada`—, «completada», «trabada») y **`_raEn`** (de qué fila es). Si se
+  escribieran aparte, el número y la lista dirían cosas distintas. Un cero no se
+  toca. El desglose dice inicio, entrega, **días de vencida en calendario** (hoy
+  menos `fecha_fin`), el estado y, si está trabada, la causa y el motivo; la más
+  vencida arriba; de 100 en 100. Las notas no salen, a propósito.
+- **CADA ACTIVIDAD VA A UNA SOLA FILA**, así las filas suman el total.
+  `_raQuien`: `propio` → **«Personal x la casa» (`PAL_PROPIO`), una fila**, y
+  también si TODOS sus nombres son del personal propio (hay una fila marcada
+  contratista con la lista entera de la casa); `ingeniero` → **una fila,
+  «Ingeniería»** — en la base van con uno o con cuatro ingenieros separados por
+  coma, y repartirlas por persona contaría la misma tarea varias veces; vacío →
+  **«Sin asignar»**. `_raArea`: vacía → **«Sin ubicación»**. **Lo sucio sale
+  tal cual** («techo», «Fachada» suelta): que se vea es lo que hace que se
+  arregle. Medido el 26-oct: ningún contratista lleva varios nombres con coma.
+- **LAS COMPLETADAS NO ESTÁN EN `S.acts`**: se piden UNA vez por sesión al
+  entrar (`_raCargarCerradas`, once columnas, **554 KB de JSON** por las 1.551
+  del 26-oct, medido por SQL; comprimido, unos 90 KB), o se toman de la copia del
+  catálogo si está fresca. Mientras no llegan, completadas y avance dicen «…»,
+  no un cero. «Actualizar» las vuelve a pedir.
+- **Las propuestas no cuentan** (`sb()` ya las deja fuera; aquí se filtran
+  otra vez) y arriba se dice cuántas esperan.
+- **La matriz pinta números, no listas**: el detalle de un cuadro se arma al
+  tocarlo (la lección de los 24 MB de la v144). Se desliza dentro de su caja con
+  la columna de ubicaciones fija (`sticky`, sin `-webkit-overflow-scrolling`).
+- **Imprimir** (`raImprimir`) hace lo de «Por Apto»: ventana nueva con una
+  tabla limpia de la vista abierta —resumen, matriz o desglose— y
+  `window.print()`. En el iPhone sale la hoja de compartir, que guarda PDF.
+- **Medido**: pintar con 3.198 partidas y el teléfono frenado a 4× son **22 ms**
+  por ubicación, **34 ms** por contratista y **8 ms** la matriz; 58 KB de HTML.
+- **NO ESCRIBE NADA.** El refresco de 90 s lo repinta si está a la vista y no
+  hay un desglose abierto (`_renderReportesSiSeVe`).
+
 ### DICTAR (v143) — RETIRADO EN LA v144
 
 La v143 metió una pestaña «Dictar» (Actividades) y un botón «Dictar una
@@ -3751,6 +3799,11 @@ mismo:**
   aprueba; Nilson ve el número; aprobar la mete; rechazar escribe el respaldo
   **antes** del `DELETE`; Gerencia cuenta por causa y se abre; sin Kanban ni
   Matriz a 390; y todo con la entidad `actividad`
+- **EL AVANCE CUADRA Y SE TOCA** (v146), en su sección de la lista: tres
+  ubicaciones y tres contratistas iguales a la cuenta directa; personal propio
+  en UNA fila; «Sin ubicación» y «Sin asignar» a la vista; la propuesta no suma;
+  el desglose del mismo tamaño que el número; la vencida de 30 días dice 30; la
+  matriz con la primera columna fija a 390; y cero escrituras
 - **LA LISTA NO SE REPINTA DE BALDE NI ARMA LO QUE NO SE VE** (v144), en su
   sección de la lista: pliegue cerrado vacío y lleno al tocarlo; mismas filas;
   refresco sin cambios **no repinta**, con cambios sí; Reportes **cero** veces
@@ -4202,6 +4255,13 @@ contratistas y uno no registrado, y de personal propio), los `GET` de los
 formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
+
+**Desde la v146 tiene una séptima parte, «AVANCE»**: entra por el cajón a 390
+y compara los números de Apto 2A, Apto 4A y Parqueo, y de Daniel, Yelson y el
+personal propio, contra una cuenta hecha en Node con las reglas del pedido;
+toca cuatro números y comprueba que la lista es del mismo tamaño; mete una
+vencida de hace 30 días (tiene que decir 30) y una propuesta (no puede sumar);
+mide la matriz a 390 y los dedos. Contra la v144 falla: no hay Avance.
 
 **Desde la v144 tiene una sexta parte, «VELOCIDAD»** (la de «DICTAR» de la
 v143 se fue con Dictar): a 390, en la Lista de Actividades, comprueba que el
