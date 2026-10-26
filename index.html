@@ -261,7 +261,8 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
   font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);white-space:nowrap;line-height:30px}
 .pil-nivel:first-child{border-left:none;margin-left:0;padding-left:2px}
 .cp-av.on{background:var(--accent-fill)!important;color:#fff!important;border-color:var(--accent-fill)!important}
-.cp-falta span,.mo-falta-s{display:block;font-size:12px;font-weight:600;opacity:.85;margin-top:2px}
+.cp-esc{display:block;width:100%;margin:0 0 12px;min-height:50px;padding:12px;border-radius:14px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text);font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer}
+.cp-falta span,.cp-esc span,.mo-falta-s{display:block;font-size:12px;font-weight:600;opacity:.85;margin-top:2px}
 .cp-trab-t{font-size:13px;font-weight:700;color:#b45309;margin-top:8px}
 .cp-card.cp-trab{border:1.5px dashed #d97706;background:var(--amber-light)}
 .cp-trab{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border2)}
@@ -1316,7 +1317,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261026_149';
+const APP_VERSION='20261026_150';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -27819,7 +27820,9 @@ function recEscanearDesdeMenu(){
 }
 function recEscanear(){
   var msg=document.getElementById('rec-scanmsg');
-  function fallo(t){ if(msg){msg.textContent=t; msg.style.display='block';} }
+  /* v150 · Desde el Modo Campo no existe #rec-scanmsg: sin el aviso, no poder
+     abrir la cámara no decía nada. */
+  function fallo(t){ if(msg){msg.textContent=t; msg.style.display='block';} else showToast(t,'warn',6000); }
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
     fallo('Este teléfono no permite usar la cámara desde el navegador. Elige el área de la lista.'); return;
   }
@@ -27900,17 +27903,24 @@ function recLeido(txt, cerrar){
   var corte=resto.indexOf('|');
   var area =(corte<0?resto:resto.slice(0,corte)).trim();
   var quien=(corte<0?'':resto.slice(corte+1)).trim();
-  var enArea=(S.acts||[]).filter(function(a){return a.area===area;});
+  var enArea=(S.acts||[]).filter(function(a){return String(a.area||'').trim()===area;});
   if(!enArea.length) return malo('No encuentro el área "'+area+'"');
   if(navigator.vibrate) try{navigator.vibrate(60);}catch(e){}
   cerrar();
-  /* El codigo pegado en la puerta abre el panel de ESE apartamento, que es
-     donde se decide que recorrer. Antes dejaba Actividades filtrado y habia
-     que seguir buscando; estando parado en la puerta eso sobra.
-     El filtro se deja puesto igual, para el que salga del panel a la lista. */
+  /* v150 · El QR de la hoja pegada (uno por contratista, `_hpPegarHTML`) abre
+     ACTIVIDADES → LISTA con la ubicación y el contratista puestos, que es lo
+     que pidió el dueño: «con los filtros aplicados por contratistas y por
+     ubicación». Hasta la v149 abría el panel del apartamento. Los filtros son
+     pastillas que se ven y se quitan (v81). Desde el Modo Campo se sale a la
+     app completa: la lista no vive ahí. */
+  if(document.documentElement.getAttribute('data-campo')==='1'){ try{ salirModoCampo(); }catch(e){} }
   recAplicarFiltro(area, quien, enArea);
-  S.torrePersona = quien || '';
-  abrirAptoTorre(area);
+  S.torrePersona='';
+  S.actVista='lista';
+  try{ cerrarHojaApto(); }catch(e){}
+  S.obraVista='todas';
+  goTab('obra');
+  renderActs();
   showToast(area+(quien?' · '+quien:''));
 }
 
@@ -27923,19 +27933,13 @@ function recAplicarFiltro(area, quien, enArea){
   S.actFiltroTexto='';
   S.actFiltroOpen=null;
   S.actMostrarTodas=false;
+  /* v150 · Por `personas`, el filtro de las pastillas de contratista, que no
+     exige `tipo_personal` (no es de fiar, §8): así la lista enseña lo mismo
+     que la hoja. «Personal x la casa» y «Sin asignar» los entiende ese mismo
+     filtro; las de ingeniería van por tipo, como el bloque de la hoja. */
   var f={ubicaciones:[area],contratistas:[],responsables:[]};
-  if(quien==='Personal x la casa'){
-    f.tipo='propio';
-  } else if(quien){
-    var esCont=enArea.some(function(a){
-      return a.tipo_personal==='contratista' && _responsables(a.personal_nombre).indexOf(quien)>=0;
-    });
-    if(esCont){ f.contratistas=[quien]; f.tipo='contratista'; }
-    // Las tareas de ingeniero guardan en ingeniero_nombre a quien las
-    // registró, no a quien las ejecuta; por eso ahí se busca por texto,
-    // que sí mira el nombre del asignado.
-    else { S.actFiltroTexto=quien; }
-  }
+  if(quien===RA_INGENIERIA) f.tipo='ingeniero';
+  else if(quien) f.personas=[quien];
   S.actFiltroAvanzado=f;
 }
 
@@ -31502,6 +31506,93 @@ function raHojaImprimir(){
   win.document.close();
 }
 
+/* v150 · GENERADOR DE QR, dentro del archivo (sin librería de afuera: la hoja
+   se imprime en la obra y no puede depender de un CDN). Es el algoritmo de
+   Nayuki recortado a lo que hace falta: modo byte, corrección M (aguanta polvo
+   y una esquina rota), versiones 1 a 10. Devuelve la matriz de módulos; el
+   dibujo lo hace `_qrSvg`. Lo lee jsQR, el mismo lector del app
+   (`recEscanear`). */
+function _qrMatriz(texto){
+  var datos=Array.from(new TextEncoder().encode(String(texto)));
+  var ECC=[0,10,16,26,18,24,16,18,22,22,26], BLQ=[0,1,1,1,2,2,4,4,4,5,5];
+  function crudos(v){ var r=(16*v+128)*v+64; if(v>=2){ var n=Math.floor(v/7)+2; r-=(25*n-10)*n-55; if(v>=7) r-=36; } return r; }
+  function capacidad(v){ return Math.floor(crudos(v)/8)-ECC[v]*BLQ[v]; }
+  var ver=0;
+  for(var v=1;v<=10;v++){ var bits=4+(v<10?8:16)+datos.length*8; if(bits<=capacidad(v)*8){ ver=v; break; } }
+  if(!ver) return null;
+  // Los bits: modo byte (0100), cuántos, los datos, el cierre y el relleno.
+  var bb=[], pon=function(val,n){ for(var i=n-1;i>=0;i--) bb.push((val>>>i)&1); };
+  pon(4,4); pon(datos.length, ver<10?8:16); datos.forEach(function(b){ pon(b,8); });
+  var cap=capacidad(ver)*8;
+  pon(0, Math.min(4, cap-bb.length)); pon(0,(8-bb.length%8)%8);
+  for(var p=0xEC; bb.length<cap; p^=0xEC^0x11) pon(p,8);
+  var cw=[]; for(var i=0;i<bb.length;i+=8){ var x=0; for(var j=0;j<8;j++) x=(x<<1)|bb[i+j]; cw.push(x); }
+  // Reed-Solomon por bloque, y los bloques intercalados.
+  function mul(x,y){ var z=0; for(var i=7;i>=0;i--){ z=(z<<1)^((z>>>7)*0x11D); z^=((y>>>i)&1)*x; } return z; }
+  var grado=ECC[ver], div=[]; for(var i=0;i<grado-1;i++) div.push(0); div.push(1);
+  for(var i=0,raiz=1;i<grado;i++){ for(var j=0;j<div.length;j++){ div[j]=mul(div[j],raiz); if(j+1<div.length) div[j]^=div[j+1]; } raiz=mul(raiz,2); }
+  function rs(d){ var r=div.map(function(){return 0;}); d.forEach(function(b){ var f=b^r.shift(); r.push(0); div.forEach(function(c,k){ r[k]^=mul(c,f); }); }); return r; }
+  var nb=BLQ[ver], total=Math.floor(crudos(ver)/8), cortos=nb-total%nb, lCorto=Math.floor(total/nb);
+  var bloques=[], k=0;
+  for(var i=0;i<nb;i++){ var d=cw.slice(k,k+lCorto-grado+(i<cortos?0:1)); k+=d.length; var e=rs(d); if(i<cortos) d.push(0); bloques.push(d.concat(e)); }
+  var fin=[];
+  for(var i=0;i<bloques[0].length;i++) bloques.forEach(function(b,j){ if(i!==lCorto-grado||j>=cortos) fin.push(b[i]); });
+  // La matriz: patrones fijos primero.
+  var n=ver*4+17, M=[], F=[];
+  for(var y=0;y<n;y++){ M.push(new Array(n).fill(false)); F.push(new Array(n).fill(false)); }
+  function fijo(x,y,on){ M[y][x]=!!on; F[y][x]=true; }
+  for(var i=0;i<n;i++){ fijo(6,i,i%2===0); fijo(i,6,i%2===0); }
+  function ojo(cx,cy){ for(var dy=-4;dy<=4;dy++) for(var dx=-4;dx<=4;dx++){ var d=Math.max(Math.abs(dx),Math.abs(dy)), x=cx+dx, y=cy+dy; if(x>=0&&x<n&&y>=0&&y<n) fijo(x,y,d!==2&&d!==4); } }
+  ojo(3,3); ojo(n-4,3); ojo(3,n-4);
+  if(ver>1){ var na=Math.floor(ver/7)+2, paso=Math.ceil((ver*4+4)/(na*2-2))*2, pos=[6];
+    for(var q=ver*4+10;pos.length<na;q-=paso) pos.splice(1,0,q);
+    pos.forEach(function(a,ia){ pos.forEach(function(b,ib){ if((ia===0&&ib===0)||(ia===0&&ib===na-1)||(ia===na-1&&ib===0)) return;
+      for(var dy=-2;dy<=2;dy++) for(var dx=-2;dx<=2;dx++) fijo(a+dx,b+dy,Math.max(Math.abs(dx),Math.abs(dy))!==1); }); }); }
+  function formato(mask){ var d=(0<<3)|mask, r=d; for(var i=0;i<10;i++) r=(r<<1)^((r>>>9)*0x537); var b=((d<<10)|r)^0x5412;
+    for(var i=0;i<=5;i++) fijo(8,i,(b>>>i)&1); fijo(8,7,(b>>>6)&1); fijo(8,8,(b>>>7)&1); fijo(7,8,(b>>>8)&1);
+    for(var i=9;i<15;i++) fijo(14-i,8,(b>>>i)&1);
+    for(var i=0;i<8;i++) fijo(n-1-i,8,(b>>>i)&1);
+    for(var i=8;i<15;i++) fijo(8,n-15+i,(b>>>i)&1);
+    fijo(8,n-8,true); }
+  formato(0);
+  if(ver>=7){ var r=ver; for(var i=0;i<12;i++) r=(r<<1)^((r>>>11)*0x1F25); var b=(ver<<12)|r;
+    for(var i=0;i<18;i++){ var bit=(b>>>i)&1, a=n-11+i%3, c=Math.floor(i/3); fijo(a,c,bit); fijo(c,a,bit); } }
+  // Los datos, en zigzag de dos columnas.
+  var ib=0;
+  for(var der=n-1;der>=1;der-=2){ if(der===6) der=5;
+    for(var vv=0;vv<n;vv++) for(var jj=0;jj<2;jj++){ var x=der-jj, sube=((der+1)&2)===0, y=sube?n-1-vv:vv;
+      if(!F[y][x] && ib<fin.length*8){ M[y][x]=((fin[ib>>>3]>>>(7-(ib&7)))&1)===1; ib++; } } }
+  // La máscara que menos castiga, como manda la norma.
+  function enmascarar(m){ for(var y=0;y<n;y++) for(var x=0;x<n;x++){ if(F[y][x]) continue; var inv;
+    switch(m){ case 0:inv=(x+y)%2===0;break; case 1:inv=y%2===0;break; case 2:inv=x%3===0;break; case 3:inv=(x+y)%3===0;break;
+      case 4:inv=(Math.floor(x/3)+Math.floor(y/2))%2===0;break; case 5:inv=x*y%2+x*y%3===0;break;
+      case 6:inv=(x*y%2+x*y%3)%2===0;break; default:inv=((x+y)%2+x*y%3)%2===0; }
+    if(inv) M[y][x]=!M[y][x]; } }
+  function castigo(){ var s=0, oscuros=0;
+    function linea(get){ for(var a=0;a<n;a++){ var run=1, prev=get(a,0), row=[prev];
+      for(var b=1;b<n;b++){ var c=get(a,b); row.push(c); if(c===prev){ run++; if(run===5) s+=3; else if(run>5) s++; } else { run=1; prev=c; } }
+      for(var b=0;b+6<n;b++){ if(row[b]&&!row[b+1]&&row[b+2]&&row[b+3]&&row[b+4]&&!row[b+5]&&row[b+6]){
+        var antes=b>=4&&!row[b-1]&&!row[b-2]&&!row[b-3]&&!row[b-4], despues=b+10<n&&!row[b+7]&&!row[b+8]&&!row[b+9]&&!row[b+10];
+        if(antes||despues) s+=40; } } } }
+    linea(function(a,b){ return M[a][b]; }); linea(function(a,b){ return M[b][a]; });
+    for(var y=0;y<n-1;y++) for(var x=0;x<n-1;x++){ var c=M[y][x]; if(c===M[y][x+1]&&c===M[y+1][x]&&c===M[y+1][x+1]) s+=3; }
+    for(var y=0;y<n;y++) for(var x=0;x<n;x++) if(M[y][x]) oscuros++;
+    s+=Math.floor(Math.abs(oscuros*20-n*n*10)/(n*n))*10; return s; }
+  var mejor=0, menor=Infinity;
+  for(var m=0;m<8;m++){ enmascarar(m); formato(m); var c=castigo(); if(c<menor){ menor=c; mejor=m; } enmascarar(m); }
+  enmascarar(mejor); formato(mejor);
+  return M;
+}
+/* El QR como SVG: un solo <path>, con dos módulos de margen blanco (jsQR lo
+   lee así; la hoja ya da más blanco alrededor). */
+function _qrSvg(texto, px){
+  var M=_qrMatriz(texto); if(!M) return '';
+  var n=M.length, q=2, t=n+q*2, d='';
+  for(var y=0;y<n;y++) for(var x=0;x<n;x++) if(M[y][x]) d+='M'+(x+q)+' '+(y+q)+'h1v1h-1z';
+  return '<svg class="qr" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+t+' '+t+'" width="'+px+'" height="'+px+'" shape-rendering="crispEdges">'
+    +'<rect width="'+t+'" height="'+t+'" fill="#fff"/><path d="'+d+'" fill="#000"/></svg>';
+}
+
 /* ── v149 · REPORTES EN DOS HOJAS ─────────────────────────────────────────
    Palabras del dueño: «Elimina un poco de opciones de los reportes… Hay
    demasiados pasos y demasiadas opciones. Necesito dos.»
@@ -31659,24 +31750,35 @@ function _hpBlanco(atras){
   return '<div class="it hr hb '+_hpCols(atras)+'"><span class="bx"></span><span class="lnp"></span>'
     +_hpCirc(null)+'<span class="bx urg"></span>'+(atras?'<span class="bx atr"></span>':'')+'<span class="ln"></span></div>';
 }
-function _hpFranja(titulo, n, atras){
+function _hpFranja(titulo, n, atras, qr){
   var t=esc(titulo);
-  return '<div class="it fr" data-fr="'+t.replace(/"/g,'&quot;')+'"><div class="fr-b"><b>'+t+'</b><span>'+n+' pendiente'+(n===1?'':'s')+'</span></div>'
+  return '<div class="it fr'+(qr?' fr-qr':'')+'" data-fr="'+t.replace(/"/g,'&quot;')+'"><div class="fr-b"><div class="fr-t"><b>'+t+'</b><span>'+n+' pendiente'+(n===1?'':'s')+'</span>'
+      +(qr?'<i>Escanéelo con la app: abre la lista de este contratista aquí</i>':'')+'</div>'
+      +(qr?'<span class="fr-q">'+qr+'</span>':'')+'</div>'
     +_hpCabCols(atras)+'</div>';
+}
+/* v150 · Lo que lleva el QR: lo mismo que ya lee `recLeido` (el escáner del
+   cajón, «Escanear el QR del apartamento»): «MECCA:<ubicación>|<quién>». Sin quién, la ubicación entera. Una
+   hoja de «Sin ubicación» no lleva QR: no es un sitio y no hay puerta donde
+   pegarla. */
+function _hpQrTexto(area, quien){
+  if(!area || area===PAL_SIN_UBIC) return '';
+  return 'MECCA:'+area+(quien ? '|'+quien : '');
 }
 function _hpPegarHTML(area, lista){
   var gs=_hpGrupos('cont', lista);
   /* La ingeniería al final, en su propio bloque; lo demás de más a menos. */
   gs=gs.filter(function(g){ return g.k!==RA_INGENIERIA; }).concat(gs.filter(function(g){ return g.k===RA_INGENIERIA; }));
-  var nom=_hpNomUbic(area), hoy=today();
-  var cab='<div class="cab-p"><div><div class="cp-big">'+esc(nom.toUpperCase())+'</div><div class="cp-sub2">LO QUE FALTA AQUÍ</div>'
-      +(nom!==area?'<div class="cp-area">'+esc(area)+'</div>':'')+'</div>'
+  var nom=_hpNomUbic(area), hoy=today(), qrTodo=_hpQrTexto(area,'');
+  var cab='<div class="cab-p"><div class="cp-izq">'+(qrTodo?'<span class="cp-qr">'+_qrSvg(qrTodo,84)+'<i>Todo el sitio</i></span>':'')+'<div><div class="cp-big">'+esc(nom.toUpperCase())+'</div><div class="cp-sub2">LO QUE FALTA AQUÍ</div>'
+      +(nom!==area?'<div class="cp-area">'+esc(area)+'</div>':'')+'</div></div>'
     +'<div class="cp-der"><b>BRIDEX · Mecca Residence</b><span>Emitida el '+esc(_nodoFecha(hoy))+'</span><strong>'+lista.length+' pendiente'+(lista.length===1?'':'s')+'</strong></div></div>'
     +'<div class="ins">✔ = completa · AVANCE = marque 25, 50 o 75 · URG. = márquelo si es urgente · NOTAS = escriba lo que haga falta<br>'
     +'Renglones en blanco = anote lo que falte</div>';
   var cuerpo=gs.map(function(g){
     var t= g.k===RA_INGENIERIA ? HP_ING_TITULO : g.k+(_hpOficio(g.k)&&_hpEsPersona(g.k)?' — '+_hpOficio(g.k):'');
-    return _hpFranja(t, g.acts.length, false)+g.acts.map(function(a){ return _hpFila(a,false); }).join('')+_hpBlanco(false)+_hpBlanco(false);
+    var qt=_hpQrTexto(area, g.k);
+    return _hpFranja(t, g.acts.length, false, qt?_qrSvg(qt,88):'')+g.acts.map(function(a){ return _hpFila(a,false); }).join('')+_hpBlanco(false)+_hpBlanco(false);
   }).join('');
   return {cab:cab, cuerpo:cuerpo, total:lista.length, sumaBloques:gs.reduce(function(s,g){return s+g.acts.length;},0),
     titulo:nom, pie:'Al final de la semana el ingeniero recoge esta hoja, pasa lo marcado a la app y pega la nueva.'};
@@ -31714,17 +31816,21 @@ function _hpImprimir(doc, titulo){
   win.document.write(_hpDocHTML(doc, titulo));
   win.document.close();
 }
-/* Carta vertical con 10 mm de margen: 740 × 980 px a 96 ppp. La hoja deja
-   holgura (950) porque Safari y Chromium no cuentan igual el pie. */
-var HP_CSS='@page{size:letter portrait;margin:10mm}'
+/* Carta vertical: 816 × 1.056 px a 96 ppp. v150 · SIN MARGEN DEL NAVEGADOR
+   (`@page margin:0`): el iPhone escribía en ese margen el enlace del app y la
+   fecha, el dueño no los quiere, y además le robaban alto a cada hoja — la
+   hoja se desbordaba y salía una en blanco por medio. Ahora el margen lo pone
+   la propia hoja (`.pg`, padding) y la hoja mide 1.010 px, con 46 de holgura
+   por si el teléfono redondea. */
+var HP_CSS='@page{size:letter portrait;margin:0}'
   +'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-  +'html,body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif}body{width:740px}'
+  +'html,body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif}body{width:816px}'
   +'#fuente{position:absolute;left:-9999px;top:0;width:740px}'
-  +'.pg{width:740px;height:950px;position:relative;overflow:hidden;page-break-after:always;break-after:page}'
+  +'.pg{width:816px;height:1010px;padding:36px 38px 0;position:relative;overflow:hidden;page-break-after:always;break-after:page}'
   +'.pg:last-child{page-break-after:auto;break-after:auto}'
   +'@media screen{body{background:#ddd;padding:10px}.pg{background:#fff;margin:0 auto 12px;box-shadow:0 1px 4px rgba(0,0,0,.25)}}'
   +'@media print{body{padding:0}}'
-  +'.pie{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;gap:12px;border-top:1px solid #999;padding-top:5px;font-size:10px;color:#444}'
+  +'.pie{position:absolute;left:38px;right:38px;bottom:24px;display:flex;justify-content:space-between;gap:12px;border-top:1px solid #999;padding-top:5px;font-size:10px;color:#444}'
   +'.pie b{white-space:nowrap}'
   +'.cab-p{display:flex;justify-content:space-between;gap:14px;border-bottom:5px solid #833088;padding-bottom:8px;margin-bottom:8px}'
   +'.cp-big{font-size:40px;font-weight:900;letter-spacing:.5px;line-height:1}'
@@ -31741,8 +31847,13 @@ var HP_CSS='@page{size:letter portrait;margin:10mm}'
   +'.res{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:12px}'
   +'.res-c{display:flex;justify-content:space-between;gap:6px;border:1px solid #bbb;border-radius:4px;padding:4px 6px;font-size:10.5px}'
   +'.res-c b{font-size:12px}'
-  +'.fr{margin-top:8px}.fr-b{display:flex;justify-content:space-between;align-items:center;background:#833088;color:#fff;padding:5px 8px;border-radius:3px 3px 0 0}'
-  +'.fr-b b{font-size:13px}.fr-b span{font-size:11.5px;font-weight:700;white-space:nowrap}'
+  +'.fr{margin-top:8px}.fr-b{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#833088;color:#fff;padding:5px 8px;border-radius:3px 3px 0 0}'
+  +'.fr-t{display:flex;flex:1;min-width:0;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}'
+  +'.fr-b b{font-size:13px}.fr-t span{font-size:11.5px;font-weight:700;white-space:nowrap}'
+  +'.fr-t i{flex-basis:100%;font-style:normal;font-size:10px;opacity:.9}'
+  +'.fr-q{flex-shrink:0;background:#fff;padding:3px;border-radius:3px;line-height:0}'
+  +'.cp-izq{display:flex;align-items:center;gap:12px}.cp-qr{display:flex;flex-direction:column;align-items:center;gap:2px;line-height:0}'
+  +'.cp-qr i{font-style:normal;font-size:9px;color:#555;line-height:1.2}'
   +'.hr{display:grid;align-items:center;column-gap:6px;border-bottom:1px solid #c8c8c8;padding:4px 4px;font-size:11.5px;line-height:1.3}'
   +'.hp-c5{grid-template-columns:20px 1fr 96px 30px 170px}'
   +'.hp-c6{grid-template-columns:20px 1fr 96px 30px 34px 150px}'
@@ -31763,7 +31874,7 @@ var HP_CSS='@page{size:letter portrait;margin:10mm}'
    las reparte en hojas. Una franja no se queda sola al pie de una hoja; si un
    bloque sigue en la siguiente, su franja se repite con «(sigue)». */
 var HP_PAGINAR='(function(){'
-  +'var ALTO=950,PIE=26,LIBRE=ALTO-PIE-6;'
+  +'var ALTO=1010,LIBRE=ALTO-36-62;'
   +'var F=document.getElementById("fuente"),H=document.getElementById("hojas"),pieT=document.getElementById("pie").innerHTML;'
   +'var its=[].slice.call(F.children),pgs=[],pg=null,usado=0,fr=null;'
   +'function nueva(){pg=document.createElement("div");pg.className="pg";H.appendChild(pg);pgs.push(pg);usado=0;}'
@@ -32279,6 +32390,9 @@ function renderCampo(){
       +_campoMisPropuestasHTML()
       +'<div class="cp-lbl">Hojas para imprimir</div>'
       +_hpHubHTML('campo')
+      /* v150 · El escáner, también aquí: el QR de la hoja pegada abre la lista
+         de ese contratista en ese sitio (sale a la app completa, `recLeido`). */
+      +'<button class="cp-esc" onclick="recEscanear()">Escanear el QR de la hoja<span>Abre la lista de ese contratista en ese sitio</span></button>'
       +'<div class="cp-filtro">'
         +'<button class="'+(S._campoSoloMio?'':'on')+'" onclick="if(S._campoSoloMio)campoToggleMio()">Toda la obra</button>'
         +'<button class="'+(S._campoSoloMio?'on':'')+'" onclick="if(!S._campoSoloMio)campoToggleMio()">Solo lo mío</button>'

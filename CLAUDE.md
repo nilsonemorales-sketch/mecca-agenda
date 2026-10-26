@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v149 — 26 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v150 — 26 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -257,6 +257,7 @@ mismos botones que cualquier otra.
 | **EL AVANCE POR UBICACIÓN, POR CONTRATISTA Y CRUZADO, con cada número tocable** | **Reportes → «Avance»** (v146), la primera de la sub-barra, y en el cajón «Reportes — Avance por ubicación y contratista» — `renderAvanceRep()`, `_raFilas()`, `_raPasa()`, `_raEn()`, `raVer()`, `raImprimir()`. Solo lectura. Ver «AVANCE (v146)» abajo |
 | **LA HOJA DE UN CONTRATISTA O DE UNA UBICACIÓN, para imprimir y mandar** | **Reportes → Avance → «Hoja ›»** en una fila de Por contratista o de un área (v147) — `raHoja()`, `_raHojaHTML()`, `_raCargarMov()`, `raHojaImprimir()`, CSS en `<style id="hj-css">`. Sin dinero. Ver «LA HOJA DE REPORTE (v147)» abajo |
 | **SACAR LA HOJA PARA PEGAR DE UNA UBICACIÓN, o EL PDF DE UN CONTRATISTA** | **Reportes** (v149) — lo ÚNICO que se ve al entrar: dos botones → escoger → sale la hoja. También en el **Modo Campo**. `renderHojasRep()`, `_hpHubHTML()`, `hpSacar()`, `_hpPegarHTML()`, `_hpContHTML()`. Ver «REPORTES EN DOS HOJAS (v149)» abajo |
+| **Escanear la hoja pegada y caer en la lista de ese contratista en ese sitio** | **Cajón → «Escanear el QR del apartamento»** y **Modo Campo → «Escanear el QR de la hoja»** (v150) — `recEscanear()`, `recLeido()`, `recAplicarFiltro()`. Los QR los dibuja `_qrSvg()` / `_qrMatriz()`, dentro del archivo |
 | **Las doce pantallas viejas de Reportes (Avance, Dashboard, Historial…)** | **Reportes → «Otros reportes ›»**, solo administrador (v149) — `REPORTES_OCULTOS`, `reporteOculto()`, `hpOtros()`. Escondidas, no borradas |
 | ~~Agregar una actividad dictándola~~ | **Se retiró en la v144** (decisión del dueño). Ver «DICTAR (v143) — RETIRADO EN LA v144» abajo. **No la vuelvas a construir sin que él lo pida** |
 | **Dejar dicho que una partida NO se puede hacer todavía, y por qué** | **Modo Campo → «Trabada»** y **Modo Obra → el cuarto botón** (v139) — `moTrabaAbrir()`, `moTrabar()`, `Acciones.trabar()` / `destrabar()`, `TRABA_CAUSAS`. Ver «Trabadas y propuestas» abajo |
@@ -3103,6 +3104,34 @@ contratista, y un **PDF del contratista**, con lo suyo por ubicación.
   si un bloque sigue, su franja se repite con «(sigue)». Cada hoja dice «Hoja X
   de Y». Por eso no se usa `zoom` como en la v147: aquí sí son varias páginas.
 
+#### Lo que corrigió el dueño al día siguiente (v150)
+
+- **«Queda una hoja en blanco por medio» y «abajo sale el link de la app».**
+  Las dos tenían la misma causa: el navegador del iPhone escribe el enlace y la
+  fecha en el MARGEN del papel, y ese margen le robaba alto a cada hoja, que se
+  desbordaba en otra. Ahora **`@page{margin:0}`** —sin margen no hay dónde
+  escribir el enlace— y el margen lo pone la hoja (`.pg`, 816 × 1.010 px con
+  padding, 46 px de holgura sobre los 1.056 del papel carta). **No le subas el
+  alto a la hoja para «aprovechar»**: es la holgura la que evita la hoja en
+  blanco. *Chromium no lo reproducía* (su PDF no lleva enlace); se comprueba
+  que el margen sea cero en el CSS.
+- **UN QR POR CONTRATISTA en la hoja para pegar**, en su franja, y uno arriba
+  con el sitio entero. Llevan **`MECCA:<ubicación>|<quién>`**, lo que el lector
+  del app (`recLeido`, jsQR) ya sabía leer; «Sin ubicación» no lleva. **El PDF
+  del contratista NO lleva QR** (no lo pidió).
+- **El generador es del archivo** (`_qrMatriz`, `_qrSvg`, ~90 líneas, algoritmo
+  de Nayuki: modo byte, corrección M, versiones 1-10): la hoja se imprime en la
+  obra y no puede esperar por un CDN. Comprobado leyendo cada QR con jsQR.
+- **ESCANEAR ABRE ACTIVIDADES → LISTA FILTRADA**, con las pastillas de la
+  ubicación y del contratista (`personas`, el filtro de las pastillas, que no
+  exige `tipo_personal`; la ingeniería por `tipo`), y **enseña tantas como
+  dice el bloque**. Palabras del dueño: «con los filtros aplicados por
+  contratistas y por ubicación». **Hasta la v149 abría el panel del
+  apartamento**: se cambió a propósito.
+- **El Modo Campo tiene el escáner** («Escanear el QR de la hoja», `.cp-esc` —
+  no `.cp-falta`, que es la de Proponer y la prueba la busca por clase). Al
+  leer, sale a la app completa: la lista no vive en el Modo Campo.
+
 ### DICTAR (v143) — RETIRADO EN LA v144
 
 La v143 metió una pestaña «Dictar» (Actividades) y un botón «Dictar una
@@ -4362,7 +4391,9 @@ renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
 
 **Desde la v149 tiene una novena parte, «LAS DOS HOJAS»**: quince
-comprobaciones a 390. Entra por el cajón como Nilson: el centro con dos botones,
+comprobaciones a 390 —diecinueve desde la v150: los QR se leen con jsQR, escanear
+el de Dimedes da la lista con el mismo número, margen cero y el escáner en el
+Modo Campo—. Entra por el cajón como Nilson: el centro con dos botones,
 el conteo y el orden del escogedor, la hoja del 4A y el PDF de Dimedes contra
 una cuenta en Node (bloques = total = cuenta), nada marcado, los circulitos,
 ATRAS. y los blancos, la paginación («(sigue)», «Hoja X de Y», nada cortado) y

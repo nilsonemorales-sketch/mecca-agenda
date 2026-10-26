@@ -1391,6 +1391,10 @@ const HP_ESPERADO={
   ingSinOtros:{v:'cae en las dos hojas', d:'una ingeniera que llegue a Reportes con otra vista puesta cae en las dos hojas'},
   dedos:{v:0, d:'nada de lo que se toca en el centro y el escogedor mide menos de 40 px'},
   ceroRed:{v:0, d:'escoger y sacar las hojas: cero GET y cero escrituras'},
+  qr:{v:'un QR por contratista · todos se leen · y uno del sitio', d:'(v150) la hoja del 4A lleva un QR por bloque que jsQR —el lector del app— lee como «MECCA:N4 — Apto 4A|<contratista>», y uno arriba con el sitio entero'},
+  escaneo:{v:'lista · 2 pastillas · mismo número', d:'(v150) escanear el QR de Dimedes abre Actividades → Lista con la ubicación y el contratista puestos, y enseña tantas como dice su bloque'},
+  sinMargen:{v:'margen 0 · sin QR en el contratista', d:'(v150) el papel no deja margen al navegador (ahí ponía el enlace y salía una hoja en blanco), y el PDF del contratista no lleva QR'},
+  campoEscaner:{v:'botón a la vista', d:'(v150) el Modo Campo tiene «Escanear el QR de la hoja»'},
 };
 async function probarDosHojas(nombreVer, html, b){
   const D=datos(); const {ACTS,PERS}=D;
@@ -1505,6 +1509,19 @@ async function probarDosHojas(nombreVer, html, b){
     const conAv=ab.filter(a=>(a.area||'').trim()==='N4 — Apto 4A'&&(parseFloat(a.porcentaje)||0)>0).length;
     r.circulos=v4.llenos===conAv?'igual':JSON.stringify({llenos:v4.llenos,conAvance:conAv});
     const pag4=await paginar(ctx,h4);
+    // v150 · Los QR de la hoja, leídos con jsQR, el lector del propio app.
+    const leidos=await G(async htm=>{ const d=new DOMParser().parseFromString(htm,'text/html');
+      const lee=svg=>new Promise(res=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=c.height=264;
+        const x=c.getContext('2d'); x.drawImage(im,0,0,264,264); const r=typeof jsQR==='function'?jsQR(x.getImageData(0,0,264,264).data,264,264):null; res(r?r.data:null); };
+        im.onerror=()=>res(null); im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg.outerHTML); });
+      const bloques=[]; for(const f of d.querySelectorAll('#fuente .fr')){ const s=f.querySelector('svg'); bloques.push({t:f.querySelector('.fr-b b').textContent, q:s?await lee(s):null}); }
+      const cab=d.querySelector('.cp-qr svg'); return {bloques, cab:cab?await lee(cab):null}; }, h4);
+    const quienDe=t=>t==='Revisiones de ingeniería'?'Ingeniería':t.replace(/ — .*$/,'');
+    const qrBien=leidos.bloques.length && leidos.bloques.every(x=>x.q==='MECCA:N4 — Apto 4A|'+quienDe(x.t));
+    r.qr=(leidos.bloques.length&&leidos.bloques.every(x=>x.q!==null)?'un QR por contratista':'faltan QR '+JSON.stringify(leidos.bloques.slice(0,3)))
+      +' · '+(qrBien?'todos se leen':'leen mal '+JSON.stringify(leidos.bloques.filter(x=>x.q!=='MECCA:N4 — Apto 4A|'+quienDe(x.t)).slice(0,2)))
+      +' · '+(leidos.cab==='MECCA:N4 — Apto 4A'?'y uno del sitio':'cabecera '+leidos.cab);
+    r.sinMargen=/@page\{size:letter portrait;margin:0\}/.test(h4)?'margen 0':'con margen';
     // ── PDF del contratista: Dimedes
     await p.locator('#c-hp .hp-volver').click(); await p.waitForTimeout(200);
     await p.locator('#c-hp .hp-gran').nth(1).click(); await p.waitForTimeout(300);
@@ -1518,19 +1535,31 @@ async function probarDosHojas(nombreVer, html, b){
     r.contAtras=(vd.blq.every(x=>x.atras===x.filas+x.blancos)?'un ATRAS. por renglón':'ATRAS. faltan')+' · '+(vd.blq.every(x=>x.blancos===3)?'3 en blanco':'blancos '+vd.blq.map(x=>x.blancos));
     r.sinMarcar=(!v4.marcadoTxt&&!vd.marcadoTxt&&!v4.bxLlenos&&!vd.bxLlenos&&!v4.pctGeneral&&!vd.pctGeneral)?'nada marcado':JSON.stringify({v4,vd:{m:vd.marcadoTxt,b:vd.bxLlenos,p:vd.pctGeneral}}).slice(0,200);
     const pagd=await paginar(ctx,hd);
+    r.sinMargen+=' · '+(/<svg class="qr"/.test(hd)?'CON QR en el contratista':'sin QR en el contratista');
+    const lScan=LEC.length, eScan=ESC.length;   // lo de abajo entra a Actividades, que pide lo suyo: no es de la hoja
+    // v150 · Escanear el QR de Dimedes en el 4A: la lista filtrada, con su número.
+    const nDim=v4.frs.find(f=>/^Dimedes Estebez/.test(f.t)), lDim=leidos.bloques.find(x=>/^Dimedes Estebez/.test(x.t));
+    if(lDim&&lDim.q){ r.escaneo=await G(q=>{ recLeido(q,function(){});
+      const av=S.actFiltroAvanzado||{}, pil=(av.ubicaciones||[]).length+(av.personas||[]).length;
+      const n=applyActFilters(S.acts,true).length, vis=document.getElementById('view-obra');
+      return [(S.currentTab==='obra'&&S.actVista==='lista'&&vis&&vis.checkVisibility())?'lista':'pantalla '+S.currentTab+'/'+S.actVista, pil+' pastillas', n]; }, lDim.q);
+      r.escaneo=r.escaneo[0]+' · '+r.escaneo[1]+' · '+(nDim&&r.escaneo[2]===nDim.n?'mismo número':'lista '+r.escaneo[2]+' contra hoja '+(nDim&&nDim.n)); }
+    else r.escaneo='sin QR de Dimedes';
     const P=[pag4,pagd];
     r.paginas=[pagd.n>1?'varias':'una sola ('+pagd.n+')', P.every(x=>x.n<2||x.sigue>0)?'(sigue)':'sin (sigue) '+JSON.stringify(P.map(x=>x.sigue)),
       P.every(x=>x.pies===x.n)?'Hoja X de Y':'pies '+JSON.stringify(P.map(x=>x.pies+'/'+x.n)), P.every(x=>!x.cortes&&!x.quedan)?'nada cortado':'cortes '+JSON.stringify(P.map(x=>x.cortes+'/'+x.quedan))].join(' · ');
     r.imprimir=P.every(x=>x.paginasPdf===x.n)?'mismas hojas · carta':'pantalla '+P.map(x=>x.n)+' · PDF '+P.map(x=>x.paginasPdf);
     r._hojas={pegar4A:pag4.n, dimedes:pagd.n, bloques4A:v4.frs.length, ubicDimedes:vd.frs.length};
     r.dedos=dedos;
-    r.ceroRed=(LEC.length-l0)+(ESC.length-e0);
+    r.ceroRed=(lScan-l0)+(eScan-e0);
+    r._alEscanear={lect:LEC.slice(lScan), escr:ESC.slice(eScan)};
     await ctx.close();
     // ── Karina, por el Modo Campo
     ({ctx,p,G}=await abrir({id:'karina',nombre:'Ing. Karina Breton',rol:'ing'}));
     const cmp=await G(()=>{ const h=document.getElementById('campo-root'); if(!h) return 'sin Modo Campo';
       const g=[...h.querySelectorAll('.hp-gran')].filter(x=>x.checkVisibility()).length; return g+' botones · '+(h.querySelector('.hp-otros')?'con otros':'sin otros'); });
     if(FOTOS){ await p.locator('#campo-root .hp-gran').first().scrollIntoViewIfNeeded().catch(()=>{}); await p.screenshot({path:path.join(FOTOS,nombreVer+'-campo-hojas.png')}); }
+    r.campoEscaner=await G(()=>{ const b=[...document.querySelectorAll('#campo-root button')].find(x=>/Escanear el QR/.test(x.textContent)); return b&&b.checkVisibility()?'botón a la vista':'no está'; });
     let sale='no sale';
     if(/^2 /.test(cmp)){ await p.locator('#campo-root .hp-gran').nth(1).click(); await p.waitForTimeout(300);
       await p.locator('#campo-root .hp-op').first().click(); await p.waitForTimeout(200);
