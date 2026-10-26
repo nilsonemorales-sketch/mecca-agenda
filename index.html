@@ -1297,7 +1297,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261026_147';
+const APP_VERSION='20261026_148';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -2207,12 +2207,15 @@ function showAddActSmart(){
 
 function ubicacionSelect(id, val){
   var AREAS=[
+    /* v148 · Desde el 26-oct el N1 tiene Lobby, y el N7 es UN solo apartamento,
+       «N7 — Penthouse»: «Penthouse A» y «Penthouse B» no existen. */
+    ['N1',['N1 — Lobby']],
     ['N2',['N2 — Apto 2A','N2 — Apto 2B','N2 — Áreas Comunes N2']],
     ['N3',['N3 — Apto 3A','N3 — Apto 3B','N3 — Áreas Comunes N3']],
     ['N4',['N4 — Apto 4A','N4 — Apto 4B','N4 — Áreas Comunes N4']],
     ['N5',['N5 — Apto 5A','N5 — Apto 5B','N5 — Áreas Comunes N5']],
     ['N6',['N6 — Apto 6A','N6 — Apto 6B','N6 — Áreas Comunes N6']],
-    ['N7',['N7 — Penthouse A','N7 — Penthouse B','N7 — Áreas Comunes N7']],
+    ['N7',['N7 — Penthouse','N7 — Áreas Comunes N7','N7 — GYM']],
     ['Exteriores',['Fachada','Fachada Frontal','Fachada Lateral Derecha','Fachada Lateral Izquierda','Fachada Posterior']],
     ['General',['Escalera de Emergencia','Escalera Principal','Terraza','Parqueo','General','Toda la obra']]
   ];
@@ -3907,7 +3910,7 @@ async function pendResolver(actId,pendId){
 var TORRE_NIV=[['7',0],['6',1],['5',2],['4',3],['3',4],['2',5]];
 
 function _torreArea(nivel,lado){
-  return nivel==='7' ? 'N7 — Penthouse B' : 'N'+nivel+' — Apto '+nivel+lado;
+  return nivel==='7' ? 'N7 — Penthouse' : 'N'+nivel+' — Apto '+nivel+lado;
 }
 
 async function cargarTorre(force){
@@ -4242,7 +4245,7 @@ function _dibujarTorreEn(caja){
       add('rect',{x:x,y:y,width:w,height:alto,rx:10,fill:'var(--green)',
         opacity:(0.05+d.pct/100*0.24).toFixed(2)},g);
       /* Arriba, en una sola linea: el nombre a la izquierda y lo que falta a
-         la derecha, como en la muestra. "Penthouse B" es mas largo que los
+         la derecha, como en la muestra. "Penthouse" es mas largo que los
          demas, asi que en vez de adivinar se mide el texto de verdad y, si
          no caben los dos, se encoge el nombre hasta que quepa. */
       var tNom=add('text',{x:x+12,y:y+16,'font-size':10,'font-weight':500,
@@ -4251,8 +4254,8 @@ function _dibujarTorreEn(caja){
         'text-anchor':'end'},g);
       tFal.textContent='faltan '+d.faltan;
       /* nombres de mas a menos largo: se queda con el primero que quepa de
-         verdad al lado del "faltan". "Penthouse B" no cabe en 116 px. */
-      var nombres = nivel==='7' ? ['Penthouse B','Penthouse','PH B']
+         verdad al lado del "faltan". "Penthouse" puede no caber en 116 px. */
+      var nombres = nivel==='7' ? ['Penthouse','PH']
                                 : ['Apto '+nivel+L];
       tNom.textContent=nombres[0];
       try{
@@ -4265,7 +4268,7 @@ function _dibujarTorreEn(caja){
         }
         /* Si el navegador todavia no sabe medir — pasa cuando la torre se
            dibuja antes de que su contenedor tenga tamaño — todas las medidas
-           vuelven en 0, el primer nombre "cabe" y "Penthouse B" termina
+           vuelven en 0, el primer nombre "cabe" y "Penthouse" termina
            montado encima del "faltan". En ese caso se usa el nombre corto:
            mejor corto que encima. */
         if(!medido || anchoFal===0) tNom.textContent=nombres[nombres.length-1];
@@ -4794,7 +4797,13 @@ function _repCopiarViejo(t,ok){
    ───────────────────────────────────────────────────────────────── */
 var REC_ORDEN=['N2 — Apto 2A','N2 — Apto 2B','N3 — Apto 3A','N3 — Apto 3B',
   'N4 — Apto 4A','N4 — Apto 4B','N5 — Apto 5A','N5 — Apto 5B',
-  'N6 — Apto 6A','N6 — Apto 6B','N7 — Penthouse B'];
+  'N6 — Apto 6A','N6 — Apto 6B','N7 — Penthouse'];
+/* v148 · «N7 — Penthouse», no «Penthouse B». El 26-oct se corrigió en la base
+   (el N7 es un solo apartamento, 201 partidas) y esta lista se quedó con el
+   nombre viejo: todas las pantallas de «solo apartamentos» —la torre, Por
+   Apto, el Modo Obra, «Repetir en los 11», la matriz de apartamentos— dejaron
+   de ver el Penthouse. Si se vuelve a renombrar una ubicación en la base, esta
+   lista va en el mismo cambio. */
 
 function _recNom(area){ return String(area||'').split('—').pop().trim(); }
 
@@ -5592,7 +5601,7 @@ function _recFlecha(area,pre,post){
   return '<button onclick="irApto(\''+String(area).replace(/'/g,"\\'")+'\')" '+
     'style="flex-shrink:0;border:none;background:var(--bg3);color:var(--text2);border-radius:9px;'+
     'padding:9px 11px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;'+
-    'white-space:nowrap">'+(pre||'')+esc(_recNom(area).replace('Apto ','').replace('Penthouse B','PH'))+
+    'white-space:nowrap">'+(pre||'')+esc(_recNom(area).replace('Apto ','').replace(/^Penthouse( B)?$/,'PH'))+
     (post||'')+'</button>';
 }
 function irApto(area){
@@ -27707,7 +27716,7 @@ function revQuitarFiltro(){
   renderRevision();
 }
 /* Los apartamentos en el orden de la obra, no alfabetico. Para los once suena
-   igual — "N2 — Apto 2A" … "N7 — Penthouse B" ya ordenan bien por texto — pero
+   igual — "N2 — Apto 2A" … "N7 — Penthouse" ya ordenan bien por texto — pero
    NO para el resto: alfabeticamente "Escalera de Emergencia", "Fachada" y
    "General" caen ANTES del Apto 2A, asi que la pantalla empezaba por la
    escalera en vez de por el primer apartamento. Ahora: primero los once, luego

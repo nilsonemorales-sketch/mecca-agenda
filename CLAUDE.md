@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v147 — 26 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v148 — 26 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -4115,7 +4115,7 @@ dueño. Ahora usa `_revOrdenArea` como todo lo demás. El cambio está **solo en
 «Por Apto» (`renderActsPorApto`) es otra función y ya ordenaba bien.
 
 Sobre el orden de las áreas: **alfabético no sirve.** Para los once
-apartamentos suena igual — `N2 — Apto 2A` … `N7 — Penthouse B` ya ordenan
+apartamentos suena igual — `N2 — Apto 2A` … `N7 — Penthouse` ya ordenan
 bien por texto — pero «Escalera de Emergencia», «Fachada» y «General»
 caen **antes** de «N2 — Apto 2A», así que la pantalla abría por la
 escalera. Usa siempre `_revOrdenArea()`: primero los once de `REC_ORDEN`,
@@ -4429,13 +4429,18 @@ orden de magnitud.
 - **`REC_ORDEN`** define los 11 apartamentos y su orden. Úsala, no
   inventes otra lista:
   `N2 — Apto 2A`, `2B`, `N3 — 3A`, `3B`, `N4 — 4A`, `4B`, `N5 — 5A`,
-  `5B`, `N6 — 6A`, `6B`, `N7 — Penthouse B`.
-  **⚠ PENDIENTE desde el 26-oct:** en la base el N7 se llama ahora **«N7 —
-  Penthouse»** (un solo apartamento, 201 partidas), pero `REC_ORDEN` y otros
-  sitios del código (`_ubicApartamentos`/la lista por nivel con «Penthouse A» y
-  «Penthouse B», el nombre del nivel 7 al tocar la torre, las etiquetas cortas)
-  siguen con «Penthouse B». Hasta que se arregle, **las pantallas de «solo
-  apartamentos» no ven el Penthouse**. La v147 no lo tocó: avisado.
+  `5B`, `N6 — 6A`, `6B`, **`N7 — Penthouse`**.
+  **Hasta la v147 decía «N7 — Penthouse B».** El 26-oct se corrigió en la base
+  (el N7 es UN apartamento, 201 partidas; «Penthouse A» no existió nunca) y el
+  código se quedó con el nombre viejo: **las pantallas de «solo apartamentos»
+  —la torre, Por Apto, el Modo Obra, «Repetir en los 11», la matriz— dejaron
+  de ver el Penthouse** durante la v147. La v148 lo cambió en los cinco sitios:
+  `REC_ORDEN`, el escogedor de ubicación del formulario (`ubicacionSelect`, que
+  además gana «N1 — Lobby» y «N7 — GYM»), `_torreArea`, los nombres del nivel 7
+  en la torre y la flecha corta «PH» del recorrido. En la base «Penthouse B»
+  solo queda en textos libres (descripciones, notas, 41 penalidades): no se
+  tocan. **Si se vuelve a renombrar una ubicación en la base, busca su nombre
+  en el código en el mismo cambio.**
   Hay otras áreas que **no** son apartamentos: `Parqueo`, `Fachada
   Frontal`, `Fachada Posterior`, `Escalera Principal`, `Escalera de
   Emergencia`, `Terraza`, `General`, `Toda la obra`, y las áreas comunes

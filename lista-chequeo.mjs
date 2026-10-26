@@ -53,7 +53,7 @@ function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.i
 function datos(){
   const R=rng(133), pick=a=>a[Math.floor(R()*a.length)];
   const AREAS=['N2 — Apto 2A','N2 — Apto 2B','N3 — Apto 3A','N3 — Apto 3B','N4 — Apto 4A','N4 — Apto 4B',
-    'N5 — Apto 5A','N5 — Apto 5B','N6 — Apto 6A','N6 — Apto 6B','N7 — Penthouse B','Parqueo',
+    'N5 — Apto 5A','N5 — Apto 5B','N6 — Apto 6A','N6 — Apto 6B','N7 — Penthouse','Parqueo',
     'Escalera Principal','General','N7 — Áreas Comunes N7',''];
   const CONT=['Daniel Espinal','Dimedes Estebez (Niño)','Yelson Jimenez','Jordy','Milo','Alexander Ramos','Felix y Jefrey','Ing. Uriel'];
   // 26 contratistas registrados, como en la obra: los 8 de arriba tienen trabajo, los otros 18 no.
