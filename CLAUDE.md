@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v148 — 26 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v149 — 26 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -256,6 +256,8 @@ mismos botones que cualquier otra.
 | **LO QUE VE UN INGENIERO al poner su PIN (Moisés, Karina)** | **El Modo Campo** — `debeAbrirCampo()`, `iniciarModoCampo()`, `renderCampo()`, `campoMarcar()`. Pantalla aparte, en cualquier aparato, para todo rol `ing`. **No estaba en este mapa hasta la v139.** Ver «El Modo Campo» abajo |
 | **EL AVANCE POR UBICACIÓN, POR CONTRATISTA Y CRUZADO, con cada número tocable** | **Reportes → «Avance»** (v146), la primera de la sub-barra, y en el cajón «Reportes — Avance por ubicación y contratista» — `renderAvanceRep()`, `_raFilas()`, `_raPasa()`, `_raEn()`, `raVer()`, `raImprimir()`. Solo lectura. Ver «AVANCE (v146)» abajo |
 | **LA HOJA DE UN CONTRATISTA O DE UNA UBICACIÓN, para imprimir y mandar** | **Reportes → Avance → «Hoja ›»** en una fila de Por contratista o de un área (v147) — `raHoja()`, `_raHojaHTML()`, `_raCargarMov()`, `raHojaImprimir()`, CSS en `<style id="hj-css">`. Sin dinero. Ver «LA HOJA DE REPORTE (v147)» abajo |
+| **SACAR LA HOJA PARA PEGAR DE UNA UBICACIÓN, o EL PDF DE UN CONTRATISTA** | **Reportes** (v149) — lo ÚNICO que se ve al entrar: dos botones → escoger → sale la hoja. También en el **Modo Campo**. `renderHojasRep()`, `_hpHubHTML()`, `hpSacar()`, `_hpPegarHTML()`, `_hpContHTML()`. Ver «REPORTES EN DOS HOJAS (v149)» abajo |
+| **Las doce pantallas viejas de Reportes (Avance, Dashboard, Historial…)** | **Reportes → «Otros reportes ›»**, solo administrador (v149) — `REPORTES_OCULTOS`, `reporteOculto()`, `hpOtros()`. Escondidas, no borradas |
 | ~~Agregar una actividad dictándola~~ | **Se retiró en la v144** (decisión del dueño). Ver «DICTAR (v143) — RETIRADO EN LA v144» abajo. **No la vuelvas a construir sin que él lo pida** |
 | **Dejar dicho que una partida NO se puede hacer todavía, y por qué** | **Modo Campo → «Trabada»** y **Modo Obra → el cuarto botón** (v139) — `moTrabaAbrir()`, `moTrabar()`, `Acciones.trabar()` / `destrabar()`, `TRABA_CAUSAS`. Ver «Trabadas y propuestas» abajo |
 | **Proponer una partida que no estaba en la lista** | **Modo Campo → «Proponer a Gerencia»** (`campoProponer()`) y **Modo Obra → un contratista abierto → «+ Proponer a Gerencia»** (v139, renombrado en la v140: `PAL_PROPONER`) — `_propFormHTML()`, `propEnviar()`, `Acciones.proponer()`. Entra como propuesta y no cuenta hasta que Gerencia la aprueba |
@@ -3063,6 +3065,44 @@ chequeo comprueba que en la hoja no aparece «RD$», «precio», «monto» ni
   otro, y el resumen cabe sin deslizarse (320 de 320 px).
 - **NO ESCRIBE NADA.**
 
+### REPORTES EN DOS HOJAS (v149) — lo demás se escondió
+
+Palabras del dueño: *«Hay demasiados pasos y demasiadas opciones. Necesito
+dos»*: una **hoja para pegar** en cada ubicación, con lo pendiente por
+contratista, y un **PDF del contratista**, con lo suyo por ubicación.
+
+- **Reportes abre con dos botones grandes y nada más** (`#c-hp`,
+  `S.reportesVista='hojas'`). **Dos toques**: botón → escoger (con su conteo de
+  pendientes) → sale la hoja para imprimir o compartir. Sin filtros ni fechas.
+  `goTab` la devuelve a 'hojas' **cada vez que se entra** desde otra pestaña.
+- **LO DEMÁS SE ESCONDIÓ, NO SE BORRÓ**: `REPORTES_OCULTOS` (avance, dashboard,
+  custom, proyeccion, apto, semana, urgentes, historial, cambios, cierre,
+  notif) y las cuatro entradas «Reportes — …» del cajón (`display:none`). El
+  administrador llega por **«Otros reportes ›»**, y la sub-barra de siempre
+  sale con «‹ Las dos hojas» delante. Un ingeniero que llegue con otra vista
+  puesta cae en las dos hojas (`reporteOculto`). Para devolver una pantalla, se
+  quita de la lista.
+- **El Modo Campo tiene los mismos dos botones** («Hojas para imprimir»); el
+  escogedor ocupa la pantalla con su «‹ Volver». Sin «Otros reportes».
+- **Lee solo `S.acts`** (lo abierto): **cero `GET`, cero escrituras**. Quién y
+  dónde por `_raQuien` / `_raArea` (v146): el personal propio es UNA entrada
+  (`PAL_PROPIO`), la ingeniería junta y al final («Revisiones de ingeniería»).
+  Las propuestas no salen. Orden de ubicaciones: `_hpRankArea` — las once,
+  Lobby, Parqueo, lo común de los pisos, escaleras, fachadas, lo general.
+- **DECISIÓN DEL DUEÑO: nada marcado.** Ni % de avance general (todavía no es
+  de fiar), ni la palabra urgente o atrasada, ni un cuadro URG./ATRAS. puesto:
+  son para marcar a mano. `prioridad` y `fecha_fin` solo ORDENAN por dentro
+  (`_hpOrdenActs`). Lo que sí sale es el avance de cada partida en sus
+  circulitos 25 · 50 · 75.
+- **El papel**: carta vertical. Hoja para pegar: ✔ · ACTIVIDAD · AVANCE % ·
+  URG. · NOTAS, 2 en blanco por contratista. PDF del contratista: lo mismo más
+  **ATRAS.**, resumen por ubicación y 3 en blanco por ubicación. La descripción
+  se parte en líneas, nunca se corta.
+- **La ventana de imprimir PAGINA ella misma** (`HP_PAGINAR`): mide cada pieza
+  a 740 px y reparte en hojas de 950 px; una franja no se queda sola al pie, y
+  si un bloque sigue, su franja se repite con «(sigue)». Cada hoja dice «Hoja X
+  de Y». Por eso no se usa `zoom` como en la v147: aquí sí son varias páginas.
+
 ### DICTAR (v143) — RETIRADO EN LA v144
 
 La v143 metió una pestaña «Dictar» (Actividades) y un botón «Dictar una
@@ -4320,6 +4360,18 @@ contratistas y uno no registrado, y de personal propio), los `GET` de los
 formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
+
+**Desde la v149 tiene una novena parte, «LAS DOS HOJAS»**: quince
+comprobaciones a 390. Entra por el cajón como Nilson: el centro con dos botones,
+el conteo y el orden del escogedor, la hoja del 4A y el PDF de Dimedes contra
+una cuenta en Node (bloques = total = cuenta), nada marcado, los circulitos,
+ATRAS. y los blancos, la paginación («(sigue)», «Hoja X de Y», nada cortado) y
+el PDF carta real con las mismas hojas; después como Karina por el Modo Campo.
+Avance y su hoja (v146, v147) entran ahora por «Otros reportes ›»
+(`entrarAvance`, que sirve para las dos versiones). *Avisado:* corrida después
+de las 5 p. m., el arranque del administrador escribe la inactividad del día
+(2 escrituras en Velocidad, Avance y Hoja) **en las dos versiones**: es la hora,
+no el cambio.
 
 **Desde la v147 tiene una octava parte, «LA HOJA DE REPORTE»**: catorce
 comprobaciones a 390 y con el app en oscuro. Abre la hoja de Daniel, Yelson y
