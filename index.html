@@ -229,6 +229,45 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .in-foto img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1.5px solid var(--border2)}
 .in-falta{font-size:12.5px;color:var(--red);font-weight:650}
 .in-ayuda{font-size:12.5px;color:var(--text3);margin:-4px 0 4px}
+.in-fase{display:inline-block;font-size:11px;font-weight:800;border-radius:6px;padding:1px 7px;margin-bottom:4px;color:#fff}
+.in-fase.f-I{background:#5b6b8c}.in-fase.f-C{background:#2f7fa8}.in-fase.f-P{background:#c07a12}.in-fase.f-T{background:#346837}
+.in-aviso-fase{margin-top:8px;font-size:13px;font-weight:700;color:#8a5a00;background:#fff4d6;border:1.5px solid #e8b84a;border-radius:10px;padding:6px 10px}
+.in-est{display:inline-block;font-size:11px;font-style:normal;font-weight:800;border-radius:999px;padding:1px 8px;margin:3px 4px 0 0;border:1.5px solid var(--border2);color:var(--text3)}
+.in-est.e-en_curso{border-color:#e8b84a;color:#8a5a00;background:#fff4d6}
+.in-est.e-cerrada{border-color:var(--green);color:#fff;background:var(--green)}
+.in-est.e-ok{border-color:var(--accent);color:var(--accent)}
+.in-cerrada{font-size:13.5px;font-weight:700;color:var(--green);background:var(--bg2);border:1.5px solid var(--green);border-radius:12px;padding:8px 12px}
+.in-listo{font-size:13.5px;font-weight:800;color:var(--green)}
+.in-fin{margin-top:10px}
+.in .in-guardar{border-style:solid;margin-top:10px}
+.in-res{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13.5px;color:var(--text2)}
+.in-res .ok b{color:var(--green)}.in-res .mal b{color:var(--red)}
+.in-cierre{border-color:var(--accent)}
+.in .in-aprob{width:100%;min-height:48px;border-radius:12px;border:1.5px dashed var(--accent);background:transparent;color:var(--accent);font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;padding:6px 10px;margin:4px 0}
+.in .in-aprob.on{border-style:solid;background:var(--accent);color:#fff}
+.in .in-aprob.mini{min-height:44px;font-size:13px}
+.lev-ley{margin:-4px 0 6px}
+.lev-wrap{overflow-x:auto;max-width:100%;border:1px solid var(--border);border-radius:12px}
+.lev-t{border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:100%}
+.lev-t th{position:sticky;top:0;background:var(--bg2);font-size:11px;font-weight:800;color:var(--text2);padding:6px 4px;text-align:center;min-width:64px;vertical-align:middle}
+.lev-t tbody th{position:sticky;left:0;z-index:1;min-width:52px;padding:2px;background:var(--bg)}
+.lev-t td{padding:2px;text-align:center}
+.in .lev-c,.in .lev-apto{width:100%;min-height:44px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text3);font-family:var(--font);font-size:12.5px;font-weight:800;cursor:pointer;padding:2px}
+.in .lev-apto{background:var(--bg2);color:var(--text)}
+.in .lev-c.e-en_curso{background:#fff4d6;border-color:#e8b84a;color:#8a5a00}
+.in .lev-c.e-cerrada{background:var(--green);border-color:var(--green);color:#fff}
+.lev-el{background:var(--bg2);border:1.5px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px}
+.lev-el.ok{border-color:var(--green)}.lev-el.mal{border-color:var(--red)}
+.lev-el-t{display:flex;justify-content:space-between;gap:8px;font-size:14px;margin-bottom:4px}
+.lev-el-t span{font-weight:800;color:var(--text2);white-space:nowrap}
+.lev-pt{display:flex;gap:6px;font-size:13px;color:var(--text2);padding:2px 0}
+.lev-pt i{font-style:normal;font-size:11px;color:var(--text3)}
+.lev-pt em{display:block;font-style:normal;color:var(--red);font-weight:650}
+.lev-pt.mal{color:var(--text)}.lev-m{font-weight:800;width:16px;flex-shrink:0}
+.lev-pt.ok .lev-m{color:var(--green)}.lev-pt.mal .lev-m{color:var(--red)}
+.lev-fotos{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 4px 22px}
+.lev-fotos img{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border2);cursor:pointer}
+.lev-sin{font-size:12.5px;color:var(--text3);margin-top:4px}
 .in .in-cambiar{display:block;margin-top:6px;min-height:40px;padding:4px 12px;border-radius:10px;border:1.5px solid var(--red);background:transparent;color:var(--red);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer}
 .in-fotos{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .in .in-mini{position:relative;width:52px;height:52px;min-height:0;padding:0;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg3);overflow:hidden;cursor:pointer;color:var(--text3);font-size:11px}
@@ -1381,7 +1420,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261027_155';
+const APP_VERSION='20261027_156';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -32083,17 +32122,31 @@ async function _hpEntregar(blob, nombre, titulo){
      mismo tipo y vive en `obra_config`, clave `insp_nombres`.
    El catálogo de puntos y el inventario son CONSTANTES, aprobados por el dueño
    el 27-oct-2026: si cambian, se cambian aquí. */
+/* v156 · LAS CUATRO FASES. Desde el «Checklist de cierre Mecca v2» (aprobado
+   por el dueño el 27-oct-2026) los elementos de Plomería, Electricidad,
+   Ventanas, Topes, las puertas de madera y la pintura llevan cada punto con
+   su fase: I Instalado → C Conectado → P Probado → T Terminado. Se escriben
+   aquí como [fase, título, detalle] en el orden del documento y `_inspFases`
+   los deja agrupados por fase (orden estable) y en la forma de siempre,
+   [título, detalle, fase]: así el resto del módulo lee pt[0] y pt[1] igual
+   que antes, y el índice del punto es el de la pantalla. */
+var INSP_FASES={I:'Instalado',C:'Conectado',P:'Probado',T:'Terminado'}, INSP_FASE_ORD='ICPT';
+function _inspFases(l){
+  return l.map(function(p,i){ return {p:p,i:i}; })
+    .sort(function(a,b){ return (INSP_FASE_ORD.indexOf(a.p[0])-INSP_FASE_ORD.indexOf(b.p[0]))||(a.i-b.i); })
+    .map(function(o){ return [o.p[1],o.p[2],o.p[0]]; });
+}
 var INSP_CAT=[
  {id:'ebanisteria',nombre:'Ebanistería',contratista:'Dimedes Estebez (Niño)',grupos:[
-  {id:'puertas',nombre:'Puertas de madera',filas:'cada puerta',pts:[
-   ['Instalada y a plomo','Colgada en su sitio, derecha; abierta a medio camino no se mueve sola.'],
-   ['Bisagras','Las 3 puestas, con todos sus tornillos, firmes y sin chillido.'],
-   ['Cerradura y llaves','Abre con llave y perilla; el pestillo entra en el cerradero; las llaves están.'],
-   ['Abre y cierra bien','No roza ni se traba; separación pareja alrededor (≈3 mm) y al piso (≈1 cm).'],
-   ['Jamba y cubrefaltas','Completos de los dos lados, pegados a la pared, esquinas cerradas.'],
-   ['Barniz','Parejo, sin chorreos; cantos de arriba y abajo también barnizados.'],
-   ['Sin daños','Hoja, jamba y cubrefalta sin golpes, rayas, manchas ni astillas.'],
-   ['Tope','Tope puesto y firme; la perilla no pega en la pared.']]},
+  {id:'puertas',nombre:'Puertas de madera',filas:'cada puerta',pts:_inspFases([
+   ['I','Jamba y cubrefalta','Jamba a plomo; cubrefaltas de los dos lados, esquinas cerradas.'],
+   ['I','Hoja colgada','Tres bisagras con todos sus tornillos; no se mueve sola.'],
+   ['P','Abre y cierra','Sin rozar; luz pareja alrededor (≈3 mm) y al piso (≈1 cm).'],
+   ['C','Cerradura','Puesta, abre con llave y perilla; el pestillo entra en el cerradero.'],
+   ['I','Tope','Puesto; la perilla no pega en la pared.'],
+   ['T','Barniz','Parejo, también en los cantos de arriba y abajo.'],
+   ['T','Sin daños','Sin golpes, rayas ni astillas.'],
+   ['T','Llaves','Las llaves entregadas y rotuladas.']])},
   {id:'closets',nombre:'Closets',filas:'cada closet',pts:[
    ['Puertas derechas','A plomo; arriba y abajo en la misma línea.'],
    ['Separación pareja','Rendija igual entre puertas (≈3 mm) y centrada en el hueco.'],
@@ -32113,44 +32166,107 @@ var INSP_CAT=[
    ['Juntas selladas','Silicón parejo entre gabinete, tope y pared.'],
    ['Sin daños','Sin golpes, rayas, manchas ni piezas que falten.']]}]},
  {id:'plomeria',nombre:'Plomería',contratista:'Daniel Espinal',grupos:[
-  {id:'banos',nombre:'Baños',filas:'cada baño',pts:[
-   ['Inodoro','Fijo y sellado; descarga, llena y se corta solo.'],
-   ['Lavamanos','Firme; fría y caliente sin goteo; tapón y sifón puestos.'],
-   ['Ducha','Mezcladora y regadera firmes; fría y caliente con buena presión.'],
-   ['Desagüe de piso','Rejilla puesta; un cubo de agua drena rápido sin charco.'],
-   ['Llaves angulares','Con su escudo; cierran completo.'],
-   ['Sin fugas','Seco debajo, detrás y en el techo del piso de abajo.'],
-   ['Silicón','Parejo y limpio en inodoro, lavamanos y ducha.'],
-   ['Accesorios','Toallero, papelera, jabonera y gancho firmes.']]},
-  {id:'cocinas',nombre:'Cocinas, lavado y calentador',filas:'cada sitio',pts:[
-   ['Grifería','Firme; abre y cierra sin goteo; llaves de lavadora puestas.'],
-   ['Desagüe','Sifón puesto; drena rápido sin fuga.'],
-   ['Llaves de paso','Puestas, cierran completo; la general cierra todo.'],
-   ['Agua caliente','Llega a cocina y lavado; el calentador prende.'],
-   ['Sin fugas','Seco bajo el fregadero, detrás del calentador y en empalmes.'],
-   ['Gas','Llaves de paso puestas; prueba con agua jabonosa sin burbujas.'],
-   ['Tapas y registros','Registros tapados; válvula de alivio del calentador con su tubo.'],
-   ['Silicón','Fregadero sellado contra el tope.']]}]},
+  {id:'inodoro',nombre:'Inodoro',filas:'cada inodoro',pts:_inspFases([
+   ['I','Fijado al piso','Anillo de cera puesto; pernos con sus tapas; el inodoro no se mueve.'],
+   ['C','Desagüe','Conectado y alineado al desagüe del piso; no huele.'],
+   ['C','Agua potable','Llave angular con su escudo y manguera flexible conectada al tanque.'],
+   ['P','Descarga','Descarga completa y arrastra (prueba con papel); llena y se corta solo.'],
+   ['P','Sin fugas','Seco en la base, la angular y el tanque después de 3 descargas.'],
+   ['T','Junta sellada','Silicón parejo en la base; atrás se dejan unos 5 cm sin sellar para ver si algún día gotea.'],
+   ['T','Tapa y asiento','Firmes y alineados.'],
+   ['T','Limpio','Sin cemento, pegatinas ni manchas.']])},
+  {id:'lavamanos',nombre:'Lavamanos',filas:'cada lavamanos',pts:_inspFases([
+   ['I','Fijado','Firme a la pared o al mueble, a nivel.'],
+   ['I','Grifería','Firme; caliente a la izquierda, fría a la derecha.'],
+   ['C','Agua','Llaves angulares con escudo y flexibles conectados.'],
+   ['C','Desagüe','Tapón, sifón y salida a la pared con su escudo.'],
+   ['P','Drena','Lleno y destapado drena rápido; el rebose funciona.'],
+   ['P','Sin fugas','Seco debajo después de 5 minutos abierto.'],
+   ['T','Sellado','Silicón parejo contra la pared o el tope.'],
+   ['T','Limpio','Sin cemento, masilla ni pegatinas.']])},
+  {id:'fregadero',nombre:'Fregadero y lavadero',filas:'cada fregadero o lavadero',pts:_inspFases([
+   ['I','Asentado en el tope','Bien apoyado en su hueco, con sus grapas.'],
+   ['I','Grifería','Firme; caliente a la izquierda, fría a la derecha.'],
+   ['C','Agua','Llaves angulares con escudo y flexibles conectados.'],
+   ['C','Desagüe','Canastilla, sifón y salida a la pared; triturador si lleva.'],
+   ['P','Drena','Lleno y destapado drena rápido, sin gorgoteo.'],
+   ['P','Sin fugas','Seco debajo después de 5 minutos abierto.'],
+   ['T','Sellado al tope','Silicón parejo entre fregadero y tope.'],
+   ['T','Limpio','Sin masilla, cemento ni pegatinas.']])},
+  {id:'ducha',nombre:'Ducha',filas:'cada ducha',pts:_inspFases([
+   ['I','Mezcladora','Firme, con su placa o escudo contra la pared.'],
+   ['I','Regadera','Brazo y regadera firmes y derechos.'],
+   ['P','Caliente y fría','Sale caliente y fría donde dice, con buena presión.'],
+   ['P','Desagüe','Rejilla puesta; drena sin dejar charco.'],
+   ['P','Sin fugas','Seco detrás de la pared y en el techo del piso de abajo.'],
+   ['I','Puerta o mampara','Cierra bien y no bota agua al baño.'],
+   ['T','Silicón','Juntas de piso, pared y mampara selladas.'],
+   ['T','Limpio','Sin cemento ni manchas en cerámica y vidrio.']])},
+  {id:'calentador',nombre:'Calentador',filas:'cada calentador',pts:_inspFases([
+   ['I','Fijado','Firme en su sitio, a plomo, con espacio para darle servicio.'],
+   ['C','Entrada de agua fría','Con su llave de paso a mano.'],
+   ['C','Salida caliente','Conectada a la red del apartamento.'],
+   ['C','Válvula de alivio','Puesta, con su tubo llevando el agua a un sitio seguro.'],
+   ['C','Energía o gas','Breaker propio, o llave de gas y prueba con agua jabonosa.'],
+   ['P','Calienta','A los 20 minutos sale caliente en la cocina y el baño más lejano.'],
+   ['P','Sin fugas','Seco en todas las uniones.'],
+   ['T','Terminado','Tapas puestas y pared terminada alrededor.']])}]},
  {id:'electricidad',nombre:'Electricidad',contratista:'Alexander Ramos',grupos:[
-  {id:'espacios',nombre:'Por espacio',filas:'cada espacio del apartamento',pts:[
-   ['Tomacorrientes','Con placa, derechos y con corriente (probador en cada uno).'],
-   ['Interruptores','Prenden lo que deben; los de 3 vías funcionan desde los dos lados.'],
-   ['Luminarias','Puestas, firmes y prenden todas.'],
-   ['Data y TV','Placa y conector puestos donde van.'],
-   ['Salidas especiales','Aire, estufa, calentador, lavadora y secadora: caja, tapa y corriente.'],
-   ['Extractor','Prende, sale el aire y no hace ruido.'],
-   ['Placas limpias','Sin pintura, a ras de la pared y sin hueco alrededor.'],
-   ['Breakers','Caja con tapa y rotulada; cada breaker apaga lo que dice.']]}]},
+  {id:'tomas',nombre:'Tomacorrientes',filas:'cada espacio',pts:_inspFases([
+   ['I','Caja','A ras de la pared, firme y sin hueco alrededor.'],
+   ['I','Accesorio','Derecho, fijo y a la misma altura que los demás.'],
+   ['P','Polaridad y tierra','El probador de 3 luces dice «correcto» en cada uno.'],
+   ['P','Voltaje','120 V; los especiales (estufa, secadora, aire) 240 V.'],
+   ['P','Protección GFCI','En baños, cocina, lavado y exteriores: el botón TEST lo dispara y RESET lo vuelve.'],
+   ['C','Circuito','Se sabe cuál breaker lo apaga.'],
+   ['T','Placa','Puesta, derecha y sin pintura.'],
+   ['T','Limpio','Sin masilla ni pintura en el accesorio.']])},
+  {id:'interruptores',nombre:'Interruptores',filas:'cada espacio',pts:_inspFases([
+   ['I','Instalado','Derecho, fijo, del lado de la cerradura de la puerta.'],
+   ['I','Altura','A la misma altura en todo el apartamento.'],
+   ['P','Controla lo que debe','Cada tecla prende la luz o el equipo que le toca.'],
+   ['P','3 vías','Donde hay dos, la luz prende y apaga desde los dos.'],
+   ['P','Dimmer','Donde lleva, sube y baja sin parpadeo.'],
+   ['P','Sin calentarse','No chispea ni se calienta.'],
+   ['T','Placa','Puesta, derecha y sin pintura.'],
+   ['T','Limpio','Sin masilla ni pintura.']])},
+  {id:'luminarias',nombre:'Luminarias',filas:'cada espacio',pts:_inspFases([
+   ['I','Fija a su caja','Atornillada a la caja, no colgando del cable.'],
+   ['I','Ubicada','Centrada y alineada con las demás.'],
+   ['P','Enciende','Prende y apaga desde su interruptor.'],
+   ['P','Luz pareja','Mismo color de luz en todo el espacio; ningún LED parpadea.'],
+   ['I','Difusor','Vidrio, aro o difusor puesto.'],
+   ['T','Borde terminado','Sin hueco entre la lámpara y el techo.'],
+   ['T','Exterior y balcón','Las de balcón son para exterior y están selladas.'],
+   ['T','Limpia','Sin polvo, pintura ni pegatinas.']])},
+  {id:'panel',nombre:'Panel de breakers',filas:'cada panel',pts:_inspFases([
+   ['I','Fijado','A nivel y firme en la pared.'],
+   ['I','Tapa','Tapa interior y puerta puestas; sin huecos abiertos.'],
+   ['C','Breakers','Del amperaje que dice el plano.'],
+   ['C','Tierra y neutro','Cada uno en su barra, apretados.'],
+   ['C','Cables ordenados','Sin empalmes dentro del panel.'],
+   ['P','Cada breaker','Uno por uno: apaga lo que dice su rótulo.'],
+   ['P','Principal','El breaker principal apaga todo.'],
+   ['T','Rotulado','Directorio escrito y pegado en la puerta.']])},
+  {id:'especiales',nombre:'Salidas especiales',filas:'aire, estufa, horno, calentador, secadora, extractor',pts:_inspFases([
+   ['I','Caja y tapa','Caja firme con su tapa o receptáculo.'],
+   ['C','Receptáculo correcto','El enchufe que usa el equipo que va ahí.'],
+   ['C','Breaker propio','Circuito dedicado, rotulado en el panel.'],
+   ['P','Voltaje','El que pide el equipo (120 o 240 V).'],
+   ['P','Equipo funciona','Si el equipo ya está: enciende y trabaja.'],
+   ['P','Extractor','Saca el aire hacia afuera; no hace ruido.'],
+   ['T','Pared terminada','Sin hueco ni rotura alrededor.'],
+   ['T','Limpio','Sin pintura ni masilla.']])}]},
  {id:'pintura',nombre:'Pintura',contratista:'Jordy',grupos:[
-  {id:'espacios',nombre:'Por espacio',filas:'cada espacio del apartamento',pts:[
-   ['Muros','Color parejo, sin manchas, chorreos ni brochazos; se cubre bien.'],
-   ['Techo','Parejo y sin manchas; la luz de lado no muestra rayas.'],
-   ['Resanes','No se notan las reparaciones ni las marcas de cinta.'],
-   ['Cortes','Líneas limpias contra techo, rodapié, marcos y ventanas.'],
-   ['Color correcto','El color de la tabla de terminación en cada pared.'],
-   ['Nada manchado','Sin pintura en pisos, ventanas, placas, aparatos ni puertas.'],
-   ['Detalles','Dentro de closets, detrás de puertas y bajo ventanas también pintado.'],
-   ['Limpieza','Sin restos de pintura, cinta ni plástico.']]}]},
+  {id:'muros',nombre:'Muros y techos',filas:'cada espacio',pts:_inspFases([
+   ['I','Superficie liberada','Estuco lijado y aprobado (liberación L1).'],
+   ['I','Sellador','Aplicado en todo antes de la pintura.'],
+   ['I','Primera mano','Completa en muros y techos.'],
+   ['T','Segunda mano','Pareja; con la luz de lado no se ven rayas.'],
+   ['T','Cortes','Líneas limpias contra techo, rodapié, marcos y ventanas.'],
+   ['T','Retoques','Los golpes de las instalaciones, repintados.'],
+   ['T','Color','El de la tabla de terminación.'],
+   ['T','Limpieza','Sin pintura en pisos, vidrios, placas ni aparatos.']])}]},
  {id:'pisos',nombre:'Pisos y revestimientos',contratista:'Yelson Jimenez',grupos:[
   {id:'espacios',nombre:'Por espacio',filas:'cada espacio del apartamento',pts:[
    ['Sin piezas huecas','Golpee con el mango del martillo: ninguna suena hueca.'],
@@ -32161,16 +32277,116 @@ var INSP_CAT=[
    ['Bordes y cortes','Cortes limpios contra paredes, marcos y desagües.'],
    ['Caída al desagüe','En baños, lavado y balcón el agua corre a la rejilla.'],
    ['Revestimiento','Paredes de baño y cocina completas, a plomo y limpias.']]}]},
- {id:'ventanas',nombre:'Ventanas, puertas de aluminio y barandas',contratista:'Jose Lantigua',grupos:[
-  {id:'huecos',nombre:'Por ventana o puerta',filas:'cada ventana, puerta de balcón y baranda',pts:[
-   ['Corre suave','Abre y cierra sin trabarse ni brincar del riel.'],
-   ['Seguro','El cierre o seguro traba bien.'],
-   ['Vidrio','Sin rayas, rotos ni etiquetas.'],
-   ['Gomas y felpas','Completas, sin huecos.'],
-   ['Sellado','Silicón por fuera y por dentro; sin filtración al echar agua.'],
-   ['Mosquitero','Puesto donde va.'],
-   ['Baranda','Firme, a la altura y sin óxido ni rayas.'],
-   ['Limpieza','Perfiles y vidrios limpios, sin cemento ni pintura.']]}]}
+ {id:'ventanas',nombre:'Ventanas y vidrio',contratista:'Jose Lantigua',grupos:[
+  {id:'ventanas',nombre:'Ventana corrediza',filas:'cada ventana · se agregan en la primera inspección',pts:_inspFases([
+   ['I','Marco','A plomo, a nivel y bien fijado.'],
+   ['I','Masilla exterior','Sellado continuo alrededor por fuera, sin huecos.'],
+   ['I','Masilla interior','Sellado parejo por dentro, unido a la pared.'],
+   ['P','Corre suave','Abre y cierra sin trabarse ni brincar del riel.'],
+   ['P','Cerradura','El seguro traba y no se abre desde fuera.'],
+   ['I','Felpas y mosquitero','Felpas y gomas completas; mosquitero donde va.'],
+   ['P','Prueba de agua','Manguera 5 minutos por fuera: no entra agua; los drenajes del riel botan.'],
+   ['T','Vidrio y limpieza','Vidrio sin rayas ni rotos; perfiles limpios.']])},
+  {id:'puertas',nombre:'Puerta corrediza de vidrio',filas:'cada puerta de balcón',pts:_inspFases([
+   ['I','Marco','A plomo, a nivel y bien fijado.'],
+   ['I','Sellado','Masilla continua por fuera y por dentro.'],
+   ['P','Corre suave','Rueda suave y no se sale del riel.'],
+   ['P','Cerradura y jaladera','Cierra con seguro; jaladera firme.'],
+   ['I','Tope','Tope o amortiguador al final del recorrido.'],
+   ['P','Umbral','Con caída hacia afuera; manguera 5 minutos y no entra agua.'],
+   ['T','Vidrio templado','Con su sello de templado visible y sin rayas.'],
+   ['T','Limpieza','Perfiles y vidrio limpios, sin cemento ni pintura.']])},
+  {id:'barandas',nombre:'Baranda',filas:'cada baranda · se agregan en la primera inspección',pts:_inspFases([
+   ['I','Firme','Empujada con fuerza no se mueve.'],
+   ['I','Altura','La altura del plano, pareja en todo el largo.'],
+   ['I','Separación','Entre barrotes o vidrios no pasa una pelota de 10 cm.'],
+   ['I','Anclajes','Bien anclados y sellados; no entra agua.'],
+   ['T','Vidrio','Templado o laminado, sin rayas.'],
+   ['T','Sin filos','Sin puntas ni bordes que corten.'],
+   ['T','Acabado','Sin óxido ni rayas.'],
+   ['T','Limpieza','Sin cemento ni pintura.']])}]},
+ {id:'topes',nombre:'Topes',contratista:'Milo',grupos:[
+  {id:'topes',nombre:'Tope (cocina, isla, lavado o baño)',filas:'cada tope · de arranque, las partidas abiertas de Milo aquí',pts:_inspFases([
+   ['I','Base liberada','Gabinetes nivelados y fijos antes de medir (liberación L3).'],
+   ['I','Medida en sitio','Se midió con el fregadero, la estufa y la grifería en obra.'],
+   ['I','Perforaciones','Fregadero, estufa, grifería y lavamanos a la medida; cantos pulidos y esquinas redondeadas.'],
+   ['I','Instalado y nivelado','Apoyado completo, a nivel; los voladizos con su soporte.'],
+   ['T','Juntas','Unión entre piezas con masilla del color, pulida y sin ceja.'],
+   ['T','Sellado','Silicón entre tope y pared, y entre fregadero y tope.'],
+   ['T','Salpicadero','Revestimiento completo, a plomo y con sus juntas.'],
+   ['T','Sin daños','Sin rayas, manchas ni grietas; protegido hasta la entrega.']])}]},
+ /* Los siete del «Catálogo de inspección por apartamento v3», con sus 8
+    puntos y sin fases (decisión del dueño, 27-oct). */
+ {id:'albanileria',nombre:'Albañilería',contratista:'Felix y Jefrey',grupos:[
+  {id:'espacios',nombre:'Por espacio',filas:'cada espacio del apartamento',pts:[
+   ['Pañete parejo','Pasando una regla no se ven ondas ni bultos.'],
+   ['Sin pañete hueco','Golpee con el mango del martillo: no suena hueco.'],
+   ['Mochetas y cantos','Derechos, a plomo y sin cantos rotos.'],
+   ['Mochetas de ventana','Completas, a escuadra y sin rajaduras.'],
+   ['Resanes','Alrededor de cajitas eléctricas, registros y tuberías, sin huecos.'],
+   ['Patinillos','Cerrados con block y pañetados.'],
+   ['Huecos sobrantes','Huecos de puertas o pases que no se usan, cerrados y terminados.'],
+   ['Encuentro con el piso','Terminación limpia donde termina el piso y en los balcones.']]}]},
+ {id:'sheetrock',nombre:'Sheetrock',contratista:'Secre',grupos:[
+  {id:'espacios',nombre:'Techos, plafones y columnas falsas',filas:'cada espacio con techo o pieza de sheetrock',pts:[
+   ['Plano y nivelado','Sin ondas ni bajadas; las esquinas cierran.'],
+   ['Juntas invisibles','Cinta y masilla que no se notan con la luz de lado.'],
+   ['Huecos de luces y extractor','A la medida, limpios y terminados.'],
+   ['Registros','Con su tapa puesta, ajustada y que abre.'],
+   ['Rejillas','Rejillas de aire y retorno puestas y derechas.'],
+   ['Dinteles y esquinas','Derechos, con esquinero y terminados.'],
+   ['Listo para pintar','Masillado y lijado completo.'],
+   ['Sin daños','Sin roturas, manchas de humedad ni tornillos a la vista.']]}]},
+ {id:'estuco',nombre:'Estuco',contratista:'Eddy Estuquero',grupos:[
+  {id:'espacios',nombre:'Por espacio',filas:'cada espacio del apartamento',pts:[
+   ['Parejo','Con la luz de lado no se ven rayas ni ondas.'],
+   ['Sin grietas','Ni grietas ni partes desprendidas.'],
+   ['Esquinas y aristas','Derechas y vivas, sin golpes.'],
+   ['Uniones con madera','Mochetas y piezas de madera estucadas y lijadas.'],
+   ['Sitios difíciles','Detrás del fregadero, el lavado y sobre los topes, también terminado.'],
+   ['Bordes limpios','Contra techo, ventanas y marcos sin rebabas.'],
+   ['Listo para pintar','Lijado completo, sin polvo pegado.'],
+   ['Limpieza','Sin restos de estuco en pisos, ventanas ni aparatos.']]}]},
+ {id:'herreria',nombre:'Herrería',contratista:'Alejandro',grupos:[
+  {id:'piezas',nombre:'Piezas de herrería',filas:'cada protector de A/C, soporte o pieza · se agregan en la primera inspección',pts:[
+   ['Firme','Bien anclado; no se mueve al empujarlo.'],
+   ['A plomo y nivel','Derecho y alineado con la fachada.'],
+   ['Soldaduras','Completas, esmeriladas y sin poros.'],
+   ['Pintura','Anticorrosivo y acabado completos, sin óxido.'],
+   ['Medida','Cubre el equipo y le deja aire para trabajar.'],
+   ['Sin filos','Sin puntas ni bordes que corten.'],
+   ['Anclajes sellados','Los huecos en la pared sellados; no entra agua.'],
+   ['Limpieza','Sin restos de soldadura ni pintura alrededor.']]}]},
+ {id:'polimetal',nombre:'Puertas de polimetal y corredizas',contratista:'Laura Gonel',grupos:[
+  {id:'puertas',nombre:'Puertas',filas:'cada puerta de polimetal o corrediza · se agregan en la primera inspección',pts:[
+   ['Instalada a plomo','Derecha y firme en su marco.'],
+   ['Abre o corre suave','Sin trabarse ni salirse del riel.'],
+   ['Seguro o cerradura','Cierra y traba bien.'],
+   ['Bisagras y rieles','Completos, con todos sus tornillos.'],
+   ['Guía o tope','Guía de abajo y tope puestos.'],
+   ['Marco sellado','Sellado contra la pared, sin rendijas.'],
+   ['Sin daños','Sin abolladuras, rayas ni golpes.'],
+   ['Limpieza','Sin plástico, cemento ni pintura.']]}]},
+ {id:'intercom',nombre:'Intercom y cámaras',contratista:'Venancio',grupos:[
+  {id:'equipos',nombre:'Equipos',filas:'cada monitor o cámara · se agregan en la primera inspección',pts:[
+   ['Instalado firme','A nivel, a la altura correcta y bien sujeto.'],
+   ['Prende','Tiene corriente y enciende.'],
+   ['Suena la llamada','Al llamar desde la entrada, suena en el apartamento.'],
+   ['Imagen y sonido','Se ve y se oye bien en los dos sentidos.'],
+   ['Abre la puerta','El botón del monitor abre la puerta de abajo.'],
+   ['Cables ocultos','Sin cables sueltos ni a la vista.'],
+   ['Placa y caja','Caja tapada y pared terminada alrededor.'],
+   ['Explicado','El ingeniero sabe cómo se usa para enseñarlo al cliente.']]}]},
+ {id:'aires',nombre:'Aires acondicionados',contratista:'Kelvin',grupos:[
+  {id:'equipos',nombre:'Equipos',filas:'cada equipo de aire · se agregan en la primera inspección',pts:[
+   ['Unidad de adentro','A nivel y firme; el registro en su sitio.'],
+   ['Unidad de afuera','Firme sobre su soporte o protector.'],
+   ['Enfría','Después de 15 minutos sale aire frío parejo.'],
+   ['Drenaje','El agua corre afuera; no gotea dentro.'],
+   ['Tubería','Aislada y forrada, sin partes peladas.'],
+   ['Control','Control remoto o termostato funciona.'],
+   ['Sin ruido','No vibra ni hace ruido raro.'],
+   ['Huecos sellados','Pase de tubería sellado y resanado.']]}]}
 ];
 var INSP_ESPACIOS={
  A:['Recibidor','Sala','Comedor','Estar / balcón','Cocina','Cocina caliente y lavado','Habitación principal','Baño principal','Habitación secundaria 1','Habitación secundaria 2','Baño común','Habitación de servicio','Baño de servicio','1/2 baño de visita'],
@@ -32210,7 +32426,14 @@ var INSP_INV={
    pendiente. Las otras cuatro son las claves de TRABA_CAUSAS. */
 var INSP_CAUSAS=[['material','Falta material'],['otro_taller','Espera otro taller'],['gerencia','Espera decisión de Gerencia'],
   ['contratista','El contratista no vino'],['arreglo','Arreglo']];
-var INSP_LS='mecca_insp_v1', INSP_IDB='mecca_insp_fotos';
+var INSP_LS='mecca_insp_v1', INSP_IDB='mecca_insp_fotos', INSP_EST_LS='mecca_insp_est_v1';
+/* v156 · LA INSPECCIÓN ES UN LEVANTAMIENTO (decisión del dueño, 27-oct-2026):
+   «que no afecte ahora mismo las actividades». Con esto en false ningún ✗,
+   desmarcar, «— no tiene» ni «empezar de nuevo» escribe en obra_actividades:
+   la foto, la causa y la nota se quedan en la inspección y la foto entra a la
+   Bitácora como nota. El código que crea, traba, anota y completa partidas
+   (v153-v155) SE QUEDA, apagado: volver a encenderlo es poner true aquí. */
+var INSP_CREA_PARTIDAS=false;
 
 function _inspApto(area){
   var m=String(area||'').match(/Apto\s*(\d)([AB])/i);
@@ -32235,18 +32458,48 @@ function _inspElementos(area, of){
     out.push({id:id, grupo:gid, nombre:ren||(n>1?nombre+' ('+n+')':nombre), rowId:_inspRowId(ap.code,of,gid,id), clave:key});
   }
   var enEste=function(p){ return String(p[2]).split(' ').indexOf(ap.code)>=0; };
+  var espacios=function(gid){ (INSP_ESPACIOS[ap.tipo]||[]).forEach(function(x){ add(gid,x); }); };
   if(of==='ebanisteria'){
     inv.puertas.filter(function(p){ return p[1]!=='Aluminio' && enEste(p); }).forEach(function(p){ add('puertas',p[0]); });
     inv.closets.forEach(function(x){ add('closets',x); });
     inv.gabinetes.forEach(function(x){ add('gabinetes',x); });
   }else if(of==='plomeria'){
-    inv.banos.forEach(function(x){ add('banos',x); });
-    ['Cocina principal'].concat(inv.cocinaCaliente?['Cocina caliente']:[],['Área de lavado','Calentador','Balcones','Llave general del apartamento'])
-      .forEach(function(x){ add('cocinas',x); });
+    /* v156 · De los baños del inventario: cada baño lleva su inodoro y su
+       lavamanos, y su ducha si no es un 1/2 baño. */
+    inv.banos.forEach(function(x){ add('inodoro',x); });
+    inv.banos.forEach(function(x){ add('lavamanos',x); });
+    inv.banos.filter(function(x){ return !/1\/2/.test(x); }).forEach(function(x){ add('ducha',x); });
+    ['Cocina principal'].concat(inv.cocinaCaliente?['Cocina caliente']:[],['Área de lavado']).forEach(function(x){ add('fregadero',x); });
+    add('calentador','Calentador');
+  }else if(of==='electricidad'){
+    espacios('tomas'); espacios('interruptores'); espacios('luminarias');
+    add('panel','Panel del apartamento');
+    ['Aire acondicionado','Estufa','Horno','Calentador','Secadora'].forEach(function(x){ add('especiales',x); });
+    inv.banos.forEach(function(x){ add('especiales','Extractor — '+x); });
+  }else if(of==='pintura'){
+    espacios('muros');
   }else if(of==='ventanas'){
-    inv.puertas.filter(function(p){ return p[1]==='Aluminio' && enEste(p); }).forEach(function(p){ add('huecos',p[0]); });
+    /* Las ventanas y las barandas se agregan en la primera inspección; las
+       puertas corredizas son las de tipo «Aluminio» del inventario. */
+    inv.puertas.filter(function(p){ return p[1]==='Aluminio' && enEste(p); }).forEach(function(p){ add('puertas',p[0]); });
+  }else if(of==='topes'){
+    /* La lista de arranque son las partidas ABIERTAS de Milo en ese sitio,
+       más lo que ya se inspeccionó (una partida que se cierra no puede
+       hacer desaparecer su tope de la inspección). Se lee de S.acts: cero GET. */
+    (S.acts||[]).filter(function(a){ return a.area===area && a.estado!=='completado' &&
+      _responsables(a.personal_nombre).some(function(n){ return /^milo\b/i.test(n); }); })
+      .map(function(a){ return a.descripcion||''; }).filter(Boolean)
+      .sort(function(x,y){ return x.localeCompare(y,'es'); })
+      .forEach(function(x){ add('topes',x); });
+    var ya={}; out.forEach(function(e){ ya[e.rowId]=1; });
+    var rs=(S.insp&&S.insp.rows)||{};
+    Object.keys(rs).forEach(function(k){ var r=rs[k];
+      if(!r.agregado && r.apto===area && r.oficio==='topes' && !ya[k]){ vistos['topes|'+k.split('|')[3]]=1;
+        out.push({id:k.split('|')[3], grupo:'topes', nombre:r.elemento, rowId:k, clave:ap.tipo+'|topes|topes|'+k.split('|')[3]}); } });
+  }else if(of==='herreria'||of==='polimetal'||of==='intercom'||of==='aires'){
+    /* Sin inventario: se agregan en la primera inspección. */
   }else{
-    (INSP_ESPACIOS[ap.tipo]||[]).forEach(function(x){ add('espacios',x); });
+    espacios('espacios');
   }
   /* Lo agregado en obra (ventanas y elementos que faltaban), de la tabla. */
   var rows=(S.insp&&S.insp.rows)||{};
@@ -32294,10 +32547,79 @@ async function _inspCargarApto(area){
   try{
     var filas=await sb('obra_inspecciones?apto=eq.'+encodeURIComponent(area)+'&select=*');
     (filas||[]).forEach(function(r){ S.insp.rows[r.id]=r; });
+    /* v156 · El estado de cada oficio (en curso o cerrada), una lectura chica. */
+    var ests=await sb('obra_insp_estado?apto=eq.'+encodeURIComponent(area)+'&select=*');
+    S.insp.est=S.insp.est||{};
+    (ests||[]).forEach(function(r){ S.insp.est[r.id]=r; });
     S.insp.cargados[area]=true; S.insp.err=null;
   }catch(e){ S.insp.err=(e&&e.sinRed)?'Sin señal: se ve lo guardado en este teléfono.':'No contestó la base: se ve lo guardado en este teléfono.'; }
   /* Lo que se quedó sin subir manda sobre lo que trae la base: es más nuevo. */
   var suc=_inspSucios(); Object.keys(suc).forEach(function(k){ S.insp.rows[k]=suc[k]; });
+  _inspEstEncima();
+}
+/* ── v156 · EL ESTADO DE UNA INSPECCIÓN (apartamento + oficio) ──
+   Vive en `obra_insp_estado`, una fila por apartamento y oficio (la creó el
+   dueño el 27-oct). «Sin empezar» no se guarda: es no tener fila ni marcas.
+   Sin señal el cambio espera en el teléfono (`mecca_insp_est_v1`) y sale con
+   la cola de la inspección, igual que las marcas. */
+var INSP_CORTO={ebanisteria:'Ebanistería',plomeria:'Plomería',electricidad:'Electricidad',pintura:'Pintura',pisos:'Pisos',ventanas:'Ventanas',topes:'Topes',
+  albanileria:'Albañilería',sheetrock:'Sheetrock',estuco:'Estuco',herreria:'Herrería',polimetal:'Polimetal',intercom:'Intercom',aires:'Aires'};
+var INSP_EST_TXT={sin_empezar:'Sin empezar',en_curso:'En curso',cerrada:'Cerrada'};
+function _inspEstPend(){ try{ return JSON.parse(localStorage.getItem(INSP_EST_LS)||'{}')||{}; }catch(e){ return {}; } }
+function _inspEstPendSet(m){ try{ localStorage.setItem(INSP_EST_LS, JSON.stringify(m)); }catch(e){} }
+function _inspEstEncima(){
+  S.insp.est=S.insp.est||{};
+  var pe=_inspEstPend(); Object.keys(pe).forEach(function(k){ S.insp.est[k]=Object.assign({}, S.insp.est[k]||{}, pe[k]); });
+}
+function _inspEstId(area,of){ var ap=_inspApto(area); return ap?ap.code+'|'+of:''; }
+function _inspEstFila(area,of){ return ((S.insp&&S.insp.est)||{})[_inspEstId(area,of)]||null; }
+function _inspEstado(area,of){
+  var f=_inspEstFila(area,of);
+  if(f && f.estado==='cerrada') return 'cerrada';
+  if(f || _inspCuenta(area,of).puntos>0) return 'en_curso';
+  return 'sin_empezar';
+}
+function _inspEstPoner(area,of,cambios){
+  var id=_inspEstId(area,of); if(!id) return;
+  var ahora=new Date().toISOString();
+  S.insp.est=S.insp.est||{};
+  S.insp.est[id]=Object.assign({id:id, apto:area, oficio:of}, S.insp.est[id]||{}, cambios, {actualizado_en:ahora});
+  var pe=_inspEstPend(); pe[id]=Object.assign(pe[id]||{id:id, apto:area, oficio:of}, cambios, {actualizado_en:ahora}); _inspEstPendSet(pe);
+  _inspEnviar();
+}
+/* Lo que se escribe en una inspección cerrada se rechaza con un aviso:
+   cerrada quiere decir que el ingeniero la dio por buena. Se reabre. */
+function _inspCerradaAqui(){
+  var I=S._insp; if(!I||!I.area||!I.of) return false;
+  if(_inspEstado(I.area,I.of)!=='cerrada') return false;
+  showToast('Esta inspección está cerrada. Para cambiarla, toque «Reabrir la inspección».','warn',4500);
+  return true;
+}
+/* Un elemento está LISTO cuando sus 8 puntos están en ✔ o en «— no tiene». */
+function _inspListo(rowId){
+  var ps=_inspPuntos(rowId); if(ps.length<8) return false;
+  for(var i=0;i<8;i++){ var m=ps[i]&&ps[i].m; if(m!=='ok'&&m!=='na') return false; }
+  return true;
+}
+function _inspResumen(els){
+  var listos=0, conMal=0;
+  els.forEach(function(e){ var ps=_inspPuntos(e.rowId);
+    if(ps.some(function(p){ return p&&p.m==='mal'; })) conMal++; else if(_inspListo(e.rowId)) listos++; });
+  return {listos:listos, conMal:conMal, faltan:els.length-listos-conMal};
+}
+/* ── v156 · Las fases: el ✔ de «Probado» o «Terminado» con una fase de antes
+   en ✗ o sin revisar AVISA y deja marcar (decisión del dueño). Los puntos van
+   ordenados por fase, así que el primero que falta es la fase más temprana. */
+function _inspAvisoFase(r, j, e){
+  var g=_inspGrupo(S._insp.of, e.grupo); if(!g||!g.pts[j]) return null;
+  var f=g.pts[j][2]; if(f!=='P'&&f!=='T') return null;
+  var k=INSP_FASE_ORD.indexOf(f), falta=null;
+  g.pts.forEach(function(pt,i){
+    if(falta||!pt[2]||INSP_FASE_ORD.indexOf(pt[2])>=k) return;
+    var m=(r.puntos[i]||{}).m; if(m!=='ok'&&m!=='na') falta=pt[2];
+  });
+  if(!falta) return null;
+  return {j:j, t:{I:'Falta validar la instalación',C:'Falta validar la conexión',P:'Falta validar la prueba'}[falta]};
 }
 async function _inspCargarNombres(){
   if(S.inspNombres) return;
@@ -32333,6 +32655,14 @@ async function _inspEnviar(){
   if(_inspEnviando){ _inspOtraVez=true; return; } _inspEnviando=true; _inspOtraVez=false;
   var sinRed=false;
   try{
+    var pe=_inspEstPend(), pids=Object.keys(pe);
+    for(var pi=0; pi<pids.length && !sinRed; pi++){
+      var cu=pe[pids[pi]];
+      try{
+        await sb('obra_insp_estado',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:JSON.stringify(cu)});
+        var pe2=_inspEstPend(); if(pe2[cu.id] && pe2[cu.id].actualizado_en===cu.actualizado_en){ delete pe2[cu.id]; _inspEstPendSet(pe2); }
+      }catch(e){ if(_inspEsSinRed(e)) sinRed=true; else console.warn('inspección estado:',e); }
+    }
     var suc=_inspSucios(), ids=Object.keys(suc);
     for(var i=0;i<ids.length && !sinRed;i++){
       var r=(S.insp&&S.insp.rows[ids[i]])||suc[ids[i]];
@@ -32374,7 +32704,7 @@ function _inspNPend(){
   var suc=_inspSucios(), n=0;
   Object.keys(suc).forEach(function(k){ (suc[k].puntos||[]).forEach(function(p){ if(p&&p.fp) n++;
     (p&&p.x||[]).forEach(function(x){ if(!x.bo) n++; }); }); });
-  return {filas:Object.keys(suc).length, fotos:n};
+  return {filas:Object.keys(suc).length+Object.keys(_inspEstPend()).length, fotos:n};
 }
 function _inspPintarBarra(){ var b=document.getElementById('insp-barra'); if(b) b.outerHTML=_inspBarraHTML(); }
 function _inspBarraHTML(){
@@ -32445,6 +32775,10 @@ async function _inspResolver(r, j){
     }
     qs.shift();
   }
+  /* v156 · Sin partidas: la foto del ✗ sube a Drive y entra a la Bitácora
+     como nota «Foto de inspección · …» (el mismo camino de «＋ Foto»), y ahí
+     se acaba. La causa y la nota viven en el punto. */
+  if(!INSP_CREA_PARTIDAS){ if(p.fp) await _inspSubirFotoNota(r,j,p,t); return; }
   /* La foto de un ✗ que ya tiene partida sube aunque la marca haya cambiado
      después: es la constancia del problema que se vio. */
   if(p.m!=='mal'){ if(p.fp && p.a) await _inspSubirFotoMal(r,j,p); return; }
@@ -32466,6 +32800,17 @@ async function _inspResolver(r, j){
     p.ap=false;
   }
   if(p.fp && p.a) await _inspSubirFotoMal(r,j,p);
+}
+async function _inspSubirFotoNota(r, j, p, t){
+  var k=r.id+'#'+j, data=await _inspFotoGet(k);
+  if(!data){ p.fp=false; return; }
+  if(!p.fu) p.fu=await _subirFotoData(data, r.apto, '');
+  if(!p.fb) p.fb='inspf-'+uid(); var bid=p.fb;
+  var causa=(INSP_CAUSAS.find(function(c){ return c[0]===p.c; })||['',''])[1];
+  await sb('obra_bitacora',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+    body:JSON.stringify({id:bid, fecha:today(), nota:'Foto de inspección · '+_hpNomUbic(r.apto)+' · '+r.elemento+' — '+(j+1)+'. '+t+
+      (causa?' · problema: '+causa:'')+(p.n?' — '+p.n:''), autor:r.ingeniero||'', fotos:p.fu+'::'+(r.ingeniero||''), created_at:new Date().toISOString()})});
+  p.f=p.fu; delete p.fu; p.fb=bid; p.fp=false; _inspFotoDel(k);
 }
 async function _inspSubirFotoMal(r, j, p){
     var k=r.id+'#'+j, data=await _inspFotoGet(k);
@@ -32489,11 +32834,59 @@ async function inspApto(i){
   if(S._insp && S._insp.area===area){ S._insp.cargando=false; _hpRepintar(); }
   _inspEnviar();
 }
-function inspOficio(of){ S._insp.paso='lista'; S._insp.of=of; S._insp.desg=false; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
-function inspElem(i){ S._insp.paso='elem'; S._insp.i=i; S._insp.mal=null; S._insp.ren=null; S._insp.reset=null; S._insp.verFoto=null; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
+function inspOficio(of){
+  var I=S._insp; I.paso='lista'; I.of=of; I.desg=false; I.cerrar=false; I.reset=null;
+  /* v156 · «Guardar y seguir después»: al volver a entrar a una inspección en
+     curso, el app lleva al primer elemento con algún punto sin revisar. */
+  if(_inspEstado(I.area,of)==='en_curso'){
+    var els=_inspElementos(I.area,of);
+    var k=els.findIndex(function(e){ var ps=_inspPuntos(e.rowId); for(var i=0;i<8;i++) if(!(ps[i]&&ps[i].m)) return true; return false; });
+    if(k>=0 && _inspCuenta(I.area,of).puntos>0) return inspElem(k);
+  }
+  _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){}
+}
+function inspGuardarSeguir(){
+  var I=S._insp; if(!I||!canEdit()) return;
+  if(_inspEstado(I.area,I.of)!=='cerrada') _inspEstPoner(I.area,I.of,{estado:'en_curso'});
+  var els=_inspElementos(I.area,I.of);
+  var sig=els.find(function(e){ var ps=_inspPuntos(e.rowId); for(var i=0;i<8;i++) if(!(ps[i]&&ps[i].m)) return true; return false; });
+  I.paso='oficio'; I.mal=null; I.reset=null; I.cerrar=false; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){}
+  showToast('Guardada.'+(sig?' Al volver, sigue en «'+sig.nombre+'».':''),'ok',4000);
+}
+function inspCerrarAbrir(){ if(_inspCerradaAqui()) return; S._insp.cerrar=true; S._insp.reset=null; _hpRepintar(); }
+function inspCerrarSi(){
+  var I=S._insp; if(!I||!canEdit()) return;
+  var c=_inspResumen(_inspElementos(I.area,I.of)), quien=(S.user&&S.user.nombre)||'';
+  _inspEstPoner(I.area,I.of,{estado:'cerrada', cerrada_por:quien, cerrada_fecha:new Date().toISOString()});
+  logCambio('cerrada','inspeccion',_inspEstId(I.area,I.of),_hpNomUbic(I.area)+' · '+_inspOficio(I.of).nombre,
+    'Inspección cerrada: '+c.listos+' listos, '+c.conMal+' con ✗, '+c.faltan+' sin terminar');
+  I.cerrar=false; I.paso='oficio'; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){}
+  showToast('Inspección cerrada','ok',3000);
+}
+function inspReabrir(){
+  var I=S._insp; if(!I||!canEdit()) return;
+  var quien=(S.user&&S.user.nombre)||'';
+  _inspEstPoner(I.area,I.of,{estado:'en_curso', reabierta_por:quien, reabierta_fecha:new Date().toISOString()});
+  logCambio('reabierta','inspeccion',_inspEstId(I.area,I.of),_hpNomUbic(I.area)+' · '+_inspOficio(I.of).nombre,'Inspección reabierta por '+quien);
+  _hpRepintar(); showToast('Inspección reabierta','ok',3000);
+}
+function _inspFechaCorta(iso){ if(!iso) return ''; try{ return _nodoFecha(String(iso).slice(0,10)); }catch(e){ return String(iso).slice(0,10); } }
+function _inspCerrarHTML(els){
+  var c=_inspResumen(els);
+  return '<div class="in-mal in-conf in-cierre"><div class="in-paso">¿Cerrar esta inspección?</div>'+
+    '<div class="in-res"><span class="ok"><b>'+c.listos+'</b> con todo ✔</span><span class="mal"><b>'+c.conMal+'</b> con ✗</span><span><b>'+c.faltan+'</b> sin terminar</span></div>'+
+    '<div class="in-conf-t">Queda cerrada con su fecha y su nombre. Se puede reabrir después, y queda anotado quién la reabrió. No cambia ninguna actividad.</div>'+
+    '<div class="in-dos"><button class="in-b2" onclick="S._insp.cerrar=false;_hpRepintar()">Cancelar</button>'+
+    '<button class="in-b2 fuerte" onclick="inspCerrarSi()">Sí, cerrar la inspección</button></div></div>';
+}
+function _inspEstChip(est){ return '<span class="in-est e-'+est+'">'+INSP_EST_TXT[est]+'</span>'; }
+function inspElem(i){ S._insp.paso='elem'; S._insp.i=i; S._insp.mal=null; S._insp.ren=null; S._insp.reset=null; S._insp.verFoto=null; S._insp.aviso=null; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
 function inspVolver(){
   var I=S._insp; if(!I) return;
-  I.reset=null; I.verFoto=null;
+  I.reset=null; I.verFoto=null; I.cerrar=false; I.aviso=null;
+  if(I.paso==='levOf'){ I.paso=I.levDesde||'levApto'; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} return; }
+  if(I.paso==='levApto'){ I.paso='lev'; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} return; }
+  if(I.paso==='lev'){ I.paso='apto'; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} return; }
   if(I.paso==='elem'){ I.paso='lista'; I.mal=null; }
   else if(I.paso==='lista'){ I.paso='oficio'; }
   else if(I.paso==='oficio'){ I.paso='apto'; }
@@ -32512,8 +32905,11 @@ function _inspBotonHTML(){
 }
 function _inspHTML(){
   var I=S._insp, h='<div class="hp in">'+_inspBarraHTML()+'<button class="hp-volver" onclick="inspVolver()">‹ Volver</button>';
+  if(I.paso && I.paso.indexOf('lev')===0) return h+_inspLevHTML()+'</div>';
   if(I.paso==='apto'){
-    h+='<div class="hp-tit">¿Qué apartamento?</div><div class="hp-sub">Toca uno para escoger el oficio.</div><div class="hp-lista">';
+    h+='<div class="hp-tit">¿Qué apartamento?</div><div class="hp-sub">Toca uno para escoger el oficio.</div>'+
+      (isAdmin()?'<button class="hp-op in-lev-btn" onclick="inspLev()"><span>Levantamiento<i>Revisar y aprobar lo de todos los apartamentos</i></span><b>›</b></button>':'')+
+      '<div class="hp-lista">';
     REC_ORDEN.forEach(function(a,i){ h+='<button class="hp-op" onclick="inspApto('+i+')"><span>'+esc(_hpNomUbic(a))+'</span><b>›</b></button>'; });
     return h+'</div></div>';
   }
@@ -32524,8 +32920,8 @@ function _inspHTML(){
       (S.insp.err?'<div class="in-aviso">'+esc(S.insp.err)+'</div>':'')+'<div class="hp-lista">';
     INSP_CAT.forEach(function(o){
       var c=_inspCuenta(area,o.id);
-      h+='<button class="hp-op in-of" onclick="inspOficio(\''+o.id+'\')"><span>'+esc(o.nombre)+'<i>'+esc(o.contratista)+' · '+c.els.length+' elementos</i></span>'+
-        '<b>'+_inspPctTxt(c.pct)+'</b></button>';
+      h+='<button class="hp-op in-of" onclick="inspOficio(\''+o.id+'\')"><span>'+esc(o.nombre)+'<i>'+esc(o.contratista)+' · '+c.els.length+' elementos</i>'+
+        _inspEstChip(_inspEstado(area,o.id))+'</span><b>'+_inspPctTxt(c.pct)+'</b></button>';
     });
     return h+'</div></div>';
   }
@@ -32536,15 +32932,27 @@ function _inspHTML(){
       '<button class="in-avance" onclick="inspDesglose()"><b>'+_inspPctTxt(c.pct)+'</b><span>avance comprobable · '+c.ok+' ✔ de '+(c.ok+c.mal)+' puntos revisados'+
         (c.mal?' · '+c.mal+' ✗':'')+'</span><i>'+(I.desg?'Esconder el detalle ‹':'Ver qué hay detrás ›')+'</i></button>'+
       '<div class="in-barrita"><i style="width:'+(els.length?Math.round(rev/els.length*100):0)+'%"></i></div>'+
-      '<div class="hp-sub" style="margin-top:0">'+rev+' de '+els.length+' elementos revisados</div>';
+      '<div class="hp-sub" style="margin-top:0">'+rev+' de '+els.length+' elementos revisados · '+_inspEstChip(_inspEstado(area,I.of))+'</div>';
+    var fe=_inspEstFila(area,I.of);
+    if(_inspEstado(area,I.of)==='cerrada')
+      h+='<div class="in-cerrada">Cerrada el '+esc(_inspFechaCorta(fe.cerrada_fecha))+' por '+esc(fe.cerrada_por||'')+'.</div>';
+    else if(fe && fe.reabierta_por)
+      h+='<div class="hp-sub" style="margin-top:0">Reabierta el '+esc(_inspFechaCorta(fe.reabierta_fecha))+' por '+esc(fe.reabierta_por)+'.</div>';
     if(I.desg) h+=_inspDesgloseHTML(area,I.of,els);
     var gAnt='';
     els.forEach(function(e,i){
       if(e.grupo!==gAnt){ gAnt=e.grupo; var g=_inspGrupo(I.of,e.grupo); h+='<div class="cp-lbl">'+esc(g?g.nombre:e.grupo)+'</div>'; }
       var ps=_inspPuntos(e.rowId), m=0, x=0; ps.forEach(function(p){ if(p&&p.m) m++; if(p&&p.m==='mal') x++; });
-      h+='<button class="hp-op in-el'+(x?' mal':m===8?' ok':'')+'" onclick="inspElem('+i+')"><span>'+esc(e.nombre)+'</span><b>'+(x?x+' ✗ · ':'')+m+'/8</b></button>';
+      var listo=_inspListo(e.rowId);
+      h+='<button class="hp-op in-el'+(x?' mal':listo?' ok':'')+'" onclick="inspElem('+i+')"><span>'+esc(e.nombre)+(listo&&!x?'<i>listo</i>':'')+'</span><b>'+(x?x+' ✗ · ':'')+m+'/8</b></button>';
     });
+    if(!els.length) h+='<div class="hp-sub">Este oficio no tiene inventario: los elementos se agregan en la primera inspección.</div>';
     h+=_inspAgregarHTML(I.of);
+    var estL=_inspEstado(area,I.of);
+    if(I.cerrar) h+=_inspCerrarHTML(els);
+    else if(estL==='cerrada') h+='<button class="in-agr" onclick="inspReabrir()">Reabrir la inspección</button>';
+    else h+='<div class="in-dos in-fin"><button class="in-b2" onclick="inspGuardarSeguir()">Guardar y seguir después</button>'+
+      '<button class="in-b2 fuerte" onclick="inspCerrarAbrir()">Cerrar inspección</button></div>';
     h+='<button class="hp-op in-imp" onclick="inspImprimir()"><span>Imprimir hoja de inspección</span><b>PDF</b></button>';
     if(I.reset==='insp') h+=_inspResetHTML('insp');
     else if(rev) h+='<button class="in-agr in-reset" onclick="inspResetAbrir(\'insp\')">Empezar de nuevo esta inspección</button>';
@@ -32563,10 +32971,13 @@ function _inspHTML(){
      : '<div class="in-cab"><div class="hp-tit">'+esc(e.nombre)+'</div>'+
        '<button class="in-lapiz" title="Corregir el nombre" onclick="S._insp.ren={t:'+esc(JSON.stringify(e.nombre))+'};_hpRepintar()">'+INSP_ICO_LAPIZ+'</button></div>')+
      '<div class="hp-sub">'+esc(nom)+' · '+esc(g.nombre)+' · elemento '+(I.i+1)+' de '+els.length+' · '+marcados+' de 8 puntos</div>'+
-     '<div class="in-ayuda">Para quitar una marca, toca otra vez el mismo botón.</div>';
+     '<div class="in-ayuda">Para quitar una marca, toca otra vez el mismo botón.</div>'+
+     (_inspEstado(area,I.of)==='cerrada'?'<div class="in-cerrada">Inspección cerrada: solo para ver. Para cambiarla, vuelva a la lista y toque «Reabrir la inspección».</div>':'')+
+     (_inspListo(e.rowId)?'<div class="in-listo">✔ Elemento listo</div>':'');
   g.pts.forEach(function(pt,j){
     var p=ps[j]||{}, abierto=I.mal&&I.mal.j===j;
     h+='<div class="in-pt'+(p.m==='ok'?' ok':p.m==='mal'?' mal':p.m==='na'?' na':'')+'">'+
+      (pt[2]?'<span class="in-fase f-'+pt[2]+'">'+pt[2]+' · '+INSP_FASES[pt[2]]+'</span>':'')+
       '<div class="in-pt-t">'+(j+1)+'. '+esc(pt[0])+'</div><div class="in-pt-d">'+esc(pt[1])+'</div>'+
       '<div class="in-tres">'+
         '<button class="in-b'+(p.m==='ok'?' on':'')+'" onclick="inspMarcar('+j+',\'ok\')" aria-label="Bien">✔</button>'+
@@ -32576,11 +32987,13 @@ function _inspHTML(){
       (p.m==='mal'&&!abierto?'<div class="in-prob">'+esc((INSP_CAUSAS.find(function(c){ return c[0]===p.c; })||['',''])[1])+(p.n?' — '+esc(p.n):'')+
         (p.fp?' · foto esperando señal':p.f?' · con foto':'')+(p.ap?' · partida por crear':'')+
         '<button class="in-cambiar" onclick="inspMalEditar('+j+')">Cambiar el problema</button></div>':'')+
+      (I.aviso&&I.aviso.j===j?'<div class="in-aviso-fase">⚠ '+esc(I.aviso.t)+'. Se marcó igual.</div>':'')+
       (abierto?_inspMalHTML(j):_inspFotosHTML(e,j,p))+
     '</div>';
   });
   if(I.reset==='el') h+=_inspResetHTML('el');
   else if(marcados) h+='<button class="in-agr in-reset" onclick="inspResetAbrir(\'el\')">Empezar de nuevo este elemento</button>';
+  if(_inspEstado(area,I.of)!=='cerrada') h+='<button class="in-agr in-guardar" onclick="inspGuardarSeguir()">Guardar y seguir después</button>';
   var sig=els[I.i+1];
   h+=sig ? '<button class="in-sig'+(marcados===8?' listo':'')+'" onclick="inspElem('+(I.i+1)+')">'+(marcados===8?'Listo · ':'')+'Siguiente: '+esc(sig.nombre)+' ›</button>'
          : '<button class="in-sig listo" onclick="inspVolver()">Terminé '+esc(of.nombre)+' · ver el avance ›</button>';
@@ -32630,10 +33043,124 @@ function _inspAgregarHTML(of){
     '<button class="in-agr" onclick="inspAgregarAbrir()">＋ Agregar elemento que falta</button>';
 }
 
+/* ── v156 · EL LEVANTAMIENTO: lo que revisa y aprueba el Ing. Nilson ──
+   Solo administrador. Una lectura de cada tabla al entrar (obra_inspecciones
+   y obra_insp_estado, las dos chicas) y nada más: tocar una celda o una
+   tarjeta pinta lo que ya está cargado. «Aprobado por el Ing. Nilson» NO
+   libera talleres ni cambia actividades: es su marca, con fecha y nombre. */
+async function inspLev(){
+  if(!isAdmin()) return;
+  S._insp={paso:'lev', cargando:true}; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){}
+  S.insp=S.insp||{rows:{}, cargados:{}};
+  try{
+    var rs=await Promise.all([sbTodo('obra_inspecciones?select=*&order=id.asc'), sb('obra_insp_estado?select=*'), _inspCargarNombres()]);
+    var suc=_inspSucios();
+    (rs[0]||[]).forEach(function(r){ if(!suc[r.id]) S.insp.rows[r.id]=r; });
+    S.insp.est=S.insp.est||{}; (rs[1]||[]).forEach(function(r){ S.insp.est[r.id]=r; });
+    _inspEstEncima(); S.insp.err=null;
+  }catch(e){ S.insp.err=(e&&e.sinRed)?'Sin señal: se ve lo guardado en este teléfono.':'No contestó la base: se ve lo que hay en este teléfono.'; }
+  if(S._insp && S._insp.paso==='lev'){ S._insp.cargando=false; _hpRepintar(); }
+}
+function inspLevApto(i){ var I=S._insp; I.paso='levApto'; I.levA=i; I.area=REC_ORDEN[i]; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
+function inspLevOf(i, of){ var I=S._insp; I.levDesde=I.paso; I.paso='levOf'; I.levA=i; I.area=REC_ORDEN[i]; I.of=of; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
+function _inspLevQuien(area, of){
+  var f=_inspEstFila(area,of);
+  if(f && f.estado==='cerrada' && f.cerrada_por) return {ing:f.cerrada_por, fecha:f.cerrada_fecha};
+  var ult=null, rs=(S.insp&&S.insp.rows)||{};
+  Object.keys(rs).forEach(function(k){ var r=rs[k]; if(r.apto===area && r.oficio===of && (r.puntos||[]).some(function(p){ return p&&p.m; }))
+    if(!ult || String(r.actualizado_en||r.fecha||'')>String(ult.actualizado_en||ult.fecha||'')) ult=r; });
+  return ult?{ing:ult.ingeniero, fecha:ult.actualizado_en||ult.fecha}:null;
+}
+function _inspLevHTML(){
+  var I=S._insp, h='';
+  if(I.cargando) return '<div class="hp-tit">Levantamiento</div><div class="hp-sub">Trayendo las inspecciones…</div>';
+  if(!isAdmin()) return '<div class="hp-sub">Solo el administrador ve el levantamiento.</div>';
+  var err=S.insp&&S.insp.err?'<div class="in-aviso">'+esc(S.insp.err)+'</div>':'';
+  if(I.paso==='lev'){
+    h+='<div class="hp-tit">Levantamiento</div><div class="hp-sub">Avance comprobable de cada oficio en cada apartamento. Toque una celda para ver lo que hay detrás, o el apartamento para ver sus oficios.</div>'+err+
+      '<div class="lev-ley">'+_inspEstChip('sin_empezar')+_inspEstChip('en_curso')+_inspEstChip('cerrada')+'<span class="in-est e-ok">✓ aprobado</span></div>'+
+      '<div class="lev-wrap"><table class="lev-t"><thead><tr><th>Apto</th>'+INSP_CAT.map(function(o){ return '<th>'+esc(INSP_CORTO[o.id]||o.nombre)+'</th>'; }).join('')+'</tr></thead><tbody>';
+    REC_ORDEN.forEach(function(a,i){
+      var ap=_inspApto(a); if(!ap) return;
+      h+='<tr><th><button class="lev-apto" onclick="inspLevApto('+i+')">'+esc(ap.code)+'</button></th>';
+      INSP_CAT.forEach(function(o){
+        var est=_inspEstado(a,o.id), c=_inspCuenta(a,o.id), f=_inspEstFila(a,o.id);
+        h+='<td><button class="lev-c e-'+est+'" onclick="inspLevOf('+i+',\''+o.id+'\')">'+
+          (est==='sin_empezar'?'—':_inspPctTxt(c.pct))+(f&&f.aprobado_por?' ✓':'')+'</button></td>';
+      });
+      h+='</tr>';
+    });
+    return h+'</tbody></table></div>';
+  }
+  var area=I.area, nom=_hpNomUbic(area);
+  if(I.paso==='levApto'){
+    h+='<div class="hp-tit">Levantamiento · '+esc(nom)+'</div>'+err+'<div class="hp-lista">';
+    INSP_CAT.forEach(function(o){
+      var est=_inspEstado(area,o.id), c=_inspCuenta(area,o.id), q=_inspLevQuien(area,o.id), f=_inspEstFila(area,o.id), rz=_inspResumen(c.els);
+      h+='<button class="hp-op in-of lev-card" onclick="inspLevOf('+I.levA+',\''+o.id+'\')"><span>'+esc(o.nombre)+
+        '<i>'+(est==='sin_empezar'?'Sin revisar':(q?esc(q.ing||'')+' · '+esc(_inspFechaCorta(q.fecha)):'')+' · '+rz.listos+' listos · '+rz.conMal+' con ✗ · '+rz.faltan+' faltan')+'</i>'+
+        _inspEstChip(est)+(f&&f.aprobado_por?'<span class="in-est e-ok">✓ Aprobado por '+esc(f.aprobado_por)+'</span>':'')+'</span><b>'+_inspPctTxt(c.pct)+'</b></button>';
+    });
+    return h+'</div>';
+  }
+  /* levOf: los elementos con sus puntos, fotos y causas. */
+  var of=_inspOficio(I.of), c=_inspCuenta(area,I.of), est=_inspEstado(area,I.of), fo=_inspEstFila(area,I.of), rz=_inspResumen(c.els);
+  h+='<div class="hp-tit">'+esc(of.nombre)+' · '+esc(nom)+'</div><div class="hp-sub">'+esc(of.contratista)+' · '+_inspEstChip(est)+'</div>'+err+
+    '<div class="in-res"><span class="ok"><b>'+rz.listos+'</b> listos</span><span class="mal"><b>'+rz.conMal+'</b> con ✗</span><span><b>'+rz.faltan+'</b> faltan</span><span>avance <b>'+_inspPctTxt(c.pct)+'</b></span></div>';
+  if(est!=='sin_empezar')
+    h+='<button class="in-aprob'+(fo&&fo.aprobado_por?' on':'')+'" onclick="inspAprobarOf()">'+(fo&&fo.aprobado_por?'✓ Aprobado por '+esc(fo.aprobado_por)+' · '+esc(_inspFechaCorta(fo.aprobado_fecha))+' — tocar para quitar':'Aprobado por el Ing. Nilson — marcar el oficio')+'</button>';
+  var gAnt='';
+  c.els.forEach(function(e){
+    var g=_inspGrupo(I.of,e.grupo), ps=_inspPuntos(e.rowId), r=(S.insp.rows||{})[e.rowId];
+    if(e.grupo!==gAnt){ gAnt=e.grupo; h+='<div class="cp-lbl">'+esc(g?g.nombre:e.grupo)+'</div>'; }
+    var mk=ps.filter(function(p){ return p&&p.m; }).length, x=ps.filter(function(p){ return p&&p.m==='mal'; }).length, listo=_inspListo(e.rowId);
+    h+='<div class="lev-el'+(x?' mal':listo?' ok':'')+'"><div class="lev-el-t"><b>'+esc(e.nombre)+'</b><span>'+(listo?'listo':x?x+' ✗':mk+'/8')+'</span></div>';
+    var sin=[];
+    (g?g.pts:[]).forEach(function(pt,j){
+      var p=ps[j]||{};
+      if(!p.m){ sin.push(j+1); return; }
+      var fotos=[]; if(p.f) fotos.push(p.f); (p.x||[]).forEach(function(xx){ if(xx.u) fotos.push(xx.u); });
+      h+='<div class="lev-pt '+p.m+'"><span class="lev-m">'+(p.m==='ok'?'✔':p.m==='mal'?'✗':'—')+'</span><span>'+(j+1)+'. '+esc(pt[0])+(pt[2]?' <i>'+INSP_FASES[pt[2]]+'</i>':'')+
+        (p.m==='mal'?'<em>'+esc((INSP_CAUSAS.find(function(cc){ return cc[0]===p.c; })||['',''])[1])+(p.n?' — '+esc(p.n):'')+(p.fp?' · foto esperando señal':'')+'</em>':'')+'</span></div>'+
+        (fotos.length?'<div class="lev-fotos">'+fotos.map(function(u){ return '<img src="'+esc(u)+'" alt="" onclick="verFoto(\''+String(u).replace(/'/g,'%27')+'\')">'; }).join('')+'</div>':'');
+    });
+    if(sin.length) h+='<div class="lev-sin">Sin revisar: '+sin.join(', ')+'</div>';
+    if(r && mk) h+='<button class="in-aprob mini'+(r.aprobado_por?' on':'')+'" onclick="inspAprobarEl(\''+esc(e.rowId)+'\')">'+(r.aprobado_por?'✓ Aprobado por '+esc(r.aprobado_por)+' · '+esc(_inspFechaCorta(r.aprobado_fecha)):'Aprobado por el Ing. Nilson')+'</button>';
+    h+='</div>';
+  });
+  if(!c.els.length) h+='<div class="hp-sub">Este oficio no tiene elementos en este apartamento todavía.</div>';
+  return h;
+}
+async function inspAprobarEl(rowId){
+  if(!isAdmin()) return;
+  var r=(S.insp.rows||{})[rowId]; if(!r) return;
+  var on=!r.aprobado_por, quien=(S.user&&S.user.nombre)||'';
+  var body=on?{aprobado_por:quien, aprobado_fecha:new Date().toISOString()}:{aprobado_por:null, aprobado_fecha:null};
+  try{
+    await sb('obra_inspecciones?id=eq.'+encodeURIComponent(rowId),{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
+    Object.assign(r,body);
+    logCambio(on?'aprobado':'aprobacion_quitada','inspeccion',rowId,r.elemento||'',(on?'Aprobado por ':'Aprobación quitada por ')+quien);
+  }catch(e){ showToast('No se pudo guardar la aprobación'+(e&&e.sinRed?': sin señal':''),'err',5000); }
+  _hpRepintar();
+}
+async function inspAprobarOf(){
+  if(!isAdmin()) return;
+  var I=S._insp, id=_inspEstId(I.area,I.of); if(!id) return;
+  var f=_inspEstFila(I.area,I.of)||{}, on=!f.aprobado_por, quien=(S.user&&S.user.nombre)||'';
+  var body={id:id, apto:I.area, oficio:I.of, aprobado_por:on?quien:null, aprobado_fecha:on?new Date().toISOString():null};
+  if(!f.estado) body.estado='en_curso';
+  try{
+    await sb('obra_insp_estado',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:JSON.stringify(body)});
+    S.insp.est=S.insp.est||{}; S.insp.est[id]=Object.assign({}, f, body);
+    logCambio(on?'aprobado':'aprobacion_quitada','inspeccion',id,_hpNomUbic(I.area)+' · '+_inspOficio(I.of).nombre,(on?'Oficio aprobado por ':'Aprobación del oficio quitada por ')+quien);
+  }catch(e){ showToast('No se pudo guardar la aprobación'+(e&&e.sinRed?': sin señal':''),'err',5000); }
+  _hpRepintar();
+}
+
 /* ── Marcar ── */
 function _inspElActual(){ var I=S._insp; return _inspElementos(I.area,I.of)[I.i]; }
 function inspMarcar(j, m){
-  if(!canEdit()) return;
+  if(!canEdit() || _inspCerradaAqui()) return;
   var I=S._insp, e=_inspElActual(); if(!e) return;
   var p0=_inspPuntos(e.rowId)[j]||{};
   I.verFoto=null;
@@ -32649,7 +33176,7 @@ function inspMarcar(j, m){
   if(p0.m===m) return _inspDesmarcar(j);
   var r=_inspFila(e,I.area,I.of), p=r.puntos[j]||{};
   var antes=p.m;
-  var nuevo={m:m, a:p.a||null, f:p.f||null, x:p.x||[], q:p.q||[], dm:p.dm||false, nt:p.nt||false};
+  var nuevo={m:m, a:p.a||null, f:p.f||null, fb:p.fb||null, x:p.x||[], q:p.q||[], dm:p.dm||false, nt:p.nt||false};
   /* Venía de ✗: con ✔ su partida se completa; con «— no tiene» se queda
      ABIERTA con una nota (v154, decisión del dueño). Si la partida todavía no
      existía (sin señal), ya no se crea. Un ✔ sobre una partida que se quedó
@@ -32657,8 +33184,9 @@ function inspMarcar(j, m){
   if(antes==='mal' && p.ap && !p.a){ nuevo.a=null; }
   else if(p.a && m==='ok'){ nuevo.cp=true; nuevo.dm=false; nuevo.nt=false; }
   else if(p.a && m==='na' && antes==='mal') nuevo.nt=true;
-  if(antes==='mal' && p.fp){ if(nuevo.a) nuevo.fp=true; else _inspFotoDel(r.id+'#'+j); }
+  if(antes==='mal' && p.fp){ if(nuevo.a || !INSP_CREA_PARTIDAS) nuevo.fp=true; else _inspFotoDel(r.id+'#'+j); }
   r.puntos[j]=nuevo;
+  I.aviso=(m==='ok')?_inspAvisoFase(r,j,e):null;
   _inspTocar(r); _hpRepintar();
 }
 /* v155 · El punto vuelve a «sin marcar», como si nunca se hubiera revisado.
@@ -32666,10 +33194,10 @@ function inspMarcar(j, m){
    la nota de revisar y cerrar a mano) y las fotos. */
 function _inspLimpiarPunto(r, j){
   var p=r.puntos[j]||{};
-  var nuevo={a:p.a||null, f:p.f||null, x:p.x||[], q:p.q||[], dm:p.dm||false, nt:p.nt||false};
+  var nuevo={a:p.a||null, f:p.f||null, fb:p.fb||null, x:p.x||[], q:p.q||[], dm:p.dm||false, nt:p.nt||false};
   if(p.m==='mal' && p.ap && !p.a){ nuevo.a=null; if(p.fp) _inspFotoDel(r.id+'#'+j); }
   else if(p.a && (p.m==='mal' || p.cp)){ nuevo.dm=true; nuevo.nt=false; }
-  if(p.fp && p.a) nuevo.fp=true; /* la foto del ✗ sigue su camino a la partida */
+  if(p.fp && (p.a || !INSP_CREA_PARTIDAS)) nuevo.fp=true; /* la foto del ✗ sigue su camino */
   r.puntos[j]=nuevo;
 }
 function _inspDesmarcar(j){
@@ -32682,6 +33210,7 @@ function _inspDesmarcar(j){
 /* Abrir el recuadro de un ✗ que ya está guardado, para cambiarle la causa,
    la nota o la foto. */
 function inspMalEditar(j){
+  if(_inspCerradaAqui()) return;
   var I=S._insp, e=_inspElActual(); if(!e) return;
   var p0=_inspPuntos(e.rowId)[j]||{};
   I.verFoto=null;
@@ -32702,7 +33231,7 @@ function _inspResetUno(e){
   _inspTocar(r);
   return true;
 }
-function inspResetAbrir(que){ S._insp.reset=que; S._insp.mal=null; S._insp.verFoto=null; _hpRepintar(); }
+function inspResetAbrir(que){ if(_inspCerradaAqui()) return; S._insp.cerrar=false; S._insp.reset=que; S._insp.mal=null; S._insp.verFoto=null; _hpRepintar(); }
 function inspResetCancelar(){ S._insp.reset=null; _hpRepintar(); }
 function inspResetSi(){
   var I=S._insp; if(!I||!canEdit()) return;
@@ -32736,7 +33265,7 @@ function _inspResetHTML(que){
 /* ── Foto en cualquier punto (v155) ── */
 S._inspMem=S._inspMem||{};
 function inspFotoPunto(j){
-  if(!canEdit()) return;
+  if(!canEdit() || _inspCerradaAqui()) return;
   var inp=document.createElement('input');
   inp.type='file'; inp.accept='image/*'; inp.style.display='none';
   inp.onchange=async function(){
@@ -32786,7 +33315,7 @@ function _inspFotosHTML(e, j, p){
   return h;
 }
 function inspQuitarFoto(){
-  var I=S._insp, V=I&&I.verFoto, e=_inspElActual(); if(!V||!e||!canEdit()) return;
+  var I=S._insp, V=I&&I.verFoto, e=_inspElActual(); if(!V||!e||!canEdit()||_inspCerradaAqui()) return;
   var r=_inspFila(e,I.area,I.of), j=V.j, p=r.puntos[j]||{}, g=_inspGrupo(I.of,e.grupo), t=(j+1)+'. '+((g&&g.pts[j])?g.pts[j][0]:'');
   var pre='RESPALDO antes de borrar: foto de la inspección '+_hpNomUbic(I.area)+' · '+r.elemento+' — '+t+': ';
   p.q=(p.q||[]);
@@ -32794,7 +33323,8 @@ function inspQuitarFoto(){
     if(p.m==='mal'){ showToast('Es la foto del problema: cambia antes la marca','warn',4000); return; }
     if(p.fp){ _inspFotoDel(r.id+'#'+j); p.fp=false; }
     if(p.f && p.a) p.q.push({rec:_logRec('respaldo','inspeccion',r.id,r.elemento,pre+p.f+' (de la partida '+p.a+')'), a:p.a, u:p.f});
-    p.f=null;
+    else if(p.f && p.fb) p.q.push({rec:_logRec('respaldo','inspeccion',r.id,r.elemento,pre+p.f+' (nota '+p.fb+' de la Bitácora)'), b:p.fb});
+    p.f=null; p.fb=null;
   }else{
     var ix=(p.x||[]).findIndex(function(x){ return x.id===V.cual; }); if(ix<0) return;
     var x=p.x[ix];
@@ -32821,7 +33351,7 @@ function inspFoto(fuente){
 function inspCausa(c){ if(S._insp&&S._insp.mal){ S._insp.mal.c=c; _hpRepintar(); } }
 function inspMalCancelar(){ S._insp.mal=null; _hpRepintar(); }
 async function inspMalGuardar(){
-  var I=S._insp, M=I&&I.mal; if(!M) return;
+  var I=S._insp, M=I&&I.mal; if(!M || _inspCerradaAqui()) return;
   if(!M.foto && !M.tiene){ showToast('El problema necesita su foto','warn',3500); return; }
   if(!M.c){ showToast('Escoge qué falta','warn',3500); return; }
   var e=_inspElActual(); if(!e) return;
@@ -32831,12 +33361,13 @@ async function inspMalGuardar(){
     catch(err){ showToast('No se pudo guardar la foto en el teléfono','err',5000); return; }
     S._inspMem[r.id+'#'+M.j]=M.foto;
   }
-  r.puntos[M.j]={m:'mal', c:M.c, n:String(M.n||'').trim(), a:p.a||null, f:M.foto?null:(p.f||null), ap:true, fp:M.foto?true:!!p.fp,
-    x:p.x||[], q:p.q||[], dm:p.dm||false, nt:p.nt||false};
+  r.puntos[M.j]={m:'mal', c:M.c, n:String(M.n||'').trim(), a:p.a||null, f:M.foto?null:(p.f||null), fb:M.foto?null:(p.fb||null),
+    ap:INSP_CREA_PARTIDAS, fp:M.foto?true:!!p.fp, x:p.x||[], q:p.q||[], dm:p.dm||false, nt:p.nt||false};
+  I.aviso=null;
   I.mal=null;
   _inspTocar(r); _hpRepintar();
 }
-function inspAgregarAbrir(){ var I=S._insp; I.agregar={g:_inspOficio(I.of).grupos[0].id, t:''}; _hpRepintar(); }
+function inspAgregarAbrir(){ if(_inspCerradaAqui()) return; var I=S._insp; I.agregar={g:_inspOficio(I.of).grupos[0].id, t:''}; _hpRepintar(); }
 function inspAgregarGuardar(){
   var I=S._insp, A=I.agregar, t=String(A&&A.t||'').trim(), ap=_inspApto(I.area);
   if(!t){ showToast('Escribe el nombre','warn',3000); return; }
@@ -32899,7 +33430,9 @@ var INSP_DIBUJOS={
     D.l(48,58,50,56); D.l(50,56,52,58); D.l(52,58,54,56);               // golpe
     D.l(84,70,84,66); D.c(84,65,1.4);                                    // tope
     D.t('hueco 1 cm',36,74);
-    return [[12,30],[40,19.5],[67,40],[60,74],[78,12],[56,22],[57,62],[90,63]];
+    /* v156 · Los números siguen el orden por fase de la «Puerta de madera»:
+       jamba, hoja, tope, cerradura, abre y cierra, barniz, sin daños, llaves. */
+    return [[78,12],[40,19.5],[90,63],[67,40],[60,74],[56,22],[57,62],[74,50]];
   },
   'ebanisteria|closets':function(D){
     D.l(3,70,97,70); D.r(10,5,80,63);
@@ -33029,25 +33562,26 @@ function _inspPDF(area, ofId){
     var suyos=els.filter(function(e){ return e.grupo===g.id; }); if(!suyos.length) return;
     /* v154 · Arriba de la tabla, el dibujo del elemento con los puntos 1-8 en
        círculos naranja (`_inspDibujo`) y al lado lo que se mira en cada uno. */
-    var wDib=78, xLey=M+wDib+4, wLey=CW-wDib-4, lineas=[], hLey=0;
+    var tieneDib=!!INSP_DIBUJOS[of.id+'|'+g.id], wDib=tieneDib?78:0, xLey=M+(tieneDib?wDib+4:0), wLey=CW-(tieneDib?wDib+4:0), lineas=[], hLey=0;
     doc.setFontSize(7.5);
     g.pts.forEach(function(pt){
       var l=doc.splitTextToSize(T(pt[1]),wLey-7);
       lineas.push(l); hLey+=3.4+l.length*3+1.3;
     });
-    var hBloque=Math.max(58,hLey+2);
+    var hBloque=tieneDib?Math.max(58,hLey+2):hLey+2;
     if(y+8+hBloque+5+9>FONDO) nueva();
     doc.setFillColor(MOR[0],MOR[1],MOR[2]); doc.rect(M,y,CW,7,'F');
     doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(255,255,255);
     doc.text(T(g.nombre+' · '+suyos.length+' ('+g.filas+')'),M+2,y+4.8); y+=8;
     var caja=[M,y,wDib,hBloque];
-    doc.setDrawColor(215,215,215); doc.setLineWidth(0.3); doc.rect(caja[0],caja[1],caja[2],caja[3],'S');
-    var marcas=_inspDibujo(doc, of.id+'|'+g.id, M+2, y+2, wDib-4, hBloque-4);
+    var marcas=null;
+    if(tieneDib){ doc.setDrawColor(215,215,215); doc.setLineWidth(0.3); doc.rect(caja[0],caja[1],caja[2],caja[3],'S');
+      marcas=_inspDibujo(doc, of.id+'|'+g.id, M+2, y+2, wDib-4, hBloque-4); }
     var yl=y+1;
     lineas.forEach(function(l,i){
       _inspCirculo(doc,xLey+2.3,yl+2.1,2.1,i+1,6.5);
       doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(20,20,20);
-      doc.text(T(g.pts[i][0]),xLey+6,yl+3);
+      doc.text(T(g.pts[i][0]+(g.pts[i][2]?'  ('+INSP_FASES[g.pts[i][2]]+')':'')),xLey+6,yl+3);
       doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(70,70,70);
       doc.text(l,xLey+6,yl+6.2);
       yl+=3.4+l.length*3+1.3;

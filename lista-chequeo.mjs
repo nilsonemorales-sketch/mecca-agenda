@@ -1647,31 +1647,38 @@ const IN_ESPERADO={
   aptos:{v:11, d:'el primer toque ofrece los once apartamentos, en el orden del edificio'},
   ebanisteria4A:{v:'puertas 14 · closets 4 · gabinetes 6', d:'el 4A en Ebanistería trae sus 14 puertas de madera, 4 closets y 6 gabinetes'},
   repetidos:{v:'Habitación principal (2) · Habitación secundaria · sin nombres iguales', d:'el nombre repetido sale con «(2)» y ninguna fila se llama igual que otra'},
+  avisoFase:{v:'avisa «Falta validar la instalación» · deja marcar', d:'(v156) ✔ a un punto de «Probado» con la instalación sin revisar: sale el aviso amarillo y la marca se pone igual'},
+  fasesVisibles:{v:'IIICPTTT', d:'(v156) la puerta de madera enseña la fase de cada punto, agrupada en orden: I · C · P · T'},
   sinFoto:{v:'no guarda sin foto', d:'tocar ✗ y «Guardar el problema» sin foto no escribe nada'},
-  crea:{v:'1 partida pausada · Dimedes Estebez (Niño) · material · con foto', d:'el ✗ con foto y «Falta material» crea UNA partida «Corregir: Cerradura y llaves — Entrada principal», pausada, de Dimedes, con la foto en su campo fotos'},
-  bitacoraCrea:{v:'creado + trabada', d:'esa partida deja sus renglones en obra_cambios (creado y trabada), con la entidad «actividad»'},
-  fila:{v:'1 fila · 8 puntos · id de la partida', d:'la inspección se guarda en obra_inspecciones: un renglón del elemento, con los 8 puntos y el id de la partida en el ✗'},
+  crea:{v:'0 escrituras a actividades · foto en la Bitácora · causa material', d:'(v156) el ✗ con foto y «Falta material» NO crea partida: la causa queda en el punto y la foto entra a la Bitácora como nota'},
+  fila:{v:'1 fila · 8 puntos · ✗ con su foto', d:'la inspección se guarda en obra_inspecciones: un renglón del elemento, con los 8 puntos y la foto en el ✗'},
   avance:{v:'87,5%', d:'7 ✔ y 1 ✗ en una puerta dan 87,5 % de avance comprobable'},
   desglose:{v:'con problemas 1 · completos 0', d:'al tocar el avance sale el desglose: la puerta con su ✗ y lo que falta'},
-  vuelveBien:{v:'completada · sin duplicar · 1 renglón', d:'volver ese punto a ✔ completa la MISMA partida, con su renglón, y no crea otra'},
-  sinRed:{v:'espera en el teléfono · sale al volver · 1 partida', d:'sin señal, un ✗ con foto se queda en el teléfono (la barra lo dice) y al volver la red sale UNA partida con su foto'},
-  noTiene:{v:'abierta · nota «no tiene» · 1 renglón', d:'(v154) un ✗ que pasa a «— no tiene» deja su partida ABIERTA, con la nota «en la inspección se marcó “no tiene”; revisar y cerrar a mano» y su renglón en obra_cambios'},
-  bitacoraFoto:{v:'Apartamento 4A · Cerradura y llaves — Entrada principal', d:'la foto sale en la Bitácora del día con el apartamento y el elemento al lado'},
-  papel:{v:'PDF carta · 24 filas · por compartir', d:'«Imprimir hoja de inspección» saca el PDF del 4A en Ebanistería, una fila por elemento, por la hoja de compartir'},
-  dibujo:{v:'3 dibujos · 8 números cada uno · nada encimado', d:'(v154) la hoja de Ebanistería trae el dibujo de puertas, closets y gabinetes con sus 8 números dentro y la explicación al lado, sin pisarse'},
+  vuelveBien:{v:'queda ✔ · sin tocar actividades · la foto se queda', d:'(v156) volver ese punto a ✔ cambia la marca y nada más'},
+  sinRed:{v:'espera en el teléfono · sale al volver · 0 actividades', d:'sin señal, un ✗ con foto se queda en el teléfono (la barra lo dice) y al volver la red sale su foto a la Bitácora; ninguna partida'},
   quitarMal:{v:'no se deja · lo dice', d:'(v155) la foto de un ✗ no se puede quitar: la pantalla dice que se cambie antes la marca, y no escribe nada'},
-  desmarcaOk:{v:'sin marcar · 93,3% → 92,9%', d:'(v155) tocar otra vez el ✔ deja el punto sin marcar, y el avance baja en el momento'},
+  desmarcaOk:{v:'sin marcar · 87,5% → 86,7%', d:'(v155) tocar otra vez el ✔ deja el punto sin marcar, y el avance baja en el momento'},
   fotoOk:{v:'sube · en la Bitácora con su pie', d:'(v155) «＋ Foto» en un ✔ sube la foto y sale en la Bitácora del día con el apartamento, el elemento y el punto'},
   quitarFoto:{v:'respaldo y después se borra', d:'(v155) quitar esa foto pide confirmar en la pantalla, escribe el «RESPALDO antes de borrar» y después borra la nota de la Bitácora'},
-  desmarcaMal:{v:'abierta · nota «se desmarcó» · 1 renglón', d:'(v155) desmarcar un ✗ con partida la deja ABIERTA, con la nota «se desmarcó en la inspección; revisar y cerrar a mano» y su renglón'},
-  resetEl:{v:'pide confirmar en pantalla · 8 sin marcar · respaldo antes · partidas igual', d:'(v155) «Empezar de nuevo este elemento» pregunta en la pantalla (Cancelar no borra), deja los 8 puntos sin marcar, guarda el respaldo ANTES de la fila y no toca ninguna partida'},
-  resetInsp:{v:'todo sin marcar · 3 respaldos antes · agregado y nombre siguen · partidas abiertas con nota', d:'(v155) «Empezar de nuevo esta inspección» deja todos los elementos sin marcar con un respaldo por elemento, conserva lo agregado a mano y el nombre corregido, y la partida del ✗ queda abierta con su nota'},
+  desmarcaMal:{v:'sin marcar · la foto se queda · 0 actividades', d:'(v156) desmarcar un ✗ lo deja sin marcar, con su foto, sin tocar actividades'},
+  resetEl:{v:'pide confirmar en pantalla · 8 sin marcar · respaldo antes · nada en actividades', d:'(v155) «Empezar de nuevo este elemento» pregunta en la pantalla (Cancelar no borra), deja los 8 puntos sin marcar y guarda el respaldo ANTES de la fila'},
+  bitacoraFoto:{v:'Apartamento 4A · Entrada principal — 4. Cerradura · problema: Falta material', d:'(v156) la foto del ✗ sale en la Bitácora con el apartamento, el elemento, el punto y la causa'},
+  papel:{v:'PDF carta · 24 filas · por compartir', d:'«Imprimir hoja de inspección» saca el PDF del 4A en Ebanistería, una fila por elemento, por la hoja de compartir'},
+  dibujo:{v:'3 dibujos · 8 números cada uno · nada encimado', d:'(v154) la hoja de Ebanistería trae el dibujo de puertas, closets y gabinetes con sus 8 números dentro y la explicación al lado, sin pisarse'},
+  resetInsp:{v:'todo sin marcar · 3 respaldos antes · agregado y nombre siguen · nada en actividades', d:'(v155) «Empezar de nuevo esta inspección» deja todo sin marcar con un respaldo por elemento y conserva lo agregado a mano y el nombre corregido'},
+  guardar:{v:'guardada · en curso · vuelve al elemento que falta', d:'(v156) «Guardar y seguir después» deja la inspección en curso, y al volver a entrar lleva al primer elemento que falta'},
+  cerrar:{v:'resumen 0 ✔ · 0 ✗ · 25 faltan · cerrada por Karina · no deja marcar · reabierta por Karina', d:'(v156) «Cerrar inspección» enseña el resumen, la cierra con nombre y fecha, cerrada no deja marcar, y al reabrir queda anotado quién'},
+  plomeria4A:{v:'4 inodoro · 4 lavamanos · 3 ducha · 3 fregadero · 1 calentador', d:'(v156) en el 4A salen los elementos de plomería según sus 4 baños (el 1/2 baño sin ducha), 3 fregaderos y lavadero, y el calentador'},
+  inodoroListo:{v:'inodoro · listo · la lista lo dice', d:'(v156) un inodoro con sus 8 puntos en ✔ queda «listo»'},
+  levKarina:{v:'no lo ve', d:'(v156) el Levantamiento es solo del administrador: la Ing. Karina no ve el botón'},
+  sinActividades:{v:0, d:'(v156) en toda la prueba de la inspección, cero escrituras a obra_actividades'},
+  levantamiento:{v:'11 × 14 · 4A Ebanistería e-en_curso 100% · aprueba el elemento', d:'(v156) el Ing. Nilson ve la tabla de apartamentos × oficios, toca la celda y aprueba un elemento: se guarda con su nombre'},
   dedos:{v:0, d:'nada de lo que se toca en la inspección mide menos de 40 px, y la página no se desliza de lado a 390'},
   realBase:{v:0, d:'ninguna escritura se escapa del doble: lo escrito a Supabase lo contesta la prueba y lo demás se corta'},
 };
 async function probarInspeccion(nombreVer, html, b){
   const D=datos(); const {ACTS,PERS}=D;
-  const ESC=[], FILAS={}, CAMB=[], NOTAS={}, r={}; let drive=0, fuera=0;
+  const ESC=[], FILAS={}, CAMB=[], NOTAS={}, ESTS={}, r={}; let drive=0, fuera=0;
   const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
   const ok=(q,body)=>q.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
   const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQKADxbD/FlyXmBAAAAAElFTkSuQmCC','base64');
@@ -1694,7 +1701,9 @@ async function probarInspeccion(nombreVer, html, b){
       if(m!=='GET'){
         let body=null; try{ body=JSON.parse(q.request().postData()||'null'); }catch(e){}
         ESC.push({m,base,pth,body});
-        if(base==='obra_inspecciones' && m==='POST'){ FILAS[body.id]=JSON.parse(JSON.stringify(body)); }
+        if(base==='obra_inspecciones' && m==='POST'){ FILAS[body.id]=Object.assign(FILAS[body.id]||{}, JSON.parse(JSON.stringify(body))); }
+        if(base==='obra_inspecciones' && m==='PATCH'){ const id=(pth.match(/id=eq\.([^&]+)/)||[])[1]; if(FILAS[id]) Object.assign(FILAS[id],body); }
+        if(base==='obra_insp_estado' && m==='POST'){ ESTS[body.id]=Object.assign(ESTS[body.id]||{estado:'en_curso'}, body); }
         if(base==='obra_actividades' && m==='POST'){ ACTS.push(body); }
         if(base==='obra_actividades' && m==='PATCH'){ const id=(pth.match(/id=eq\.([^&]+)/)||[])[1]; const a=ACTS.find(x=>x.id===id); if(a) Object.assign(a,body); }
         if(base==='obra_cambios' && m==='POST'){ CAMB.push(body); }
@@ -1711,6 +1720,7 @@ async function probarInspeccion(nombreVer, html, b){
       else if(base==='obra_inspecciones'){ const ap=(pth.match(/apto=eq\.([^&]+)/)||[])[1]; f=Object.values(FILAS).filter(x=>!ap||x.apto===ap); }
       else if(base==='obra_cambios') f=CAMB.slice().reverse();
       else if(base==='obra_bitacora') f=Object.values(NOTAS);
+      else if(base==='obra_insp_estado'){ const ap=(pth.match(/apto=eq\.([^&]+)/)||[])[1]; f=Object.values(ESTS).filter(x=>!ap||x.apto===ap); }
       const rg=q.request().headers()['range']||''; if(rg){ const [d0,h]=rg.split('-').map(Number); f=f.slice(d0,h+1); }
       return ok(q,f);
     });
@@ -1736,29 +1746,36 @@ async function probarInspeccion(nombreVer, html, b){
     const n=lista.nombres;
     r.repetidos=[n.includes('Habitación principal (2)')?'Habitación principal (2)':'sin (2)', n.includes('Habitación secundaria')?'Habitación secundaria':'sin secundaria',
       new Set(n).size===n.length?'sin nombres iguales':'con nombres iguales'].join(' · ');
-    // La primera puerta: «Entrada principal». 7 ✔ y el 3 (Cerradura y llaves) en ✗.
+    // ── v156 · un levantamiento: nada de la inspección escribe en obra_actividades ──
+    const esActs=()=>ESC.filter(x=>x.base==='obra_actividades').length;
+    const esperar=async(f,n=24)=>{ for(let t=0;t<n;t++){ await p.waitForTimeout(250); if(await f()) return true; } return false; };
+    const filaDe=id=>FILAS[id]||{puntos:[]};
+    const acts0=esActs();
+    // La primera puerta: «Entrada principal». Puntos por fase: 1 Jamba · 2 Hoja · 3 Tope (I) · 4 Cerradura (C) · 5 Abre y cierra (P) · 6-8 (T).
     await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(300);
     const tresDe=i=>p.locator('#campo-root .in-pt').nth(i).locator('.in-b');
-    for(const i of [0,1,3,4,5,6,7]) { await tresDe(i).nth(0).click(); await p.waitForTimeout(60); }
-    await tresDe(2).nth(1).click(); await p.waitForTimeout(150);
+    const el1=await G(()=>_inspElActual().rowId);
+    // El ✔ de «Abre y cierra» (Probado) sin la instalación: avisa y deja marcar.
+    await tresDe(4).nth(0).click(); await p.waitForTimeout(150);
+    const av=await G(()=>{ const a=document.querySelector('#campo-root .in-aviso-fase'); return a&&a.checkVisibility()?a.textContent:''; });
+    const marcado=await G(()=>(_inspPuntos(_inspElActual().rowId)[4]||{}).m);
+    r.avisoFase=(/Falta validar la instalación/.test(av)?'avisa «Falta validar la instalación»':'aviso: '+JSON.stringify(av))+' · '+(marcado==='ok'?'deja marcar':'no marcó');
+    r.fasesVisibles=await G(()=>[...document.querySelectorAll('#campo-root .in-fase')].map(x=>x.textContent.trim()[0]).join(''));
+    for(const i of [0,1,2,5,6,7]) { await tresDe(i).nth(0).click(); await p.waitForTimeout(60); }
+    await tresDe(3).nth(1).click(); await p.waitForTimeout(150);
     const e0=ESC.length;
     await p.locator('#campo-root .in-b2',{hasText:'Falta material'}).click();
     await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click(); await p.waitForTimeout(300);
-    r.sinFoto=ESC.slice(e0).some(x=>x.base==='obra_actividades')?'escribió sin foto':'no guarda sin foto';
+    r.sinFoto=ESC.slice(e0).some(x=>x.base==='obra_inspecciones'&&x.body&&x.body.puntos&&x.body.puntos[3]&&x.body.puntos[3].m==='mal')?'guardó sin foto':'no guarda sin foto';
     const [fc]=await Promise.all([p.waitForEvent('filechooser'), p.locator('#campo-root .in-b2',{hasText:'Tomar foto'}).click()]);
     await fc.setFiles({name:'f.png',mimeType:'image/png',buffer:PNG}); await p.waitForTimeout(400);
     await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click();
-    for(let t=0;t<20;t++){ await p.waitForTimeout(250); if(ESC.some(x=>x.base==='obra_inspecciones') && ESC.filter(x=>x.base==='obra_inspecciones').slice(-1)[0].body.puntos[2].a && !ESC.filter(x=>x.base==='obra_inspecciones').slice(-1)[0].body.puntos[2].fp) break; }
-    const altas=ESC.filter(x=>x.m==='POST'&&x.base==='obra_actividades');
-    const par=altas[0]&&ACTS.find(a=>a.id===altas[0].body.id);
-    r.crea=altas.length===1&&par&&/^Corregir: Cerradura y llaves — Entrada principal$/.test(par.descripcion)
-      ? [altas.length+' partida '+par.estado, par.personal_nombre, par.estancada_causa, /drive\.google\.com/.test(par.fotos||'')?'con foto':'sin foto'].join(' · ')
-      : altas.length+' altas '+JSON.stringify(altas.map(a=>a.body.descripcion));
-    const deEsa=par?CAMB.filter(c=>c.entidad_id===par.id):[];
-    r.bitacoraCrea=deEsa.map(c=>c.accion).sort().join(' + ')+(deEsa.every(c=>c.entidad==='actividad')?'':' (otra entidad)');
-    if(r.bitacoraCrea==='creado + trabada') r.bitacoraCrea='creado + trabada';
-    const fila=Object.values(FILAS)[0];
-    r.fila=Object.keys(FILAS).length+' fila · '+(fila?fila.puntos.filter(x=>x&&x.m).length:0)+' puntos · '+(fila&&par&&fila.puntos[2].a===par.id?'id de la partida':'sin id');
+    await esperar(()=>{ const pt=filaDe(el1).puntos[3]; return pt&&pt.m==='mal'&&pt.f&&!pt.fp; });
+    const pt3=filaDe(el1).puntos[3]||{}, nota3=Object.values(NOTAS).find(n=>/Entrada principal — 4\. Cerradura/.test(n.nota||''));
+    r.crea=[esActs()-acts0+' escrituras a actividades', nota3&&/drive\.google\.com/.test(nota3.fotos||'')&&/Falta material/.test(nota3.nota)?'foto en la Bitácora':'sin nota en la Bitácora',
+      pt3.c==='material'?'causa material':'causa '+pt3.c].join(' · ');
+    const fila=filaDe(el1);
+    r.fila=Object.keys(FILAS).length+' fila · '+fila.puntos.filter(x=>x&&x.m).length+' puntos · '+(/drive\.google\.com/.test(pt3.f||'')?'✗ con su foto':'✗ sin foto');
     // Avance y desglose
     await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
     r.avance=await G(()=>{ const b=document.querySelector('#campo-root .in-avance b'); return b?b.textContent.trim():''; });
@@ -1766,39 +1783,97 @@ async function probarInspeccion(nombreVer, html, b){
     r.desglose=await G(()=>{ const t=[...document.querySelectorAll('#campo-root .in-dg-t')].map(x=>x.textContent);
       const n=s=>{ const x=t.find(y=>y.startsWith(s)); return x?(x.match(/\((\d+)\)/)||[])[1]:'?'; };
       return 'con problemas '+n('Con problemas')+' · completos '+n('Completos'); });
-    // Volver a ✔
+    // ✗ → ✔: la marca cambia y nada más
     await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(250);
-    const e1=ESC.length, c1=CAMB.length;
-    await tresDe(2).nth(0).click();
-    for(let t=0;t<16;t++){ await p.waitForTimeout(250); if(par&&par.estado==='completado') break; }
-    const nuevasAltas=ESC.slice(e1).filter(x=>x.m==='POST'&&x.base==='obra_actividades').length;
-    const renglones=CAMB.slice(c1).filter(c=>par&&c.entidad_id===par.id);
-    r.vuelveBien=[par&&par.estado==='completado'?'completada':'estado '+(par&&par.estado), nuevasAltas?nuevasAltas+' altas de más':'sin duplicar', renglones.length+' renglón'].join(' · ');
-    // Sin señal: el punto 5 (Barniz) en ✗ con foto
+    const a1=esActs(); await tresDe(3).nth(0).click(); await p.waitForTimeout(600);
+    r.vuelveBien=[(await G(()=>(_inspPuntos(_inspElActual().rowId)[3]||{}).m))==='ok'?'queda ✔':'no quedó ✔', esActs()===a1?'sin tocar actividades':'tocó actividades',
+      (await G(()=>!!(_inspPuntos(_inspElActual().rowId)[3]||{}).f))?'la foto se queda':'se perdió la foto'].join(' · ');
+    // Sin señal: el 6 (Barniz) en ✗ con foto
     sinRed=true; await ctx.setOffline(true);
-    const altas0=ESC.filter(x=>x.m==='POST'&&x.base==='obra_actividades').length;
     await tresDe(5).nth(1).click(); await p.waitForTimeout(150);
     const [fc2]=await Promise.all([p.waitForEvent('filechooser'), p.locator('#campo-root .in-b2',{hasText:'De la galería'}).click()]);
     await fc2.setFiles({name:'g.png',mimeType:'image/png',buffer:PNG}); await p.waitForTimeout(400);
     await p.locator('#campo-root .in-b2',{hasText:'Arreglo'}).click();
     await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click(); await p.waitForTimeout(1200);
     const espera=await G(()=>{ const b=document.getElementById('insp-barra'); return b&&/sin subir/.test(b.textContent)?1:0; });
-    const sinSalir=ESC.filter(x=>x.m==='POST'&&x.base==='obra_actividades').length===altas0;
+    const notas0=Object.keys(NOTAS).length;
     sinRed=false; await ctx.setOffline(false);
     await G(()=>window.dispatchEvent(new Event('online')));
     for(let t=0;t<20;t++){ await p.waitForTimeout(250); if(!(await G(()=>Object.keys(_inspSucios()).length))) break; }
-    const despues=ESC.filter(x=>x.m==='POST'&&x.base==='obra_actividades').length-altas0;
-    const nueva=ACTS.find(a=>/^Corregir: Barniz — Entrada principal$/.test(a.descripcion||''));
-    r.sinRed=[espera&&sinSalir?'espera en el teléfono':'no esperó', despues===1&&nueva&&/drive/.test(nueva.fotos||'')?'sale al volver':'no salió ('+despues+')', despues+' partida'].join(' · ');
-    // ✗ → «— no tiene»: la partida de Barniz se queda abierta, con su nota
-    if(nueva){ const c2=CAMB.length;
-      await tresDe(5).nth(2).click();
-      for(let t=0;t<16;t++){ await p.waitForTimeout(250); if(/no tiene/.test(nueva.notas||'')) break; }
-      const ren=CAMB.slice(c2).filter(c=>c.entidad_id===nueva.id);
-      r.noTiene=[nueva.estado!=='completado'?'abierta':'completada', /se marcó “no tiene”; revisar y cerrar a mano/.test(nueva.notas||'')?'nota «no tiene»':'sin nota',
-        ren.length+' renglón'+(ren.every(c=>c.accion==='nota')?'':' ('+ren.map(c=>c.accion).join(',')+')')].join(' · ');
-    }
-    // Bitácora: como el administrador del mismo teléfono, el pie de la foto
+    const nota6=Object.values(NOTAS).find(n=>/Entrada principal — 6\. Barniz/.test(n.nota||''));
+    r.sinRed=[espera?'espera en el teléfono':'no esperó', nota6&&Object.keys(NOTAS).length===notas0+1?'sale al volver':'no salió', esActs()-acts0+' actividades'].join(' · ');
+    // ── v155 · desmarcar, foto en cualquier punto, empezar de nuevo (sin partidas) ──
+    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    await p.locator('#campo-root .in-el').nth(1).click(); await p.waitForTimeout(250);
+    const el2=await G(()=>({id:_inspElActual().rowId, nom:_inspElActual().nombre}));
+    for(const i of [0,1,2,3,4,5,6]) { await tresDe(i).nth(0).click(); await p.waitForTimeout(60); }
+    const conFoto=async(i,boton)=>{ await tresDe(i).nth(1).click(); await p.waitForTimeout(150);
+      const [fx]=await Promise.all([p.waitForEvent('filechooser'), p.locator('#campo-root .in-b2',{hasText:boton||'Tomar foto'}).click()]);
+      await fx.setFiles({name:'h.png',mimeType:'image/png',buffer:PNG}); await p.waitForTimeout(400);
+      await p.locator('#campo-root .in-b2',{hasText:'Arreglo'}).click();
+      await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click(); };
+    await conFoto(7);
+    await esperar(()=>{ const pt=filaDe(el2.id).puntos[7]; return pt&&pt.f&&!pt.fp; });
+    // a) la foto del ✗ no se quita
+    const e2=ESC.length;
+    const mini7=p.locator('#campo-root .in-pt').nth(7).locator('.in-mini');
+    if(await mini7.count()){ await mini7.first().click(); await p.waitForTimeout(200);
+      const dice=await G(()=>/cambia antes la marca/.test((document.querySelector('#campo-root .in-ver')||{}).textContent||''));
+      const hayBoton=await p.locator('#campo-root .in-ver .in-b2',{hasText:'Quitar foto'}).count();
+      await G(()=>{ S._insp.verFoto={j:7,cual:'f',conf:true}; inspQuitarFoto(); });
+      await p.waitForTimeout(600);
+      const sigue=await G(()=>!!_inspPuntos(_inspElActual().rowId)[7].f);
+      r.quitarMal=(!hayBoton&&!ESC.slice(e2).length&&sigue?'no se deja':'se dejó')+' · '+(dice?'lo dice':'no lo dice');
+      await G(()=>{ S._insp.verFoto=null; _hpRepintar(); });
+    }else r.quitarMal='sin miniatura';
+    // b) ✔ otra vez lo quita y el avance baja
+    const pct=()=>G(()=>_inspPctTxt(_inspCuenta(S._insp.area,S._insp.of).pct));
+    const a0=await pct(); await tresDe(0).nth(0).click(); await p.waitForTimeout(250);
+    const sin=await G(()=>!(_inspPuntos(_inspElActual().rowId)[0]||{}).m);
+    r.desmarcaOk=(sin?'sin marcar':'sigue marcado')+' · '+a0+' → '+(await pct());
+    // c) ＋ Foto en un ✔
+    const notasAntes=Object.keys(NOTAS).length;
+    const [fy]=await Promise.all([p.waitForEvent('filechooser'), p.locator('#campo-root .in-pt').nth(1).locator('.in-masfoto').click()]);
+    await fy.setFiles({name:'k.png',mimeType:'image/png',buffer:PNG});
+    const subio=await esperar(()=>Object.keys(NOTAS).length>notasAntes);
+    const notaX=Object.values(NOTAS).find(n=>/— 2\. /.test(n.nota||'')&&n.nota.includes(el2.nom))||{};
+    const pie=await G(async()=>{ S.bitacora=S.bitacora||{}; S.bitacora.dias=14; await loadBitacora();
+      return [...document.querySelectorAll('#c-bitacora .bit-insp div')].map(x=>x.textContent); });
+    const bueno=pie.find(t=>t.includes('Apartamento 4A')&&t.includes(el2.nom)&&/— 2\. /.test(t));
+    r.fotoOk=(subio&&/drive\.google\.com/.test(notaX.fotos||'')?'sube':'no subió')+' · '+(bueno?'en la Bitácora con su pie':'pie: '+JSON.stringify(pie));
+    // d) quitar esa foto: confirmar en pantalla, respaldo, borrar
+    const e3=ESC.length, idX=notaX.id;
+    await p.locator('#campo-root .in-pt').nth(1).locator('.in-mini').first().click(); await p.waitForTimeout(150);
+    await p.locator('#campo-root .in-ver .in-b2',{hasText:'Quitar foto'}).click(); await p.waitForTimeout(150);
+    const preg=await p.locator('#campo-root .in-ver .in-b2',{hasText:'Sí, quitar la foto'}).count();
+    await p.locator('#campo-root .in-ver .in-b2',{hasText:'Sí, quitar la foto'}).click();
+    await esperar(()=>!NOTAS[idX]);
+    const sl=ESC.slice(e3), iR=sl.findIndex(x=>x.base==='obra_cambios'&&/^RESPALDO antes de borrar/.test(x.body&&x.body.detalle||'')), iD=sl.findIndex(x=>x.base==='obra_bitacora'&&x.m==='DELETE');
+    r.quitarFoto=preg&&iR>=0&&iD>iR&&!NOTAS[idX]?'respaldo y después se borra':'respaldo '+iR+' · borrado '+iD+' · pregunta '+preg;
+    // e) desmarcar el ✗: queda sin marcar, con su foto, y nada en actividades
+    const a4=esActs(); await tresDe(7).nth(1).click(); await p.waitForTimeout(600);
+    const p7=await G(()=>_inspPuntos(_inspElActual().rowId)[7]||{});
+    r.desmarcaMal=[!p7.m?'sin marcar':'sigue '+p7.m, p7.f?'la foto se queda':'se perdió la foto', (esActs()-a4)+' actividades'].join(' · ');
+    // f) empezar de nuevo el primer elemento
+    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(250);
+    const d0=await G(()=>window.__dialogos), e5=ESC.length, a5=esActs();
+    if(await p.locator('#campo-root .in-reset').count()){
+      await p.locator('#campo-root .in-reset').click(); await p.waitForTimeout(150);
+      const hayCaja=await p.locator('#campo-root .in-conf .in-b2',{hasText:'Sí, borrar las marcas'}).count();
+      await p.locator('#campo-root .in-conf .in-b2',{hasText:'Cancelar'}).click(); await p.waitForTimeout(150);
+      const siguen=await G(()=>_inspPuntos(_inspElActual().rowId).filter(x=>x&&x.m).length);
+      await p.locator('#campo-root .in-reset').click(); await p.waitForTimeout(150);
+      await p.locator('#campo-root .in-conf .in-b2',{hasText:'Sí, borrar las marcas'}).click();
+      await esperar(()=>filaDe(el1).puntos.every(x=>!x||!x.m));
+      const sl5=ESC.slice(e5), iR5=sl5.findIndex(x=>x.base==='obra_cambios'&&/^RESPALDO antes de borrar/.test(x.body&&x.body.detalle||'')&&x.body.entidad_id===el1),
+        iF5=sl5.findIndex(x=>x.base==='obra_inspecciones'&&x.body.id===el1&&x.body.puntos.every(y=>!y||!y.m));
+      r.resetEl=[hayCaja&&siguen>0&&d0===await G(()=>window.__dialogos)?'pide confirmar en pantalla':'confirmar: caja '+hayCaja+' · siguen '+siguen,
+        filaDe(el1).puntos.filter(x=>x&&x.m).length===0?'8 sin marcar':'quedan marcas',
+        iR5>=0&&iF5>iR5?'respaldo antes':'respaldo '+iR5+' · fila '+iF5,
+        esActs()===a5?'nada en actividades':'tocó actividades'].join(' · ');
+    }else r.resetEl='sin botón';
+    // Bitácora: el pie de la foto del ✗ (ahora una nota «Foto de inspección»)
     r.bitacoraFoto=await G(async()=>{ S.bitacora=S.bitacora||{}; S.bitacora.dias=14; await loadBitacora();
       const c=[...document.querySelectorAll('#c-bitacora .bit-insp div')].map(x=>x.textContent);
       return c.find(t=>/Cerradura/.test(t))||c[0]||'sin pie'; });
@@ -1815,90 +1890,9 @@ async function probarInspeccion(nombreVer, html, b){
         return bs.length+' dibujos · '+(bien.length===bs.length?'8 números cada uno · nada encimado':(bs.length-bien.length)+' mal'); });
     }else r.papel='(sin jsPDF local)';
     try{
-    // ── v155 · desmarcar, foto en cualquier punto, empezar de nuevo ──
-    const esperar=async(f,n=24)=>{ for(let t=0;t<n;t++){ await p.waitForTimeout(250); if(await f()) return true; } return false; };
-    const filaDe=id=>FILAS[id]||{puntos:[]};
-    await p.locator('#campo-root .in-el').nth(1).click(); await p.waitForTimeout(250);
-    const el2=await G(()=>({id:_inspElActual().rowId, nom:_inspElActual().nombre}));
-    for(const i of [0,1,2,3,4,5,6]) { await tresDe(i).nth(0).click(); await p.waitForTimeout(60); }
-    const conFoto=async(i,boton)=>{ await tresDe(i).nth(1).click(); await p.waitForTimeout(150);
-      const [fx]=await Promise.all([p.waitForEvent('filechooser'), p.locator('#campo-root .in-b2',{hasText:boton||'Tomar foto'}).click()]);
-      await fx.setFiles({name:'h.png',mimeType:'image/png',buffer:PNG}); await p.waitForTimeout(400);
-      await p.locator('#campo-root .in-b2',{hasText:'Arreglo'}).click();
-      await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click(); };
-    await conFoto(7);
-    await esperar(()=>{ const pt=filaDe(el2.id).puntos[7]; return pt&&pt.a&&!pt.fp; });
-    const p2=ACTS.find(a=>a.id===(filaDe(el2.id).puntos[7]||{}).a);
-    if(p2){
-      // a) la foto del ✗ no se quita
-      const e2=ESC.length;
-      const mini7=p.locator('#campo-root .in-pt').nth(7).locator('.in-mini');
-      if(await mini7.count()){ await mini7.first().click(); await p.waitForTimeout(200);
-        const dice=await G(()=>/cambia antes la marca/.test((document.querySelector('#campo-root .in-ver')||{}).textContent||''));
-        const hayBoton=await p.locator('#campo-root .in-ver .in-b2',{hasText:'Quitar foto'}).count();
-        await G(()=>{ S._insp.verFoto={j:7,cual:'f',conf:true}; inspQuitarFoto(); });
-        await p.waitForTimeout(600);
-        const fueraDe=ESC.slice(e2).length;
-        const sigue=await G(()=>!!_inspPuntos(_inspElActual().rowId)[7].f);
-        r.quitarMal=(!hayBoton&&!fueraDe&&sigue?'no se deja':'se dejó')+' · '+(dice?'lo dice':'no lo dice');
-        await G(()=>{ S._insp.verFoto=null; _hpRepintar(); });
-      }else r.quitarMal='sin miniatura';
-      // b) ✔ otra vez lo quita y el avance baja
-      const pct=()=>G(()=>_inspPctTxt(_inspCuenta(S._insp.area,S._insp.of).pct));
-      const a0=await pct(); await tresDe(0).nth(0).click(); await p.waitForTimeout(250);
-      const sin=await G(()=>!(_inspPuntos(_inspElActual().rowId)[0]||{}).m);
-      r.desmarcaOk=(sin?'sin marcar':'sigue marcado')+' · '+a0+' → '+(await pct());
-      // c) ＋ Foto en un ✔
-      const [fy]=await Promise.all([p.waitForEvent('filechooser'), p.locator('#campo-root .in-pt').nth(1).locator('.in-masfoto').click()]);
-      await fy.setFiles({name:'k.png',mimeType:'image/png',buffer:PNG});
-      const subio=await esperar(()=>Object.keys(NOTAS).length>0);
-      const nota=Object.values(NOTAS)[0]||{};
-      const pie=await G(async()=>{ S.bitacora=S.bitacora||{}; S.bitacora.dias=14; await loadBitacora();
-        return [...document.querySelectorAll('#c-bitacora .bit-insp div')].map(x=>x.textContent); });
-      const bueno=pie.find(t=>t.includes('Apartamento 4A')&&t.includes(el2.nom)&&/— 2\. /.test(t));
-      r.fotoOk=(subio&&/drive\.google\.com/.test(nota.fotos||'')?'sube':'no subió')+' · '+(bueno?'en la Bitácora con su pie':'pie: '+JSON.stringify(pie));
-      // d) quitar esa foto: confirmar en pantalla, respaldo, borrar
-      const e3=ESC.length;
-      await p.locator('#campo-root .in-pt').nth(1).locator('.in-mini').first().click(); await p.waitForTimeout(150);
-      await p.locator('#campo-root .in-ver .in-b2',{hasText:'Quitar foto'}).click(); await p.waitForTimeout(150);
-      const preg=await p.locator('#campo-root .in-ver .in-b2',{hasText:'Sí, quitar la foto'}).count();
-      await p.locator('#campo-root .in-ver .in-b2',{hasText:'Sí, quitar la foto'}).click();
-      await esperar(()=>!Object.keys(NOTAS).length);
-      const sl=ESC.slice(e3), iR=sl.findIndex(x=>x.base==='obra_cambios'&&/^RESPALDO antes de borrar/.test(x.body&&x.body.detalle||'')), iD=sl.findIndex(x=>x.base==='obra_bitacora'&&x.m==='DELETE');
-      r.quitarFoto=preg&&iR>=0&&iD>iR&&!Object.keys(NOTAS).length?'respaldo y después se borra':'respaldo '+iR+' · borrado '+iD+' · pregunta '+preg;
-      // e) desmarcar el ✗: la partida se queda abierta con su nota
-      const c4=CAMB.length; await tresDe(7).nth(1).click();
-      await esperar(()=>/se desmarcó en la inspección; revisar y cerrar a mano/.test(p2.notas||''));
-      const ren=CAMB.slice(c4).filter(c=>c.entidad_id===p2.id);
-      r.desmarcaMal=[p2.estado!=='completado'?'abierta':'completada', /se desmarcó en la inspección; revisar y cerrar a mano/.test(p2.notas||'')?'nota «se desmarcó»':'sin nota',
-        ren.length+' renglón'+(ren.every(c=>c.accion==='nota')?'':' ('+ren.map(c=>c.accion).join(',')+')')].join(' · ');
-      // y se vuelve a marcar en ✗, para la prueba de «empezar de nuevo esta inspección»
-      await conFoto(7,'De la galería'); await esperar(()=>{ const pt=filaDe(el2.id).puntos[7]; return pt&&pt.m==='mal'&&!pt.ap&&!pt.fp; });
-    }
-    // f) empezar de nuevo el primer elemento
-    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
-    await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(250);
-    const el1=await G(()=>_inspElActual().rowId);
-    const est0=JSON.stringify(ACTS.map(a=>a.id+a.estado)), d0=await G(()=>window.__dialogos), e5=ESC.length;
-    if(await p.locator('#campo-root .in-reset').count()){
-      await p.locator('#campo-root .in-reset').click(); await p.waitForTimeout(150);
-      const hayCaja=await p.locator('#campo-root .in-conf .in-b2',{hasText:'Sí, borrar las marcas'}).count();
-      await p.locator('#campo-root .in-conf .in-b2',{hasText:'Cancelar'}).click(); await p.waitForTimeout(150);
-      const siguen=await G(()=>_inspPuntos(_inspElActual().rowId).filter(x=>x&&x.m).length);
-      await p.locator('#campo-root .in-reset').click(); await p.waitForTimeout(150);
-      await p.locator('#campo-root .in-conf .in-b2',{hasText:'Sí, borrar las marcas'}).click();
-      await esperar(()=>filaDe(el1).puntos.every(x=>!x||!x.m));
-      const sl5=ESC.slice(e5), iR5=sl5.findIndex(x=>x.base==='obra_cambios'&&/^RESPALDO antes de borrar/.test(x.body&&x.body.detalle||'')&&x.body.entidad_id===el1),
-        iF5=sl5.findIndex(x=>x.base==='obra_inspecciones'&&x.body.id===el1&&x.body.puntos.every(y=>!y||!y.m));
-      const tocoActs=sl5.some(x=>x.base==='obra_actividades'&&(x.m==='DELETE'||(x.body&&x.body.estado)));
-      r.resetEl=[hayCaja&&siguen>0&&d0===await G(()=>window.__dialogos)?'pide confirmar en pantalla':'confirmar: caja '+hayCaja+' · siguen '+siguen,
-        filaDe(el1).puntos.filter(x=>x&&x.m).length===0?'8 sin marcar':'quedan marcas',
-        iR5>=0&&iF5>iR5?'respaldo antes':'respaldo '+iR5+' · fila '+iF5,
-        !tocoActs&&JSON.stringify(ACTS.map(a=>a.id+a.estado))===est0?'partidas igual':'tocó partidas'].join(' · ');
-    }else r.resetEl='sin botón';
     // g) empezar de nuevo la inspección entera: lo agregado y el nombre se quedan
     if(await G(()=>S._insp&&S._insp.paso==='elem')){ await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250); }
-    if(p2 && await p.locator('#campo-root .in-reset',{hasText:'esta inspección'}).count()){
+    if(await p.locator('#campo-root .in-reset',{hasText:'esta inspección'}).count()){
       await p.locator('#campo-root .in-agr',{hasText:'Agregar elemento que falta'}).click(); await p.waitForTimeout(150);
       await p.locator('#in-nuevo').fill('Puerta del cuarto de prueba');
       await p.locator('#campo-root .in-b2',{hasText:/^Agregar$/}).click(); await p.waitForTimeout(250);
@@ -1911,23 +1905,102 @@ async function probarInspeccion(nombreVer, html, b){
       await tresDe(0).nth(0).click(); await p.waitForTimeout(150);
       await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(400);
       await esperar(async()=>!(await G(()=>Object.keys(_inspSucios()).length)));
-      const n0=ACTS.length, est1=JSON.stringify(ACTS.map(a=>a.id+a.estado)), e6=ESC.length, notas0=(p2.notas||'').split('se desmarcó').length;
+      const e6=ESC.length, a6=esActs();
       await p.locator('#campo-root .in-reset',{hasText:'esta inspección'}).click(); await p.waitForTimeout(150);
       await p.locator('#campo-root .in-conf .in-b2',{hasText:'Sí, borrar las marcas'}).click();
       await esperar(async()=>await G(()=>!Object.keys(_inspSucios()).length&&_inspCuenta(S._insp.area,S._insp.of).puntos===0));
-      await esperar(()=>(p2.notas||'').split('se desmarcó').length>notas0,12);
       const sl6=ESC.slice(e6), resp=sl6.map((x,i)=>[x,i]).filter(([x])=>x.base==='obra_cambios'&&/^RESPALDO antes de borrar/.test(x.body&&x.body.detalle||''));
       const antes=resp.every(([x,i])=>{ const iF=sl6.findIndex(y=>y.base==='obra_inspecciones'&&y.body.id===x.body.entidad_id); return iF>i; });
       const nombres=await G(()=>[...document.querySelectorAll('#campo-root .in-el span')].map(x=>x.textContent));
       const vacio=await G(()=>_inspCuenta(S._insp.area,S._insp.of).puntos===0);
-      r.resetInsp=[vacio&&Object.values(FILAS).every(f=>f.puntos.every(y=>!y||!y.m))?'todo sin marcar':'quedan marcas',
+      r.resetInsp=[vacio&&Object.values(FILAS).filter(f=>f.oficio==='ebanisteria').every(f=>f.puntos.every(y=>!y||!y.m))?'todo sin marcar':'quedan marcas',
         resp.length+' respaldos'+(antes?' antes':' (alguno después)'),
-        nombres.includes('Puerta del cuarto de prueba')&&nombres.includes('Puerta renombrada en obra')?'agregado y nombre siguen':'se perdió '+JSON.stringify(nombres.slice(0,4)),
-        ACTS.length===n0&&JSON.stringify(ACTS.map(a=>a.id+a.estado))===est1&&p2.estado!=='completado'&&(p2.notas||'').split('se desmarcó').length>notas0?'partidas abiertas con nota':'partidas cambiaron'].join(' · ');
+        nombres.some(t=>t.startsWith('Puerta del cuarto de prueba'))&&nombres.some(t=>t.startsWith('Puerta renombrada en obra'))?'agregado y nombre siguen':'se perdió '+JSON.stringify(nombres.slice(0,4)),
+        esActs()===a6?'nada en actividades':'tocó actividades'].join(' · ');
     }else r.resetInsp='sin botón';
-    }catch(e){ r._error155=String(e&&e.message||e).split('\n')[0].slice(0,200); }
+    // h) «Guardar y seguir después»: al volver a entrar, al elemento que falta
+    const est=()=>Object.values(ESTS).find(x=>x.id==='4A|ebanisteria')||{};
+    if(await p.locator('#campo-root .in-fin .in-b2',{hasText:'Guardar y seguir después'}).count()){
+      await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(250);
+      await tresDe(0).nth(0).click(); await p.waitForTimeout(150);
+      await p.locator('#campo-root .in-guardar').click(); await p.waitForTimeout(150);
+      await esperar(()=>est().estado==='en_curso');
+      const enOficios=await G(()=>S._insp.paso==='oficio');
+      const chip=await G(()=>{ const b=[...document.querySelectorAll('#campo-root .in-of')].find(x=>/Ebanistería/.test(x.textContent)); return b?(b.querySelector('.in-est')||{}).textContent:''; });
+      await p.locator('#campo-root .in-of',{hasText:'Ebanistería'}).click(); await p.waitForTimeout(250);
+      const vuelve=await G(()=>S._insp.paso==='elem'?_inspElActual().nombre:S._insp.paso);
+      r.guardar=[est().estado==='en_curso'&&enOficios?'guardada':'no guardó', chip==='En curso'?'en curso':'chip '+chip, vuelve==='Entrada principal'?'vuelve al elemento que falta':'cae en '+vuelve].join(' · ');
+    }else r.guardar='sin botón';
+    // i) cerrar con su resumen, no deja marcar, y se reabre
+    if(await G(()=>S._insp&&S._insp.paso==='elem')){ await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250); }
+    if(await p.locator('#campo-root .in-fin .in-b2',{hasText:'Cerrar inspección'}).count()){
+      await p.locator('#campo-root .in-fin .in-b2',{hasText:'Cerrar inspección'}).click(); await p.waitForTimeout(150);
+      const res=await G(()=>{ const c=document.querySelector('#campo-root .in-cierre .in-res'); return c?[...c.children].map(x=>x.textContent.trim()).join(' '):''; });
+      await p.locator('#campo-root .in-cierre .in-b2',{hasText:'Sí, cerrar la inspección'}).click(); await p.waitForTimeout(150);
+      await esperar(()=>est().estado==='cerrada');
+      const cerr=JSON.parse(JSON.stringify(est()));
+      await p.locator('#campo-root .in-of',{hasText:'Ebanistería'}).click(); await p.waitForTimeout(250);
+      await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(250);
+      const e7=ESC.length; await tresDe(1).nth(0).click(); await p.waitForTimeout(600);
+      const bloq=!ESC.slice(e7).some(x=>x.base==='obra_inspecciones') && !(await G(()=>(_inspPuntos(_inspElActual().rowId)[1]||{}).m));
+      await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(200);
+      await p.locator('#campo-root .in-agr',{hasText:'Reabrir la inspección'}).click(); await p.waitForTimeout(150);
+      await esperar(()=>est().estado==='en_curso');
+      r.cerrar=[/0 con todo ✔ 0 con ✗ 25 sin terminar/.test(res)?'resumen 0 ✔ · 0 ✗ · 25 faltan':'resumen: '+res,
+        cerr.estado==='cerrada'&&/Karina/.test(cerr.cerrada_por||'')?'cerrada por Karina':'cerrada: '+JSON.stringify(cerr),
+        bloq?'no deja marcar':'dejó marcar', /Karina/.test(est().reabierta_por||'')?'reabierta por Karina':'reabierta: '+est().reabierta_por].join(' · ');
+    }else r.cerrar='sin botón';
+    // j) un inodoro con sus 8 puntos en ✔ queda «listo»
+    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    if(await p.locator('#campo-root .in-of',{hasText:'Plomería'}).count()){
+      await p.locator('#campo-root .in-of',{hasText:'Plomería'}).click(); await p.waitForTimeout(250);
+      const plom=await G(()=>{ const c={}; _inspElementos(S._insp.area,'plomeria').forEach(e=>c[e.grupo]=(c[e.grupo]||0)+1); return c; });
+      r.plomeria4A=['inodoro','lavamanos','ducha','fregadero','calentador'].map(k=>(plom[k]||0)+' '+k).join(' · ');
+      await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(250);
+      const nomI=await G(()=>_inspElActual().grupo+' · '+_inspElActual().nombre);
+      for(let i=0;i<8;i++){ await tresDe(i).nth(0).click(); await p.waitForTimeout(60); }
+      const listo=await G(()=>{ const l=document.querySelector('#campo-root .in-listo'); return !!(l&&l.checkVisibility()); });
+      await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+      const enLista=await G(()=>/listo/.test((document.querySelector('#campo-root .in-el')||{}).textContent||''));
+      r.inodoroListo=(nomI.startsWith('inodoro')?'inodoro':nomI)+' · '+(listo?'listo':'no listo')+' · '+(enLista?'la lista lo dice':'la lista no lo dice');
+    }else{ r.plomeria4A='sin Plomería'; r.inodoroListo='sin Plomería'; }
+    r.levKarina=await G(()=>{ inspVolver(); inspVolver(); return document.querySelector('#campo-root .in-lev-btn')?'lo ve':'no lo ve'; });
+    r.sinActividades=esActs()-acts0;
+    }catch(e){ r._error156=String(e&&e.message||e).split('\n')[0].slice(0,200); }
     r.dedos=await G(()=>{ const chicos=[...document.querySelectorAll('#campo-root .in button, #campo-root .in input')].filter(e=>e.checkVisibility()&&e.getBoundingClientRect().height<40).length;
       return chicos+(document.documentElement.scrollWidth>window.innerWidth+1?1:0); });
+    r.dedos=r.dedos;
+    // k) el Levantamiento, como el Ing. Nilson: la tabla del edificio y aprobar un elemento
+    try{
+      const q=await ctx.newPage(); q.setDefaultTimeout(6000);
+      await q.goto(ORIGEN+'/index.html',{waitUntil:'load'});
+      await q.evaluate(u=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify(u)); }catch(e){} }, {id:'nilson',nombre:'Ing. Nilson',rol:'admin'});
+      await q.reload({waitUntil:'load'});
+      for(let t=0;t<40;t++){ if(await q.evaluate(()=>typeof S!=='undefined'&&S.acts&&S.acts.length).catch(()=>0)) break; await q.waitForTimeout(500); }
+      await q.waitForTimeout(800);
+      await q.evaluate(()=>goTab('reportes')); await q.waitForTimeout(300);
+      await q.locator('#c-hp .hp-gran',{hasText:'Inspección'}).click(); await q.waitForTimeout(200);
+      await q.locator('#c-hp .in-lev-btn').click();
+      await q.waitForSelector('#c-hp .lev-t');
+      const tabla=await q.evaluate(()=>{ const t=document.querySelector('#c-hp .lev-t');
+        const filas=t.querySelectorAll('tbody tr').length, cols=t.querySelectorAll('thead th').length-1;
+        const ths=[...t.querySelectorAll('thead th')].map(x=>x.textContent), ci=ths.indexOf('Ebanistería');
+        const tr=[...t.querySelectorAll('tbody tr')].find(x=>x.querySelector('th').textContent==='4A');
+        const b=tr&&tr.children[ci].querySelector('button');
+        return {filas, cols, cel:b?b.className.replace('lev-c ','')+' '+b.textContent:'' }; });
+      const f4=Object.values(FILAS).find(f=>f.id===el1);
+      await q.evaluate(()=>{ const t=document.querySelector('#c-hp .lev-t'); const ths=[...t.querySelectorAll('thead th')].map(x=>x.textContent), ci=ths.indexOf('Ebanistería');
+        const tr=[...t.querySelectorAll('tbody tr')].find(x=>x.querySelector('th').textContent==='4A'); tr.children[ci].querySelector('button').click(); });
+      await q.waitForTimeout(250);
+      const e8=ESC.length;
+      await q.locator('#c-hp .in-aprob.mini').first().click();
+      for(let t=0;t<16;t++){ await q.waitForTimeout(250); if(f4&&FILAS[el1].aprobado_por) break; }
+      const pat=ESC.slice(e8).find(x=>x.base==='obra_inspecciones'&&x.m==='PATCH');
+      const boton=await q.evaluate(()=>(document.querySelector('#c-hp .in-aprob.mini.on')||{}).textContent||'');
+      r.levantamiento=[tabla.filas+' × '+tabla.cols, '4A Ebanistería '+tabla.cel,
+        pat&&FILAS[el1]&&FILAS[el1].aprobado_por==='Ing. Nilson'&&/Aprobado por Ing\. Nilson/.test(boton)?'aprueba el elemento':'no aprobó'].join(' · ');
+      await q.close();
+    }catch(e){ r.levantamiento='se cortó: '+String(e&&e.message||e).split('\n')[0].slice(0,120); }
     r.realBase=fuera;
     await ctx.close();
   }catch(e){ r._error=String(e&&e.message||e).split('\n')[0].slice(0,200); }

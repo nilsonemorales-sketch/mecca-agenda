@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v155 — 27 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v156 — 27 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -257,7 +257,7 @@ mismos botones que cualquier otra.
 | **EL AVANCE POR UBICACIÓN, POR CONTRATISTA Y CRUZADO, con cada número tocable** | **Reportes → «Avance»** (v146), la primera de la sub-barra, y en el cajón «Reportes — Avance por ubicación y contratista» — `renderAvanceRep()`, `_raFilas()`, `_raPasa()`, `_raEn()`, `raVer()`, `raImprimir()`. Solo lectura. Ver «AVANCE (v146)» abajo |
 | **LA HOJA DE UN CONTRATISTA O DE UNA UBICACIÓN, para imprimir y mandar** | **Reportes → Avance → «Hoja ›»** en una fila de Por contratista o de un área (v147) — `raHoja()`, `_raHojaHTML()`, `_raCargarMov()`, `raHojaImprimir()`, CSS en `<style id="hj-css">`. Sin dinero. Ver «LA HOJA DE REPORTE (v147)» abajo |
 | **SACAR LA HOJA PARA PEGAR DE UNA UBICACIÓN, o EL PDF DE UN CONTRATISTA** | **Reportes** (v149) — lo ÚNICO que se ve al entrar: dos botones → escoger → sale la hoja. También en el **Modo Campo**. `renderHojasRep()`, `_hpHubHTML()`, `hpSacar()`, `_hpPegarHTML()`, `_hpContHTML()`. Ver «REPORTES EN DOS HOJAS (v149)» abajo |
-| **INSPECCIONAR un apartamento por oficio, punto por punto, con foto en cada problema** | **Reportes y Modo Campo → «Inspección»**, el tercer botón junto a las dos hojas (v153) — `inspAbrir()`, `_inspHTML()`, `_inspElementos()`, `inspMarcar()`, `inspMalGuardar()`, `_inspResolver()`, `_inspEnviar()`, `inspImprimir()`; desde la v155 `_inspDesmarcar()`, `inspResetAbrir()`, `inspFotoPunto()`, `inspQuitarFoto()`. Tabla `obra_inspecciones`. Ver «INSPECCIÓN POR APARTAMENTO (v153)» abajo |
+| **INSPECCIONAR un apartamento por oficio, punto por punto, con foto en cada problema** | **Reportes y Modo Campo → «Inspección»**, el tercer botón junto a las dos hojas (v153) — `inspAbrir()`, `_inspHTML()`, `_inspElementos()`, `inspMarcar()`, `inspMalGuardar()`, `_inspResolver()`, `_inspEnviar()`, `inspImprimir()`; desde la v155 `_inspDesmarcar()`, `inspResetAbrir()`, `inspFotoPunto()`, `inspQuitarFoto()`; desde la v156 `inspGuardarSeguir()`, `inspCerrarSi()`, `inspReabrir()`, `inspLev()`. Tablas `obra_inspecciones` y `obra_insp_estado`. **Desde la v156 es un LEVANTAMIENTO: no toca las actividades**. Ver «INSPECCIÓN POR APARTAMENTO (v153)» abajo |
 | **Escanear la hoja pegada y caer en la lista de ese contratista en ese sitio** | **Cajón → «Escanear el QR del apartamento»** y **Modo Campo → «Escanear el QR de la hoja»** (v150) — `recEscanear()`, `recLeido()`, `recAplicarFiltro()`. Los QR los dibuja `_qrSvg()` / `_qrMatriz()`, dentro del archivo |
 | **Las doce pantallas viejas de Reportes (Avance, Dashboard, Historial…)** | **Reportes → «Otros reportes ›»**, solo administrador (v149) — `REPORTES_OCULTOS`, `reporteOculto()`, `hpOtros()`. Escondidas, no borradas |
 | ~~Agregar una actividad dictándola~~ | **Se retiró en la v144** (decisión del dueño). Ver «DICTAR (v143) — RETIRADO EN LA v144» abajo. **No la vuelvas a construir sin que él lo pida** |
@@ -3270,7 +3270,70 @@ por el Modo Campo.
   marca. `_inspEnviar` vuelve a correr al terminar si algo se tocó mientras iba
   de camino (`_inspOtraVez`): sin eso, «empezar de nuevo esta inspección»
   dejaba esperando 45 s todos los elementos menos el primero.
-- **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO»**: veinticinco
+### LA INSPECCIÓN ES UN LEVANTAMIENTO (v156) — checklist de cierre, sin tocar actividades
+
+Palabras del dueño (27-oct): *«que no afecte ahora mismo las actividades, sino que
+sea simplemente un levantamiento que nos permita evaluar el resultado… que lo
+pueda guardar o cerrar… y que cada elemento tenga su proceso para confirmar».*
+**Lo de arriba sobre partidas (v153-v155) describe el código que SIGUE en el
+archivo pero está APAGADO** con `INSP_CREA_PARTIDAS = false`.
+
+- **Nada de la inspección escribe en `obra_actividades`**: ni el ✗, ni
+  desmarcar, ni «— no tiene», ni «empezar de nuevo». El ✗ sigue pidiendo foto,
+  causa y nota, y todo queda en el punto. La foto del ✗ sube a Drive y entra a
+  la Bitácora como nota «Foto de inspección · Apartamento 4A · Elemento — N.
+  Punto · problema: causa» (`_inspSubirFotoNota`, `p.fb` = id de la nota),
+  igual que las de «＋ Foto». Volver a crear partidas es poner `true`. Medido
+  el 27-oct: 0 partidas «Corregir: …» en la base, y la única inspección real
+  (2A · Ebanistería · Entrada principal) sin marcas.
+- **LAS FASES** (`INSP_FASES`, `_inspFases`): los 16 elementos del «Checklist de
+  cierre Mecca v2» llevan cada punto con su fase I Instalado → C Conectado → P
+  Probado → T Terminado, en una etiqueta de color. En la constante se escriben
+  `[fase, título, detalle]` en el orden del documento y `_inspFases` los ordena
+  por fase (estable) a `[título, detalle, fase]`: el resto del módulo lee
+  `pt[0]` y `pt[1]` como siempre. **El ✔ de un punto P o T con una fase anterior
+  en ✗ o sin revisar AVISA y deja marcar** (`_inspAvisoFase`, decisión del
+  dueño): «Falta validar la instalación / la conexión / la prueba». Un elemento
+  está **listo** con sus 8 puntos en ✔ o «— no tiene» (`_inspListo`).
+- **El catálogo nuevo**: Plomería por aparato (Inodoro, Lavamanos, Ducha, de los
+  baños del inventario —el 1/2 baño sin ducha—; Fregadero y lavadero; Calentador:
+  en el 4A salen 4 · 4 · 3 · 3 · 1); Electricidad (Tomacorrientes, Interruptores
+  y Luminarias por espacio, Panel, Salidas especiales con un extractor por baño);
+  Ventanas y vidrio (ventanas y barandas se agregan, las puertas corredizas son
+  las «Aluminio» del inventario); **Topes** (Milo: arranca con sus partidas
+  abiertas en ese sitio, más lo ya inspeccionado); la Puerta de madera; Pintura
+  «Muros y techos». Y los **siete del Catálogo v3** con 8 puntos y sin fases:
+  Albañilería, Sheetrock, Estuco (por espacio), Herrería, Puertas de polimetal,
+  Intercom y cámaras, Aires (sin inventario: se agregan). Son **14 oficios**.
+- **Dibujos**: los grupos con puntos nuevos salen en la hoja de papel SIN dibujo
+  (la leyenda usa todo el ancho y lleva la fase): los dibujos de Plomería,
+  Electricidad, Pintura y Ventanas marcaban los puntos viejos. La puerta de
+  madera conserva el suyo con los números puestos en el orden nuevo.
+- **ESTADO** en `obra_insp_estado` (tabla del 27-oct, aprobada por el dueño):
+  una fila por apartamento y oficio, `id = «4A|plomeria»`, con `estado`
+  (`en_curso` / `cerrada`), quién y cuándo cerró, reabrió y aprobó. «Sin
+  empezar» es no tener fila ni marcas. **«Guardar y seguir después»** (en la
+  lista y al pie del elemento) la deja en curso; **al volver a entrar se cae en
+  el primer elemento con puntos sin revisar**. **«Cerrar inspección»** enseña el
+  resumen (con todo ✔ · con ✗ · sin terminar) y pide «Sí, cerrar»; cerrada **no
+  deja marcar** (`_inspCerradaAqui`) hasta «Reabrir la inspección», que deja
+  anotado quién. Sin señal, el estado espera en `mecca_insp_est_v1` y sale con
+  la cola. Cada cierre, reapertura y aprobación deja un renglón en
+  `obra_cambios` (entidad `inspeccion`).
+- **EL LEVANTAMIENTO** (solo administrador): Reportes → Inspección →
+  «Levantamiento» (`inspLev`, `_inspLevHTML`). Una lectura de cada tabla al
+  entrar. La tabla del edificio (11 apartamentos × 14 oficios, color por estado,
+  ✓ si aprobado) se desliza dentro de su caja; la celda abre el oficio con sus
+  elementos, puntos, causas y fotos; el apartamento abre sus 14 tarjetas.
+  **«Aprobado por el Ing. Nilson»** por elemento (`obra_inspecciones.aprobado_por`
+  y `aprobado_fecha`) y por oficio (en `obra_insp_estado`) se pone y se quita.
+  **No libera talleres ni cambia actividades.** *Ojo:* el upsert de la fila del
+  elemento manda solo sus columnas, así que no pisa la aprobación.
+- **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO»**: treinta y tres
+  comprobaciones desde la v156 (las de partidas de la v153-v155 se cambiaron por
+  «cero escrituras a actividades», y entran fases, guardar, cerrar, el inodoro
+  listo, la plomería del 4A y el Levantamiento como Nilson).
+- **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO» (hasta la v155)**: veinticinco
   comprobaciones como Karina por el Modo Campo a 390 (desde la v154, también
   ✗ → «—» deja la partida abierta con su nota, y los tres dibujos de la hoja de
   Ebanistería con sus 8 números dentro y la explicación al lado sin pisarse;
@@ -4653,7 +4716,8 @@ orden de magnitud.
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
 | `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Desde la v118 `obra_partida_actividad` es además lo que la tabla lee para la columna CAPÍTULO y lo que reescribe al cambiarlo. Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**; **con `orden` desde v114** (el orden que el dueño pone a mano en «Por partida»). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
 | `obra_nodos`, `obra_nodo_actividad`, `obra_plan_fuera` | **EL PLAN (v111→v113, rehecho en v120)** — el segundo eje. **Desde el 20-sep es el esquema del dueño, no el MS Project**: 131 nodos = 1 raíz + **8 grupos** + **28 partidas madre** + **93 subpartidas** + POR UBICAR, ids `es_raiz`, `es_g*`, `es_p*`, `es_s***`, `es_porubicar`, y `origen` vale `raiz · grupo · partida · subpartida · porubicar`. **Los `cr_*` del Project ya no están**, pero sus columnas sí (`costo_plan`, `dias_plan`, `pred_plan`, `inicio_plan`, `fin_plan`, `pct_plan`, `costo_real_plan`) y el cronograma las sigue leyendo — vacías. **Columna nueva `palabras` (v120)**, texto separado por coma, llena en 73 de las 93, que es lo que ordena las candidatas de Clasificar. Más `tipo` (`rama`/`entregable`), `clase`, `orden`, `notas` y `avance_manual`. **No hay siembra desde el app.** `obra_nodo_actividad` lleva `UNIQUE (nodo_id, actividad_id)`, así que el POST va con `resolution=merge-duplicates`. **El sitio NO es un nodo**: sale del `area` de la actividad. `obra_plan_fuera` son los descartes: **no borra nada**. Se borran las tres y el catálogo queda exactamente igual. | 131 + 2.445 |
-| `obra_inspecciones` | **La inspección por apartamento (v153).** Un renglón por elemento revisado; `puntos` jsonb con la marca, causa, nota, foto y partida de cada uno de los 8 puntos. Ver «INSPECCIÓN POR APARTAMENTO (v153)». | 0 al nacer |
+| `obra_inspecciones` | **La inspección por apartamento (v153).** Un renglón por elemento revisado; `puntos` jsonb con la marca, causa, nota, foto y partida de cada uno de los 8 puntos. Desde la v156 con `aprobado_por` y `aprobado_fecha`. Ver «INSPECCIÓN POR APARTAMENTO (v153)» y «LA INSPECCIÓN ES UN LEVANTAMIENTO (v156)». | 1 (27-oct) |
+| `obra_insp_estado` | **El estado de cada inspección (v156)**: una fila por apartamento y oficio, en curso o cerrada, quién cerró, reabrió y aprobó. | 0 al nacer |
 | `obra_ubicaciones` | **Del módulo «Partidas» (v110, v116).** Guarda el porcentaje a mano de una ubicación **y, desde la v116, las ubicaciones que el dueño crea**: `_catUbicsTodas()` devuelve la unión de las que usan las actividades y las filas activas de aquí. El nombre sigue viviendo en `obra_actividades.area`. | 0 al nacer |
 
 ### Cosas de los datos que hay que saber
