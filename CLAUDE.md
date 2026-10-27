@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v154 — 27 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v155 — 27 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -257,7 +257,7 @@ mismos botones que cualquier otra.
 | **EL AVANCE POR UBICACIÓN, POR CONTRATISTA Y CRUZADO, con cada número tocable** | **Reportes → «Avance»** (v146), la primera de la sub-barra, y en el cajón «Reportes — Avance por ubicación y contratista» — `renderAvanceRep()`, `_raFilas()`, `_raPasa()`, `_raEn()`, `raVer()`, `raImprimir()`. Solo lectura. Ver «AVANCE (v146)» abajo |
 | **LA HOJA DE UN CONTRATISTA O DE UNA UBICACIÓN, para imprimir y mandar** | **Reportes → Avance → «Hoja ›»** en una fila de Por contratista o de un área (v147) — `raHoja()`, `_raHojaHTML()`, `_raCargarMov()`, `raHojaImprimir()`, CSS en `<style id="hj-css">`. Sin dinero. Ver «LA HOJA DE REPORTE (v147)» abajo |
 | **SACAR LA HOJA PARA PEGAR DE UNA UBICACIÓN, o EL PDF DE UN CONTRATISTA** | **Reportes** (v149) — lo ÚNICO que se ve al entrar: dos botones → escoger → sale la hoja. También en el **Modo Campo**. `renderHojasRep()`, `_hpHubHTML()`, `hpSacar()`, `_hpPegarHTML()`, `_hpContHTML()`. Ver «REPORTES EN DOS HOJAS (v149)» abajo |
-| **INSPECCIONAR un apartamento por oficio, punto por punto, con foto en cada problema** | **Reportes y Modo Campo → «Inspección»**, el tercer botón junto a las dos hojas (v153) — `inspAbrir()`, `_inspHTML()`, `_inspElementos()`, `inspMarcar()`, `inspMalGuardar()`, `_inspResolver()`, `_inspEnviar()`, `inspImprimir()`. Tabla `obra_inspecciones`. Ver «INSPECCIÓN POR APARTAMENTO (v153)» abajo |
+| **INSPECCIONAR un apartamento por oficio, punto por punto, con foto en cada problema** | **Reportes y Modo Campo → «Inspección»**, el tercer botón junto a las dos hojas (v153) — `inspAbrir()`, `_inspHTML()`, `_inspElementos()`, `inspMarcar()`, `inspMalGuardar()`, `_inspResolver()`, `_inspEnviar()`, `inspImprimir()`; desde la v155 `_inspDesmarcar()`, `inspResetAbrir()`, `inspFotoPunto()`, `inspQuitarFoto()`. Tabla `obra_inspecciones`. Ver «INSPECCIÓN POR APARTAMENTO (v153)» abajo |
 | **Escanear la hoja pegada y caer en la lista de ese contratista en ese sitio** | **Cajón → «Escanear el QR del apartamento»** y **Modo Campo → «Escanear el QR de la hoja»** (v150) — `recEscanear()`, `recLeido()`, `recAplicarFiltro()`. Los QR los dibuja `_qrSvg()` / `_qrMatriz()`, dentro del archivo |
 | **Las doce pantallas viejas de Reportes (Avance, Dashboard, Historial…)** | **Reportes → «Otros reportes ›»**, solo administrador (v149) — `REPORTES_OCULTOS`, `reporteOculto()`, `hpOtros()`. Escondidas, no borradas |
 | ~~Agregar una actividad dictándola~~ | **Se retiró en la v144** (decisión del dueño). Ver «DICTAR (v143) — RETIRADO EN LA v144» abajo. **No la vuelvas a construir sin que él lo pida** |
@@ -3237,10 +3237,45 @@ por el Modo Campo.
   en círculo naranja. **Los nueve los dibujó el app sin ver las muestras**
   (los PDF no llegaron en dos sesiones) y el dueño los aprobó con capturas. Si
   llegan las muestras, se ajustan las coordenadas de `INSP_DIBUJOS`.
-- **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO»**: dieciocho
+- **DESMARCAR (v155)**: tocar otra vez el botón que ya está puesto (✔, ✗ o —)
+  deja el punto **sin marcar** (`_inspDesmarcar`, `_inspLimpiarPunto`). El
+  dueño probó la v154 y no supo quitar un ✔: por eso el elemento dice arriba
+  «Para quitar una marca, toca otra vez el mismo botón». Si era un ✗ con
+  partida, la partida **se queda abierta** con la nota «se desmarcó en la
+  inspección; revisar y cerrar a mano» (marca `dm` en el punto, la sale
+  `_inspResolver` por `Acciones.agregarNota`). Como tocar ✗ ya no abre el
+  recuadro sobre un ✗ guardado, el renglón rojo lleva **«Cambiar el
+  problema»** (`inspMalEditar`), que deja guardar sin foto nueva si ya tiene.
+  Un ✔ sobre una partida que se quedó abierta la completa, como en la v154.
+- **EMPEZAR DE NUEVO (v155)**: «Empezar de nuevo este elemento» al final del
+  elemento y «Empezar de nuevo esta inspección» al final de la lista
+  (`inspResetAbrir`, `_inspResetUno`). Confirman **en la pantalla**
+  (`_inspResetHTML`: qué se borra, «Sí, borrar las marcas» · «Cancelar»), sin
+  `confirm()`. Borran marcas, causas y notas de los puntos; **se quedan** las
+  fotos, lo agregado a mano, los nombres del lápiz y las partidas (abiertas,
+  con la nota de desmarcar). **El RESPALDO** («RESPALDO antes de borrar: …»,
+  `accion='respaldo'`, `entidad='inspeccion'`) se arma al tocar y va en
+  `r.bk`: `_inspEnviar` lo escribe en `obra_cambios` **antes** de mandar la fila
+  vacía, y si no sale, la fila tampoco.
+- **FOTO EN CUALQUIER PUNTO (v155)**: «＋ Foto» debajo de cada punto
+  (`inspFotoPunto`). Va en `p.x` (`{id,k,u,bo}`), espera en IndexedDB sin señal
+  igual que la del ✗, sube a Drive y entra a la Bitácora como una nota de
+  `obra_bitacora` con `id` = el de la foto y texto «Foto de inspección ·
+  Apartamento 4A · Elemento — N. Punto». `renderBitacora` la enseña como foto
+  con su pie (`.bit-insp`) y **no** como nota suelta. Tocar la miniatura la abre
+  con «Quitar foto» y su confirmación (`inspQuitarFoto`): respaldo en
+  `obra_cambios` primero, después `DELETE` de la nota (o se saca del campo
+  `fotos` de la partida, si era la de un ✗ que ya cambió de marca). **La foto de
+  un ✗ que sigue en ✗ no se quita**: la pantalla dice que se cambie antes la
+  marca. `_inspEnviar` vuelve a correr al terminar si algo se tocó mientras iba
+  de camino (`_inspOtraVez`): sin eso, «empezar de nuevo esta inspección»
+  dejaba esperando 45 s todos los elementos menos el primero.
+- **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO»**: veinticinco
   comprobaciones como Karina por el Modo Campo a 390 (desde la v154, también
   ✗ → «—» deja la partida abierta con su nota, y los tres dibujos de la hoja de
-  Ebanistería con sus 8 números dentro y la explicación al lado sin pisarse).
+  Ebanistería con sus 8 números dentro y la explicación al lado sin pisarse;
+  desde la v155, las siete de desmarcar, la foto y empezar de nuevo, que
+  fallan contra la v154).
 
 ### DICTAR (v143) — RETIRADO EN LA v144
 

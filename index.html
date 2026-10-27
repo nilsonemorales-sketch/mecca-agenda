@@ -228,6 +228,20 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .in-foto{display:flex;align-items:center;gap:10px}
 .in-foto img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1.5px solid var(--border2)}
 .in-falta{font-size:12.5px;color:var(--red);font-weight:650}
+.in-ayuda{font-size:12.5px;color:var(--text3);margin:-4px 0 4px}
+.in .in-cambiar{display:block;margin-top:6px;min-height:40px;padding:4px 12px;border-radius:10px;border:1.5px solid var(--red);background:transparent;color:var(--red);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer}
+.in-fotos{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.in .in-mini{position:relative;width:52px;height:52px;min-height:0;padding:0;border-radius:10px;border:1.5px solid var(--border2);background:var(--bg3);overflow:hidden;cursor:pointer;color:var(--text3);font-size:11px}
+.in .in-mini.on{border-color:var(--accent);border-width:2.5px}
+.in-mini img{width:100%;height:100%;object-fit:cover;display:block}
+.in-mini i{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);color:#fff;font-style:normal;font-size:9.5px;line-height:1.5}
+.in .in-masfoto{min-height:44px;padding:4px 12px;border-radius:10px;border:1.5px dashed var(--border2);background:transparent;color:var(--text2);font-family:var(--font);font-size:13.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px}
+.in-ver,.in-conf{border-color:var(--border2)}
+.in-conf{border-color:var(--red)}
+.in-grande{width:100%;max-height:320px;object-fit:contain;border-radius:10px;background:var(--bg3)}
+.in-conf-t{font-size:13.5px;color:var(--text2);line-height:1.45}
+.in .in-b2.rojo{border-color:var(--red);background:var(--red);color:#fff}
+.in .in-reset{border-color:var(--red);color:var(--red);margin-top:10px}
 .in-sig{width:100%;min-height:56px;border-radius:14px;border:1.5px solid var(--accent);background:var(--bg2);color:var(--accent);font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;padding:8px 12px}
 .in-sig.listo{background:var(--accent);color:#fff}
 .in-agr{width:100%;min-height:48px;border-radius:12px;border:1.5px dashed var(--accent);background:transparent;color:var(--accent);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
@@ -1367,7 +1381,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261027_154';
+const APP_VERSION='20261027_155';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -32311,14 +32325,27 @@ function _inspTocar(r){
   var suc=_inspSucios(); suc[r.id]=JSON.parse(JSON.stringify(r)); _inspGuardarSucios(suc);
   _inspEnviar();
 }
-var _inspEnviando=false;
+var _inspEnviando=false, _inspOtraVez=false;
 async function _inspEnviar(){
-  if(_inspEnviando) return; _inspEnviando=true;
+  /* v155 · Lo que se toca mientras otro envío va de camino no espera al
+     reloj de 45 s: sale en cuanto termine éste. «Empezar de nuevo esta
+     inspección» toca todos los elementos de un golpe. */
+  if(_inspEnviando){ _inspOtraVez=true; return; } _inspEnviando=true; _inspOtraVez=false;
+  var sinRed=false;
   try{
-    var suc=_inspSucios(), ids=Object.keys(suc), sinRed=false;
+    var suc=_inspSucios(), ids=Object.keys(suc);
     for(var i=0;i<ids.length && !sinRed;i++){
       var r=(S.insp&&S.insp.rows[ids[i]])||suc[ids[i]];
       if(S.insp) S.insp.rows[r.id]=r;
+      /* v155 · «Empezar de nuevo»: el RESPALDO de lo que había se escribe en
+         obra_cambios ANTES de que la fila vacía llegue a la base. Si no sale,
+         la fila tampoco: así nunca se borra nada sin su copia. */
+      while(r.bk && r.bk.length && !sinRed){
+        try{ await sb('obra_cambios',{method:'POST',prefer:'return=minimal',body:JSON.stringify(r.bk[0])}); r.bk.shift();
+          var s0=_inspSucios(); if(s0[r.id]){ s0[r.id]=JSON.parse(JSON.stringify(r)); _inspGuardarSucios(s0); } }
+        catch(e){ if(_inspEsSinRed(e)) sinRed=true; else { console.warn('inspección respaldo:',e); break; } }
+      }
+      if(sinRed || (r.bk && r.bk.length)) { if(sinRed) break; continue; }
       for(var j=0;j<(r.puntos||[]).length && !sinRed;j++){
         try{ await _inspResolver(r,j); var s1=_inspSucios(); if(s1[r.id]){ s1[r.id]=JSON.parse(JSON.stringify(r)); _inspGuardarSucios(s1); } }
         catch(e){ if(_inspEsSinRed(e)) sinRed=true; else { console.warn('inspección:',e); showToast('No se pudo guardar un problema: '+((e&&e.message)||''),'err',6000); } }
@@ -32333,15 +32360,20 @@ async function _inspEnviar(){
         if(s2[r.id] && s2[r.id].actualizado_en===cuerpo.actualizado_en && !_inspPendiente(r)){ delete s2[r.id]; _inspGuardarSucios(s2); }
       }catch(e){ if(_inspEsSinRed(e)) sinRed=true; else console.warn('inspección fila:',e); }
     }
-  }finally{ _inspEnviando=false; _inspPintarBarra(); }
+  }finally{ _inspEnviando=false; _inspPintarBarra(); if(_inspOtraVez && !sinRed){ _inspOtraVez=false; setTimeout(_inspEnviar,0); } }
 }
 function _inspEsSinRed(e){
   return !!(e && (e.sinRed || (typeof navigator!=='undefined' && navigator.onLine===false) || /fetch|network|tard/i.test(String(e.message||''))));
 }
-function _inspPendiente(r){ return (r.puntos||[]).some(function(p){ return p && (p.ap || p.fp || p.cp || p.nt); }); }
+function _inspPendiente(r){
+  if(r.bk && r.bk.length) return true;
+  return (r.puntos||[]).some(function(p){ return p && (p.ap || p.fp || p.cp || p.nt || p.dm || (p.q&&p.q.length) ||
+    (p.x||[]).some(function(x){ return !x.bo; })); });
+}
 function _inspNPend(){
   var suc=_inspSucios(), n=0;
-  Object.keys(suc).forEach(function(k){ (suc[k].puntos||[]).forEach(function(p){ if(p&&p.fp) n++; }); });
+  Object.keys(suc).forEach(function(k){ (suc[k].puntos||[]).forEach(function(p){ if(p&&p.fp) n++;
+    (p&&p.x||[]).forEach(function(x){ if(!x.bo) n++; }); }); });
   return {filas:Object.keys(suc).length, fotos:n};
 }
 function _inspPintarBarra(){ var b=document.getElementById('insp-barra'); if(b) b.outerHTML=_inspBarraHTML(); }
@@ -32360,19 +32392,62 @@ async function _inspResolver(r, j){
   var p=r.puntos[j]; if(!p) return;
   var of=_inspOficio(r.oficio), g=_inspGrupo(r.oficio,r.grupo); if(!of||!g) return;
   var t=g.pts[j][0];
-  /* Cerrar: el punto ya no está en ✗ y su partida sigue abierta. */
-  if(p.cp){
-    if(_inspActAbierta(p.a)) await Acciones.completar(p.a,{},'Inspección: '+t+' — quedó bien');
-    p.cp=false; return;
-  }
   /* v154 · «— no tiene» sobre un ✗ NO cierra la partida (decisión del dueño):
      se queda abierta y se le deja dicho en las notas, con su renglón, para
      que el ingeniero o el Ing. Nilson la cierren a mano. */
   if(p.nt){
     if(_inspActAbierta(p.a)) await Acciones.agregarNota(p.a,'en la inspección se marcó “no tiene”; revisar y cerrar a mano');
-    p.nt=false; return;
+    p.nt=false;
   }
-  if(p.m!=='mal') return;
+  /* v155 · Desmarcar (o «empezar de nuevo») un ✗: la partida tampoco se
+     cierra ni se borra. La misma regla del «no tiene», con su nota. */
+  if(p.dm){
+    if(_inspActAbierta(p.a)) await Acciones.agregarNota(p.a,'se desmarcó en la inspección; revisar y cerrar a mano');
+    p.dm=false;
+  }
+  /* Cerrar: el punto quedó en ✔ y su partida sigue abierta. */
+  if(p.cp){
+    if(_inspActAbierta(p.a)) await Acciones.completar(p.a,{},'Inspección: '+t+' — quedó bien');
+    p.cp=false;
+  }
+  /* v155 · Las fotos que NO son de un ✗: suben a Drive y entran a la
+     Bitácora del día como una nota «Foto de inspección · …», que la Bitácora
+     enseña con el apartamento, el elemento y el punto al lado. El id de la
+     nota es el de la foto: si se repite el envío, no se duplica. */
+  var xs=p.x||[];
+  for(var ix=0; ix<xs.length; ix++){
+    var x=xs[ix]; if(x.bo) continue;
+    if(!x.u){
+      var dx=x.k?await _inspFotoGet(x.k):null;
+      if(!dx){ xs.splice(ix,1); ix--; continue; }
+      x.u=await _subirFotoData(dx, r.apto, '');
+    }
+    await sb('obra_bitacora',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',
+      body:JSON.stringify({id:x.id, fecha:x.d||today(), nota:'Foto de inspección · '+_hpNomUbic(r.apto)+' · '+r.elemento+' — '+(j+1)+'. '+t,
+        autor:r.ingeniero||'', fotos:x.u+'::'+(r.ingeniero||''), created_at:new Date().toISOString()})});
+    x.bo=true; if(x.k){ _inspFotoDel(x.k); delete x.k; }
+  }
+  /* Quitar una foto: primero el RESPALDO en obra_cambios, después se borra. */
+  var qs=p.q||[];
+  while(qs.length){
+    var qq=qs[0];
+    if(!qq.rs){ await sb('obra_cambios',{method:'POST',prefer:'return=minimal',body:JSON.stringify(qq.rec)}); qq.rs=true; }
+    if(qq.b) await sb('obra_bitacora?id=eq.'+encodeURIComponent(qq.b),{method:'DELETE',prefer:'return=minimal'});
+    else if(qq.a){
+      var aa=_findActAny(qq.a), fs0;
+      if(aa) fs0=aa.fotos||'';
+      else { var rr=await sb('obra_actividades?id=eq.'+encodeURIComponent(qq.a)+'&select=fotos'); fs0=(rr&&rr[0]&&rr[0].fotos)||''; }
+      var fs1=String(fs0).split('||').filter(function(e){ return e && e.split('::')[0]!==qq.u; }).join('||');
+      if(fs1!==fs0){
+        await sb('obra_actividades?id=eq.'+encodeURIComponent(qq.a),{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fs1||null})});
+        if(aa) aa.fotos=fs1;
+      }
+    }
+    qs.shift();
+  }
+  /* La foto de un ✗ que ya tiene partida sube aunque la marca haya cambiado
+     después: es la constancia del problema que se vio. */
+  if(p.m!=='mal'){ if(p.fp && p.a) await _inspSubirFotoMal(r,j,p); return; }
   var traba=p.c && p.c!=='arreglo';
   if(p.ap){
     var abierta=_inspActAbierta(p.a), nota=(p.n?p.n+' · ':'')+'Inspección '+today()+' de '+(r.ingeniero||'')+' — '+r.elemento;
@@ -32390,7 +32465,9 @@ async function _inspResolver(r, j){
     }
     p.ap=false;
   }
-  if(p.fp && p.a){
+  if(p.fp && p.a) await _inspSubirFotoMal(r,j,p);
+}
+async function _inspSubirFotoMal(r, j, p){
     var k=r.id+'#'+j, data=await _inspFotoGet(k);
     if(!data){ p.fp=false; return; }
     var url=await _subirFotoData(data, r.apto, p.a);
@@ -32399,7 +32476,6 @@ async function _inspResolver(r, j){
     var fotos=act.fotos?act.fotos+'||'+entrada:entrada;
     await sb('obra_actividades?id=eq.'+p.a,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos})});
     act.fotos=fotos; p.f=url; p.fp=false; _inspFotoDel(k);
-  }
 }
 
 /* ── Navegación ── */
@@ -32414,9 +32490,10 @@ async function inspApto(i){
   _inspEnviar();
 }
 function inspOficio(of){ S._insp.paso='lista'; S._insp.of=of; S._insp.desg=false; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
-function inspElem(i){ S._insp.paso='elem'; S._insp.i=i; S._insp.mal=null; S._insp.ren=null; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
+function inspElem(i){ S._insp.paso='elem'; S._insp.i=i; S._insp.mal=null; S._insp.ren=null; S._insp.reset=null; S._insp.verFoto=null; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
 function inspVolver(){
   var I=S._insp; if(!I) return;
+  I.reset=null; I.verFoto=null;
   if(I.paso==='elem'){ I.paso='lista'; I.mal=null; }
   else if(I.paso==='lista'){ I.paso='oficio'; }
   else if(I.paso==='oficio'){ I.paso='apto'; }
@@ -32469,6 +32546,8 @@ function _inspHTML(){
     });
     h+=_inspAgregarHTML(I.of);
     h+='<button class="hp-op in-imp" onclick="inspImprimir()"><span>Imprimir hoja de inspección</span><b>PDF</b></button>';
+    if(I.reset==='insp') h+=_inspResetHTML('insp');
+    else if(rev) h+='<button class="in-agr in-reset" onclick="inspResetAbrir(\'insp\')">Empezar de nuevo esta inspección</button>';
     return h+'</div>';
   }
   /* El elemento: sus 8 puntos. */
@@ -32483,7 +32562,8 @@ function _inspHTML(){
        (e.agregado?'':'<div class="in-falta" style="color:var(--text3)">Vale para los apartamentos del mismo tipo.</div>')+'</div>'
      : '<div class="in-cab"><div class="hp-tit">'+esc(e.nombre)+'</div>'+
        '<button class="in-lapiz" title="Corregir el nombre" onclick="S._insp.ren={t:'+esc(JSON.stringify(e.nombre))+'};_hpRepintar()">'+INSP_ICO_LAPIZ+'</button></div>')+
-     '<div class="hp-sub">'+esc(nom)+' · '+esc(g.nombre)+' · elemento '+(I.i+1)+' de '+els.length+' · '+marcados+' de 8 puntos</div>';
+     '<div class="hp-sub">'+esc(nom)+' · '+esc(g.nombre)+' · elemento '+(I.i+1)+' de '+els.length+' · '+marcados+' de 8 puntos</div>'+
+     '<div class="in-ayuda">Para quitar una marca, toca otra vez el mismo botón.</div>';
   g.pts.forEach(function(pt,j){
     var p=ps[j]||{}, abierto=I.mal&&I.mal.j===j;
     h+='<div class="in-pt'+(p.m==='ok'?' ok':p.m==='mal'?' mal':p.m==='na'?' na':'')+'">'+
@@ -32494,10 +32574,13 @@ function _inspHTML(){
         '<button class="in-b'+(p.m==='na'?' on':'')+'" onclick="inspMarcar('+j+',\'na\')" aria-label="No tiene">—</button>'+
       '</div>'+
       (p.m==='mal'&&!abierto?'<div class="in-prob">'+esc((INSP_CAUSAS.find(function(c){ return c[0]===p.c; })||['',''])[1])+(p.n?' — '+esc(p.n):'')+
-        (p.fp?' · foto esperando señal':p.f?' · con foto':'')+(p.ap?' · partida por crear':'')+'</div>':'')+
-      (abierto?_inspMalHTML(j):'')+
+        (p.fp?' · foto esperando señal':p.f?' · con foto':'')+(p.ap?' · partida por crear':'')+
+        '<button class="in-cambiar" onclick="inspMalEditar('+j+')">Cambiar el problema</button></div>':'')+
+      (abierto?_inspMalHTML(j):_inspFotosHTML(e,j,p))+
     '</div>';
   });
+  if(I.reset==='el') h+=_inspResetHTML('el');
+  else if(marcados) h+='<button class="in-agr in-reset" onclick="inspResetAbrir(\'el\')">Empezar de nuevo este elemento</button>';
   var sig=els[I.i+1];
   h+=sig ? '<button class="in-sig'+(marcados===8?' listo':'')+'" onclick="inspElem('+(I.i+1)+')">'+(marcados===8?'Listo · ':'')+'Siguiente: '+esc(sig.nombre)+' ›</button>'
          : '<button class="in-sig listo" onclick="inspVolver()">Terminé '+esc(of.nombre)+' · ver el avance ›</button>';
@@ -32520,6 +32603,9 @@ function _inspMalHTML(j){
   return '<div class="in-mal">'+
     (M.foto
       ? '<div class="in-foto"><img src="'+M.foto+'" alt=""><button class="in-b2" onclick="inspFoto(\'camera\')">Otra foto</button></div>'
+      : M.tiene
+      ? '<div class="in-paso">1 · La foto del problema <i>(ya tiene una)</i></div>'+
+        '<div class="in-dos"><button class="in-b2" onclick="inspFoto(\'camera\')">'+INSP_ICO_CAM+' Cambiarla</button></div>'
       : '<div class="in-paso">1 · La foto del problema <i>(obligatoria)</i></div>'+
         '<div class="in-dos"><button class="in-b2 fuerte" onclick="inspFoto(\'camera\')">'+INSP_ICO_CAM+' Tomar foto</button>'+
         '<button class="in-b2" onclick="inspFoto(\'galeria\')">De la galería</button></div>')+
@@ -32527,8 +32613,8 @@ function _inspMalHTML(j){
       INSP_CAUSAS.map(function(c){ return '<button class="in-b2'+(M.c===c[0]?' on':'')+'" onclick="inspCausa(\''+c[0]+'\')">'+esc(c[1])+'</button>'; }).join('')+'</div>'+
     '<input id="in-nota" class="in-nota" placeholder="Nota (opcional): «rayada abajo», «3 interruptores 3-way»" value="'+esc(M.n||'')+'" oninput="S._insp.mal.n=this.value">'+
     '<div class="in-dos"><button class="in-b2" onclick="inspMalCancelar()">Cancelar</button>'+
-      '<button class="in-b2 fuerte'+(M.foto&&M.c?'':' apagado')+'" onclick="inspMalGuardar()">Guardar el problema</button></div>'+
-    (!M.foto||!M.c?'<div class="in-falta">'+(!M.foto?'Falta la foto':'')+(!M.foto&&!M.c?' y ':'')+(!M.c?'falta escoger qué falta':'')+'.</div>':'')+
+      '<button class="in-b2 fuerte'+((M.foto||M.tiene)&&M.c?'':' apagado')+'" onclick="inspMalGuardar()">Guardar el problema</button></div>'+
+    ((!M.foto&&!M.tiene)||!M.c?'<div class="in-falta">'+(!M.foto&&!M.tiene?'Falta la foto':'')+(!M.foto&&!M.tiene&&!M.c?' y ':'')+(!M.c?'falta escoger qué falta':'')+'.</div>':'')+
   '</div>';
 }
 function _inspAgregarHTML(of){
@@ -32549,23 +32635,177 @@ function _inspElActual(){ var I=S._insp; return _inspElementos(I.area,I.of)[I.i]
 function inspMarcar(j, m){
   if(!canEdit()) return;
   var I=S._insp, e=_inspElActual(); if(!e) return;
-  if(m==='mal'){ var p0=_inspPuntos(e.rowId)[j]||{};
-    I.mal={j:j, c:p0.m==='mal'?p0.c:null, n:p0.m==='mal'?(p0.n||''):'', foto:null}; _hpRepintar(); return; }
+  var p0=_inspPuntos(e.rowId)[j]||{};
+  I.verFoto=null;
+  if(m==='mal'){
+    /* El recuadro del ✗ abierto y sin guardar: tocar ✗ otra vez lo cierra. */
+    if(I.mal&&I.mal.j===j){ I.mal=null; _hpRepintar(); return; }
+    /* v155 · Ya estaba en ✗: tocarlo otra vez lo DESMARCA (lo pidió el dueño).
+       Para cambiar la causa o la nota está «Cambiar el problema». */
+    if(p0.m==='mal') return _inspDesmarcar(j);
+    I.mal={j:j, c:null, n:'', foto:null}; _hpRepintar(); return;
+  }
   if(I.mal&&I.mal.j===j) I.mal=null;
+  if(p0.m===m) return _inspDesmarcar(j);
   var r=_inspFila(e,I.area,I.of), p=r.puntos[j]||{};
   var antes=p.m;
-  if(antes===m) return;
-  var nuevo={m:m, a:p.a||null, f:p.f||null};
+  var nuevo={m:m, a:p.a||null, f:p.f||null, x:p.x||[], q:p.q||[], dm:p.dm||false, nt:p.nt||false};
   /* Venía de ✗: con ✔ su partida se completa; con «— no tiene» se queda
      ABIERTA con una nota (v154, decisión del dueño). Si la partida todavía no
-     existía (sin señal), ya no se crea. Un ✔ después de un «—» que dejó la
-     partida abierta también la completa. */
+     existía (sin señal), ya no se crea. Un ✔ sobre una partida que se quedó
+     abierta (por un «—» o porque se desmarcó) también la completa. */
   if(antes==='mal' && p.ap && !p.a){ nuevo.a=null; }
-  else if(p.a && m==='ok' && (antes==='mal'||antes==='na')) nuevo.cp=true;
+  else if(p.a && m==='ok'){ nuevo.cp=true; nuevo.dm=false; nuevo.nt=false; }
   else if(p.a && m==='na' && antes==='mal') nuevo.nt=true;
-  if(antes==='mal' && p.fp) _inspFotoDel(r.id+'#'+j);
+  if(antes==='mal' && p.fp){ if(nuevo.a) nuevo.fp=true; else _inspFotoDel(r.id+'#'+j); }
   r.puntos[j]=nuevo;
   _inspTocar(r); _hpRepintar();
+}
+/* v155 · El punto vuelve a «sin marcar», como si nunca se hubiera revisado.
+   Lo que no se pierde: la partida (se queda abierta y, si venía de un ✗, con
+   la nota de revisar y cerrar a mano) y las fotos. */
+function _inspLimpiarPunto(r, j){
+  var p=r.puntos[j]||{};
+  var nuevo={a:p.a||null, f:p.f||null, x:p.x||[], q:p.q||[], dm:p.dm||false, nt:p.nt||false};
+  if(p.m==='mal' && p.ap && !p.a){ nuevo.a=null; if(p.fp) _inspFotoDel(r.id+'#'+j); }
+  else if(p.a && (p.m==='mal' || p.cp)){ nuevo.dm=true; nuevo.nt=false; }
+  if(p.fp && p.a) nuevo.fp=true; /* la foto del ✗ sigue su camino a la partida */
+  r.puntos[j]=nuevo;
+}
+function _inspDesmarcar(j){
+  var I=S._insp, e=_inspElActual(); if(!e) return;
+  var r=_inspFila(e,I.area,I.of);
+  _inspLimpiarPunto(r,j);
+  _inspTocar(r); _hpRepintar();
+  showToast('Punto '+(j+1)+' sin marcar','ok',2500);
+}
+/* Abrir el recuadro de un ✗ que ya está guardado, para cambiarle la causa,
+   la nota o la foto. */
+function inspMalEditar(j){
+  var I=S._insp, e=_inspElActual(); if(!e) return;
+  var p0=_inspPuntos(e.rowId)[j]||{};
+  I.verFoto=null;
+  I.mal={j:j, c:p0.c||null, n:p0.n||'', foto:null, tiene:!!(p0.f||p0.fp)}; _hpRepintar();
+}
+/* ── Empezar de nuevo ── */
+function _inspTieneMarcas(rowId){ return _inspPuntos(rowId).some(function(p){ return p && p.m; }); }
+function _inspResetUno(e){
+  var I=S._insp; if(!_inspTieneMarcas(e.rowId)) return false;
+  var r=_inspFila(e,I.area,I.of), g=_inspGrupo(I.of,e.grupo);
+  var antes=r.puntos.map(function(p,j){ if(!p||!p.m) return null;
+    var o={punto:(j+1)+'. '+((g&&g.pts[j])?g.pts[j][0]:''), marca:p.m==='ok'?'bien':p.m==='mal'?'problema':'no tiene'};
+    if(p.c) o.causa=p.c; if(p.n) o.nota=p.n; if(p.a) o.partida=p.a; if(p.f) o.foto=p.f; return o; }).filter(Boolean);
+  var rec=_logRec('respaldo','inspeccion',r.id,r.elemento,
+    'RESPALDO antes de borrar: inspección '+_hpNomUbic(I.area)+' · '+r.elemento+' — '+JSON.stringify(antes));
+  r.bk=(r.bk||[]); if(rec) r.bk.push(rec);
+  for(var j=0;j<8;j++) if(r.puntos[j]&&r.puntos[j].m) _inspLimpiarPunto(r,j);
+  _inspTocar(r);
+  return true;
+}
+function inspResetAbrir(que){ S._insp.reset=que; S._insp.mal=null; S._insp.verFoto=null; _hpRepintar(); }
+function inspResetCancelar(){ S._insp.reset=null; _hpRepintar(); }
+function inspResetSi(){
+  var I=S._insp; if(!I||!canEdit()) return;
+  var n=0;
+  if(I.reset==='el'){ var e=_inspElActual(); if(e && _inspResetUno(e)) n=1; }
+  else if(I.reset==='insp'){ _inspElementos(I.area,I.of).forEach(function(e){ if(_inspResetUno(e)) n++; }); }
+  I.reset=null; _hpRepintar();
+  showToast(n?(n===1?'Marcas borradas. El respaldo queda en el historial.':n+' elementos sin marcar. El respaldo queda en el historial.'):'No había marcas','ok',4000);
+}
+function _inspResetHTML(que){
+  var I=S._insp, c=_inspCuenta(I.area,I.of), txt;
+  if(que==='el'){
+    var e=_inspElActual(), ps=_inspPuntos(e.rowId), mk=0, x=0;
+    ps.forEach(function(p){ if(p&&p.m) mk++; if(p&&p.m==='mal'&&p.a) x++; });
+    txt='Se borran las marcas de los 8 puntos de <b>'+esc(e.nombre)+'</b> ('+mk+(mk===1?' marcado':' marcados')+').';
+    if(x) txt+=' '+(x===1?'La partida que nació de un ✗ NO se borra ni se cierra':'Las '+x+' partidas que nacieron de un ✗ NO se borran ni se cierran')+': queda'+(x===1?'':'n')+' abierta'+(x===1?'':'s')+' con una nota para revisar y cerrar a mano.';
+  }else{
+    var nel=0, x2=0;
+    c.els.forEach(function(e){ var ps=_inspPuntos(e.rowId); if(ps.some(function(p){ return p&&p.m; })) nel++;
+      ps.forEach(function(p){ if(p&&p.m==='mal'&&p.a) x2++; }); });
+    txt='Se borran las marcas de los <b>'+nel+(nel===1?' elemento revisado':' elementos revisados')+'</b> de '+esc(_inspOficio(I.of).nombre)+' en '+esc(_hpNomUbic(I.area))+'.'+
+      ' Se conservan los elementos agregados a mano y los nombres corregidos con el lápiz.';
+    if(x2) txt+=' '+(x2===1?'La partida que nació de un ✗ NO se borra ni se cierra':'Las '+x2+' partidas que nacieron de un ✗ NO se borran ni se cierran')+': queda'+(x2===1?'':'n')+' abierta'+(x2===1?'':'s')+' con una nota para revisar y cerrar a mano.';
+  }
+  txt+=' Las fotos se quedan. Antes de borrar se guarda un respaldo en el historial.';
+  return '<div class="in-mal in-conf"><div class="in-paso">'+(que==='el'?'¿Empezar de nuevo este elemento?':'¿Empezar de nuevo esta inspección?')+'</div>'+
+    '<div class="in-conf-t">'+txt+'</div>'+
+    '<div class="in-dos"><button class="in-b2" onclick="inspResetCancelar()">Cancelar</button>'+
+    '<button class="in-b2 rojo" onclick="inspResetSi()">Sí, borrar las marcas</button></div></div>';
+}
+/* ── Foto en cualquier punto (v155) ── */
+S._inspMem=S._inspMem||{};
+function inspFotoPunto(j){
+  if(!canEdit()) return;
+  var inp=document.createElement('input');
+  inp.type='file'; inp.accept='image/*'; inp.style.display='none';
+  inp.onchange=async function(){
+    var f=inp.files&&inp.files[0]; inp.remove(); var I=S._insp; if(!f||!I) return;
+    var e=_inspElActual(); if(!e) return;
+    var data;
+    try{ data=await compressImagen(f); }catch(err){ showToast('No se pudo leer la foto','err',4000); return; }
+    var r=_inspFila(e,I.area,I.of), p=r.puntos[j]||(r.puntos[j]={});
+    var xid='insp-'+uid(), k=r.id+'#'+j+'#'+xid;
+    try{ await _inspFotoPut(k,data); }catch(err){ showToast('No se pudo guardar la foto en el teléfono','err',5000); return; }
+    S._inspMem[k]=data;
+    p.x=(p.x||[]); p.x.push({id:xid, k:k, d:today()});
+    _inspTocar(r); _hpRepintar();
+  };
+  document.body.appendChild(inp); inp.click();
+}
+function inspVerFoto(j, cual){ var I=S._insp; I.mal=null; I.reset=null;
+  I.verFoto=(I.verFoto&&I.verFoto.j===j&&I.verFoto.cual===cual)?null:{j:j, cual:cual, conf:false}; _hpRepintar(); }
+function _inspFotoSrc(rowId, j, p, cual){
+  if(cual==='f') return p.f || S._inspMem[rowId+'#'+j] || '';
+  var x=(p.x||[]).find(function(y){ return y.id===cual; }); if(!x) return '';
+  return x.u || (x.k&&S._inspMem[x.k]) || '';
+}
+function _inspFotosHTML(e, j, p){
+  var I=S._insp, h='<div class="in-fotos">';
+  var mini=function(cual, src, espera){
+    var on=I.verFoto&&I.verFoto.j===j&&I.verFoto.cual===cual;
+    return '<button class="in-mini'+(on?' on':'')+'" onclick="inspVerFoto('+j+',\''+cual+'\')" aria-label="Ver la foto">'+
+      (src?'<img src="'+esc(src)+'" alt="">':'<span>foto</span>')+(espera?'<i>sin subir</i>':'')+'</button>';
+  };
+  if(p.f||p.fp) h+=mini('f', _inspFotoSrc(e.rowId,j,p,'f'), !!p.fp);
+  (p.x||[]).forEach(function(x){ h+=mini(x.id, _inspFotoSrc(e.rowId,j,p,x.id), !x.bo); });
+  h+='<button class="in-masfoto" onclick="inspFotoPunto('+j+')">'+INSP_ICO_CAM+' ＋ Foto</button></div>';
+  var V=I.verFoto;
+  if(V && V.j===j){
+    var src=_inspFotoSrc(e.rowId,j,p,V.cual), bloq=(V.cual==='f' && p.m==='mal');
+    h+='<div class="in-mal in-ver">'+(src?'<img class="in-grande" src="'+esc(src)+'" alt="">':'<div class="in-conf-t">La foto está guardada en el teléfono y sube cuando haya señal.</div>');
+    if(bloq) h+='<div class="in-conf-t">Es la foto del problema (✗). Para quitarla, cambia antes la marca de este punto.</div>'+
+      '<div class="in-dos"><button class="in-b2" onclick="inspVerFoto('+j+',\'f\')">Cerrar</button></div>';
+    else if(V.conf) h+='<div class="in-conf-t">¿Quitar esta foto? Se borra de la inspección'+(V.cual==='f'?' y de su partida':' y de la Bitácora')+'. El respaldo queda en el historial.</div>'+
+      '<div class="in-dos"><button class="in-b2" onclick="S._insp.verFoto.conf=false;_hpRepintar()">Cancelar</button>'+
+      '<button class="in-b2 rojo" onclick="inspQuitarFoto()">Sí, quitar la foto</button></div>';
+    else h+='<div class="in-dos"><button class="in-b2" onclick="S._insp.verFoto=null;_hpRepintar()">Cerrar</button>'+
+      '<button class="in-b2" onclick="S._insp.verFoto.conf=true;_hpRepintar()">Quitar foto</button></div>';
+    h+='</div>';
+  }
+  return h;
+}
+function inspQuitarFoto(){
+  var I=S._insp, V=I&&I.verFoto, e=_inspElActual(); if(!V||!e||!canEdit()) return;
+  var r=_inspFila(e,I.area,I.of), j=V.j, p=r.puntos[j]||{}, g=_inspGrupo(I.of,e.grupo), t=(j+1)+'. '+((g&&g.pts[j])?g.pts[j][0]:'');
+  var pre='RESPALDO antes de borrar: foto de la inspección '+_hpNomUbic(I.area)+' · '+r.elemento+' — '+t+': ';
+  p.q=(p.q||[]);
+  if(V.cual==='f'){
+    if(p.m==='mal'){ showToast('Es la foto del problema: cambia antes la marca','warn',4000); return; }
+    if(p.fp){ _inspFotoDel(r.id+'#'+j); p.fp=false; }
+    if(p.f && p.a) p.q.push({rec:_logRec('respaldo','inspeccion',r.id,r.elemento,pre+p.f+' (de la partida '+p.a+')'), a:p.a, u:p.f});
+    p.f=null;
+  }else{
+    var ix=(p.x||[]).findIndex(function(x){ return x.id===V.cual; }); if(ix<0) return;
+    var x=p.x[ix];
+    if(x.bo) p.q.push({rec:_logRec('respaldo','inspeccion',r.id,r.elemento,pre+x.u+' (nota '+x.id+' de la Bitácora)'), b:x.id});
+    if(x.k) _inspFotoDel(x.k);
+    p.x.splice(ix,1);
+  }
+  p.q=p.q.filter(function(q){ return q.rec; });
+  r.puntos[j]=p; I.verFoto=null;
+  _inspTocar(r); _hpRepintar();
+  showToast('Foto quitada','ok',2500);
 }
 function inspFoto(fuente){
   var inp=document.createElement('input');
@@ -32582,13 +32822,17 @@ function inspCausa(c){ if(S._insp&&S._insp.mal){ S._insp.mal.c=c; _hpRepintar();
 function inspMalCancelar(){ S._insp.mal=null; _hpRepintar(); }
 async function inspMalGuardar(){
   var I=S._insp, M=I&&I.mal; if(!M) return;
-  if(!M.foto){ showToast('El problema necesita su foto','warn',3500); return; }
+  if(!M.foto && !M.tiene){ showToast('El problema necesita su foto','warn',3500); return; }
   if(!M.c){ showToast('Escoge qué falta','warn',3500); return; }
   var e=_inspElActual(); if(!e) return;
   var r=_inspFila(e,I.area,I.of), p=r.puntos[M.j]||{};
-  try{ await _inspFotoPut(r.id+'#'+M.j, M.foto); }
-  catch(err){ showToast('No se pudo guardar la foto en el teléfono','err',5000); return; }
-  r.puntos[M.j]={m:'mal', c:M.c, n:String(M.n||'').trim(), a:p.a||null, f:null, ap:true, fp:true};
+  if(M.foto){
+    try{ await _inspFotoPut(r.id+'#'+M.j, M.foto); }
+    catch(err){ showToast('No se pudo guardar la foto en el teléfono','err',5000); return; }
+    S._inspMem[r.id+'#'+M.j]=M.foto;
+  }
+  r.puntos[M.j]={m:'mal', c:M.c, n:String(M.n||'').trim(), a:p.a||null, f:M.foto?null:(p.f||null), ap:true, fp:M.foto?true:!!p.fp,
+    x:p.x||[], q:p.q||[], dm:p.dm||false, nt:p.nt||false};
   I.mal=null;
   _inspTocar(r); _hpRepintar();
 }
@@ -36558,8 +36802,12 @@ function renderBitacora(){
   notas.forEach(function(n){
     var d=(n.fecha||'').slice(0,10);
     if(!d)return;
-    _gDay(d).notas.push(n);
-    if(n.fotos)parseFotos(n.fotos).forEach(function(f){_addF(d,f.url,f.by);});
+    /* v155 · Una foto de inspección que no es de un ✗ entra como nota
+       «Foto de inspección · 4A · Elemento — punto»: se enseña como foto con
+       su leyenda, igual que las de un ✗, y no como una nota más. */
+    var mi=/^Foto de inspección · /.test(n.nota||'');
+    if(!mi)_gDay(d).notas.push(n); else _gDay(d);
+    if(n.fotos)parseFotos(n.fotos).forEach(function(f){_addF(d,f.url,f.by,mi?String(n.nota).replace(/^Foto de inspección · /,''):'');});
   });
 
   var dates=Object.keys(byDate).sort(function(a,b){return b.localeCompare(a);});
