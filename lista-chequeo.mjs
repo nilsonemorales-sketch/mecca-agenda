@@ -1377,7 +1377,7 @@ async function entrarAvance(p){
    ella todavía abría la ventana de imprimir. */
 const JSPDF=(()=>{ try{ return readFileSync(process.env.JSPDF||require.resolve('jspdf/dist/jspdf.umd.min.js')); }catch(e){ return null; } })();
 const HP_ESPERADO={
-  centro:{v:'2 botones · otros reportes · sin sub-barra', d:'Reportes abre con los dos botones grandes y el enlace chico «Otros reportes ›» (administrador); la sub-barra de doce no se ve'},
+  centro:{v:'3 botones · otros reportes · sin sub-barra', d:'Reportes abre con los dos botones grandes —y desde la v153 el tercero, Inspección— y el enlace chico «Otros reportes ›» (administrador); la sub-barra de doce no se ve'},
   conteoUbic:{v:'igual', d:'«Apartamento 4A» en el escogedor dice lo mismo que la cuenta directa de abiertas del 4A, sin la propuesta'},
   ordenUbic:{v:'Apartamento 2A · Apartamento 2B · Apartamento 3A', d:'las ubicaciones salen en el orden del edificio, empezando por el 2A'},
   pegarCuadra:{v:'cuadra', d:'en la hoja del 4A los bloques suman el total de la cabecera, y ese total es la cuenta directa'},
@@ -1389,7 +1389,7 @@ const HP_ESPERADO={
   contAtras:{v:'ATRAS. en cada franja · 3 en blanco', d:'la columna ATRAS. sale en cada franja (también las «(sigue)») y cada ubicación cierra con 3 en blanco'},
   paginas:{v:'varias · (sigue) · Hoja X de Y · ninguna vacía', d:'una hoja larga se reparte en varias, la franja se repite con «(sigue)», cada una dice «Hoja X de Y» y no hay ni una en blanco'},
   imprimir:{v:'PDF carta · por compartir · sin ventanas', d:'(v151) el PDF sale hecho, en papel carta, por la hoja de compartir: no se abre ninguna ventana, así que se vuelve al app sin cerrarla'},
-  campo:{v:'2 botones · sin otros · sale la hoja', d:'Karina, por el Modo Campo, tiene los dos botones, no ve «Otros reportes», y escoger saca el PDF'},
+  campo:{v:'3 botones · sin otros · sale la hoja', d:'Karina, por el Modo Campo, tiene los dos botones (y la Inspección desde la v153), no ve «Otros reportes», y escoger saca el PDF'},
   ingSinOtros:{v:'cae en las dos hojas', d:'una ingeniera que llegue a Reportes con otra vista puesta cae en las dos hojas'},
   dedos:{v:0, d:'nada de lo que se toca en el centro y el escogedor mide menos de 40 px'},
   ceroRed:{v:0, d:'escoger y sacar las hojas: cero GET y cero escrituras'},
@@ -1543,7 +1543,7 @@ async function probarDosHojas(nombreVer, html, b){
     r.campoEscaner=await G(()=>{ const b=[...document.querySelectorAll('#campo-root button')].find(x=>/Escanear el QR/.test(x.textContent)); return b&&b.checkVisibility()?'botón a la vista':'no está'; });
     if(FOTOS){ await p.locator('#campo-root .hp-gran').first().scrollIntoViewIfNeeded().catch(()=>{}); await p.screenshot({path:path.join(FOTOS,nombreVer+'-campo-hojas.png')}); }
     let sale='no sale';
-    if(/^2 /.test(cmp)){ await p.locator('#campo-root .hp-gran').nth(1).click(); await p.waitForTimeout(300);
+    if(/^[23] /.test(cmp)){ await p.locator('#campo-root .hp-gran').nth(1).click(); await p.waitForTimeout(300);
       await p.locator('#campo-root .hp-op').first().click(); await p.waitForTimeout(800);
       sale=await G(()=>window.__compartido&&/^Pendientes_.*\.pdf$/.test(window.__compartido.name)?'sale la hoja':'no sale'); }
     r.campo=cmp+' · '+sale;
@@ -1636,6 +1636,170 @@ async function probarRepetir(nombreVer, html, b){
   return r;
 }
 
+// ── INSPECCIÓN POR APARTAMENTO (v153) ───────────────────────────────────────
+// Como Karina, por el Modo Campo, a 390: el 4A en Ebanistería. Un ✗ con foto y
+// «Falta material» crea UNA partida pausada para Dimedes con su renglón; vuelto
+// a ✔ la completa sin duplicar; el avance de 7 ✔ y 1 ✗ es 87,5 % y se toca; sin
+// señal la marca y la foto esperan en el teléfono y salen al volver; la foto sale
+// en la Bitácora con el apartamento y el elemento; y la hoja de papel.
+const IN_ESPERADO={
+  boton:{v:'a la vista en el Modo Campo', d:'el Modo Campo de Karina tiene el botón «Inspección» junto a las dos hojas'},
+  aptos:{v:11, d:'el primer toque ofrece los once apartamentos, en el orden del edificio'},
+  ebanisteria4A:{v:'puertas 14 · closets 4 · gabinetes 6', d:'el 4A en Ebanistería trae sus 14 puertas de madera, 4 closets y 6 gabinetes'},
+  repetidos:{v:'Habitación principal (2) · Habitación secundaria · sin nombres iguales', d:'el nombre repetido sale con «(2)» y ninguna fila se llama igual que otra'},
+  sinFoto:{v:'no guarda sin foto', d:'tocar ✗ y «Guardar el problema» sin foto no escribe nada'},
+  crea:{v:'1 partida pausada · Dimedes Estebez (Niño) · material · con foto', d:'el ✗ con foto y «Falta material» crea UNA partida «Corregir: Cerradura y llaves — Entrada principal», pausada, de Dimedes, con la foto en su campo fotos'},
+  bitacoraCrea:{v:'creado + trabada', d:'esa partida deja sus renglones en obra_cambios (creado y trabada), con la entidad «actividad»'},
+  fila:{v:'1 fila · 8 puntos · id de la partida', d:'la inspección se guarda en obra_inspecciones: un renglón del elemento, con los 8 puntos y el id de la partida en el ✗'},
+  avance:{v:'87,5%', d:'7 ✔ y 1 ✗ en una puerta dan 87,5 % de avance comprobable'},
+  desglose:{v:'con problemas 1 · completos 0', d:'al tocar el avance sale el desglose: la puerta con su ✗ y lo que falta'},
+  vuelveBien:{v:'completada · sin duplicar · 1 renglón', d:'volver ese punto a ✔ completa la MISMA partida, con su renglón, y no crea otra'},
+  sinRed:{v:'espera en el teléfono · sale al volver · 1 partida', d:'sin señal, un ✗ con foto se queda en el teléfono (la barra lo dice) y al volver la red sale UNA partida con su foto'},
+  bitacoraFoto:{v:'Apartamento 4A · Cerradura y llaves — Entrada principal', d:'la foto sale en la Bitácora del día con el apartamento y el elemento al lado'},
+  papel:{v:'PDF carta · 24 filas · por compartir', d:'«Imprimir hoja de inspección» saca el PDF del 4A en Ebanistería, una fila por elemento, por la hoja de compartir'},
+  dedos:{v:0, d:'nada de lo que se toca en la inspección mide menos de 40 px, y la página no se desliza de lado a 390'},
+  realBase:{v:0, d:'ninguna escritura se escapa del doble: lo escrito a Supabase lo contesta la prueba y lo demás se corta'},
+};
+async function probarInspeccion(nombreVer, html, b){
+  const D=datos(); const {ACTS,PERS}=D;
+  const ESC=[], FILAS={}, CAMB=[], r={}; let drive=0, fuera=0;
+  const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
+  const ok=(q,body)=>q.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQKADxbD/FlyXmBAAAAAElFTkSuQmCC','base64');
+  try{
+    const ctx=await b.newContext({serviceWorkers:'block',viewport:{width:390,height:844}});
+    await ctx.addInitScript(()=>{ window.confirm=()=>true; window.alert=()=>{};
+      try{ localStorage.setItem('mecca_drive_url','https://script.google.com/macros/s/PRUEBA/exec'); }catch(e){}
+      window.__compartido=null;
+      try{ Object.defineProperty(navigator,'canShare',{value:()=>true,configurable:true});
+        Object.defineProperty(navigator,'share',{value:async d=>{ window.__compartido=d.files[0]; },configurable:true}); }catch(e){} });
+    let sinRed=false;
+    await ctx.route('**', q=>{
+      const u=q.request().url(), m=q.request().method();
+      if(u.startsWith(ORIGEN)) return q.continue();
+      if(sinRed) return q.abort('internetdisconnected');
+      if(/jspdf[^/]*\.min\.js/.test(u) && JSPDF) return q.fulfill({status:200,contentType:'application/javascript',body:JSPDF});
+      if(/script\.google\.com/.test(u)){ drive++; return q.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,url:'https://drive.google.com/thumbnail?id=F'+drive})}); }
+      if(!/\/rest\/v1\//.test(u)){ if(m!=='GET') fuera++; return q.abort(); }
+      const pth=decodeURIComponent(u.split('/rest/v1/')[1]||''), base=pth.split('?')[0];
+      if(m!=='GET'){
+        let body=null; try{ body=JSON.parse(q.request().postData()||'null'); }catch(e){}
+        ESC.push({m,base,pth,body});
+        if(base==='obra_inspecciones' && m==='POST'){ FILAS[body.id]=JSON.parse(JSON.stringify(body)); }
+        if(base==='obra_actividades' && m==='POST'){ ACTS.push(body); }
+        if(base==='obra_actividades' && m==='PATCH'){ const id=(pth.match(/id=eq\.([^&]+)/)||[])[1]; const a=ACTS.find(x=>x.id===id); if(a) Object.assign(a,body); }
+        if(base==='obra_cambios' && m==='POST'){ CAMB.push(body); }
+        return ok(q,[]);
+      }
+      let f=[];
+      if(base==='obra_actividades'){ f=ACTS;
+        if(/estado=neq\.completado/.test(pth)) f=f.filter(a=>a.estado!=='completado');
+        if(/propuesta=not\.is\.true/.test(pth)) f=f.filter(a=>a.propuesta!==true);
+        const ids=pth.match(/id=in\.\(([^)]*)\)/); if(ids){ const S=new Set(ids[1].split(',')); f=f.filter(a=>S.has(a.id)); } }
+      else if(base==='obra_personal') f=PERS;
+      else if(base==='obra_inspecciones'){ const ap=(pth.match(/apto=eq\.([^&]+)/)||[])[1]; f=Object.values(FILAS).filter(x=>!ap||x.apto===ap); }
+      else if(base==='obra_cambios') f=CAMB.slice().reverse();
+      const rg=q.request().headers()['range']||''; if(rg){ const [d0,h]=rg.split('-').map(Number); f=f.slice(d0,h+1); }
+      return ok(q,f);
+    });
+    const p=await ctx.newPage(); p.setDefaultTimeout(6000);
+    const G=(f,...a)=>p.evaluate(f,...a);
+    await p.goto(ORIGEN+'/index.html',{waitUntil:'load'});
+    await G(u=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify(u)); }catch(e){} }, {id:'karina',nombre:'Ing. Karina Breton',rol:'ing'});
+    await p.reload({waitUntil:'load'});
+    for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S.acts&&S.acts.length).catch(()=>0)) break; await p.waitForTimeout(500); }
+    await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1000);
+    const boton=p.locator('#campo-root .hp-gran',{hasText:'Inspección'});
+    r.boton=(await boton.count()) && await boton.first().isVisible() ? 'a la vista en el Modo Campo' : 'no está';
+    if(!/^a la vista/.test(r.boton)) throw new Error('sin botón de Inspección');
+    await boton.first().click(); await p.waitForTimeout(300);
+    r.aptos=await G(()=>document.querySelectorAll('#campo-root .hp-op').length);
+    await p.locator('#campo-root .hp-op',{hasText:/^Apartamento 4A/}).click(); await p.waitForTimeout(900);
+    await p.locator('#campo-root .in-of',{hasText:'Ebanistería'}).click(); await p.waitForTimeout(300);
+    const lista=await G(()=>{ const out={}, nombres=[]; let g='';
+      document.querySelectorAll('#campo-root .cp-lbl, #campo-root .in-el').forEach(e=>{
+        if(e.classList.contains('cp-lbl')) g=e.textContent.trim(); else { out[g]=(out[g]||0)+1; nombres.push(e.querySelector('span').textContent.trim()); } });
+      return {out, nombres}; });
+    r.ebanisteria4A='puertas '+(lista.out['Puertas de madera']||0)+' · closets '+(lista.out['Closets']||0)+' · gabinetes '+(lista.out['Gabinetes de cocina y baño']||0);
+    const n=lista.nombres;
+    r.repetidos=[n.includes('Habitación principal (2)')?'Habitación principal (2)':'sin (2)', n.includes('Habitación secundaria')?'Habitación secundaria':'sin secundaria',
+      new Set(n).size===n.length?'sin nombres iguales':'con nombres iguales'].join(' · ');
+    // La primera puerta: «Entrada principal». 7 ✔ y el 3 (Cerradura y llaves) en ✗.
+    await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(300);
+    const tresDe=i=>p.locator('#campo-root .in-pt').nth(i).locator('.in-b');
+    for(const i of [0,1,3,4,5,6,7]) { await tresDe(i).nth(0).click(); await p.waitForTimeout(60); }
+    await tresDe(2).nth(1).click(); await p.waitForTimeout(150);
+    const e0=ESC.length;
+    await p.locator('#campo-root .in-b2',{hasText:'Falta material'}).click();
+    await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click(); await p.waitForTimeout(300);
+    r.sinFoto=ESC.slice(e0).some(x=>x.base==='obra_actividades')?'escribió sin foto':'no guarda sin foto';
+    const [fc]=await Promise.all([p.waitForEvent('filechooser'), p.locator('#campo-root .in-b2',{hasText:'Tomar foto'}).click()]);
+    await fc.setFiles({name:'f.png',mimeType:'image/png',buffer:PNG}); await p.waitForTimeout(400);
+    await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click();
+    for(let t=0;t<20;t++){ await p.waitForTimeout(250); if(ESC.some(x=>x.base==='obra_inspecciones') && ESC.filter(x=>x.base==='obra_inspecciones').slice(-1)[0].body.puntos[2].a && !ESC.filter(x=>x.base==='obra_inspecciones').slice(-1)[0].body.puntos[2].fp) break; }
+    const altas=ESC.filter(x=>x.m==='POST'&&x.base==='obra_actividades');
+    const par=altas[0]&&ACTS.find(a=>a.id===altas[0].body.id);
+    r.crea=altas.length===1&&par&&/^Corregir: Cerradura y llaves — Entrada principal$/.test(par.descripcion)
+      ? [altas.length+' partida '+par.estado, par.personal_nombre, par.estancada_causa, /drive\.google\.com/.test(par.fotos||'')?'con foto':'sin foto'].join(' · ')
+      : altas.length+' altas '+JSON.stringify(altas.map(a=>a.body.descripcion));
+    const deEsa=par?CAMB.filter(c=>c.entidad_id===par.id):[];
+    r.bitacoraCrea=deEsa.map(c=>c.accion).sort().join(' + ')+(deEsa.every(c=>c.entidad==='actividad')?'':' (otra entidad)');
+    if(r.bitacoraCrea==='creado + trabada') r.bitacoraCrea='creado + trabada';
+    const fila=Object.values(FILAS)[0];
+    r.fila=Object.keys(FILAS).length+' fila · '+(fila?fila.puntos.filter(x=>x&&x.m).length:0)+' puntos · '+(fila&&par&&fila.puntos[2].a===par.id?'id de la partida':'sin id');
+    // Avance y desglose
+    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    r.avance=await G(()=>{ const b=document.querySelector('#campo-root .in-avance b'); return b?b.textContent.trim():''; });
+    await p.locator('#campo-root .in-avance').click(); await p.waitForTimeout(200);
+    r.desglose=await G(()=>{ const t=[...document.querySelectorAll('#campo-root .in-dg-t')].map(x=>x.textContent);
+      const n=s=>{ const x=t.find(y=>y.startsWith(s)); return x?(x.match(/\((\d+)\)/)||[])[1]:'?'; };
+      return 'con problemas '+n('Con problemas')+' · completos '+n('Completos'); });
+    // Volver a ✔
+    await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(250);
+    const e1=ESC.length, c1=CAMB.length;
+    await tresDe(2).nth(0).click();
+    for(let t=0;t<16;t++){ await p.waitForTimeout(250); if(par&&par.estado==='completado') break; }
+    const nuevasAltas=ESC.slice(e1).filter(x=>x.m==='POST'&&x.base==='obra_actividades').length;
+    const renglones=CAMB.slice(c1).filter(c=>par&&c.entidad_id===par.id);
+    r.vuelveBien=[par&&par.estado==='completado'?'completada':'estado '+(par&&par.estado), nuevasAltas?nuevasAltas+' altas de más':'sin duplicar', renglones.length+' renglón'].join(' · ');
+    // Sin señal: el punto 5 (Barniz) en ✗ con foto
+    sinRed=true; await ctx.setOffline(true);
+    const altas0=ESC.filter(x=>x.m==='POST'&&x.base==='obra_actividades').length;
+    await tresDe(5).nth(1).click(); await p.waitForTimeout(150);
+    const [fc2]=await Promise.all([p.waitForEvent('filechooser'), p.locator('#campo-root .in-b2',{hasText:'De la galería'}).click()]);
+    await fc2.setFiles({name:'g.png',mimeType:'image/png',buffer:PNG}); await p.waitForTimeout(400);
+    await p.locator('#campo-root .in-b2',{hasText:'Arreglo'}).click();
+    await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click(); await p.waitForTimeout(1200);
+    const espera=await G(()=>{ const b=document.getElementById('insp-barra'); return b&&/sin subir/.test(b.textContent)?1:0; });
+    const sinSalir=ESC.filter(x=>x.m==='POST'&&x.base==='obra_actividades').length===altas0;
+    sinRed=false; await ctx.setOffline(false);
+    await G(()=>window.dispatchEvent(new Event('online')));
+    for(let t=0;t<20;t++){ await p.waitForTimeout(250); if(!(await G(()=>Object.keys(_inspSucios()).length))) break; }
+    const despues=ESC.filter(x=>x.m==='POST'&&x.base==='obra_actividades').length-altas0;
+    const nueva=ACTS.find(a=>/^Corregir: Barniz — Entrada principal$/.test(a.descripcion||''));
+    r.sinRed=[espera&&sinSalir?'espera en el teléfono':'no esperó', despues===1&&nueva&&/drive/.test(nueva.fotos||'')?'sale al volver':'no salió ('+despues+')', despues+' partida'].join(' · ');
+    // Bitácora: como el administrador del mismo teléfono, el pie de la foto
+    r.bitacoraFoto=await G(async()=>{ S.bitacora=S.bitacora||{}; S.bitacora.dias=14; await loadBitacora();
+      const c=[...document.querySelectorAll('#c-bitacora .bit-insp div')].map(x=>x.textContent);
+      return c.find(t=>/Cerradura/.test(t))||c[0]||'sin pie'; });
+    // La hoja de papel
+    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    if(JSPDF){
+      await p.locator('#campo-root .in-imp').click(); await p.waitForTimeout(1200);
+      r.papel=await G(async()=>{ const f=window.__compartido; if(!f) return 'no salió';
+        const t=new TextDecoder('latin1').decode(new Uint8Array(await f.arrayBuffer()));
+        return (/\/MediaBox\s*\[0 0 612\.?\d* 792/.test(t)?'PDF carta':'otro papel')+' · '+((S._inspUltimo||{}).filas)+' filas · por compartir'; });
+    }else r.papel='(sin jsPDF local)';
+    r.dedos=await G(()=>{ const chicos=[...document.querySelectorAll('#campo-root .in button, #campo-root .in input')].filter(e=>e.checkVisibility()&&e.getBoundingClientRect().height<40).length;
+      return chicos+(document.documentElement.scrollWidth>window.innerWidth+1?1:0); });
+    r.realBase=fuera;
+    await ctx.close();
+  }catch(e){ r._error=String(e&&e.message||e).split('\n')[0].slice(0,200); }
+  srv.close();
+  for(const k of Object.keys(IN_ESPERADO)) if(!(k in r)) r[k]=null;
+  return r;
+}
+
 // ── el comparador ─────────────────────────────────────────────────────────
 const b=await chromium.launch({executablePath:CHROME,args:['--no-sandbox']});
 const res=[];
@@ -1648,7 +1812,8 @@ for(const v of VERS){ process.stderr.write('· probando '+v+' …\n'); const nv=
   r.avance=await probarAvance(nv, leerVersion(v), b);
   r.hoja=await probarHoja(nv, leerVersion(v), b);
   r.dosHojas=await probarDosHojas(nv, leerVersion(v), b);
-  r.repetir=await probarRepetir(nv, leerVersion(v), b); res.push(r); }
+  r.repetir=await probarRepetir(nv, leerVersion(v), b);
+  r.inspeccion=await probarInspeccion(nv, leerVersion(v), b); res.push(r); }
 await b.close();
 if(JSONOUT){ console.log(JSON.stringify(res,null,1)); process.exit(0); }
 
@@ -1765,6 +1930,16 @@ for(const k of Object.keys(RP_ESPERADO)){
 }
 console.log('  ↑ antes · después. '+(fallaRp?fallaRp+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
 for(const [i,r] of res.entries()) if(r.repetir._error) console.log('  ('+VERS[i]+' se cortó: '+r.repetir._error+')');
+let fallaIn=0;
+console.log('\nINSPECCIÓN POR APARTAMENTO — contra lo que tiene que dar (v153)\n');
+for(const k of Object.keys(IN_ESPERADO)){
+  const e=IN_ESPERADO[k];
+  const marca=res.map(r=>{ const v=r.inspeccion[k]; return (v===e.v?'✓':'✗')+' '+JSON.stringify(v); });
+  if(res[1].inspeccion[k]!==e.v) fallaIn++;
+  console.log('  '+marca[0].padEnd(14).slice(0,40)+'  '+marca[1]+'\n        (tiene que dar '+JSON.stringify(e.v)+')  '+e.d);
+}
+console.log('  ↑ antes · después. '+(fallaIn?fallaIn+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
+for(const [i,r] of res.entries()) if(r.inspeccion._error) console.log('  ('+VERS[i]+' se cortó: '+r.inspeccion._error+')');
 console.log('\nCANDADO: escrituras interceptadas '+res.map(r=>Object.values(r.propio.escrituras).reduce((s,x)=>s+x,0)).join(' / ')+
   ' · salidas cortadas (fuentes, fotos) '+res.map(r=>r.propio.salidasCortadas).join(' / ')+' · a la base real: 0');
-process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra||fallaVel||fallaAva||fallaHoja||fallaHp||fallaRp?1:0);
+process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra||fallaVel||fallaAva||fallaHoja||fallaHp||fallaRp||fallaIn?1:0);

@@ -185,6 +185,56 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .hp-op{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:52px;padding:8px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-family:var(--font);font-size:15px;font-weight:650;text-align:left;cursor:pointer}
 .hp-op span{min-width:0;overflow-wrap:anywhere}
 .hp-op b{flex-shrink:0;font-family:var(--mono);font-size:15px;color:var(--accent)}
+.in-of span,.in-el span{display:flex;flex-direction:column;gap:2px}
+.in-of i{font-style:normal;font-size:12.5px;font-weight:500;color:var(--text3)}
+.in-el.ok{border-color:var(--green);background:var(--green-light)}
+.in-el.mal{border-color:var(--red);background:var(--red-light)}
+.in-el.mal b{color:var(--red)}
+.in-avance{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;min-height:72px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--text);font-family:var(--font);text-align:left;cursor:pointer}
+.in-avance b{font-size:28px;font-weight:800;font-family:var(--mono);color:var(--accent)}
+.in-avance span{font-size:13px;color:var(--text2)}
+.in-avance i{font-style:normal;font-size:12.5px;font-weight:700;color:var(--accent)}
+.in-barrita{height:7px;border-radius:4px;background:var(--bg3);overflow:hidden}
+.in-barrita i{display:block;height:100%;background:var(--accent)}
+.in-dg{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:13px}
+.in-dg-t{font-weight:800;margin-top:6px}
+.in-dg-t.mal{color:var(--red)}
+.in-dg-t.ok{color:var(--green)}
+.in-dg-l{color:var(--text2);line-height:1.5;margin-top:2px}
+.in-cab{display:flex;align-items:flex-start;gap:8px}
+.in-cab .hp-tit{flex:1;min-width:0;overflow-wrap:anywhere}
+.in-lapiz{flex-shrink:0;width:44px;height:44px;border-radius:12px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.in-pt{background:var(--bg2);border:1.5px solid var(--border);border-radius:14px;padding:12px}
+.in-pt.ok{border-color:var(--green)}
+.in-pt.mal{border-color:var(--red)}
+.in-pt.na{opacity:.75}
+.in-pt-t{font-size:17px;font-weight:800;color:var(--text)}
+.in-pt-d{font-size:13px;color:var(--text3);margin:3px 0 10px;line-height:1.4}
+.in-tres{display:flex;gap:8px}
+.in .in-b{flex:1;min-height:52px;border-radius:12px;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:22px;font-weight:800;cursor:pointer;font-family:var(--font)}
+.in .in-b.on{border-color:var(--green);background:var(--green);color:#fff}
+.in .in-b.x.on{border-color:var(--red);background:var(--red);color:#fff}
+.in .in-b:last-child.on{border-color:var(--text3);background:var(--text3);color:#fff}
+.in-prob{margin-top:8px;font-size:12.5px;color:var(--red);font-weight:650}
+.in-mal{margin-top:10px;display:flex;flex-direction:column;gap:8px;background:var(--bg);border:1.5px dashed var(--red);border-radius:12px;padding:10px}
+.in-paso{font-size:13px;font-weight:800;color:var(--text)}
+.in-paso i{font-style:normal;font-weight:600;color:var(--red)}
+.in-dos,.in-causas{display:flex;gap:8px;flex-wrap:wrap}
+.in .in-b2{flex:1 1 140px;min-height:48px;padding:6px 10px;border-radius:12px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.in .in-b2.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.in .in-b2.fuerte{border-color:var(--accent);background:var(--accent);color:#fff}
+.in .in-b2.apagado{opacity:.45}
+.in-nota{width:100%;min-height:48px;border-radius:12px;border:1.5px solid var(--border2);background:var(--bg2);color:var(--text);padding:0 12px;font-family:var(--font);font-size:15px;box-sizing:border-box}
+.in-foto{display:flex;align-items:center;gap:10px}
+.in-foto img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1.5px solid var(--border2)}
+.in-falta{font-size:12.5px;color:var(--red);font-weight:650}
+.in-sig{width:100%;min-height:56px;border-radius:14px;border:1.5px solid var(--accent);background:var(--bg2);color:var(--accent);font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;padding:8px 12px}
+.in-sig.listo{background:var(--accent);color:#fff}
+.in-agr{width:100%;min-height:48px;border-radius:12px;border:1.5px dashed var(--accent);background:transparent;color:var(--accent);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
+.in-imp{margin-top:8px}
+.in-aviso{font-size:13px;color:var(--amber);font-weight:650}
+.in-barra{width:100%;min-height:48px;border-radius:12px;border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber);font-family:var(--font);font-size:13.5px;font-weight:800;cursor:pointer;padding:8px 12px;text-align:left;display:flex;flex-direction:column;gap:2px}
+.in-barra span{font-size:11.5px;font-weight:600;color:var(--text2)}
 .ra-fila{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 10px 8px;margin-bottom:8px}
 .ra-fila-n{border-color:var(--accent);border-width:1.5px}
 .ra-hijos{margin:-2px 0 10px 14px;border-left:2px solid var(--border2);padding-left:8px}
@@ -1317,7 +1367,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261027_152';
+const APP_VERSION='20261027_153';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -2745,9 +2795,17 @@ async function uploadFoto(file, actId){
   var act=(S.acts||[]).find(function(a){return a.id===actId;})||
           (S.actsActivas||[]).find(function(a){return a.id===actId;})||{};
   var folder=act.area||'Sin ubicacion';
+  var dataUrl=await compressImagen(file);
+  return _subirFotoData(dataUrl, folder, actId);
+}
+/* v153 · La subida, aparte de la compresión: la inspección guarda la foto ya
+   comprimida en el teléfono cuando no hay señal y la sube después, sin el
+   archivo original. Es la misma petición a Drive, no una segunda. */
+async function _subirFotoData(dataUrl, folder, actId){
+  var url=localStorage.getItem('mecca_drive_url')||S.driveUrl||'';
+  if(!url) throw new Error('DRIVE_NOT_CONFIGURED');
   var ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
   var fileName='foto_'+ts+'.jpg';
-  var dataUrl=await compressImagen(file);
   var controller=new AbortController();
   var timer=setTimeout(function(){controller.abort();},30000);
   try{
@@ -31707,6 +31765,7 @@ function _hpGrupos(dim, lista){
 var HP_ICO_PIN='<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
 var HP_ICO_CONT='<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1z"/><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/><path d="M4 15v-3a6 6 0 0 1 6-6"/><path d="M14 6a6 6 0 0 1 6 6v3"/></svg>';
 function _hpHubHTML(dondeVolver){
+  if(S._insp) return _inspHTML();
   var paso=S._hpPaso||null;
   if(paso) return _hpEscogerHTML(paso);
   return '<div class="hp">'
@@ -31714,6 +31773,9 @@ function _hpHubHTML(dondeVolver){
       +'<span><b>Hoja para pegar</b><i>Lo que falta en un sitio, por contratista</i></span></button>'
     +'<button class="hp-gran" onclick="hpEscoger(\'cont\')">'+HP_ICO_CONT
       +'<span><b>PDF del contratista</b><i>Todo lo suyo, ubicación por ubicación</i></span></button>'
+    /* v153 · La inspección por apartamento vive junto a las dos hojas, en el
+       Modo Campo y en Reportes. Solo quien puede escribir (ing, admin). */
+    +(canEdit()?_inspBotonHTML():'')
     +(dondeVolver!=='campo' && isAdmin()
       ? '<button class="hp-otros" onclick="hpOtros()">Otros reportes ›</button>' : '')
   +'</div>';
@@ -31979,6 +32041,650 @@ async function _hpEntregar(blob, nombre, titulo){
   setTimeout(function(){ URL.revokeObjectURL(url); },4000);
   showToast('PDF descargado: '+nombre,'info',4000);
 }
+
+/* ══ v153 · INSPECCIÓN POR APARTAMENTO ════════════════════════════════════
+   Pedido del dueño: el avance «a ojo» no es de fiar. El ingeniero recorre un
+   apartamento con un checklist por oficio y marca cada punto ✔ bien · ✗
+   problema · — no tiene. Todo ✗ lleva FOTO obligatoria y qué falta. El app
+   saca el avance COMPROBABLE (✔ ÷ (✔+✗)) y convierte cada ✗ en una partida.
+
+   - Vive junto a las dos hojas (`_hpHubHTML`): en el Modo Campo y en Reportes.
+   - Un renglón de `obra_inspecciones` por ELEMENTO (decisión del dueño):
+     id = «4A|ebanisteria|puertas|bano-principal». Volver a inspeccionar
+     ACTUALIZA ese renglón; lo que cambió lo cuenta `obra_cambios` a través de
+     las partidas.
+   - Cada ✗ crea UNA partida por `Acciones.crear` —con su renglón 'creado'— y,
+     si la causa es de `TRABA_CAUSAS`, la traba por `Acciones.trabar`. El id de
+     la partida queda en el punto: un ✗ repetido ACTUALIZA esa partida y un ✔
+     la completa (`Acciones.completar`). Nada se duplica.
+   - La foto va a Drive (`_subirFotoData`, la petición de siempre) y se pega a
+     la `fotos` de la partida: así sale en la Bitácora del día, que ya enseña
+     las fotos de las partidas que se movieron.
+   - SIN SEÑAL (decisión del dueño): cada toque se guarda en el teléfono
+     (`mecca_insp_v1`) y la foto espera en IndexedDB (`mecca_insp_fotos`). La
+     partida y la foto salen solas al volver la red. Si se borra el app o se
+     cambia de teléfono antes, eso se pierde: lo dice la barra.
+   - Los nombres repetidos del inventario A salen con «(2)» y se corrigen con
+     el lápiz (decisión del dueño); el nombre corregido vale para los cinco del
+     mismo tipo y vive en `obra_config`, clave `insp_nombres`.
+   El catálogo de puntos y el inventario son CONSTANTES, aprobados por el dueño
+   el 27-oct-2026: si cambian, se cambian aquí. */
+var INSP_CAT=[
+ {id:'ebanisteria',nombre:'Ebanistería',contratista:'Dimedes Estebez (Niño)',grupos:[
+  {id:'puertas',nombre:'Puertas de madera',filas:'cada puerta',pts:[
+   ['Instalada y a plomo','Colgada en su sitio, derecha; abierta a medio camino no se mueve sola.'],
+   ['Bisagras','Las 3 puestas, con todos sus tornillos, firmes y sin chillido.'],
+   ['Cerradura y llaves','Abre con llave y perilla; el pestillo entra en el cerradero; las llaves están.'],
+   ['Abre y cierra bien','No roza ni se traba; separación pareja alrededor (≈3 mm) y al piso (≈1 cm).'],
+   ['Jamba y cubrefaltas','Completos de los dos lados, pegados a la pared, esquinas cerradas.'],
+   ['Barniz','Parejo, sin chorreos; cantos de arriba y abajo también barnizados.'],
+   ['Sin daños','Hoja, jamba y cubrefalta sin golpes, rayas, manchas ni astillas.'],
+   ['Tope','Tope puesto y firme; la perilla no pega en la pared.']]},
+  {id:'closets',nombre:'Closets',filas:'cada closet',pts:[
+   ['Puertas derechas','A plomo; arriba y abajo en la misma línea.'],
+   ['Separación pareja','Rendija igual entre puertas (≈3 mm) y centrada en el hueco.'],
+   ['Abren y cierran','Sin rozar; corredizas no se salen del riel.'],
+   ['Tiradores','Todos puestos, derechos y firmes.'],
+   ['Tramos y tubo','Entrepaños completos, a nivel y firmes; tubo de colgar firme.'],
+   ['Gavetas','Corren suave, cierran completo, frentes alineados.'],
+   ['Acabado','Barniz o laminado parejo, cantos tapados.'],
+   ['Sin daños','Sin golpes, rayas, manchas ni piezas que falten.']]},
+  {id:'gabinetes',nombre:'Gabinetes de cocina y baño',filas:'cada gabinete',pts:[
+   ['Nivelados y fijos','A nivel y bien sujetos; no se mueven al empujarlos.'],
+   ['Puertas alineadas','Derechas, a la misma altura, rendija pareja.'],
+   ['Abren y cierran','Puertas y gavetas cierran completo, sin rozar.'],
+   ['Tiradores','Todos puestos, derechos y firmes.'],
+   ['Zócalo y ribetes','Zócalo abajo y remates donde van.'],
+   ['Huecos y agua','Huecos de fregadero, estufa y extractor hechos y sellados.'],
+   ['Juntas selladas','Silicón parejo entre gabinete, tope y pared.'],
+   ['Sin daños','Sin golpes, rayas, manchas ni piezas que falten.']]}]},
+ {id:'plomeria',nombre:'Plomería',contratista:'Daniel Espinal',grupos:[
+  {id:'banos',nombre:'Baños',filas:'cada baño',pts:[
+   ['Inodoro','Fijo y sellado; descarga, llena y se corta solo.'],
+   ['Lavamanos','Firme; fría y caliente sin goteo; tapón y sifón puestos.'],
+   ['Ducha','Mezcladora y regadera firmes; fría y caliente con buena presión.'],
+   ['Desagüe de piso','Rejilla puesta; un cubo de agua drena rápido sin charco.'],
+   ['Llaves angulares','Con su escudo; cierran completo.'],
+   ['Sin fugas','Seco debajo, detrás y en el techo del piso de abajo.'],
+   ['Silicón','Parejo y limpio en inodoro, lavamanos y ducha.'],
+   ['Accesorios','Toallero, papelera, jabonera y gancho firmes.']]},
+  {id:'cocinas',nombre:'Cocinas, lavado y calentador',filas:'cada sitio',pts:[
+   ['Grifería','Firme; abre y cierra sin goteo; llaves de lavadora puestas.'],
+   ['Desagüe','Sifón puesto; drena rápido sin fuga.'],
+   ['Llaves de paso','Puestas, cierran completo; la general cierra todo.'],
+   ['Agua caliente','Llega a cocina y lavado; el calentador prende.'],
+   ['Sin fugas','Seco bajo el fregadero, detrás del calentador y en empalmes.'],
+   ['Gas','Llaves de paso puestas; prueba con agua jabonosa sin burbujas.'],
+   ['Tapas y registros','Registros tapados; válvula de alivio del calentador con su tubo.'],
+   ['Silicón','Fregadero sellado contra el tope.']]}]},
+ {id:'electricidad',nombre:'Electricidad',contratista:'Alexander Ramos',grupos:[
+  {id:'espacios',nombre:'Por espacio',filas:'cada espacio del apartamento',pts:[
+   ['Tomacorrientes','Con placa, derechos y con corriente (probador en cada uno).'],
+   ['Interruptores','Prenden lo que deben; los de 3 vías funcionan desde los dos lados.'],
+   ['Luminarias','Puestas, firmes y prenden todas.'],
+   ['Data y TV','Placa y conector puestos donde van.'],
+   ['Salidas especiales','Aire, estufa, calentador, lavadora y secadora: caja, tapa y corriente.'],
+   ['Extractor','Prende, sale el aire y no hace ruido.'],
+   ['Placas limpias','Sin pintura, a ras de la pared y sin hueco alrededor.'],
+   ['Breakers','Caja con tapa y rotulada; cada breaker apaga lo que dice.']]}]},
+ {id:'pintura',nombre:'Pintura',contratista:'Jordy',grupos:[
+  {id:'espacios',nombre:'Por espacio',filas:'cada espacio del apartamento',pts:[
+   ['Muros','Color parejo, sin manchas, chorreos ni brochazos; se cubre bien.'],
+   ['Techo','Parejo y sin manchas; la luz de lado no muestra rayas.'],
+   ['Resanes','No se notan las reparaciones ni las marcas de cinta.'],
+   ['Cortes','Líneas limpias contra techo, rodapié, marcos y ventanas.'],
+   ['Color correcto','El color de la tabla de terminación en cada pared.'],
+   ['Nada manchado','Sin pintura en pisos, ventanas, placas, aparatos ni puertas.'],
+   ['Detalles','Dentro de closets, detrás de puertas y bajo ventanas también pintado.'],
+   ['Limpieza','Sin restos de pintura, cinta ni plástico.']]}]},
+ {id:'pisos',nombre:'Pisos y revestimientos',contratista:'Yelson Jimenez',grupos:[
+  {id:'espacios',nombre:'Por espacio',filas:'cada espacio del apartamento',pts:[
+   ['Sin piezas huecas','Golpee con el mango del martillo: ninguna suena hueca.'],
+   ['Sin piezas rotas','Sin piezas partidas, despicadas ni rayadas.'],
+   ['Nivel','Sin cejas entre piezas; el pie no tropieza.'],
+   ['Juntas','Parejas, completas y del mismo color.'],
+   ['Rodapié','Completo, pegado y con sus juntas.'],
+   ['Bordes y cortes','Cortes limpios contra paredes, marcos y desagües.'],
+   ['Caída al desagüe','En baños, lavado y balcón el agua corre a la rejilla.'],
+   ['Revestimiento','Paredes de baño y cocina completas, a plomo y limpias.']]}]},
+ {id:'ventanas',nombre:'Ventanas, puertas de aluminio y barandas',contratista:'Jose Lantigua',grupos:[
+  {id:'huecos',nombre:'Por ventana o puerta',filas:'cada ventana, puerta de balcón y baranda',pts:[
+   ['Corre suave','Abre y cierra sin trabarse ni brincar del riel.'],
+   ['Seguro','El cierre o seguro traba bien.'],
+   ['Vidrio','Sin rayas, rotos ni etiquetas.'],
+   ['Gomas y felpas','Completas, sin huecos.'],
+   ['Sellado','Silicón por fuera y por dentro; sin filtración al echar agua.'],
+   ['Mosquitero','Puesto donde va.'],
+   ['Baranda','Firme, a la altura y sin óxido ni rayas.'],
+   ['Limpieza','Perfiles y vidrios limpios, sin cemento ni pintura.']]}]}
+];
+var INSP_ESPACIOS={
+ A:['Recibidor','Sala','Comedor','Estar / balcón','Cocina','Cocina caliente y lavado','Habitación principal','Baño principal','Habitación secundaria 1','Habitación secundaria 2','Baño común','Habitación de servicio','Baño de servicio','1/2 baño de visita'],
+ B:['Recibidor','Sala','Comedor','Estar / balcón','Cocina','Cocina caliente y lavado','Habitación principal y balcón','Vestidor','Baño principal','Habitación secundaria 1','Habitación secundaria 2','Baño común','Habitación de servicio','Baño de servicio','1/2 baño de visita'],
+ PH:['Recibidor','Sala, comedor y cocina','Habitación principal','Habitación secundaria','Baño común','Baño de visita','Terraza']
+};
+/* Puertas: [nombre, tipo, en]. `en` vacío = todas las del tipo. */
+var _IA='2A 3A 4A 5A 6A', _IB='2B 3B 4B 5B 6B';
+var INSP_INV={
+ A:{puertas:[['Entrada principal','De frente',_IA],['Habitación de servicio','Paso','2A 5A'],['Pasillo hacia el baño de servicio','Paso','3A 4A 5A 6A'],
+   ['Baño de servicio','Paso',_IA],['1/2 baño de visita','Paso',_IA],['Habitación secundaria 1 (arriba)','Paso',_IA],['Habitación secundaria 2 (abajo)','Paso','2A 3A 4A 6A'],
+   ['Baño común — puerta del inodoro','Paso',_IA],['Baño común — puerta hacia la habitación','Paso',_IA],['Baño principal','Paso',_IA],['Habitación principal','Paso',_IA],
+   ['Puerta del lavado','Aluminio',_IA],['Balcón del estar','Aluminio',_IA],['Baño','Corrediza',_IA],['Cocina (vaivén, entre cocina principal y cocina caliente)','Vaivén',_IA],
+   ['Habitación secundaria','Paso',_IA],['Habitación principal','Paso',_IA]],
+  banos:['1/2 baño de visita','Baño común (habitaciones secundarias)','Baño de servicio','Baño principal'],
+  closets:['Habitación principal (no lo veo en el plano)','Habitación secundaria 1 (CL)','Habitación secundaria 2 (CL)','Ropa blanca (CLB)'],
+  gabinetes:['Cocina caliente / lavado','Cocina principal (bajos, altos e isla)','Mueble del 1/2 baño','Mueble del baño común','Mueble del baño de servicio','Mueble del baño principal'],
+  cocinaCaliente:true},
+ B:{puertas:[['Entrada principal','De frente',_IB],['Habitación de servicio','Corrediza','2B 5B'],['Pasillo hacia el baño de servicio','Paso','4B 5B 6B'],
+   ['Baño de servicio','Paso','4B 5B 6B'],['Cocina caliente (desde el área común)','Aluminio',_IB],['Cocina (la de vaivén)','Paso',_IB],['Habitación principal','Paso',_IB],
+   ['Vestidor','Paso',_IB],['Baño principal','Paso',_IB],['Habitación secundaria 1','Paso',_IB],['Baño común — desde la habitación 1','Corrediza',_IB],
+   ['Baño común — puerta del inodoro','Paso',_IB],['Baño común — desde la habitación 2','Corrediza',_IB],['Habitación secundaria 2','Paso',_IB],
+   ['1/2 baño de visita','Paso',_IB],['Balcón del estar','Aluminio',_IB],['Balcón habitación P periferia y vidrio-','Aluminio',_IB],['Cocina','Vaivén',_IB],
+   ['Habitación de servicio','Paso','3B 4B']],
+  banos:['1/2 baño de visita','Baño común (entre las secundarias)','Baño de servicio','Baño principal (con vestidor)'],
+  closets:['Habitación principal / vestidor (CL)','Habitación secundaria 1 (CL)','Habitación secundaria 2 (CL)','Ropa blanca (CLB)'],
+  gabinetes:['Cocina caliente / lavado','Cocina principal (bajos, altos y barra)','Mueble del 1/2 baño','Mueble del baño común','Mueble del baño de servicio','Mueble del baño principal (doble)'],
+  cocinaCaliente:true},
+ PH:{puertas:[['Entrada principal','De frente','PH'],['Habitación secundaria','Paso','PH'],['Habitación principal','Paso','PH'],['Baño de la habitación principal','Corrediza','PH'],
+   ['Baño común / de visita','Paso','PH'],['Salida a la terraza (arriba)','Aluminio','PH'],['Salida a la terraza (cocina)','Aluminio','PH'],['Baño','Corrediza','PH'],['Balcón','Aluminio','PH']],
+  banos:['Baño común','Baño de visita'],
+  closets:['Habitación principal (CL)','Habitación secundaria (CL)','Recibidor'],
+  gabinetes:['Cocina (detalle de cocina N7)','Mueble del baño común','Mueble del baño de visita'],
+  cocinaCaliente:false}
+};
+/* «Arreglo» no traba la partida: es trabajo del mismo contratista y queda
+   pendiente. Las otras cuatro son las claves de TRABA_CAUSAS. */
+var INSP_CAUSAS=[['material','Falta material'],['otro_taller','Espera otro taller'],['gerencia','Espera decisión de Gerencia'],
+  ['contratista','El contratista no vino'],['arreglo','Arreglo']];
+var INSP_LS='mecca_insp_v1', INSP_IDB='mecca_insp_fotos';
+
+function _inspApto(area){
+  var m=String(area||'').match(/Apto\s*(\d)([AB])/i);
+  if(m) return {code:m[1]+m[2].toUpperCase(), tipo:m[2].toUpperCase()};
+  if(/penthouse/i.test(area||'')) return {code:'PH', tipo:'PH'};
+  return null;
+}
+function _inspOficio(id){ for(var i=0;i<INSP_CAT.length;i++) if(INSP_CAT[i].id===id) return INSP_CAT[i]; return null; }
+function _inspGrupo(of,gid){ var o=_inspOficio(of); if(!o) return null; for(var i=0;i<o.grupos.length;i++) if(o.grupos[i].id===gid) return o.grupos[i]; return null; }
+function _inspSlug(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60); }
+function _inspRowId(code,of,gid,eid){ return code+'|'+of+'|'+gid+'|'+eid; }
+/* Los elementos de ese apartamento y oficio, del inventario + lo que agregó
+   el ingeniero. Un nombre repetido sale con «(2)» y su id lleva «-2». */
+function _inspElementos(area, of){
+  var ap=_inspApto(area); if(!ap) return [];
+  var inv=INSP_INV[ap.tipo], out=[], vistos={};
+  function add(gid, nombre){
+    var base=_inspSlug(nombre), id=base, n=1;
+    while(vistos[gid+'|'+id]){ n++; id=base+'-'+n; }
+    vistos[gid+'|'+id]=1;
+    var key=ap.tipo+'|'+of+'|'+gid+'|'+id, ren=(S.inspNombres||{})[key];
+    out.push({id:id, grupo:gid, nombre:ren||(n>1?nombre+' ('+n+')':nombre), rowId:_inspRowId(ap.code,of,gid,id), clave:key});
+  }
+  var enEste=function(p){ return String(p[2]).split(' ').indexOf(ap.code)>=0; };
+  if(of==='ebanisteria'){
+    inv.puertas.filter(function(p){ return p[1]!=='Aluminio' && enEste(p); }).forEach(function(p){ add('puertas',p[0]); });
+    inv.closets.forEach(function(x){ add('closets',x); });
+    inv.gabinetes.forEach(function(x){ add('gabinetes',x); });
+  }else if(of==='plomeria'){
+    inv.banos.forEach(function(x){ add('banos',x); });
+    ['Cocina principal'].concat(inv.cocinaCaliente?['Cocina caliente']:[],['Área de lavado','Calentador','Balcones','Llave general del apartamento'])
+      .forEach(function(x){ add('cocinas',x); });
+  }else if(of==='ventanas'){
+    inv.puertas.filter(function(p){ return p[1]==='Aluminio' && enEste(p); }).forEach(function(p){ add('huecos',p[0]); });
+  }else{
+    (INSP_ESPACIOS[ap.tipo]||[]).forEach(function(x){ add('espacios',x); });
+  }
+  /* Lo agregado en obra (ventanas y elementos que faltaban), de la tabla. */
+  var rows=(S.insp&&S.insp.rows)||{};
+  Object.keys(rows).forEach(function(k){
+    var r=rows[k];
+    if(r.agregado && r.apto===area && r.oficio===of)
+      out.push({id:k.split('|')[3], grupo:r.grupo, nombre:r.elemento, rowId:k, agregado:true});
+  });
+  var orden=(_inspOficio(of)||{grupos:[]}).grupos.map(function(g){ return g.id; });
+  out.sort(function(x,y){ return orden.indexOf(x.grupo)-orden.indexOf(y.grupo); });
+  return out;
+}
+function _inspPuntos(rowId){ var r=(S.insp.rows||{})[rowId]; return (r&&Array.isArray(r.puntos))?r.puntos:[]; }
+/* El avance comprobable: ✔ ÷ (✔ + ✗). «— no tiene» no cuenta. */
+function _inspCuenta(area, of){
+  var els=_inspElementos(area,of), ok=0, mal=0, puntos=0, completos=0, conMal=0, sinTocar=0;
+  els.forEach(function(e){
+    var ps=_inspPuntos(e.rowId), m=0, k=0, x=0;
+    for(var i=0;i<8;i++){ var v=ps[i]&&ps[i].m; if(v){ m++; puntos++; } if(v==='ok'){ ok++; k++; } if(v==='mal'){ mal++; x++; } }
+    if(!m) sinTocar++; else if(x) conMal++; else if(m===8) completos++;
+  });
+  return {els:els, ok:ok, mal:mal, puntos:puntos, pct:(ok+mal)?Math.round(ok/(ok+mal)*1000)/10:null,
+          completos:completos, conMal:conMal, sinTocar:sinTocar};
+}
+function _inspPctTxt(p){ return p==null?'—':(String(p).replace('.',',')+'%'); }
+
+/* ── Lo que se guarda en el teléfono ── */
+function _inspSucios(){ try{ return JSON.parse(localStorage.getItem(INSP_LS)||'{}')||{}; }catch(e){ return {}; } }
+function _inspGuardarSucios(m){ try{ localStorage.setItem(INSP_LS, JSON.stringify(m)); }catch(e){} }
+function _inspIdb(){
+  return new Promise(function(res,rej){
+    try{ var r=indexedDB.open(INSP_IDB,1);
+      r.onupgradeneeded=function(){ r.result.createObjectStore('f'); };
+      r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); };
+    }catch(e){ rej(e); }
+  });
+}
+async function _inspFotoPut(k,v){ var db=await _inspIdb(); return new Promise(function(res,rej){ var t=db.transaction('f','readwrite'); t.objectStore('f').put(v,k); t.oncomplete=res; t.onerror=function(){ rej(t.error); }; }); }
+async function _inspFotoGet(k){ var db=await _inspIdb(); return new Promise(function(res){ var q=db.transaction('f').objectStore('f').get(k); q.onsuccess=function(){ res(q.result||null); }; q.onerror=function(){ res(null); }; }); }
+async function _inspFotoDel(k){ try{ var db=await _inspIdb(); db.transaction('f','readwrite').objectStore('f').delete(k); }catch(e){} }
+
+/* ── Carga: la fila de cada elemento del apartamento, una lectura chica ── */
+async function _inspCargarApto(area){
+  S.insp=S.insp||{rows:{}, cargados:{}};
+  try{
+    var filas=await sb('obra_inspecciones?apto=eq.'+encodeURIComponent(area)+'&select=*');
+    (filas||[]).forEach(function(r){ S.insp.rows[r.id]=r; });
+    S.insp.cargados[area]=true; S.insp.err=null;
+  }catch(e){ S.insp.err=(e&&e.sinRed)?'Sin señal: se ve lo guardado en este teléfono.':'No contestó la base: se ve lo guardado en este teléfono.'; }
+  /* Lo que se quedó sin subir manda sobre lo que trae la base: es más nuevo. */
+  var suc=_inspSucios(); Object.keys(suc).forEach(function(k){ S.insp.rows[k]=suc[k]; });
+}
+async function _inspCargarNombres(){
+  if(S.inspNombres) return;
+  S.inspNombres={};
+  try{
+    var r=await sb('obra_config?key=eq.insp_nombres&select=value');
+    if(r&&r[0]&&r[0].value) S.inspNombres=JSON.parse(r[0].value)||{};
+  }catch(e){}
+}
+
+/* ── Escribir ── */
+function _inspFila(el, area, of){
+  var r=S.insp.rows[el.rowId];
+  if(!r){
+    r={id:el.rowId, apto:area, oficio:of, grupo:el.grupo, elemento:el.nombre, agregado:!!el.agregado, puntos:[]};
+    S.insp.rows[el.rowId]=r;
+  }
+  while(r.puntos.length<8) r.puntos.push({});
+  return r;
+}
+function _inspTocar(r){
+  r.elemento=r.elemento||'';
+  r.fecha=today(); r.ingeniero=(S.user&&S.user.nombre)||'';
+  r.actualizado_en=new Date().toISOString();
+  var suc=_inspSucios(); suc[r.id]=JSON.parse(JSON.stringify(r)); _inspGuardarSucios(suc);
+  _inspEnviar();
+}
+var _inspEnviando=false;
+async function _inspEnviar(){
+  if(_inspEnviando) return; _inspEnviando=true;
+  try{
+    var suc=_inspSucios(), ids=Object.keys(suc), sinRed=false;
+    for(var i=0;i<ids.length && !sinRed;i++){
+      var r=(S.insp&&S.insp.rows[ids[i]])||suc[ids[i]];
+      if(S.insp) S.insp.rows[r.id]=r;
+      for(var j=0;j<(r.puntos||[]).length && !sinRed;j++){
+        try{ await _inspResolver(r,j); var s1=_inspSucios(); if(s1[r.id]){ s1[r.id]=JSON.parse(JSON.stringify(r)); _inspGuardarSucios(s1); } }
+        catch(e){ if(_inspEsSinRed(e)) sinRed=true; else { console.warn('inspección:',e); showToast('No se pudo guardar un problema: '+((e&&e.message)||''),'err',6000); } }
+      }
+      if(sinRed) break;
+      var cuerpo={id:r.id, apto:r.apto, oficio:r.oficio, grupo:r.grupo, elemento:r.elemento, agregado:!!r.agregado,
+                  fecha:r.fecha||today(), ingeniero:r.ingeniero||'', puntos:r.puntos, actualizado_en:r.actualizado_en||new Date().toISOString()};
+      try{
+        await sb('obra_inspecciones',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:JSON.stringify(cuerpo)});
+        var s2=_inspSucios();
+        /* Solo se quita si nadie la tocó mientras viajaba. */
+        if(s2[r.id] && s2[r.id].actualizado_en===cuerpo.actualizado_en && !_inspPendiente(r)){ delete s2[r.id]; _inspGuardarSucios(s2); }
+      }catch(e){ if(_inspEsSinRed(e)) sinRed=true; else console.warn('inspección fila:',e); }
+    }
+  }finally{ _inspEnviando=false; _inspPintarBarra(); }
+}
+function _inspEsSinRed(e){
+  return !!(e && (e.sinRed || (typeof navigator!=='undefined' && navigator.onLine===false) || /fetch|network|tard/i.test(String(e.message||''))));
+}
+function _inspPendiente(r){ return (r.puntos||[]).some(function(p){ return p && (p.ap || p.fp || p.cp); }); }
+function _inspNPend(){
+  var suc=_inspSucios(), n=0;
+  Object.keys(suc).forEach(function(k){ (suc[k].puntos||[]).forEach(function(p){ if(p&&p.fp) n++; }); });
+  return {filas:Object.keys(suc).length, fotos:n};
+}
+function _inspPintarBarra(){ var b=document.getElementById('insp-barra'); if(b) b.outerHTML=_inspBarraHTML(); }
+function _inspBarraHTML(){
+  var p=_inspNPend();
+  if(!p.filas) return '<div id="insp-barra"></div>';
+  return '<button id="insp-barra" class="in-barra" onclick="_inspEnviar()">'+
+    (p.fotos? p.fotos+(p.fotos===1?' foto sin subir':' fotos sin subir')+' · ' : '')+
+    p.filas+(p.filas===1?' elemento sin guardar':' elementos sin guardar')+' · toca para enviar'+
+    '<span>Se guarda en este teléfono. Si se borra el app o se cambia de teléfono antes de enviarlo, se pierde.</span></button>';
+}
+
+/* La partida de un ✗, y lo que pasa con ella cuando el punto cambia. */
+function _inspActAbierta(id){ return id ? (S.acts||[]).find(function(a){ return a.id===id && a.estado!=='completado'; }) : null; }
+async function _inspResolver(r, j){
+  var p=r.puntos[j]; if(!p) return;
+  var of=_inspOficio(r.oficio), g=_inspGrupo(r.oficio,r.grupo); if(!of||!g) return;
+  var t=g.pts[j][0];
+  /* Cerrar: el punto ya no está en ✗ y su partida sigue abierta. */
+  if(p.cp){
+    if(_inspActAbierta(p.a)) await Acciones.completar(p.a,{},'Inspección: '+t+' — '+(p.m==='na'?'no tiene':'quedó bien'));
+    p.cp=false; return;
+  }
+  if(p.m!=='mal') return;
+  var traba=p.c && p.c!=='arreglo';
+  if(p.ap){
+    var abierta=_inspActAbierta(p.a), nota=(p.n?p.n+' · ':'')+'Inspección '+today()+' de '+(r.ingeniero||'')+' — '+r.elemento;
+    if(abierta){
+      if(traba) await Acciones.trabar(p.a,p.c,p.n||'',null,'Inspección');
+      else if(abierta.estado==='pausada') await Acciones.destrabar(p.a,null,'Inspección');
+      if(p.n) await Acciones.agregarNota(p.a,'Inspección: '+p.n);
+    }else{
+      var hoy=today();
+      var res=await Acciones.crear({descripcion:'Corregir: '+t+' — '+r.elemento, area:r.apto, tipo_personal:'contratista',
+        personal_nombre:of.contratista, fecha_inicio:hoy, fecha_fin:_sumarDiasLab(hoy,6), prioridad:'normal',
+        notas:nota+' · ref. '+r.id+'#'+(j+1)},{confirmarDuplicado:true});
+      p.a=res.creadas[0].id;
+      if(traba) await Acciones.trabar(p.a,p.c,p.n||'',null,'Inspección');
+    }
+    p.ap=false;
+  }
+  if(p.fp && p.a){
+    var k=r.id+'#'+j, data=await _inspFotoGet(k);
+    if(!data){ p.fp=false; return; }
+    var url=await _subirFotoData(data, r.apto, p.a);
+    var entrada=url+'::'+(r.ingeniero||'');
+    var act=_findActAny(p.a)||{};
+    var fotos=act.fotos?act.fotos+'||'+entrada:entrada;
+    await sb('obra_actividades?id=eq.'+p.a,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({fotos:fotos})});
+    act.fotos=fotos; p.f=url; p.fp=false; _inspFotoDel(k);
+  }
+}
+
+/* ── Navegación ── */
+function inspAbrir(){ if(!canEdit()){ showToast('Solo los ingenieros y Gerencia hacen inspecciones','warn',4000); return; }
+  S._hpPaso=null; S._insp={paso:'apto'}; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
+function inspSalir(){ S._insp=null; _hpRepintar(); }
+async function inspApto(i){
+  var area=REC_ORDEN[i]; if(!area) return;
+  S._insp={paso:'oficio', area:area, cargando:true}; _hpRepintar();
+  await Promise.all([_inspCargarApto(area), _inspCargarNombres()]);
+  if(S._insp && S._insp.area===area){ S._insp.cargando=false; _hpRepintar(); }
+  _inspEnviar();
+}
+function inspOficio(of){ S._insp.paso='lista'; S._insp.of=of; S._insp.desg=false; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
+function inspElem(i){ S._insp.paso='elem'; S._insp.i=i; S._insp.mal=null; S._insp.ren=null; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
+function inspVolver(){
+  var I=S._insp; if(!I) return;
+  if(I.paso==='elem'){ I.paso='lista'; I.mal=null; }
+  else if(I.paso==='lista'){ I.paso='oficio'; }
+  else if(I.paso==='oficio'){ I.paso='apto'; }
+  else return inspSalir();
+  _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){}
+}
+function inspDesglose(){ S._insp.desg=!S._insp.desg; _hpRepintar(); }
+
+/* ── Pintar ── */
+var INSP_ICO='<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>';
+var INSP_ICO_CAM='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>';
+var INSP_ICO_LAPIZ='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></svg>';
+function _inspBotonHTML(){
+  return '<button class="hp-gran" onclick="inspAbrir()">'+INSP_ICO+
+    '<span><b>Inspección</b><i>Checklist por oficio, con foto en cada problema</i></span></button>';
+}
+function _inspHTML(){
+  var I=S._insp, h='<div class="hp in">'+_inspBarraHTML()+'<button class="hp-volver" onclick="inspVolver()">‹ Volver</button>';
+  if(I.paso==='apto'){
+    h+='<div class="hp-tit">¿Qué apartamento?</div><div class="hp-sub">Toca uno para escoger el oficio.</div><div class="hp-lista">';
+    REC_ORDEN.forEach(function(a,i){ h+='<button class="hp-op" onclick="inspApto('+i+')"><span>'+esc(_hpNomUbic(a))+'</span><b>›</b></button>'; });
+    return h+'</div></div>';
+  }
+  var area=I.area, nom=_hpNomUbic(area);
+  if(I.cargando) return h+'<div class="hp-tit">'+esc(nom)+'</div><div class="hp-sub">Trayendo lo ya revisado…</div></div>';
+  if(I.paso==='oficio'){
+    h+='<div class="hp-tit">'+esc(nom)+'</div><div class="hp-sub">¿Qué oficio vas a revisar?</div>'+
+      (S.insp.err?'<div class="in-aviso">'+esc(S.insp.err)+'</div>':'')+'<div class="hp-lista">';
+    INSP_CAT.forEach(function(o){
+      var c=_inspCuenta(area,o.id);
+      h+='<button class="hp-op in-of" onclick="inspOficio(\''+o.id+'\')"><span>'+esc(o.nombre)+'<i>'+esc(o.contratista)+' · '+c.els.length+' elementos</i></span>'+
+        '<b>'+_inspPctTxt(c.pct)+'</b></button>';
+    });
+    return h+'</div></div>';
+  }
+  var of=_inspOficio(I.of), c=_inspCuenta(area,I.of), els=c.els;
+  if(I.paso==='lista'){
+    var rev=els.length-c.sinTocar;
+    h+='<div class="hp-tit">'+esc(of.nombre)+' · '+esc(nom)+'</div><div class="hp-sub">'+esc(of.contratista)+'</div>'+
+      '<button class="in-avance" onclick="inspDesglose()"><b>'+_inspPctTxt(c.pct)+'</b><span>avance comprobable · '+c.ok+' ✔ de '+(c.ok+c.mal)+' puntos revisados'+
+        (c.mal?' · '+c.mal+' ✗':'')+'</span><i>'+(I.desg?'Esconder el detalle ‹':'Ver qué hay detrás ›')+'</i></button>'+
+      '<div class="in-barrita"><i style="width:'+(els.length?Math.round(rev/els.length*100):0)+'%"></i></div>'+
+      '<div class="hp-sub" style="margin-top:0">'+rev+' de '+els.length+' elementos revisados</div>';
+    if(I.desg) h+=_inspDesgloseHTML(area,I.of,els);
+    var gAnt='';
+    els.forEach(function(e,i){
+      if(e.grupo!==gAnt){ gAnt=e.grupo; var g=_inspGrupo(I.of,e.grupo); h+='<div class="cp-lbl">'+esc(g?g.nombre:e.grupo)+'</div>'; }
+      var ps=_inspPuntos(e.rowId), m=0, x=0; ps.forEach(function(p){ if(p&&p.m) m++; if(p&&p.m==='mal') x++; });
+      h+='<button class="hp-op in-el'+(x?' mal':m===8?' ok':'')+'" onclick="inspElem('+i+')"><span>'+esc(e.nombre)+'</span><b>'+(x?x+' ✗ · ':'')+m+'/8</b></button>';
+    });
+    h+=_inspAgregarHTML(I.of);
+    h+='<button class="hp-op in-imp" onclick="inspImprimir()"><span>Imprimir hoja de inspección</span><b>PDF</b></button>';
+    return h+'</div>';
+  }
+  /* El elemento: sus 8 puntos. */
+  var e=els[I.i]; if(!e){ I.paso='lista'; return _inspHTML(); }
+  var g=_inspGrupo(I.of,e.grupo), ps=_inspPuntos(e.rowId), marcados=0;
+  ps.forEach(function(p){ if(p&&p.m) marcados++; });
+  h+=(I.ren
+     ? '<div class="in-mal"><div class="in-paso">Nombre de este elemento</div>'+
+       '<input id="in-ren" class="in-nota" value="'+esc(I.ren.t)+'" oninput="S._insp.ren.t=this.value">'+
+       '<div class="in-dos"><button class="in-b2" onclick="S._insp.ren=null;_hpRepintar()">Cancelar</button>'+
+       '<button class="in-b2 fuerte" onclick="inspRenombrar()">Guardar el nombre</button></div>'+
+       (e.agregado?'':'<div class="in-falta" style="color:var(--text3)">Vale para los apartamentos del mismo tipo.</div>')+'</div>'
+     : '<div class="in-cab"><div class="hp-tit">'+esc(e.nombre)+'</div>'+
+       '<button class="in-lapiz" title="Corregir el nombre" onclick="S._insp.ren={t:'+esc(JSON.stringify(e.nombre))+'};_hpRepintar()">'+INSP_ICO_LAPIZ+'</button></div>')+
+     '<div class="hp-sub">'+esc(nom)+' · '+esc(g.nombre)+' · elemento '+(I.i+1)+' de '+els.length+' · '+marcados+' de 8 puntos</div>';
+  g.pts.forEach(function(pt,j){
+    var p=ps[j]||{}, abierto=I.mal&&I.mal.j===j;
+    h+='<div class="in-pt'+(p.m==='ok'?' ok':p.m==='mal'?' mal':p.m==='na'?' na':'')+'">'+
+      '<div class="in-pt-t">'+(j+1)+'. '+esc(pt[0])+'</div><div class="in-pt-d">'+esc(pt[1])+'</div>'+
+      '<div class="in-tres">'+
+        '<button class="in-b'+(p.m==='ok'?' on':'')+'" onclick="inspMarcar('+j+',\'ok\')" aria-label="Bien">✔</button>'+
+        '<button class="in-b x'+(p.m==='mal'||abierto?' on':'')+'" onclick="inspMarcar('+j+',\'mal\')" aria-label="Problema">✗</button>'+
+        '<button class="in-b'+(p.m==='na'?' on':'')+'" onclick="inspMarcar('+j+',\'na\')" aria-label="No tiene">—</button>'+
+      '</div>'+
+      (p.m==='mal'&&!abierto?'<div class="in-prob">'+esc((INSP_CAUSAS.find(function(c){ return c[0]===p.c; })||['',''])[1])+(p.n?' — '+esc(p.n):'')+
+        (p.fp?' · foto esperando señal':p.f?' · con foto':'')+(p.ap?' · partida por crear':'')+'</div>':'')+
+      (abierto?_inspMalHTML(j):'')+
+    '</div>';
+  });
+  var sig=els[I.i+1];
+  h+=sig ? '<button class="in-sig'+(marcados===8?' listo':'')+'" onclick="inspElem('+(I.i+1)+')">'+(marcados===8?'Listo · ':'')+'Siguiente: '+esc(sig.nombre)+' ›</button>'
+         : '<button class="in-sig listo" onclick="inspVolver()">Terminé '+esc(of.nombre)+' · ver el avance ›</button>';
+  return h+'</div>';
+}
+function _inspDesgloseHTML(area, of, els){
+  var comp=[], malos=[], pend=[];
+  els.forEach(function(e){
+    var ps=_inspPuntos(e.rowId), g=_inspGrupo(of,e.grupo), m=0, xs=[];
+    ps.forEach(function(p,j){ if(p&&p.m) m++; if(p&&p.m==='mal') xs.push(g.pts[j][0]); });
+    if(xs.length) malos.push('<b>'+esc(e.nombre)+'</b> — '+esc(xs.join(', ')));
+    else if(m===8) comp.push(esc(e.nombre));
+    else pend.push(esc(e.nombre)+(m?' ('+m+'/8)':''));
+  });
+  var bloque=function(t,l,cl){ return '<div class="in-dg-t '+cl+'">'+t+' ('+l.length+')</div>'+(l.length?'<div class="in-dg-l">'+l.join('<br>')+'</div>':''); };
+  return '<div class="in-dg">'+bloque('Con problemas',malos,'mal')+bloque('Completos y bien',comp,'ok')+bloque('Por revisar o a medias',pend,'')+'</div>';
+}
+function _inspMalHTML(j){
+  var M=S._insp.mal;
+  return '<div class="in-mal">'+
+    (M.foto
+      ? '<div class="in-foto"><img src="'+M.foto+'" alt=""><button class="in-b2" onclick="inspFoto(\'camera\')">Otra foto</button></div>'
+      : '<div class="in-paso">1 · La foto del problema <i>(obligatoria)</i></div>'+
+        '<div class="in-dos"><button class="in-b2 fuerte" onclick="inspFoto(\'camera\')">'+INSP_ICO_CAM+' Tomar foto</button>'+
+        '<button class="in-b2" onclick="inspFoto(\'galeria\')">De la galería</button></div>')+
+    '<div class="in-paso">2 · ¿Qué falta?</div><div class="in-causas">'+
+      INSP_CAUSAS.map(function(c){ return '<button class="in-b2'+(M.c===c[0]?' on':'')+'" onclick="inspCausa(\''+c[0]+'\')">'+esc(c[1])+'</button>'; }).join('')+'</div>'+
+    '<input id="in-nota" class="in-nota" placeholder="Nota (opcional): «rayada abajo», «3 interruptores 3-way»" value="'+esc(M.n||'')+'" oninput="S._insp.mal.n=this.value">'+
+    '<div class="in-dos"><button class="in-b2" onclick="inspMalCancelar()">Cancelar</button>'+
+      '<button class="in-b2 fuerte'+(M.foto&&M.c?'':' apagado')+'" onclick="inspMalGuardar()">Guardar el problema</button></div>'+
+    (!M.foto||!M.c?'<div class="in-falta">'+(!M.foto?'Falta la foto':'')+(!M.foto&&!M.c?' y ':'')+(!M.c?'falta escoger qué falta':'')+'.</div>':'')+
+  '</div>';
+}
+function _inspAgregarHTML(of){
+  var I=S._insp;
+  if(I.agregar){
+    var gs=_inspOficio(of).grupos;
+    return '<div class="in-mal"><div class="in-paso">'+(of==='ventanas'?'Agregar ventana':'Agregar un elemento que falta')+'</div>'+
+      (gs.length>1?'<div class="in-causas">'+gs.map(function(g){ return '<button class="in-b2'+(I.agregar.g===g.id?' on':'')+'" onclick="S._insp.agregar.g=\''+g.id+'\';_hpRepintar()">'+esc(g.nombre)+'</button>'; }).join('')+'</div>':'')+
+      '<input id="in-nuevo" class="in-nota" placeholder="'+(of==='ventanas'?'Ej.: Ventana habitación principal':'Nombre del elemento')+'" value="'+esc(I.agregar.t||'')+'" oninput="S._insp.agregar.t=this.value">'+
+      '<div class="in-dos"><button class="in-b2" onclick="S._insp.agregar=null;_hpRepintar()">Cancelar</button><button class="in-b2 fuerte" onclick="inspAgregarGuardar()">Agregar</button></div></div>';
+  }
+  return (of==='ventanas'?'<button class="in-agr" onclick="inspAgregarAbrir()">＋ Agregar ventana</button>':'')+
+    '<button class="in-agr" onclick="inspAgregarAbrir()">＋ Agregar elemento que falta</button>';
+}
+
+/* ── Marcar ── */
+function _inspElActual(){ var I=S._insp; return _inspElementos(I.area,I.of)[I.i]; }
+function inspMarcar(j, m){
+  if(!canEdit()) return;
+  var I=S._insp, e=_inspElActual(); if(!e) return;
+  if(m==='mal'){ var p0=_inspPuntos(e.rowId)[j]||{};
+    I.mal={j:j, c:p0.m==='mal'?p0.c:null, n:p0.m==='mal'?(p0.n||''):'', foto:null}; _hpRepintar(); return; }
+  if(I.mal&&I.mal.j===j) I.mal=null;
+  var r=_inspFila(e,I.area,I.of), p=r.puntos[j]||{};
+  var antes=p.m;
+  if(antes===m) return;
+  var nuevo={m:m, a:p.a||null, f:p.f||null};
+  /* Venía de ✗: su partida se cierra, y si todavía no existía, no se crea. */
+  if(antes==='mal'){
+    if(p.ap && !p.a){ nuevo.a=null; }
+    else if(p.a) nuevo.cp=true;
+    if(p.fp) _inspFotoDel(r.id+'#'+j);
+  }
+  r.puntos[j]=nuevo;
+  _inspTocar(r); _hpRepintar();
+}
+function inspFoto(fuente){
+  var inp=document.createElement('input');
+  inp.type='file'; inp.accept='image/*'; if(fuente==='camera') inp.setAttribute('capture','environment');
+  inp.style.display='none';
+  inp.onchange=async function(){
+    var f=inp.files&&inp.files[0]; inp.remove(); if(!f||!S._insp||!S._insp.mal) return;
+    try{ S._insp.mal.foto=await compressImagen(f); }catch(e){ showToast('No se pudo leer la foto','err',4000); }
+    _hpRepintar();
+  };
+  document.body.appendChild(inp); inp.click();
+}
+function inspCausa(c){ if(S._insp&&S._insp.mal){ S._insp.mal.c=c; _hpRepintar(); } }
+function inspMalCancelar(){ S._insp.mal=null; _hpRepintar(); }
+async function inspMalGuardar(){
+  var I=S._insp, M=I&&I.mal; if(!M) return;
+  if(!M.foto){ showToast('El problema necesita su foto','warn',3500); return; }
+  if(!M.c){ showToast('Escoge qué falta','warn',3500); return; }
+  var e=_inspElActual(); if(!e) return;
+  var r=_inspFila(e,I.area,I.of), p=r.puntos[M.j]||{};
+  try{ await _inspFotoPut(r.id+'#'+M.j, M.foto); }
+  catch(err){ showToast('No se pudo guardar la foto en el teléfono','err',5000); return; }
+  r.puntos[M.j]={m:'mal', c:M.c, n:String(M.n||'').trim(), a:p.a||null, f:null, ap:true, fp:true};
+  I.mal=null;
+  _inspTocar(r); _hpRepintar();
+}
+function inspAgregarAbrir(){ var I=S._insp; I.agregar={g:_inspOficio(I.of).grupos[0].id, t:''}; _hpRepintar(); }
+function inspAgregarGuardar(){
+  var I=S._insp, A=I.agregar, t=String(A&&A.t||'').trim(), ap=_inspApto(I.area);
+  if(!t){ showToast('Escribe el nombre','warn',3000); return; }
+  var id='x-'+_inspSlug(t)+'-'+uid().slice(-4), rowId=_inspRowId(ap.code,I.of,A.g,id);
+  var r={id:rowId, apto:I.area, oficio:I.of, grupo:A.g, elemento:t, agregado:true, puntos:[]};
+  S.insp.rows[rowId]=r; I.agregar=null; _inspTocar(r); _hpRepintar();
+}
+/* El lápiz. Lo agregado en obra se renombra en su fila; lo del inventario,
+   en `obra_config.insp_nombres`, y vale para los cinco del mismo tipo. */
+async function inspRenombrar(){
+  var I=S._insp, e=_inspElActual(); if(!e) return;
+  var t=String((I.ren&&I.ren.t)||'').trim(); I.ren=null;
+  if(!t||t===e.nombre){ _hpRepintar(); return; }
+  if(e.agregado){ var r=S.insp.rows[e.rowId]; r.elemento=t; _inspTocar(r); _hpRepintar(); return; }
+  S.inspNombres=S.inspNombres||{}; S.inspNombres[e.clave]=t;
+  var fila=S.insp.rows[e.rowId]; if(fila){ fila.elemento=t; _inspTocar(fila); }
+  _hpRepintar();
+  try{
+    var r2=await sb('obra_config?key=eq.insp_nombres&select=value'), base={};
+    try{ base=(r2&&r2[0]&&JSON.parse(r2[0].value))||{}; }catch(x){}
+    base[e.clave]=t;
+    await sb('obra_config',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:JSON.stringify({key:'insp_nombres',value:JSON.stringify(base)})});
+    S.inspNombres=base;
+  }catch(err){ showToast('El nombre quedó en este teléfono; no se pudo guardar para los demás','warn',5000); }
+}
+
+/* ── La hoja de papel, por apartamento y oficio (respaldo sin señal) ──
+   Mismo camino que las dos hojas de la v151: jsPDF y la hoja de compartir.
+   Una franja por grupo con la leyenda de sus 8 puntos y una fila por
+   elemento con 8 casillas en blanco y «qué problema tiene · foto #». */
+function inspImprimir(){
+  var I=S._insp; if(!I) return;
+  if(!window.jspdf || !window.jspdf.jsPDF){ showToast('El PDF no cargó. Prueba otra vez con señal.','warn',5000); return; }
+  try{
+    var hecho=_inspPDF(I.area, I.of);
+    S._inspUltimo={paginas:hecho.paginas, filas:hecho.filas};
+    var ap=_inspApto(I.area);
+    _hpEntregar(hecho.doc.output('blob'), 'Inspeccion_'+ap.code+'_'+I.of+'_'+today()+'.pdf', 'Inspección '+_hpNomUbic(I.area));
+  }catch(e){ console.error(e); showToast('No se pudo hacer el PDF','err',5000); }
+}
+function _inspPDF(area, ofId){
+  var doc=new window.jspdf.jsPDF({unit:'mm',format:'letter',orientation:'portrait'});
+  var W=215.9, H=279.4, M=12, CW=W-2*M, FONDO=H-16, T=_hpPdfTxt, MOR=[131,48,136];
+  var of=_inspOficio(ofId), els=_inspElementos(area,ofId), y=M, paginas=1, filas=0;
+  var wEl=62, wCas=8, wProb=CW-wEl-8*wCas;
+  function cab(){
+    var logo=_hpLogoData(); if(logo) doc.addImage(logo.data,'PNG',M,y,10*logo.r,10);
+    doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(0,0,0);
+    doc.text(T('Inspección · '+of.nombre),M+(logo?10*logo.r+4:0),y+5);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(85,85,85);
+    doc.text(T(_hpNomUbic(area)+' · '+of.contratista+' · Mecca Residence'),M+(logo?10*logo.r+4:0),y+10);
+    doc.text(T('Fecha: ____________   Ingeniero: ______________________'),W-M,y+10,{align:'right'});
+    y+=14; doc.setDrawColor(MOR[0],MOR[1],MOR[2]); doc.setLineWidth(0.6); doc.line(M,y,W-M,y); y+=3;
+  }
+  function nueva(){ doc.addPage(); paginas++; y=M; cab(); }
+  cab();
+  doc.setFontSize(8); doc.setTextColor(60,60,60);
+  doc.text(T('En cada casilla:  V = bien  ·  X = problema (lleva foto y qué falta)  ·  — = no tiene'),M,y+3); y+=6;
+  of.grupos.forEach(function(g){
+    var suyos=els.filter(function(e){ return e.grupo===g.id; }); if(!suyos.length) return;
+    var leyenda=g.pts.map(function(p,i){ return (i+1)+'. '+p[0]; }).join('   ');
+    var lin=doc.splitTextToSize(T(leyenda),CW-4);
+    if(y+10+lin.length*3.6+12>FONDO) nueva();
+    doc.setFillColor(MOR[0],MOR[1],MOR[2]); doc.rect(M,y,CW,7,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(255,255,255);
+    doc.text(T(g.nombre+' · '+suyos.length+' ('+g.filas+')'),M+2,y+4.8); y+=8;
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(40,40,40);
+    doc.text(lin,M+2,y+3); y+=lin.length*3.6+2;
+    function cabTabla(){
+      doc.setFillColor(241,232,242); doc.rect(M,y,CW,5,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(51,51,51);
+      doc.text('ELEMENTO',M+1,y+3.5);
+      for(var i=0;i<8;i++) doc.text(String(i+1),M+wEl+i*wCas+wCas/2,y+3.5,{align:'center'});
+      doc.text(T('QUÉ PROBLEMA TIENE · FOTO #'),M+wEl+8*wCas+1,y+3.5); y+=5;
+    }
+    cabTabla();
+    suyos.forEach(function(e){
+      var nl=doc.splitTextToSize(T(e.nombre),wEl-2), h=Math.max(9,nl.length*3.6+3);
+      if(y+h>FONDO){ nueva(); cabTabla(); }
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(0,0,0);
+      doc.text(nl,M+1,y+4);
+      doc.setDrawColor(120,120,120); doc.setLineWidth(0.3);
+      for(var i=0;i<8;i++) doc.rect(M+wEl+i*wCas+1.5,y+(h-5)/2,5,5,'S');
+      doc.setDrawColor(200,200,200); doc.line(M+wEl+8*wCas+1,y+h-1.5,W-M,y+h-1.5);
+      doc.setDrawColor(225,225,225); doc.line(M,y+h,W-M,y+h);
+      y+=h; filas++;
+    });
+    y+=4;
+  });
+  for(var pg=1;pg<=paginas;pg++){
+    doc.setPage(pg); doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(120,120,120);
+    doc.text(T('Respaldo sin señal: pase lo marcado a la app el mismo día. · Hoja '+pg+' de '+paginas),W/2,H-8,{align:'center'});
+  }
+  return {doc:doc, paginas:paginas, filas:filas};
+}
+/* La cola sale sola al volver la señal y al volver al app, como la de Acciones. */
+try{
+  window.addEventListener('online',function(){ if(Object.keys(_inspSucios()).length) _inspEnviar(); });
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden && Object.keys(_inspSucios()).length) _inspEnviar(); });
+  setInterval(function(){ if(S && S.user && Object.keys(_inspSucios()).length) _inspEnviar(); },45000);
+}catch(e){}
 
 
 function renderReportesHub(){
@@ -32457,8 +33163,8 @@ function renderCampo(){
 
   /* v149 · Las dos hojas, también aquí: Moisés y Karina no entran a Reportes.
      Con el escogedor abierto, la pantalla es solo eso, con su «‹ Volver». */
-  if(S._hpPaso){
-    host.innerHTML='<div class="cp-body" style="padding-top:calc(16px + var(--st))">'+_hpEscogerHTML(S._hpPaso)+'</div>';
+  if(S._hpPaso||S._insp){
+    host.innerHTML='<div class="cp-body" style="padding-top:calc(16px + var(--st))">'+(S._insp?_inspHTML():_hpEscogerHTML(S._hpPaso))+'</div>';
     return;
   }
   host.innerHTML=
@@ -35676,7 +36382,7 @@ function renderBitacora(){
 
   var byDate={};
   function _gDay(d){if(!byDate[d])byDate[d]={cambios:[],notas:[],fotos:[],_fs:{}};return byDate[d];}
-  function _addF(d,url,by){var day=_gDay(d);if(!day._fs[url]){day._fs[url]=1;day.fotos.push({url:url,by:by});}}
+  function _addF(d,url,by,cap){var day=_gDay(d);if(!day._fs[url]){day._fs[url]=1;day.fotos.push({url:url,by:by,cap:cap||''});}}
 
   cambios.forEach(function(c){
     var d=(c.fecha||'').slice(0,10)||(c.created_at||'').slice(0,10);
@@ -35684,7 +36390,10 @@ function renderBitacora(){
     _gDay(d).cambios.push(c);
     if(c.entidad_id&&actsMap[c.entidad_id]){
       var act=actsMap[c.entidad_id];
-      if(act.fotos)parseFotos(act.fotos).forEach(function(f){_addF(d,f.url,f.by);});
+      /* v153 · Las fotos de un problema de inspección dicen de dónde son: el
+         apartamento y el elemento, que van en la descripción «Corregir: …». */
+      var cap=/^Corregir: /.test(act.descripcion||'')?_hpNomUbic(act.area)+' · '+String(act.descripcion).replace(/^Corregir: /,''):'';
+      if(act.fotos)parseFotos(act.fotos).forEach(function(f){_addF(d,f.url,f.by,cap);});
     }
   });
   notas.forEach(function(n){
@@ -35743,7 +36452,8 @@ function renderBitacora(){
       html+='<div style="display:flex;gap:5px;overflow-x:auto;padding:0 0 5px 11px;margin-bottom:6px">';
       day.fotos.slice(0,8).forEach(function(f){
         var su=f.url.replace(/'/g,'%27');
-        html+='<img src="'+esc(f.url)+'" onclick="verFoto(\''+su+'\')" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border2);flex-shrink:0;cursor:pointer">';
+        var _img='<img src="'+esc(f.url)+'" onclick="verFoto(\''+su+'\')" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border2);flex-shrink:0;cursor:pointer">';
+        html+= f.cap ? '<div class="bit-insp" style="width:120px;flex-shrink:0">'+_img+'<div style="font-size:10.5px;line-height:1.3;color:var(--text2);margin-top:3px">'+esc(f.cap)+'</div></div>' : _img;
       });
       if(day.fotos.length>8) html+='<div style="width:70px;height:70px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text3);flex-shrink:0">+'+(day.fotos.length-8)+'</div>';
       html+='</div>';
