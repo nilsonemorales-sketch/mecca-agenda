@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v153 — 27 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v154 — 27 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -3207,8 +3207,13 @@ por el Modo Campo.
   trabajo**, `confirmarDuplicado` porque el control de duplicados es el id
   guardado en el punto) y, si la causa no es «Arreglo», `Acciones.trabar` con
   la clave de `TRABA_CAUSAS`. Otro ✗ sobre el mismo punto ACTUALIZA esa
-  partida (traba, destraba, nota); un ✔ o un «—» la **completa**
+  partida (traba, destraba, nota); un ✔ la **completa**
   (`Acciones.completar`). Todo deja su renglón en `obra_cambios`.
+  **Desde la v154 (decisión del dueño), ✗ → «— no tiene» NO la cierra**: se
+  queda abierta y `Acciones.agregarNota` le escribe «en la inspección se marcó
+  “no tiene”; revisar y cerrar a mano», con su renglón `nota` (marca `nt` en el
+  punto). La cierra a mano el ingeniero o el Ing. Nilson; un ✔ posterior
+  también la completa. El plazo de 6 días de trabajo se queda: lo decidió él.
 - **LA FOTO ES OBLIGATORIA** en el ✗ y va a Drive por **`_subirFotoData`**
   (la petición de `uploadFoto`, partida en dos para poder subir una foto ya
   comprimida). Se pega a la `fotos` de la partida, así que **sale en la
@@ -3223,10 +3228,19 @@ por el Modo Campo.
 - **La hoja de papel** («Imprimir hoja de inspección», `_inspPDF`): jsPDF y la
   hoja de compartir, como las dos hojas de la v151. Una franja por grupo con la
   leyenda de los 8 puntos y una fila por elemento con 8 casillas y «qué problema
-  tiene · foto #». **Sin el dibujo numerado de las muestras**: las muestras no
-  llegaron a esta sesión.
-- **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO»**: dieciséis
-  comprobaciones como Karina por el Modo Campo a 390.
+  tiene · foto #». **Desde la v154 lleva el DIBUJO** de cada grupo arriba de
+  su tabla (`INSP_DIBUJOS`, `_inspDibujo`): un croquis hecho con líneas del
+  mismo PDF —puerta, closet, gabinetes, baño, cocina con calentador, cuarto con
+  tomas y luz, pared con techo y rodapié, piso con rejilla y ventana corrediza
+  con baranda— con los puntos 1-8 en círculos naranja (`_inspCirculo`), la
+  explicación de cada número al lado y los números de la cabecera de la tabla
+  en círculo naranja. **Los nueve los dibujó el app sin ver las muestras**
+  (los PDF no llegaron en dos sesiones) y el dueño los aprobó con capturas. Si
+  llegan las muestras, se ajustan las coordenadas de `INSP_DIBUJOS`.
+- **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO»**: dieciocho
+  comprobaciones como Karina por el Modo Campo a 390 (desde la v154, también
+  ✗ → «—» deja la partida abierta con su nota, y los tres dibujos de la hoja de
+  Ebanistería con sus 8 números dentro y la explicación al lado sin pisarse).
 
 ### DICTAR (v143) — RETIRADO EN LA v144
 

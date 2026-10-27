@@ -1655,8 +1655,10 @@ const IN_ESPERADO={
   desglose:{v:'con problemas 1 · completos 0', d:'al tocar el avance sale el desglose: la puerta con su ✗ y lo que falta'},
   vuelveBien:{v:'completada · sin duplicar · 1 renglón', d:'volver ese punto a ✔ completa la MISMA partida, con su renglón, y no crea otra'},
   sinRed:{v:'espera en el teléfono · sale al volver · 1 partida', d:'sin señal, un ✗ con foto se queda en el teléfono (la barra lo dice) y al volver la red sale UNA partida con su foto'},
+  noTiene:{v:'abierta · nota «no tiene» · 1 renglón', d:'(v154) un ✗ que pasa a «— no tiene» deja su partida ABIERTA, con la nota «en la inspección se marcó “no tiene”; revisar y cerrar a mano» y su renglón en obra_cambios'},
   bitacoraFoto:{v:'Apartamento 4A · Cerradura y llaves — Entrada principal', d:'la foto sale en la Bitácora del día con el apartamento y el elemento al lado'},
   papel:{v:'PDF carta · 24 filas · por compartir', d:'«Imprimir hoja de inspección» saca el PDF del 4A en Ebanistería, una fila por elemento, por la hoja de compartir'},
+  dibujo:{v:'3 dibujos · 8 números cada uno · nada encimado', d:'(v154) la hoja de Ebanistería trae el dibujo de puertas, closets y gabinetes con sus 8 números dentro y la explicación al lado, sin pisarse'},
   dedos:{v:0, d:'nada de lo que se toca en la inspección mide menos de 40 px, y la página no se desliza de lado a 390'},
   realBase:{v:0, d:'ninguna escritura se escapa del doble: lo escrito a Supabase lo contesta la prueba y lo demás se corta'},
 };
@@ -1778,6 +1780,14 @@ async function probarInspeccion(nombreVer, html, b){
     const despues=ESC.filter(x=>x.m==='POST'&&x.base==='obra_actividades').length-altas0;
     const nueva=ACTS.find(a=>/^Corregir: Barniz — Entrada principal$/.test(a.descripcion||''));
     r.sinRed=[espera&&sinSalir?'espera en el teléfono':'no esperó', despues===1&&nueva&&/drive/.test(nueva.fotos||'')?'sale al volver':'no salió ('+despues+')', despues+' partida'].join(' · ');
+    // ✗ → «— no tiene»: la partida de Barniz se queda abierta, con su nota
+    if(nueva){ const c2=CAMB.length;
+      await tresDe(5).nth(2).click();
+      for(let t=0;t<16;t++){ await p.waitForTimeout(250); if(/no tiene/.test(nueva.notas||'')) break; }
+      const ren=CAMB.slice(c2).filter(c=>c.entidad_id===nueva.id);
+      r.noTiene=[nueva.estado!=='completado'?'abierta':'completada', /se marcó “no tiene”; revisar y cerrar a mano/.test(nueva.notas||'')?'nota «no tiene»':'sin nota',
+        ren.length+' renglón'+(ren.every(c=>c.accion==='nota')?'':' ('+ren.map(c=>c.accion).join(',')+')')].join(' · ');
+    }
     // Bitácora: como el administrador del mismo teléfono, el pie de la foto
     r.bitacoraFoto=await G(async()=>{ S.bitacora=S.bitacora||{}; S.bitacora.dias=14; await loadBitacora();
       const c=[...document.querySelectorAll('#c-bitacora .bit-insp div')].map(x=>x.textContent);
@@ -1789,6 +1799,10 @@ async function probarInspeccion(nombreVer, html, b){
       r.papel=await G(async()=>{ const f=window.__compartido; if(!f) return 'no salió';
         const t=new TextDecoder('latin1').decode(new Uint8Array(await f.arrayBuffer()));
         return (/\/MediaBox\s*\[0 0 612\.?\d* 792/.test(t)?'PDF carta':'otro papel')+' · '+((S._inspUltimo||{}).filas)+' filas · por compartir'; });
+      r.dibujo=await G(()=>{ const bs=(S._inspUltimo||{}).bloques; if(!bs) return 'sin dibujos';
+        const bien=bs.filter(b=>{ const [x,y,w,h]=b.caja, [lx,ly,lw,lh]=b.leyenda;
+          return b.marcas.length===8 && b.marcas.every(([mx,my])=>mx>=x&&mx<=x+w&&my>=y&&my<=y+h) && lx>=x+w && lh<=h+0.5; });
+        return bs.length+' dibujos · '+(bien.length===bs.length?'8 números cada uno · nada encimado':(bs.length-bien.length)+' mal'); });
     }else r.papel='(sin jsPDF local)';
     r.dedos=await G(()=>{ const chicos=[...document.querySelectorAll('#campo-root .in button, #campo-root .in input')].filter(e=>e.checkVisibility()&&e.getBoundingClientRect().height<40).length;
       return chicos+(document.documentElement.scrollWidth>window.innerWidth+1?1:0); });
