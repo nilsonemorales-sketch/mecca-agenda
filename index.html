@@ -1317,7 +1317,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261026_151';
+const APP_VERSION='20261027_152';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -2160,6 +2160,10 @@ function renderUbicacionesSeleccionadas(){
     if(l) l.innerHTML='';
     const m=document.getElementById('ubic-count-msg');
     if(m){ m.style.display='none'; }
+    wrap.innerHTML += '<button type="button" onclick="ubicRepetirDesdeEdit()" '+
+      'style="flex-basis:100%;margin-top:4px;min-height:44px;border:1.5px dashed var(--accent);'+
+      'background:transparent;color:var(--accent);border-radius:10px;font-family:var(--font);'+
+      'font-size:12.5px;font-weight:700;cursor:pointer">+ Ponerla también en otro apartamento</button>';
     renderOtrasUbicaciones();
     return;
   }
@@ -20379,17 +20383,44 @@ async function catBorrarHacer(){
    Lo que más tecleo ahorra en una torre repetitiva. Ofrece SOLO los que
    todavía no la tienen —comparando por descripción, el mismo criterio exacto
    del Repaso— y ENSEÑA cuáles se van a crear antes de crearlas. */
-function catRepetirAbrir(id){
+async function catRepetirAbrir(id){
   var a=_findActAny(id);
   if(!a){ showToast('No encuentro esa actividad.','err',5000); return; }
   var desc=String(a.descripcion||'');
   var tiene={};
-  _catTodas().forEach(function(x){
+  var marca=function(x){
     if(String(x.descripcion||'')===desc) tiene[String(x.area||'').trim()]=1;
-  });
+  };
+  /* v152 · Desde el formulario de Actividades el catálogo casi nunca está
+     cargado, y `_catTodas()` cae entonces en `S.acts`, que NO trae lo cerrado:
+     un apartamento donde ya está COMPLETADA se ofrecería otra vez. Se pregunta
+     a la base solo por esa descripción, una columna — unos cientos de bytes,
+     no los 3,8 MB del catálogo. Si no contesta, se sigue con lo abierto y se
+     dice. */
+  (S.acts||[]).forEach(marca);
+  if(Array.isArray(S.catActs)) S.catActs.forEach(marca);
+  else{
+    try{
+      var filas=await sb('obra_actividades?select=area,descripcion&descripcion=eq.'+encodeURIComponent(desc));
+      (filas||[]).forEach(marca);
+    }catch(e){
+      showToast('No pude mirar las completadas: revisa que no esté ya cerrada en el apartamento.','warn',7000);
+    }
+  }
   var faltan=REC_ORDEN.filter(function(u){ return !tiene[u]; });
   S.catRepetir={id:id, faltan:faltan, marcadas:faltan.slice(), yaEstan:REC_ORDEN.length-faltan.length};
   S.catBorrar=null; S.catTandaPick=null; _catPanel();
+}
+/* v152 · El dueño editó la luminaria del 2B para ponerla también en el 2A y
+   no pudo: al EDITAR el formulario solo enseña la ubicación de esa actividad
+   (saveAct parchea UNA). «Repetir en…» existía, pero solo en Partidas y en
+   Revisión. Esta es su puerta desde el formulario: el mismo panel, el mismo
+   `Acciones.crear`, no un segundo camino. */
+function ubicRepetirDesdeEdit(){
+  var a=window._editActual;
+  if(!a||!a.id){ showToast('Guarda primero la actividad.','warn',4000); return; }
+  closeModal();
+  catRepetirAbrir(a.id);
 }
 function catRepetirToggle(u){
   var R=S.catRepetir; if(!R) return;
@@ -20438,8 +20469,12 @@ async function catRepetirHacer(){
       prioridad:a.prioridad||'normal', area:areas[0]
     },{ubicaciones:areas, confirmarDuplicado:true});
     var creadas=(r&&r.creadas)||[];
-    for(var i=0;i<creadas.length;i++)
-      await _catAmarrar(creadas[i].id, a.descripcion, (p&&p.capitulo)||S.catCap||'0', p?_catGrupoDe(p):'');
+    /* Sin el catálogo cargado `_catAgenda()` viene vacío y `_catAmarrar`
+       crearía una partida repetida. Fuera de Partidas lo nuevo nace sin
+       partida, como toda alta del app. */
+    if(Array.isArray(S.catActs))
+      for(var i=0;i<creadas.length;i++)
+        await _catAmarrar(creadas[i].id, a.descripcion, (p&&p.capitulo)||S.catCap||'0', p?_catGrupoDe(p):'');
     showToast('Creadas '+(creadas.length||areas.length)+' ✓');
   }catch(e){ showToast('No se pudo repetir: '+((e&&e.message)||''),'err',7000); }
   _repintarDondeEstoy();

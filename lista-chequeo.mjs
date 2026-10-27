@@ -1557,6 +1557,85 @@ async function probarDosHojas(nombreVer, html, b){
   return r;
 }
 
+// ── REPETIR EN OTRO APARTAMENTO (v152) ──────────────────────────────────────
+// El dueño editó «Montaje de la luminaria de la cocina principal» del 2B para
+// ponerla también en el 2A y el formulario no le dejaba: al editar solo sale la
+// ubicación de esa actividad. Se entra como él, se abre la del 2B por «Editar»,
+// se toca «+ Ponerla también en otro apartamento» y se crea en el 2A.
+const RP_ESPERADO={
+  boton:{v:'a la vista · 44 px', d:'al EDITAR, debajo de la ubicación, sale «+ Ponerla también en otro apartamento» y se toca con el dedo'},
+  ofrece:{v:'sin 2B · sin 3A (cerrada) · con 2A · 9', d:'el panel ofrece los apartamentos que NO la tienen: ni el 2B (abierta) ni el 3A (completada, que no está en S.acts y se pregunta a la base)'},
+  lectura:{v:'1 GET de esa descripción', d:'para saber dónde está cerrada se pide solo esa descripción, no el catálogo'},
+  crea:{v:'1 alta en el 2A · con su historial · sin partida nueva', d:'dejando marcado solo el 2A y tocando «Crear», se escribe UNA actividad en el 2A con su obra_cambios, y cero escrituras a obra_partidas'},
+};
+async function probarRepetir(nombreVer, html, b){
+  const D=datos(); const {ACTS,PERS}=D;
+  const ESC=[], LEC=[]; const r={};
+  const DESC='Montaje de la luminaria de la cocina principal';
+  ACTS.push({id:'rp2b',descripcion:DESC,area:'N2 — Apto 2B',estado:'pendiente',porcentaje:'0',tipo_personal:'contratista',
+    personal_nombre:'Milo',fecha:'2026-09-01',fecha_inicio:'2026-09-30',fecha_fin:'2026-10-30',prioridad:'normal'});
+  ACTS.push({id:'rp3a',descripcion:DESC,area:'N3 — Apto 3A',estado:'completado',porcentaje:'100',tipo_personal:'contratista',
+    personal_nombre:'Milo',fecha:'2026-09-01',fecha_inicio:'2026-09-01',fecha_fin:'2026-09-10',prioridad:'normal'});
+  const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
+  const ok=(q,body)=>q.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
+  try{
+    const ctx=await b.newContext({serviceWorkers:'block',viewport:{width:390,height:844}});
+    await ctx.addInitScript(()=>{ window.confirm=()=>true; window.alert=()=>{}; });
+    await ctx.route('**', q=>{
+      const u=q.request().url(), m=q.request().method();
+      if(u.startsWith(ORIGEN)) return q.continue();
+      if(!/\/rest\/v1\//.test(u)) return q.abort();
+      const pth=decodeURIComponent(u.split('/rest/v1/')[1]||''), base=pth.split('?')[0];
+      if(m!=='GET'){ let body=[]; try{ body=JSON.parse(q.request().postData()||'[]'); }catch(e){}
+        ESC.push({m,base,body}); return ok(q,Array.isArray(body)?body:[body]); }
+      LEC.push(pth);
+      let f=[];
+      if(base==='obra_actividades'){ f=ACTS;
+        if(/estado=neq\.completado/.test(pth)) f=f.filter(a=>a.estado!=='completado');
+        if(/propuesta=not\.is\.true/.test(pth)) f=f.filter(a=>a.propuesta!==true);
+        const de=pth.match(/descripcion=eq\.([^&]*)/); if(de) f=f.filter(a=>a.descripcion===de[1]); }
+      else if(base==='obra_personal') f=PERS;
+      const rg=q.request().headers()['range']||''; if(rg){ const [d0,h]=rg.split('-').map(Number); f=f.slice(d0,h+1); }
+      return ok(q,f);
+    });
+    const p=await ctx.newPage(); p.setDefaultTimeout(6000);
+    const G=(f,...a)=>p.evaluate(f,...a);
+    await p.goto(ORIGEN+'/index.html',{waitUntil:'load'});
+    await G(u=>{ try{ sessionStorage.setItem('mecca_user',JSON.stringify(u)); }catch(e){} }, {id:'nilson',nombre:'Ing. Nilson',rol:'admin'});
+    await p.reload({waitUntil:'load'});
+    for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S.acts&&S.acts.length).catch(()=>0)) break; await p.waitForTimeout(500); }
+    await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1200);
+    await G(()=>editAct('rp2b')); await p.waitForTimeout(500);
+    const bt=p.locator('button',{hasText:'Ponerla también en otro apartamento'});
+    r.boton=(await bt.count()) && await bt.first().isVisible()
+      ? 'a la vista · '+Math.round((await bt.first().boundingBox()).height)+' px' : 'no está';
+    if(/^a la vista/.test(r.boton)){
+      const l0=LEC.length, e0=ESC.length;
+      await bt.first().click(); await p.waitForTimeout(800);
+      const lec=LEC.slice(l0).filter(x=>/^obra_actividades/.test(x));
+      r.lectura=lec.length===1&&/descripcion=eq\./.test(lec[0])?'1 GET de esa descripción':lec.length+' GET: '+lec.join(' | ').slice(0,200);
+      const ops=await G(()=>S.catRepetir?S.catRepetir.faltan:null);
+      r.ofrece=!ops?'no abre':[ops.includes('N2 — Apto 2B')?'con 2B':'sin 2B', ops.includes('N3 — Apto 3A')?'con 3A':'sin 3A (cerrada)',
+        ops.includes('N2 — Apto 2A')?'con 2A':'sin 2A', ops.length].join(' · ');
+      if(ops){
+        // Se deja marcado solo el 2A, tocando los demás como el dedo.
+        for(const u of ops) if(u!=='N2 — Apto 2A') await p.locator('#cat-panel button',{hasText:u}).first().click();
+        await p.locator('#cat-panel button',{hasText:/^Crear las 1$/}).click(); await p.waitForTimeout(1200);
+        const w=ESC.slice(e0);
+        const altas=w.filter(x=>x.m==='POST'&&x.base==='obra_actividades').flatMap(x=>Array.isArray(x.body)?x.body:[x.body]);
+        const cam=w.filter(x=>x.m==='POST'&&x.base==='obra_cambios').length;
+        const par=w.filter(x=>/^obra_partida/.test(x.base)).length;
+        r.crea=(altas.length===1&&altas[0].area==='N2 — Apto 2A'&&altas[0].descripcion===DESC?'1 alta en el 2A':altas.length+' altas '+JSON.stringify(altas.map(a=>a.area)))+
+          ' · '+(cam?'con su historial':'sin historial')+' · '+(par?par+' a obra_partidas':'sin partida nueva');
+      }
+    }
+    await ctx.close();
+  }catch(e){ r._error=String(e&&e.message||e).split('\n')[0].slice(0,200); }
+  srv.close();
+  for(const k of Object.keys(RP_ESPERADO)) if(!(k in r)) r[k]=null;
+  return r;
+}
+
 // ── el comparador ─────────────────────────────────────────────────────────
 const b=await chromium.launch({executablePath:CHROME,args:['--no-sandbox']});
 const res=[];
@@ -1568,7 +1647,8 @@ for(const v of VERS){ process.stderr.write('· probando '+v+' …\n'); const nv=
   r.velocidad=await probarVelocidad(nv, leerVersion(v), b);
   r.avance=await probarAvance(nv, leerVersion(v), b);
   r.hoja=await probarHoja(nv, leerVersion(v), b);
-  r.dosHojas=await probarDosHojas(nv, leerVersion(v), b); res.push(r); }
+  r.dosHojas=await probarDosHojas(nv, leerVersion(v), b);
+  r.repetir=await probarRepetir(nv, leerVersion(v), b); res.push(r); }
 await b.close();
 if(JSONOUT){ console.log(JSON.stringify(res,null,1)); process.exit(0); }
 
@@ -1675,6 +1755,16 @@ for(const k of Object.keys(HP_ESPERADO)){
 console.log('  ↑ antes · después. '+(fallaHp?fallaHp+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
 for(const [i,r] of res.entries()){ if(r.dosHojas._error) console.log('  ('+VERS[i]+' se cortó: '+r.dosHojas._error+')');
   if(r.dosHojas._hojas) console.log('  ('+VERS[i]+' hojas: '+JSON.stringify(r.dosHojas._hojas)+')'); }
+let fallaRp=0;
+console.log('\nREPETIR EN OTRO APARTAMENTO — contra lo que tiene que dar (v152)\n');
+for(const k of Object.keys(RP_ESPERADO)){
+  const e=RP_ESPERADO[k];
+  const marca=res.map(r=>{ const v=r.repetir[k]; return (v===e.v?'✓':'✗')+' '+JSON.stringify(v); });
+  if(res[1].repetir[k]!==e.v) fallaRp++;
+  console.log('  '+marca[0].padEnd(14).slice(0,40)+'  '+marca[1]+'\n        (tiene que dar '+JSON.stringify(e.v)+')  '+e.d);
+}
+console.log('  ↑ antes · después. '+(fallaRp?fallaRp+' FALLAN en '+VERS[1]:'todas bien en '+VERS[1]));
+for(const [i,r] of res.entries()) if(r.repetir._error) console.log('  ('+VERS[i]+' se cortó: '+r.repetir._error+')');
 console.log('\nCANDADO: escrituras interceptadas '+res.map(r=>Object.values(r.propio.escrituras).reduce((s,x)=>s+x,0)).join(' / ')+
   ' · salidas cortadas (fuentes, fotos) '+res.map(r=>r.propio.salidasCortadas).join(' / ')+' · a la base real: 0');
-process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra||fallaVel||fallaAva||fallaHoja||fallaHp?1:0);
+process.exit(dist||fallaDespues||fallaRec||fallaCab||fallaTra||fallaVel||fallaAva||fallaHoja||fallaHp||fallaRp?1:0);

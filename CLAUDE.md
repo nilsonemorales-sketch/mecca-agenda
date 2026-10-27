@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v151 — 27 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v152 — 27 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -1094,6 +1094,18 @@ Del estado solo se ofrecen **Completada** y **Sin empezar**: un porcentaje a
 medias en bloque no significa nada, porque no todas las partidas de una tanda van
 por el mismo sitio. Y cerrar va por **`Acciones.completar`**, el mismo camino que
 el botón de la tarjeta.
+
+**«Repetir en…» tiene puerta desde el formulario de EDITAR (v152).** El dueño
+abrió la luminaria de la cocina del 2B para ponerla también en el 2A y no pudo:
+al editar, el formulario solo enseña la ubicación de esa actividad (`saveAct`
+parchea UNA). Debajo sale ahora «+ Ponerla también en otro apartamento»
+(`ubicRepetirDesdeEdit`), que cierra el formulario y abre el mismo panel. Como
+fuera de Partidas el catálogo casi nunca está cargado y `S.acts` no trae lo
+cerrado, **`catRepetirAbrir` pregunta a la base por esa descripción sola** (una
+columna) para no ofrecer un apartamento donde ya está completada; y **sin
+catálogo no se amarra a partida** (`_catAgenda()` vacío crearía una partida
+repetida): nace suelta, como toda alta del app. Comprobado en la lista de
+chequeo, sección «REPETIR EN OTRO APARTAMENTO».
 
 **Duplicar copia el TRABAJO, no el AVANCE.** «Repetir en…» ofrece solo los
 apartamentos que **todavía no la tienen** —comparando por descripción, el criterio
