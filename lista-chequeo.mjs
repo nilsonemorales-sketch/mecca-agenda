@@ -1366,34 +1366,36 @@ async function entrarAvance(p){
   await p.locator('#c-hp .hp-otros').click(); await p.waitForTimeout(500);
 }
 
-// ── LAS DOS HOJAS (v149): Reportes es una hoja para pegar y un PDF del contratista ──
+// ── LAS DOS HOJAS (v149, v151): Reportes es una hoja para pegar y un PDF del contratista ──
 /* El dueño: «demasiados pasos y demasiadas opciones. Necesito dos». Se entra
-   por el cajón a 390, como el dedo; se comprueba que el centro tiene DOS
-   botones (y «Otros reportes» solo para el administrador), que los conteos y
-   los bloques cuadran con una cuenta hecha aquí, que nada sale marcado urgente
-   ni atrasado ni con % general, y que el papel se pagina: la franja se repite
-   con «(sigue)», cada hoja dice «Hoja X de Y», ninguna descripción se corta, y
-   al imprimir de verdad salen esas mismas hojas en papel carta. Después, como
-   Karina por el Modo Campo. Contra la v148 falla: no existe. */
+   por el cajón a 390, como el dedo. Desde la v151 el PDF lo hace el app con
+   jsPDF y sale por la hoja de compartir: aquí `navigator.share` se dobla y se
+   guarda el archivo, y se mide EL PDF de verdad —páginas, papel, textos— y el
+   modelo que lo dibuja (`S._hpUltimo`). jsPDF se sirve desde la copia local
+   (`npm i -g jspdf@2.5.1`, la misma versión del app): el candado corta el CDN.
+   Después, como Karina por el Modo Campo. Contra la v150 falla lo del PDF:
+   ella todavía abría la ventana de imprimir. */
+const JSPDF=(()=>{ try{ return readFileSync(process.env.JSPDF||require.resolve('jspdf/dist/jspdf.umd.min.js')); }catch(e){ return null; } })();
 const HP_ESPERADO={
   centro:{v:'2 botones · otros reportes · sin sub-barra', d:'Reportes abre con los dos botones grandes y el enlace chico «Otros reportes ›» (administrador); la sub-barra de doce no se ve'},
   conteoUbic:{v:'igual', d:'«Apartamento 4A» en el escogedor dice lo mismo que la cuenta directa de abiertas del 4A, sin la propuesta'},
   ordenUbic:{v:'Apartamento 2A · Apartamento 2B · Apartamento 3A', d:'las ubicaciones salen en el orden del edificio, empezando por el 2A'},
   pegarCuadra:{v:'cuadra', d:'en la hoja del 4A los bloques suman el total de la cabecera, y ese total es la cuenta directa'},
   pegarBloques:{v:'uno por contratista · ingeniería al final · 2 en blanco', d:'un bloque por contratista (de más a menos), las de ingeniería al final en «Revisiones de ingeniería», y dos renglones en blanco por bloque'},
-  sinMarcar:{v:'nada marcado', d:'ninguna partida dice urgente ni atrasada, ningún cuadro URG./ATRAS. sale marcado y no hay % general'},
+  notas:{v:'pared: notas 60 mm · renglón 10 mm · 2 líneas · contratista: notas 34 mm', d:'(v151) la hoja para pegar deja más sitio para escribir notas; el PDF del contratista sigue igual'},
+  sinMarcar:{v:'nada marcado', d:'ninguna partida dice urgente ni atrasada y no hay % general en el papel'},
   circulos:{v:'igual', d:'los circulitos rellenos son exactamente las partidas que ya tienen avance en la base'},
   contCuadra:{v:'cuadra', d:'el PDF de Dimedes: los bloques por ubicación suman el total, que es la cuenta directa, y el resumen tiene una celda por ubicación'},
-  contAtras:{v:'un ATRAS. por renglón · 3 en blanco', d:'la columna ATRAS. lleva un cuadro vacío en cada renglón, también en los blancos, y cada ubicación cierra con 3 en blanco'},
-  paginas:{v:'varias · (sigue) · Hoja X de Y · nada cortado', d:'una hoja larga se reparte en varias, la franja se repite con «(sigue)», cada una dice «Hoja X de Y» y ninguna descripción ni renglón queda cortado'},
-  imprimir:{v:'mismas hojas · carta', d:'al imprimir de verdad, el PDF en papel carta tiene las mismas hojas que contó la pantalla'},
-  campo:{v:'2 botones · sin otros · sale la hoja', d:'Karina, por el Modo Campo, tiene los dos botones, no ve «Otros reportes», y escoger saca la hoja'},
+  contAtras:{v:'ATRAS. en cada franja · 3 en blanco', d:'la columna ATRAS. sale en cada franja (también las «(sigue)») y cada ubicación cierra con 3 en blanco'},
+  paginas:{v:'varias · (sigue) · Hoja X de Y · ninguna vacía', d:'una hoja larga se reparte en varias, la franja se repite con «(sigue)», cada una dice «Hoja X de Y» y no hay ni una en blanco'},
+  imprimir:{v:'PDF carta · por compartir · sin ventanas', d:'(v151) el PDF sale hecho, en papel carta, por la hoja de compartir: no se abre ninguna ventana, así que se vuelve al app sin cerrarla'},
+  campo:{v:'2 botones · sin otros · sale la hoja', d:'Karina, por el Modo Campo, tiene los dos botones, no ve «Otros reportes», y escoger saca el PDF'},
   ingSinOtros:{v:'cae en las dos hojas', d:'una ingeniera que llegue a Reportes con otra vista puesta cae en las dos hojas'},
   dedos:{v:0, d:'nada de lo que se toca en el centro y el escogedor mide menos de 40 px'},
   ceroRed:{v:0, d:'escoger y sacar las hojas: cero GET y cero escrituras'},
   qr:{v:'un QR por contratista · todos se leen · y uno del sitio', d:'(v150) la hoja del 4A lleva un QR por bloque que jsQR —el lector del app— lee como «MECCA:N4 — Apto 4A|<contratista>», y uno arriba con el sitio entero'},
   escaneo:{v:'lista · 2 pastillas · mismo número', d:'(v150) escanear el QR de Dimedes abre Actividades → Lista con la ubicación y el contratista puestos, y enseña tantas como dice su bloque'},
-  sinMargen:{v:'margen 0 · sin QR en el contratista', d:'(v150) el papel no deja margen al navegador (ahí ponía el enlace y salía una hoja en blanco), y el PDF del contratista no lleva QR'},
+  sinMargen:{v:'sin enlace · sin QR en el contratista', d:'(v151) el papel no lleva el enlace del app, y el PDF del contratista no lleva QR'},
   campoEscaner:{v:'botón a la vista', d:'(v150) el Modo Campo tiene «Escanear el QR de la hoja»'},
 };
 async function probarDosHojas(nombreVer, html, b){
@@ -1401,7 +1403,6 @@ async function probarDosHojas(nombreVer, html, b){
   const ESC=[], LEC=[]; const r={};
   const srv=await servir(html); const ORIGEN='http://127.0.0.1:'+srv.address().port;
   const ok=(q,body)=>q.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
-  const hoyNode=(()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
   // Sesenta partidas de Dimedes en el 4A con nombres LARGOS: la hoja tiene que pasar de una página y partir las líneas sin cortarlas.
   for(let i=0;i<60;i++) ACTS.push({id:'lg'+i,descripcion:'Ajustar, nivelar y fijar las puertas del gabinete de la cocina principal y del baño de visitas, con sus bisagras y tiradores número '+i,
     area:'N4 — Apto 4A',estado:i%3?'pendiente':'en-progreso',porcentaje:i%3?'0':'50',tipo_personal:'contratista',personal_nombre:'Dimedes Estebez (Niño)',
@@ -1415,6 +1416,7 @@ async function probarDosHojas(nombreVer, html, b){
   const ruta=async ctx=>ctx.route('**', q=>{
     const u=q.request().url(), m=q.request().method();
     if(u.startsWith(ORIGEN)) return q.continue();
+    if(/jspdf[^/]*\.min\.js/.test(u) && JSPDF) return q.fulfill({status:200,contentType:'application/javascript',body:JSPDF});
     if(!/\/rest\/v1\//.test(u)) return q.abort();
     const pth=decodeURIComponent(u.split('/rest/v1/')[1]||''), base=pth.split('?')[0];
     if(m!=='GET'){ ESC.push(m+' '+base); return ok(q,[]); }
@@ -1432,7 +1434,10 @@ async function probarDosHojas(nombreVer, html, b){
   const abrir=async usr=>{
     const ctx=await b.newContext({serviceWorkers:'block',viewport:{width:390,height:844}});
     await ctx.addInitScript(()=>{ window.confirm=()=>true; window.alert=()=>{};
-      window.open=()=>{ const w={_html:'', document:{write:t=>{w._html+=t;}, close:()=>{}}}; window.__impresa=w; return w; }; });
+      // La hoja de compartir del teléfono: se guarda el archivo. Y se cuentan las ventanas que se abran.
+      window.__ventanas=0; window.open=()=>{ window.__ventanas++; const w={_html:'', document:{write:t=>{w._html+=t;}, close:()=>{}}}; window.__impresa=w; return w; };
+      try{ Object.defineProperty(navigator,'canShare',{value:()=>true,configurable:true});
+        Object.defineProperty(navigator,'share',{value:async d=>{ window.__compartido=d.files[0]; },configurable:true}); }catch(e){} });
     await ruta(ctx);
     const p=await ctx.newPage(); p.setDefaultTimeout(6000);
     const G=(f,...a)=>p.evaluate(f,...a);
@@ -1443,26 +1448,15 @@ async function probarDosHojas(nombreVer, html, b){
     await p.waitForLoadState('networkidle').catch(()=>{}); await p.waitForTimeout(1200);
     return {ctx,p,G};
   };
-  // La hoja impresa, abierta en una página de verdad para ver cómo se reparte.
-  const paginar=async (ctx,htm)=>{ const pg=await ctx.newPage();
-    await pg.addInitScript(()=>{ window.__sinImprimir=1; });
-    await pg.route('**/*.png', q=>q.fulfill({status:200,contentType:'image/png',body:readFileSync(path.join(RAIZ,'bridex-logo.png'))}));
-    await pg.route(ORIGEN+'/__hoja.html', q=>q.fulfill({status:200,contentType:'text/html; charset=utf-8',body:htm.replace(/<script>/,'<script>window.__sinImprimir=1;')}));
-    await pg.goto(ORIGEN+'/__hoja.html',{waitUntil:'load'});
-    await pg.waitForTimeout(400);
-    const m=await pg.evaluate(()=>{ const pgs=[...document.querySelectorAll('#hojas .pg')];
-      let cortes=0, pies=0, sigue=0;
-      pgs.forEach((p,i)=>{ const R=p.getBoundingClientRect(), pie=p.querySelector('.pie');
-        if(pie && pie.textContent.indexOf('Hoja '+(i+1)+' de '+pgs.length)>=0) pies++;
-        const tope=pie?pie.getBoundingClientRect().top:R.bottom;
-        [...p.children].filter(c=>!c.classList.contains('pie')).forEach(c=>{ if(c.getBoundingClientRect().bottom>tope+0.5) cortes++; });
-        if(i>0 && p.querySelector('.fr .fr-b b') && /\(sigue\)/.test(p.querySelector('.fr .fr-b b').textContent)) sigue++; });
-      document.querySelectorAll('#hojas .d').forEach(d=>{ if(d.scrollHeight>d.clientHeight+1||d.scrollWidth>d.clientWidth+1) cortes++; });
-      return {n:pgs.length,pies,cortes,sigue,quedan:document.querySelectorAll('#fuente > *').length}; });
-    const pdf=await pg.pdf({format:'Letter',preferCSSPageSize:true});
-    const paginasPdf=(pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g)||[]).length;
-    if(FOTOS){ await pg.screenshot({path:path.join(FOTOS,nombreVer+'-dos-hojas-'+Date.now()+'.png'),fullPage:true}); writeFileSync(path.join(FOTOS,nombreVer+'-dos-hojas-'+Date.now()+'.pdf'),pdf); }
-    await pg.close(); return Object.assign(m,{paginasPdf}); };
+  // El PDF que se compartió: lo que dice, y el modelo con que se dibujó.
+  const leerPDF=(G,nombre)=>G(async n=>{ const f=window.__compartido; if(!f) return null;
+    const bytes=new Uint8Array(await f.arrayBuffer()), txt=new TextDecoder('latin1').decode(bytes);
+    const textos=[...txt.matchAll(/\(((?:\\.|[^\\)])*)\)\s*Tj/g)].map(x=>x[1].replace(/\\(.)/g,'$1'));
+    let b64=''; for(let i=0;i<bytes.length;i+=8192) b64+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192));
+    const U=S._hpUltimo||{};
+    return {nombre:f.name, paginas:(txt.match(/\/Type\s*\/Page[^s]/g)||[]).length, carta:/\/MediaBox\s*\[0 0 612\.?\d* 792\.?\d*\]/.test(txt),
+      textos, modelo:U.modelo, partes:U.paginas, medidas:U.medidas, b64:n?btoa(b64):''}; }, !!nombre);
+  const guardar=(pdf,nombre)=>{ if(FOTOS&&pdf&&pdf.b64) writeFileSync(path.join(FOTOS,nombreVer+'-'+nombre+'.pdf'),Buffer.from(pdf.b64,'base64')); };
   try{
     let {ctx,p,G}=await abrir({id:'nilson',nombre:'Ing. Nilson',rol:'admin'});
     await p.locator('button[onclick*="toggleDrawer"]:visible').first().click(); await p.waitForTimeout(300);
@@ -1477,99 +1471,88 @@ async function probarDosHojas(nombreVer, html, b){
     if(FOTOS) await p.screenshot({path:path.join(FOTOS,nombreVer+'-reportes-centro.png')});
     await p.locator('#c-hp .hp-gran').nth(0).click(); await p.waitForTimeout(300);
     dedos+=await chicos();
-    if(FOTOS) await p.screenshot({path:path.join(FOTOS,nombreVer+'-reportes-escoger.png')});
     const op=await G(()=>[...document.querySelectorAll('#c-hp .hp-op')].map(b=>[b.querySelector('span').textContent,+b.querySelector('b').textContent]));
     const n4A=ab.filter(a=>(a.area||'').trim()==='N4 — Apto 4A').length;
     const o4=op.find(x=>x[0]==='Apartamento 4A');
     r.conteoUbic=o4&&o4[1]===n4A?'igual':JSON.stringify({pantalla:o4,cuenta:n4A});
     r.ordenUbic=op.slice(0,3).map(x=>x[0]).join(' · ');
-    await p.locator('#c-hp .hp-op',{hasText:/^Apartamento 4A/}).click(); await p.waitForTimeout(200);
-    const h4=await G(()=>window.__impresa&&window.__impresa._html||'');
-    const leer=async htm=>{ const pg=await ctx.newPage(); await pg.setContent(htm.replace(/<script>[\s\S]*<\/script>/,''));
-      const v=await pg.evaluate(()=>{ const F=document.getElementById('fuente');
-        const frs=[...F.querySelectorAll('.fr')].map(f=>({t:f.querySelector('.fr-b b').textContent,n:parseInt(f.querySelector('.fr-b span').textContent,10)}));
-        // las piezas en orden: para saber cuántos renglones y blancos lleva cada bloque
-        const blq=[]; [...F.children].forEach(c=>{ if(c.classList.contains('fr')) blq.push({filas:0,blancos:0,atras:0});
-          else if(blq.length&&c.classList.contains('hr')){ const x=blq[blq.length-1]; if(c.classList.contains('hb')) x.blancos++; else x.filas++; if(c.querySelector('.bx.atr')) x.atras++; } });
-        const tot=parseInt(((F.querySelector('.cp-der strong')||F.querySelector('.cab-f b')||{}).textContent)||'0',10);
-        const sinIns=[...F.querySelectorAll('.d, .fr, .cab-p, .cab-c, .res')].map(x=>x.textContent).join(' ');
-        return {frs,blq,tot,marcadoTxt:/urgente|atrasad|vencid/i.test(sinIns), pctGeneral:/\d+\s*%/.test(sinIns),
-          bxLlenos:[...F.querySelectorAll('.bx')].filter(x=>x.textContent.trim()||x.className.split(' ').some(c=>c==='on')).length,
-          llenos:F.querySelectorAll('.pc-i i.on').length, res:F.querySelectorAll('.res-c').length}; });
-      await pg.close(); return v; };
-    const v4=await leer(h4);
-    const suma=v4.frs.reduce((s,f)=>s+f.n,0), filas=v4.blq.reduce((s,x)=>s+x.filas,0);
-    r.pegarCuadra=(suma===v4.tot&&filas===v4.tot&&v4.tot===n4A)?'cuadra':JSON.stringify({suma,filas,cab:v4.tot,cuenta:n4A});
+    await p.locator('#c-hp .hp-op',{hasText:/^Apartamento 4A/}).click(); await p.waitForTimeout(800);
+    const v4=await leerPDF(G,true); guardar(v4,'hoja-4A');
+    if(!v4||!v4.modelo) throw new Error('la hoja del 4A no salió como PDF compartido (ventanas abiertas: '+await G(()=>window.__ventanas)+')');
+    const M4=v4.modelo, suma=M4.bloques.reduce((s,x)=>s+x.n,0), filas=M4.bloques.reduce((s,x)=>s+x.filas.length,0);
+    r.pegarCuadra=(suma===M4.total&&filas===M4.total&&M4.total===n4A)?'cuadra':JSON.stringify({suma,filas,cab:M4.total,cuenta:n4A});
     const g4={}; ab.filter(a=>(a.area||'').trim()==='N4 — Apto 4A').forEach(a=>{ const k=quien(a); g4[k]=(g4[k]||0)+1; });
     const ordenEsp=Object.keys(g4).filter(k=>k!=='Ingeniería').sort((x,y)=>(g4[y]-g4[x])||x.localeCompare(y,'es'));
-    const tit=v4.frs.map(f=>f.t.replace(/ — .*$/,''));
+    const tit=M4.bloques.map(x=>x.titulo.replace(/ — .*$/,''));
     const okOrden=ordenEsp.every((k,i)=>tit[i]===k) && (!g4['Ingeniería'] || tit[tit.length-1]==='Revisiones de ingeniería') && tit.length===Object.keys(g4).length;
     r.pegarBloques=(okOrden?'uno por contratista':'orden '+JSON.stringify(tit)+' esperaba '+JSON.stringify(ordenEsp))
-      +' · '+(g4['Ingeniería']?'ingeniería al final':'(sin ingeniería en el 4A)')+' · '+(v4.blq.every(x=>x.blancos===2)?'2 en blanco':'blancos '+v4.blq.map(x=>x.blancos));
+      +' · '+(g4['Ingeniería']?'ingeniería al final':'(sin ingeniería en el 4A)')+' · '+(M4.blancos===2?'2 en blanco':'blancos '+M4.blancos);
     const conAv=ab.filter(a=>(a.area||'').trim()==='N4 — Apto 4A'&&(parseFloat(a.porcentaje)||0)>0).length;
-    r.circulos=v4.llenos===conAv?'igual':JSON.stringify({llenos:v4.llenos,conAvance:conAv});
-    const pag4=await paginar(ctx,h4);
-    // v150 · Los QR de la hoja, leídos con jsQR, el lector del propio app.
-    const leidos=await G(async htm=>{ const d=new DOMParser().parseFromString(htm,'text/html');
-      const lee=svg=>new Promise(res=>{ const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=c.height=264;
-        const x=c.getContext('2d'); x.drawImage(im,0,0,264,264); const r=typeof jsQR==='function'?jsQR(x.getImageData(0,0,264,264).data,264,264):null; res(r?r.data:null); };
-        im.onerror=()=>res(null); im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg.outerHTML); });
-      const bloques=[]; for(const f of d.querySelectorAll('#fuente .fr')){ const s=f.querySelector('svg'); bloques.push({t:f.querySelector('.fr-b b').textContent, q:s?await lee(s):null}); }
-      const cab=d.querySelector('.cp-qr svg'); return {bloques, cab:cab?await lee(cab):null}; }, h4);
+    r.circulos=M4.bloques.reduce((s,x)=>s+x.filas.filter(f=>f.av>0).length,0)===conAv?'igual':'no';
+    // Los QR del modelo, dibujados con la MISMA matriz del PDF y leídos con jsQR.
+    const leidos=await G(async m=>{ const lee=t=>{ const Q=_qrMatriz(t); if(!Q) return null; const n=Q.length, s=6, W=(n+8)*s, c=document.createElement('canvas'); c.width=c.height=W;
+        const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,W,W); x.fillStyle='#000';
+        Q.forEach((fila,yy)=>fila.forEach((on,xx)=>{ if(on) x.fillRect((xx+4)*s,(yy+4)*s,s,s); }));
+        const r=typeof jsQR==='function'?jsQR(x.getImageData(0,0,W,W).data,W,W):null; return r?r.data:null; };
+      return {bloques:m.bloques.map(b=>({t:b.titulo,q:b.qr?lee(b.qr):null})), cab:m.qr?lee(m.qr):null}; }, M4);
     const quienDe=t=>t==='Revisiones de ingeniería'?'Ingeniería':t.replace(/ — .*$/,'');
     const qrBien=leidos.bloques.length && leidos.bloques.every(x=>x.q==='MECCA:N4 — Apto 4A|'+quienDe(x.t));
-    r.qr=(leidos.bloques.length&&leidos.bloques.every(x=>x.q!==null)?'un QR por contratista':'faltan QR '+JSON.stringify(leidos.bloques.slice(0,3)))
-      +' · '+(qrBien?'todos se leen':'leen mal '+JSON.stringify(leidos.bloques.filter(x=>x.q!=='MECCA:N4 — Apto 4A|'+quienDe(x.t)).slice(0,2)))
-      +' · '+(leidos.cab==='MECCA:N4 — Apto 4A'?'y uno del sitio':'cabecera '+leidos.cab);
-    r.sinMargen=/@page\{size:letter portrait;margin:0\}/.test(h4)?'margen 0':'con margen';
+    r.qr=(leidos.bloques.every(x=>x.q!==null)?'un QR por contratista':'faltan QR')+' · '+(qrBien?'todos se leen':'leen mal')+' · '+(leidos.cab==='MECCA:N4 — Apto 4A'?'y uno del sitio':'cabecera '+leidos.cab);
+    const md4=v4.medidas||{};
     // ── PDF del contratista: Dimedes
+    await G(()=>{ window.__compartido=null; });
     await p.locator('#c-hp .hp-volver').click(); await p.waitForTimeout(200);
     await p.locator('#c-hp .hp-gran').nth(1).click(); await p.waitForTimeout(300);
     dedos+=await chicos();
-    await p.locator('#c-hp .hp-op',{hasText:/^Dimedes Estebez/}).click(); await p.waitForTimeout(200);
-    const hd=await G(()=>window.__impresa&&window.__impresa._html||'');
-    const vd=await leer(hd);
+    await p.locator('#c-hp .hp-op',{hasText:/^Dimedes Estebez/}).click(); await p.waitForTimeout(800);
+    const vd=await leerPDF(G,true); guardar(vd,'pdf-dimedes');
+    if(!vd||!vd.modelo) throw new Error('el PDF de Dimedes no salió');
+    const MD=vd.modelo, mdd=vd.medidas||{};
+    r.notas='pared: notas '+md4.notas+' mm · renglón '+md4.alto+' mm · '+md4.lineas+' líneas · contratista: notas '+mdd.notas+' mm';
     const dims=ab.filter(a=>quien(a)==='Dimedes Estebez (Niño)'), ubis=new Set(dims.map(a=>(a.area||'').trim()||'Sin ubicación'));
-    const sumd=vd.frs.reduce((s,f)=>s+f.n,0), fild=vd.blq.reduce((s,x)=>s+x.filas,0);
-    r.contCuadra=(sumd===vd.tot&&fild===vd.tot&&vd.tot===dims.length&&vd.frs.length===ubis.size&&vd.res===ubis.size)?'cuadra':JSON.stringify({sumd,fild,cab:vd.tot,cuenta:dims.length,bloques:vd.frs.length,ubis:ubis.size,res:vd.res});
-    r.contAtras=(vd.blq.every(x=>x.atras===x.filas+x.blancos)?'un ATRAS. por renglón':'ATRAS. faltan')+' · '+(vd.blq.every(x=>x.blancos===3)?'3 en blanco':'blancos '+vd.blq.map(x=>x.blancos));
-    r.sinMarcar=(!v4.marcadoTxt&&!vd.marcadoTxt&&!v4.bxLlenos&&!vd.bxLlenos&&!v4.pctGeneral&&!vd.pctGeneral)?'nada marcado':JSON.stringify({v4,vd:{m:vd.marcadoTxt,b:vd.bxLlenos,p:vd.pctGeneral}}).slice(0,200);
-    const pagd=await paginar(ctx,hd);
-    r.sinMargen+=' · '+(/<svg class="qr"/.test(hd)?'CON QR en el contratista':'sin QR en el contratista');
-    const lScan=LEC.length, eScan=ESC.length;   // lo de abajo entra a Actividades, que pide lo suyo: no es de la hoja
+    const sumd=MD.bloques.reduce((s,x)=>s+x.n,0), fild=MD.bloques.reduce((s,x)=>s+x.filas.length,0);
+    r.contCuadra=(sumd===MD.total&&fild===MD.total&&MD.total===dims.length&&MD.bloques.length===ubis.size&&MD.resumen.length===ubis.size)?'cuadra':JSON.stringify({sumd,fild,cab:MD.total,cuenta:dims.length,bloques:MD.bloques.length,ubis:ubis.size});
+    const franjasD=vd.partes.reduce((s,x)=>s+x.bloques.length,0), atrasD=vd.textos.filter(t=>t==='ATRAS.').length;
+    r.contAtras=(MD.atras&&atrasD===franjasD?'ATRAS. en cada franja':'ATRAS. '+atrasD+' de '+franjasD)+' · '+(MD.blancos===3?'3 en blanco':'blancos '+MD.blancos);
+    const marcado=m=>m.bloques.some(x=>/urgente|atrasad|vencid/i.test(x.titulo)||x.filas.some(f=>/urgente|atrasad|vencid/i.test(f.d)));
+    const pct=v=>v.textos.some(t=>/\d+\s*%/.test(t));
+    r.sinMarcar=(!marcado(M4)&&!marcado(MD)&&!pct(v4)&&!pct(vd))?'nada marcado':'marcado';
+    const P=[v4,vd];
+    r.paginas=[vd.paginas>1?'varias':'una sola', P.every(x=>x.paginas<2||x.partes.some(pp=>pp.sigue>0))?'(sigue)':'sin (sigue)',
+      P.every(x=>{ for(let i=1;i<=x.paginas;i++) if(!x.textos.includes('Hoja '+i+' de '+x.paginas)) return false; return true; })?'Hoja X de Y':'faltan pies',
+      P.every(x=>x.partes.length===x.paginas && x.partes.every((pp,i)=>i===0||pp.bloques.length>0))?'ninguna vacía':'hojas '+P.map(x=>x.paginas+'/'+x.partes.length)].join(' · ');
+    r.imprimir=(P.every(x=>x.carta)?'PDF carta':'otro papel')+' · '+(P.every(x=>/\.pdf$/.test(x.nombre))?'por compartir':'sin archivo')+' · '+(await G(()=>window.__ventanas)?'abrió ventanas':'sin ventanas');
+    r.sinMargen=(P.every(x=>!x.textos.some(t=>/http|github\.io/.test(t)))?'sin enlace':'CON enlace')+' · '+(MD.bloques.every(x=>!x.qr)&&!MD.qr?'sin QR en el contratista':'CON QR en el contratista');
+    r._hojas={pegar4A:v4.paginas, dimedes:vd.paginas, bloques4A:M4.bloques.length, ubicDimedes:MD.bloques.length};
     // v150 · Escanear el QR de Dimedes en el 4A: la lista filtrada, con su número.
-    const nDim=v4.frs.find(f=>/^Dimedes Estebez/.test(f.t)), lDim=leidos.bloques.find(x=>/^Dimedes Estebez/.test(x.t));
-    if(lDim&&lDim.q){ r.escaneo=await G(q=>{ recLeido(q,function(){});
-      const av=S.actFiltroAvanzado||{}, pil=(av.ubicaciones||[]).length+(av.personas||[]).length;
-      const n=applyActFilters(S.acts,true).length, vis=document.getElementById('view-obra');
-      return [(S.currentTab==='obra'&&S.actVista==='lista'&&vis&&vis.checkVisibility())?'lista':'pantalla '+S.currentTab+'/'+S.actVista, pil+' pastillas', n]; }, lDim.q);
-      r.escaneo=r.escaneo[0]+' · '+r.escaneo[1]+' · '+(nDim&&r.escaneo[2]===nDim.n?'mismo número':'lista '+r.escaneo[2]+' contra hoja '+(nDim&&nDim.n)); }
+    const lScan=LEC.length, eScan=ESC.length;   // lo de abajo entra a Actividades, que pide lo suyo: no es de la hoja
+    const bDim=M4.bloques.find(x=>/^Dimedes Estebez/.test(x.titulo));
+    if(bDim&&bDim.qr){ const es=await G(q=>{ recLeido(q,function(){});
+        const av=S.actFiltroAvanzado||{}, pil=(av.ubicaciones||[]).length+(av.personas||[]).length;
+        const n=applyActFilters(S.acts,true).length, vis=document.getElementById('view-obra');
+        return [(S.currentTab==='obra'&&S.actVista==='lista'&&vis&&vis.checkVisibility())?'lista':'pantalla '+S.currentTab+'/'+S.actVista, pil+' pastillas', n]; }, bDim.qr);
+      r.escaneo=es[0]+' · '+es[1]+' · '+(es[2]===bDim.n?'mismo número':'lista '+es[2]+' contra hoja '+bDim.n); }
     else r.escaneo='sin QR de Dimedes';
-    const P=[pag4,pagd];
-    r.paginas=[pagd.n>1?'varias':'una sola ('+pagd.n+')', P.every(x=>x.n<2||x.sigue>0)?'(sigue)':'sin (sigue) '+JSON.stringify(P.map(x=>x.sigue)),
-      P.every(x=>x.pies===x.n)?'Hoja X de Y':'pies '+JSON.stringify(P.map(x=>x.pies+'/'+x.n)), P.every(x=>!x.cortes&&!x.quedan)?'nada cortado':'cortes '+JSON.stringify(P.map(x=>x.cortes+'/'+x.quedan))].join(' · ');
-    r.imprimir=P.every(x=>x.paginasPdf===x.n)?'mismas hojas · carta':'pantalla '+P.map(x=>x.n)+' · PDF '+P.map(x=>x.paginasPdf);
-    r._hojas={pegar4A:pag4.n, dimedes:pagd.n, bloques4A:v4.frs.length, ubicDimedes:vd.frs.length};
     r.dedos=dedos;
     r.ceroRed=(lScan-l0)+(eScan-e0);
-    r._alEscanear={lect:LEC.slice(lScan), escr:ESC.slice(eScan)};
     await ctx.close();
     // ── Karina, por el Modo Campo
     ({ctx,p,G}=await abrir({id:'karina',nombre:'Ing. Karina Breton',rol:'ing'}));
     const cmp=await G(()=>{ const h=document.getElementById('campo-root'); if(!h) return 'sin Modo Campo';
       const g=[...h.querySelectorAll('.hp-gran')].filter(x=>x.checkVisibility()).length; return g+' botones · '+(h.querySelector('.hp-otros')?'con otros':'sin otros'); });
-    if(FOTOS){ await p.locator('#campo-root .hp-gran').first().scrollIntoViewIfNeeded().catch(()=>{}); await p.screenshot({path:path.join(FOTOS,nombreVer+'-campo-hojas.png')}); }
     r.campoEscaner=await G(()=>{ const b=[...document.querySelectorAll('#campo-root button')].find(x=>/Escanear el QR/.test(x.textContent)); return b&&b.checkVisibility()?'botón a la vista':'no está'; });
+    if(FOTOS){ await p.locator('#campo-root .hp-gran').first().scrollIntoViewIfNeeded().catch(()=>{}); await p.screenshot({path:path.join(FOTOS,nombreVer+'-campo-hojas.png')}); }
     let sale='no sale';
     if(/^2 /.test(cmp)){ await p.locator('#campo-root .hp-gran').nth(1).click(); await p.waitForTimeout(300);
-      await p.locator('#campo-root .hp-op').first().click(); await p.waitForTimeout(200);
-      sale=await G(()=>/Pendientes de/.test(window.__impresa&&window.__impresa._html||'')?'sale la hoja':'no sale'); }
+      await p.locator('#campo-root .hp-op').first().click(); await p.waitForTimeout(800);
+      sale=await G(()=>window.__compartido&&/^Pendientes_.*\.pdf$/.test(window.__compartido.name)?'sale la hoja':'no sale'); }
     r.campo=cmp+' · '+sale;
     r.ingSinOtros=await G(()=>{ try{ salirModoCampo(); }catch(e){} goTab('reportes'); S.reportesVista='avance'; renderReportesHub();
       const c=document.getElementById('c-hp'); return S.reportesVista==='hojas'&&c&&c.checkVisibility()&&!c.querySelector('.hp-otros')?'cae en las dos hojas':'vista '+S.reportesVista; });
     await ctx.close();
   }catch(e){ r._error=String(e&&e.message||e).split('\n')[0].slice(0,200); }
   srv.close();
+  if(!JSPDF) r._error='(no hay jsPDF local: npm i -g jspdf@2.5.1, o JSPDF=<ruta>) '+(r._error||'');
   for(const k of Object.keys(HP_ESPERADO)) if(!(k in r)) r[k]=null;
   return r;
 }

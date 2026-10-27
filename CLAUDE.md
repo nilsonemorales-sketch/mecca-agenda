@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v150 — 26 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v151 — 27 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -3132,6 +3132,38 @@ contratista, y un **PDF del contratista**, con lo suyo por ubicación.
   no `.cp-falta`, que es la de Proponer y la prueba la busca por clase). Al
   leer, sale a la app completa: la lista no vive en el Modo Campo.
 
+#### EL PDF LO HACE EL APP (v151) — la ventana de imprimir no servía en el iPhone
+
+**El arreglo de la v150 no funcionó en el iPhone**, y el dueño mandó la foto:
+**32 páginas para 16 hojas** (cada una seguida de una en blanco) y el enlace y
+la fecha abajo. **Safari del iPhone no obedece `@page{margin:0}`**: pone su
+margen, su encabezado y su pie, la hoja ya no cabe y empuja una en blanco.
+Chromium sí obedece, por eso la prueba de la v150 pasó. Y la ventana de
+imprimir, abierta desde el app instalado, **dejaba al dueño sin forma de volver
+al app** sin cerrarla.
+
+- **Ahora el PDF lo dibuja el app con jsPDF** (`_hpPDF`), la misma librería del
+  Plan del día, el Informe y las órdenes de compra, y sale por **la hoja de
+  compartir** (`_hpEntregar`, como `compartirPlanWA`): WhatsApp, Archivos o
+  Imprimir. Al cerrarla se vuelve al app. **No se abre ninguna ventana.** Sin
+  hoja de compartir, se descarga.
+- **Primero el modelo, después el papel**: `_hpModelo` arma solo los datos
+  (bloques, renglones, QR, resumen) y `_hpPDF` los dibuja y pagina con medidas
+  reales (`splitTextToSize`). `S._hpUltimo` guarda el modelo, las páginas y las
+  medidas: es lo que mide la lista de chequeo.
+- **El juego de letras del PDF es Latin-1**: `_hpPdfTxt` cambia «—» por «-» y
+  quita lo que no cabe; el ✔ se DIBUJA con dos líneas, no es una letra.
+- **MÁS SITIO PARA NOTAS EN LA HOJA PARA PEGAR** (pedido del dueño: «no me está
+  resultando el espacio»): NOTAS de **60 mm** (eran 42), renglones de **10 mm**
+  como mínimo y **dos líneas** para escribir. **El PDF del contratista no
+  cambió** (notas de 34 mm, renglones de 7).
+- Se fueron `_hpPegarHTML`, `_hpContHTML`, `_hpImprimir`, `HP_CSS`,
+  `HP_PAGINAR` y `_qrSvg`: no las llama nadie. Los QR se dibujan desde
+  `_qrMatriz`, como rectángulos del PDF.
+- *Avisado y sin tocar:* las pantallas de «Otros reportes» (Avance, su hoja de
+  la v147, «Imprimir») siguen abriendo la ventana de imprimir del navegador, con
+  el mismo problema en el iPhone. Son del administrador y están escondidas.
+
 ### DICTAR (v143) — RETIRADO EN LA v144
 
 La v143 metió una pestaña «Dictar» (Actividades) y un botón «Dictar una
@@ -4390,10 +4422,13 @@ formularios y los errores de consola. Imprime **igual / DISTINTO** renglón por
 renglón y termina con el candado: escrituras interceptadas, salidas cortadas
 y **cero a la base real**. Sale con código 1 si algo es distinto.
 
-**Desde la v149 tiene una novena parte, «LAS DOS HOJAS»**: quince
-comprobaciones a 390 —diecinueve desde la v150: los QR se leen con jsQR, escanear
-el de Dimedes da la lista con el mismo número, margen cero y el escáner en el
-Modo Campo—. Entra por el cajón como Nilson: el centro con dos botones,
+**Desde la v149 tiene una novena parte, «LAS DOS HOJAS»**: veinte
+comprobaciones a 390 desde la v151. **Mide el PDF que sale por la hoja de
+compartir** (`navigator.share` doblado): páginas, papel carta, «Hoja X de Y»,
+ninguna en blanco, sin enlace, cero ventanas abiertas, y las medidas de las
+notas. **Necesita jsPDF local**, porque el candado corta el CDN: `npm i -g
+jspdf@2.5.1` (la misma versión del app) o `JSPDF=<ruta al .min.js>`; sin él
+la parte se corta y lo dice. Con `--fotos` deja los dos PDF. Entra por el cajón como Nilson: el centro con dos botones,
 el conteo y el orden del escogedor, la hoja del 4A y el PDF de Dimedes contra
 una cuenta en Node (bloques = total = cuenta), nada marcado, los circulitos,
 ATRAS. y los blancos, la paginación («(sigue)», «Hoja X de Y», nada cortado) y
