@@ -264,6 +264,7 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .lev-pt i{font-style:normal;font-size:11px;color:var(--text3)}
 .lev-pt em{display:block;font-style:normal;color:var(--red);font-weight:650}
 .lev-pt.mal{color:var(--text)}.lev-m{font-weight:800;width:16px;flex-shrink:0}
+.lev-sinfoto{display:inline-block;margin-top:2px;font-size:11px;font-weight:650;color:var(--text3);border:1px solid var(--border2);border-radius:6px;padding:0 5px}
 .lev-pt.ok .lev-m{color:var(--green)}.lev-pt.mal .lev-m{color:var(--red)}
 .lev-fotos{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 4px 22px}
 .lev-fotos img{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border2);cursor:pointer}
@@ -1420,7 +1421,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261027_156';
+const APP_VERSION='20261027_157';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -32098,7 +32099,7 @@ async function _hpEntregar(blob, nombre, titulo){
 /* ══ v153 · INSPECCIÓN POR APARTAMENTO ════════════════════════════════════
    Pedido del dueño: el avance «a ojo» no es de fiar. El ingeniero recorre un
    apartamento con un checklist por oficio y marca cada punto ✔ bien · ✗
-   problema · — no tiene. Todo ✗ lleva FOTO obligatoria y qué falta. El app
+   problema · — no tiene. Todo ✗ lleva qué falta (la foto, opcional desde la v157). El app
    saca el avance COMPROBABLE (✔ ÷ (✔+✗)) y convierte cada ✗ en una partida.
 
    - Vive junto a las dos hojas (`_hpHubHTML`): en el Modo Campo y en Reportes.
@@ -32258,15 +32259,27 @@ var INSP_CAT=[
    ['T','Pared terminada','Sin hueco ni rotura alrededor.'],
    ['T','Limpio','Sin pintura ni masilla.']])}]},
  {id:'pintura',nombre:'Pintura',contratista:'Jordy',grupos:[
-  {id:'muros',nombre:'Muros y techos',filas:'cada espacio',pts:_inspFases([
+  /* v157 · Muros y Techo, aparte (decisión del dueño). El grupo de los muros
+     conserva el id `muros`: lo ya marcado en «Muros y techos» sigue en su fila
+     y cae en «Muros», cuyos tres primeros puntos son los mismos. */
+  {id:'muros',nombre:'Muros',filas:'cada espacio',pts:_inspFases([
    ['I','Superficie liberada','Estuco lijado y aprobado (liberación L1).'],
-   ['I','Sellador','Aplicado en todo antes de la pintura.'],
-   ['I','Primera mano','Completa en muros y techos.'],
-   ['T','Segunda mano','Pareja; con la luz de lado no se ven rayas.'],
-   ['T','Cortes','Líneas limpias contra techo, rodapié, marcos y ventanas.'],
+   ['I','Sellador','Aplicado en todos los muros antes de pintar.'],
+   ['I','Primera mano','Completa en todos los muros.'],
+   ['T','Segunda mano','Pareja; con la luz de lado no se ven rayas ni brochazos.'],
+   ['T','Cortes','Líneas limpias contra rodapié, marcos, ventanas y el encuentro con el techo.'],
    ['T','Retoques','Los golpes de las instalaciones, repintados.'],
-   ['T','Color','El de la tabla de terminación.'],
-   ['T','Limpieza','Sin pintura en pisos, vidrios, placas ni aparatos.']])}]},
+   ['T','Color','El de la tabla de terminación en cada pared.'],
+   ['T','Limpieza','Sin pintura en pisos, vidrios, placas ni aparatos.']])},
+  {id:'techo',nombre:'Techo',filas:'cada espacio',pts:_inspFases([
+   ['I','Superficie liberada','Sheetrock o pañete masillado y lijado (liberación L1).'],
+   ['I','Sellador','Aplicado en todo el techo antes de pintar.'],
+   ['I','Primera mano','Completa en todo el techo.'],
+   ['T','Segunda mano','Pareja; con la luz de lado no se ven rayas ni las juntas del sheetrock.'],
+   ['T','Corte con la pared','Línea derecha y limpia donde el techo se encuentra con el muro o la moldura.'],
+   ['T','Alrededor de piezas','Pintado y limpio alrededor de luminarias, rejillas, registros y extractor, sin pintura encima de ellos.'],
+   ['T','Sin manchas','Sin manchas de humedad, grietas ni huellas.'],
+   ['T','Color','El blanco de la tabla de terminación, igual en todo el apartamento.']])}]},
  {id:'pisos',nombre:'Pisos y revestimientos',contratista:'Yelson Jimenez',grupos:[
   {id:'espacios',nombre:'Por espacio',filas:'cada espacio del apartamento',pts:[
    ['Sin piezas huecas','Golpee con el mango del martillo: ninguna suena hueca.'],
@@ -32477,7 +32490,7 @@ function _inspElementos(area, of){
     ['Aire acondicionado','Estufa','Horno','Calentador','Secadora'].forEach(function(x){ add('especiales',x); });
     inv.banos.forEach(function(x){ add('especiales','Extractor — '+x); });
   }else if(of==='pintura'){
-    espacios('muros');
+    espacios('muros'); espacios('techo');
   }else if(of==='ventanas'){
     /* Las ventanas y las barandas se agregan en la primera inspección; las
        puertas corredizas son las de tipo «Aluminio» del inventario. */
@@ -32985,7 +32998,7 @@ function _inspHTML(){
         '<button class="in-b'+(p.m==='na'?' on':'')+'" onclick="inspMarcar('+j+',\'na\')" aria-label="No tiene">—</button>'+
       '</div>'+
       (p.m==='mal'&&!abierto?'<div class="in-prob">'+esc((INSP_CAUSAS.find(function(c){ return c[0]===p.c; })||['',''])[1])+(p.n?' — '+esc(p.n):'')+
-        (p.fp?' · foto esperando señal':p.f?' · con foto':'')+(p.ap?' · partida por crear':'')+
+        (p.fp?' · foto esperando señal':p.f?' · con foto':' · sin foto')+(p.ap?' · partida por crear':'')+
         '<button class="in-cambiar" onclick="inspMalEditar('+j+')">Cambiar el problema</button></div>':'')+
       (I.aviso&&I.aviso.j===j?'<div class="in-aviso-fase">⚠ '+esc(I.aviso.t)+'. Se marcó igual.</div>':'')+
       (abierto?_inspMalHTML(j):_inspFotosHTML(e,j,p))+
@@ -33017,17 +33030,17 @@ function _inspMalHTML(j){
     (M.foto
       ? '<div class="in-foto"><img src="'+M.foto+'" alt=""><button class="in-b2" onclick="inspFoto(\'camera\')">Otra foto</button></div>'
       : M.tiene
-      ? '<div class="in-paso">1 · La foto del problema <i>(ya tiene una)</i></div>'+
+      ? '<div class="in-paso">1 · Foto del problema <i>(ya tiene una)</i></div>'+
         '<div class="in-dos"><button class="in-b2" onclick="inspFoto(\'camera\')">'+INSP_ICO_CAM+' Cambiarla</button></div>'
-      : '<div class="in-paso">1 · La foto del problema <i>(obligatoria)</i></div>'+
+      : '<div class="in-paso">1 · Foto del problema <i>(opcional)</i></div>'+
         '<div class="in-dos"><button class="in-b2 fuerte" onclick="inspFoto(\'camera\')">'+INSP_ICO_CAM+' Tomar foto</button>'+
         '<button class="in-b2" onclick="inspFoto(\'galeria\')">De la galería</button></div>')+
     '<div class="in-paso">2 · ¿Qué falta?</div><div class="in-causas">'+
       INSP_CAUSAS.map(function(c){ return '<button class="in-b2'+(M.c===c[0]?' on':'')+'" onclick="inspCausa(\''+c[0]+'\')">'+esc(c[1])+'</button>'; }).join('')+'</div>'+
     '<input id="in-nota" class="in-nota" placeholder="Nota (opcional): «rayada abajo», «3 interruptores 3-way»" value="'+esc(M.n||'')+'" oninput="S._insp.mal.n=this.value">'+
     '<div class="in-dos"><button class="in-b2" onclick="inspMalCancelar()">Cancelar</button>'+
-      '<button class="in-b2 fuerte'+((M.foto||M.tiene)&&M.c?'':' apagado')+'" onclick="inspMalGuardar()">Guardar el problema</button></div>'+
-    ((!M.foto&&!M.tiene)||!M.c?'<div class="in-falta">'+(!M.foto&&!M.tiene?'Falta la foto':'')+(!M.foto&&!M.tiene&&!M.c?' y ':'')+(!M.c?'falta escoger qué falta':'')+'.</div>':'')+
+      '<button class="in-b2 fuerte'+(M.c?'':' apagado')+'" onclick="inspMalGuardar()">Guardar el problema</button></div>'+
+    (!M.c?'<div class="in-falta">Falta escoger qué falta.</div>':'')+
   '</div>';
 }
 function _inspAgregarHTML(of){
@@ -33121,7 +33134,7 @@ function _inspLevHTML(){
       if(!p.m){ sin.push(j+1); return; }
       var fotos=[]; if(p.f) fotos.push(p.f); (p.x||[]).forEach(function(xx){ if(xx.u) fotos.push(xx.u); });
       h+='<div class="lev-pt '+p.m+'"><span class="lev-m">'+(p.m==='ok'?'✔':p.m==='mal'?'✗':'—')+'</span><span>'+(j+1)+'. '+esc(pt[0])+(pt[2]?' <i>'+INSP_FASES[pt[2]]+'</i>':'')+
-        (p.m==='mal'?'<em>'+esc((INSP_CAUSAS.find(function(cc){ return cc[0]===p.c; })||['',''])[1])+(p.n?' — '+esc(p.n):'')+(p.fp?' · foto esperando señal':'')+'</em>':'')+'</span></div>'+
+        (p.m==='mal'?'<em>'+esc((INSP_CAUSAS.find(function(cc){ return cc[0]===p.c; })||['',''])[1])+(p.n?' — '+esc(p.n):'')+(p.fp?' · foto esperando señal':'')+'</em>'+(!p.f&&!p.fp?'<b class="lev-sinfoto">sin foto</b>':''):'')+'</span></div>'+
         (fotos.length?'<div class="lev-fotos">'+fotos.map(function(u){ return '<img src="'+esc(u)+'" alt="" onclick="verFoto(\''+String(u).replace(/'/g,'%27')+'\')">'; }).join('')+'</div>':'');
     });
     if(sin.length) h+='<div class="lev-sin">Sin revisar: '+sin.join(', ')+'</div>';
@@ -33301,11 +33314,11 @@ function _inspFotosHTML(e, j, p){
   h+='<button class="in-masfoto" onclick="inspFotoPunto('+j+')">'+INSP_ICO_CAM+' ＋ Foto</button></div>';
   var V=I.verFoto;
   if(V && V.j===j){
-    var src=_inspFotoSrc(e.rowId,j,p,V.cual), bloq=(V.cual==='f' && p.m==='mal');
+    var src=_inspFotoSrc(e.rowId,j,p,V.cual), bloq=(V.cual==='f' && p.m==='mal' && INSP_CREA_PARTIDAS);
     h+='<div class="in-mal in-ver">'+(src?'<img class="in-grande" src="'+esc(src)+'" alt="">':'<div class="in-conf-t">La foto está guardada en el teléfono y sube cuando haya señal.</div>');
     if(bloq) h+='<div class="in-conf-t">Es la foto del problema (✗). Para quitarla, cambia antes la marca de este punto.</div>'+
       '<div class="in-dos"><button class="in-b2" onclick="inspVerFoto('+j+',\'f\')">Cerrar</button></div>';
-    else if(V.conf) h+='<div class="in-conf-t">¿Quitar esta foto? Se borra de la inspección'+(V.cual==='f'?' y de su partida':' y de la Bitácora')+'. El respaldo queda en el historial.</div>'+
+    else if(V.conf) h+='<div class="in-conf-t">¿Quitar esta foto? Se borra de la inspección'+(V.cual==='f'&&p.a?' y de su partida':' y de la Bitácora')+'. El respaldo queda en el historial.</div>'+
       '<div class="in-dos"><button class="in-b2" onclick="S._insp.verFoto.conf=false;_hpRepintar()">Cancelar</button>'+
       '<button class="in-b2 rojo" onclick="inspQuitarFoto()">Sí, quitar la foto</button></div>';
     else h+='<div class="in-dos"><button class="in-b2" onclick="S._insp.verFoto=null;_hpRepintar()">Cerrar</button>'+
@@ -33320,7 +33333,9 @@ function inspQuitarFoto(){
   var pre='RESPALDO antes de borrar: foto de la inspección '+_hpNomUbic(I.area)+' · '+r.elemento+' — '+t+': ';
   p.q=(p.q||[]);
   if(V.cual==='f'){
-    if(p.m==='mal'){ showToast('Es la foto del problema: cambia antes la marca','warn',4000); return; }
+    /* v157 · Sin partidas, la foto del ✗ se quita como las otras: el ✗ se
+       queda con su causa y su nota, ahora «sin foto». */
+    if(p.m==='mal' && INSP_CREA_PARTIDAS){ showToast('Es la foto del problema: cambia antes la marca','warn',4000); return; }
     if(p.fp){ _inspFotoDel(r.id+'#'+j); p.fp=false; }
     if(p.f && p.a) p.q.push({rec:_logRec('respaldo','inspeccion',r.id,r.elemento,pre+p.f+' (de la partida '+p.a+')'), a:p.a, u:p.f});
     else if(p.f && p.fb) p.q.push({rec:_logRec('respaldo','inspeccion',r.id,r.elemento,pre+p.f+' (nota '+p.fb+' de la Bitácora)'), b:p.fb});
@@ -33352,7 +33367,7 @@ function inspCausa(c){ if(S._insp&&S._insp.mal){ S._insp.mal.c=c; _hpRepintar();
 function inspMalCancelar(){ S._insp.mal=null; _hpRepintar(); }
 async function inspMalGuardar(){
   var I=S._insp, M=I&&I.mal; if(!M || _inspCerradaAqui()) return;
-  if(!M.foto && !M.tiene){ showToast('El problema necesita su foto','warn',3500); return; }
+  /* v157 · La foto del ✗ es OPCIONAL (decisión del dueño); la causa no. */
   if(!M.c){ showToast('Escoge qué falta','warn',3500); return; }
   var e=_inspElActual(); if(!e) return;
   var r=_inspFila(e,I.area,I.of), p=r.puntos[M.j]||{};

@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v156 — 27 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v157 — 27 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -3333,6 +3333,25 @@ archivo pero está APAGADO** con `INSP_CREA_PARTIDAS = false`.
   comprobaciones desde la v156 (las de partidas de la v153-v155 se cambiaron por
   «cero escrituras a actividades», y entran fases, guardar, cerrar, el inodoro
   listo, la plomería del 4A y el Levantamiento como Nilson).
+- **LA FOTO DEL ✗ ES OPCIONAL (v157, decisión del dueño).** «1 · Foto del
+  problema (opcional)»; «Guardar el problema» se enciende con la causa, que
+  sigue obligatoria (la nota, opcional), y el aviso rojo dice solo «Falta
+  escoger qué falta». La foto de un ✗ **se quita** como las otras (respaldo en
+  `obra_cambios`, después el `DELETE` de su nota de la Bitácora) y el ✗ se queda
+  con su causa. Un ✗ sin foto dice **«sin foto»** en su renglón y en el
+  Levantamiento (`.lev-sinfoto`): no es un error. Con `INSP_CREA_PARTIDAS`
+  en `true` vuelve el bloqueo de quitarla (era la constancia de la partida).
+- **PINTURA EN DOS (v157): «Muros» y «Techo»**, uno por espacio (las mismas
+  listas A, B y PH), 8 puntos con fases cada uno. **El grupo de los muros
+  conserva el id `muros`**: lo marcado en «Muros y techos» sigue en su fila y
+  cae en «Muros», cuyos tres primeros puntos (superficie, sellador, primera
+  mano) son los mismos; el techo es `techo` y nace vacío. Ni una escritura a la
+  base. La única de pintura el 27-oct era `2A|pintura|muros|recibidor` (3 ✔ del
+  Ing. Nilson): siguen ahí, ahora en «Muros». En el papel salen como dos grupos,
+  sin dibujo.
+- **Lista de chequeo (v157)**: treinta y seis — `sinCausa`, `sinFoto` (guarda,
+  87,5 % y «sin foto»), `quitarMal` (ahora se quita), `pintura4A` (Muros 14 ·
+  Techo 14 · 8 puntos) y `levSinFoto`.
 - **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO» (hasta la v155)**: veinticinco
   comprobaciones como Karina por el Modo Campo a 390 (desde la v154, también
   ✗ → «—» deja la partida abierta con su nota, y los tres dibujos de la hoja de

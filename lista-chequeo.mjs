@@ -1649,15 +1649,16 @@ const IN_ESPERADO={
   repetidos:{v:'Habitación principal (2) · Habitación secundaria · sin nombres iguales', d:'el nombre repetido sale con «(2)» y ninguna fila se llama igual que otra'},
   avisoFase:{v:'avisa «Falta validar la instalación» · deja marcar', d:'(v156) ✔ a un punto de «Probado» con la instalación sin revisar: sale el aviso amarillo y la marca se pone igual'},
   fasesVisibles:{v:'IIICPTTT', d:'(v156) la puerta de madera enseña la fase de cada punto, agrupada en orden: I · C · P · T'},
-  sinFoto:{v:'no guarda sin foto', d:'tocar ✗ y «Guardar el problema» sin foto no escribe nada'},
+  sinCausa:{v:'no guarda · lo dice', d:'(v157) un ✗ sin escoger qué falta no se guarda, y la pantalla dice «Falta escoger qué falta»'},
+  sinFoto:{v:'guarda sin foto · 87,5% · dice «sin foto»', d:'(v157) un ✗ con causa y SIN foto se guarda, cuenta para el avance y el renglón dice «sin foto»'},
   crea:{v:'0 escrituras a actividades · foto en la Bitácora · causa material', d:'(v156) el ✗ con foto y «Falta material» NO crea partida: la causa queda en el punto y la foto entra a la Bitácora como nota'},
   fila:{v:'1 fila · 8 puntos · ✗ con su foto', d:'la inspección se guarda en obra_inspecciones: un renglón del elemento, con los 8 puntos y la foto en el ✗'},
   avance:{v:'87,5%', d:'7 ✔ y 1 ✗ en una puerta dan 87,5 % de avance comprobable'},
   desglose:{v:'con problemas 1 · completos 0', d:'al tocar el avance sale el desglose: la puerta con su ✗ y lo que falta'},
   vuelveBien:{v:'queda ✔ · sin tocar actividades · la foto se queda', d:'(v156) volver ese punto a ✔ cambia la marca y nada más'},
   sinRed:{v:'espera en el teléfono · sale al volver · 0 actividades', d:'sin señal, un ✗ con foto se queda en el teléfono (la barra lo dice) y al volver la red sale su foto a la Bitácora; ninguna partida'},
-  quitarMal:{v:'no se deja · lo dice', d:'(v155) la foto de un ✗ no se puede quitar: la pantalla dice que se cambie antes la marca, y no escribe nada'},
-  desmarcaOk:{v:'sin marcar · 87,5% → 86,7%', d:'(v155) tocar otra vez el ✔ deja el punto sin marcar, y el avance baja en el momento'},
+  quitarMal:{v:'se quita · respaldo antes · el ✗ sigue con su causa · sin foto', d:'(v157) la foto de un ✗ se quita como las otras: confirma en pantalla, respaldo y después borra la nota; el ✗ se queda con su causa'},
+  desmarcaOk:{v:'sin marcar · 81,3% → 80%', d:'(v155) tocar otra vez el ✔ deja el punto sin marcar, y el avance baja en el momento (v157: 13 ✔ y 3 ✗ → 12 ✔ y 3 ✗, por el ✗ de más que prueba quitar su foto)'},
   fotoOk:{v:'sube · en la Bitácora con su pie', d:'(v155) «＋ Foto» en un ✔ sube la foto y sale en la Bitácora del día con el apartamento, el elemento y el punto'},
   quitarFoto:{v:'respaldo y después se borra', d:'(v155) quitar esa foto pide confirmar en la pantalla, escribe el «RESPALDO antes de borrar» y después borra la nota de la Bitácora'},
   desmarcaMal:{v:'sin marcar · la foto se queda · 0 actividades', d:'(v156) desmarcar un ✗ lo deja sin marcar, con su foto, sin tocar actividades'},
@@ -1670,8 +1671,10 @@ const IN_ESPERADO={
   cerrar:{v:'resumen 0 ✔ · 0 ✗ · 25 faltan · cerrada por Karina · no deja marcar · reabierta por Karina', d:'(v156) «Cerrar inspección» enseña el resumen, la cierra con nombre y fecha, cerrada no deja marcar, y al reabrir queda anotado quién'},
   plomeria4A:{v:'4 inodoro · 4 lavamanos · 3 ducha · 3 fregadero · 1 calentador', d:'(v156) en el 4A salen los elementos de plomería según sus 4 baños (el 1/2 baño sin ducha), 3 fregaderos y lavadero, y el calentador'},
   inodoroListo:{v:'inodoro · listo · la lista lo dice', d:'(v156) un inodoro con sus 8 puntos en ✔ queda «listo»'},
+  pintura4A:{v:'Muros 14 · Techo 14 · Techo con 8 puntos · Corte con la pared', d:'(v157) Pintura del 4A sale en dos grupos, Muros y Techo, uno por espacio, y el Techo trae sus 8 puntos'},
   levKarina:{v:'no lo ve', d:'(v156) el Levantamiento es solo del administrador: la Ing. Karina no ve el botón'},
   sinActividades:{v:0, d:'(v156) en toda la prueba de la inspección, cero escrituras a obra_actividades'},
+  levSinFoto:{v:'«sin foto» a la vista', d:'(v157) en el Levantamiento, un ✗ sin foto lleva la etiqueta «sin foto»'},
   levantamiento:{v:'11 × 14 · 4A Ebanistería e-en_curso 100% · aprueba el elemento', d:'(v156) el Ing. Nilson ve la tabla de apartamentos × oficios, toca la celda y aprueba un elemento: se guarda con su nombre'},
   dedos:{v:0, d:'nada de lo que se toca en la inspección mide menos de 40 px, y la página no se desliza de lado a 390'},
   realBase:{v:0, d:'ninguna escritura se escapa del doble: lo escrito a Supabase lo contesta la prueba y lo demás se corta'},
@@ -1764,9 +1767,18 @@ async function probarInspeccion(nombreVer, html, b){
     for(const i of [0,1,2,5,6,7]) { await tresDe(i).nth(0).click(); await p.waitForTimeout(60); }
     await tresDe(3).nth(1).click(); await p.waitForTimeout(150);
     const e0=ESC.length;
+    await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click(); await p.waitForTimeout(400);
+    const dice0=await G(()=>{ const f=document.querySelector('#campo-root .in-falta'); return f&&f.checkVisibility()?f.textContent.trim():''; });
+    r.sinCausa=(ESC.slice(e0).some(x=>x.base==='obra_inspecciones'&&x.body&&x.body.puntos&&x.body.puntos[3]&&x.body.puntos[3].m==='mal')||(await G(()=>(_inspPuntos(_inspElActual().rowId)[3]||{}).m))==='mal'?'guardó sin causa':'no guarda')+
+      ' · '+(dice0==='Falta escoger qué falta.'?'lo dice':'dice: '+JSON.stringify(dice0));
     await p.locator('#campo-root .in-b2',{hasText:'Falta material'}).click();
-    await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click(); await p.waitForTimeout(300);
-    r.sinFoto=ESC.slice(e0).some(x=>x.base==='obra_inspecciones'&&x.body&&x.body.puntos&&x.body.puntos[3]&&x.body.puntos[3].m==='mal')?'guardó sin foto':'no guarda sin foto';
+    await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click();
+    const guardo=await esperar(()=>{ const pt=filaDe(el1).puntos[3]; return pt&&pt.m==='mal'&&pt.c==='material'&&!pt.f&&!pt.fp; });
+    const pctSF=await G(()=>_inspPctTxt(_inspCuenta(S._insp.area,S._insp.of).pct));
+    const tagSF=await G(()=>/sin foto/.test((document.querySelectorAll('#campo-root .in-pt')[3].querySelector('.in-prob')||{}).textContent||''));
+    r.sinFoto=[guardo?'guarda sin foto':'no guardó', pctSF, tagSF?'dice «sin foto»':'no dice «sin foto»'].join(' · ');
+    // Y después se le pone la foto, con «Cambiar el problema»
+    await p.locator('#campo-root .in-pt').nth(3).locator('.in-cambiar').click(); await p.waitForTimeout(150);
     const [fc]=await Promise.all([p.waitForEvent('filechooser'), p.locator('#campo-root .in-b2',{hasText:'Tomar foto'}).click()]);
     await fc.setFiles({name:'f.png',mimeType:'image/png',buffer:PNG}); await p.waitForTimeout(400);
     await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click();
@@ -1814,17 +1826,20 @@ async function probarInspeccion(nombreVer, html, b){
       await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click(); };
     await conFoto(7);
     await esperar(()=>{ const pt=filaDe(el2.id).puntos[7]; return pt&&pt.f&&!pt.fp; });
-    // a) la foto del ✗ no se quita
-    const e2=ESC.length;
-    const mini7=p.locator('#campo-root .in-pt').nth(7).locator('.in-mini');
-    if(await mini7.count()){ await mini7.first().click(); await p.waitForTimeout(200);
-      const dice=await G(()=>/cambia antes la marca/.test((document.querySelector('#campo-root .in-ver')||{}).textContent||''));
-      const hayBoton=await p.locator('#campo-root .in-ver .in-b2',{hasText:'Quitar foto'}).count();
-      await G(()=>{ S._insp.verFoto={j:7,cual:'f',conf:true}; inspQuitarFoto(); });
-      await p.waitForTimeout(600);
-      const sigue=await G(()=>!!_inspPuntos(_inspElActual().rowId)[7].f);
-      r.quitarMal=(!hayBoton&&!ESC.slice(e2).length&&sigue?'no se deja':'se dejó')+' · '+(dice?'lo dice':'no lo dice');
-      await G(()=>{ S._insp.verFoto=null; _hpRepintar(); });
+    // a) v157 · la foto de un ✗ se quita como las otras (en el punto 7, índice 6)
+    await conFoto(6);
+    await esperar(()=>{ const pt=filaDe(el2.id).puntos[6]; return pt&&pt.f&&pt.fb&&!pt.fp&&NOTAS[pt.fb]; });
+    const e2=ESC.length, nb6=(filaDe(el2.id).puntos[6]||{}).fb;
+    const mini6=p.locator('#campo-root .in-pt').nth(6).locator('.in-mini');
+    if(await mini6.count()){ await mini6.first().click(); await p.waitForTimeout(200);
+      await p.locator('#campo-root .in-ver .in-b2',{hasText:'Quitar foto'}).click(); await p.waitForTimeout(150);
+      await p.locator('#campo-root .in-ver .in-b2',{hasText:'Sí, quitar la foto'}).click();
+      await esperar(()=>!NOTAS[nb6]);
+      const sl2=ESC.slice(e2), iR2=sl2.findIndex(x=>x.base==='obra_cambios'&&/^RESPALDO antes de borrar/.test(x.body&&x.body.detalle||'')), iD2=sl2.findIndex(x=>x.base==='obra_bitacora'&&x.m==='DELETE');
+      const p6=filaDe(el2.id).puntos[6]||{};
+      const tag6=await G(()=>/sin foto/.test((document.querySelectorAll('#campo-root .in-pt')[6].querySelector('.in-prob')||{}).textContent||''));
+      r.quitarMal=[!NOTAS[nb6]&&!p6.f?'se quita':'no se quitó', iR2>=0&&iD2>iR2?'respaldo antes':'respaldo '+iR2+' · borrado '+iD2,
+        p6.m==='mal'&&p6.c==='arreglo'?'el ✗ sigue con su causa':'quedó '+p6.m+' '+p6.c, tag6?'sin foto':'no dice «sin foto»'].join(' · ');
     }else r.quitarMal='sin miniatura';
     // b) ✔ otra vez lo quita y el avance baja
     const pct=()=>G(()=>_inspPctTxt(_inspCuenta(S._insp.area,S._insp.of).pct));
@@ -1963,7 +1978,24 @@ async function probarInspeccion(nombreVer, html, b){
       await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
       const enLista=await G(()=>/listo/.test((document.querySelector('#campo-root .in-el')||{}).textContent||''));
       r.inodoroListo=(nomI.startsWith('inodoro')?'inodoro':nomI)+' · '+(listo?'listo':'no listo')+' · '+(enLista?'la lista lo dice':'la lista no lo dice');
+      // v157 · un ✗ sin foto en el segundo elemento, para el Levantamiento
+      await p.locator('#campo-root .in-el').nth(1).click(); await p.waitForTimeout(250);
+      const elSF=await G(()=>_inspElActual().rowId);
+      await tresDe(0).nth(1).click(); await p.waitForTimeout(150);
+      await p.locator('#campo-root .in-b2',{hasText:'Falta material'}).click();
+      await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click();
+      await esperar(()=>{ const pt=filaDe(elSF).puntos[0]; return pt&&pt.m==='mal'; });
+      await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
     }else{ r.plomeria4A='sin Plomería'; r.inodoroListo='sin Plomería'; }
+    // v157 · Pintura en dos grupos, Muros y Techo
+    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    if(await p.locator('#campo-root .in-of',{hasText:'Pintura'}).count()){
+      await p.locator('#campo-root .in-of',{hasText:'Pintura'}).click(); await p.waitForTimeout(250);
+      const pin=await G(()=>{ const out={}; let g='';
+        document.querySelectorAll('#campo-root .cp-lbl, #campo-root .in-el').forEach(e=>{ if(e.classList.contains('cp-lbl')) g=e.textContent.trim(); else out[g]=(out[g]||0)+1; });
+        const t=_inspGrupo('pintura','techo'); return {out, n:t?t.pts.length:0, p5:t&&t.pts[4]?t.pts[4][0]:''}; });
+      r.pintura4A=['Muros '+(pin.out['Muros']||0), 'Techo '+(pin.out['Techo']||0), 'Techo con '+pin.n+' puntos', pin.p5].join(' · ');
+    }else r.pintura4A='sin Pintura';
     r.levKarina=await G(()=>{ inspVolver(); inspVolver(); return document.querySelector('#campo-root .in-lev-btn')?'lo ve':'no lo ve'; });
     r.sinActividades=esActs()-acts0;
     }catch(e){ r._error156=String(e&&e.message||e).split('\n')[0].slice(0,200); }
@@ -1999,6 +2031,9 @@ async function probarInspeccion(nombreVer, html, b){
       const boton=await q.evaluate(()=>(document.querySelector('#c-hp .in-aprob.mini.on')||{}).textContent||'');
       r.levantamiento=[tabla.filas+' × '+tabla.cols, '4A Ebanistería '+tabla.cel,
         pat&&FILAS[el1]&&FILAS[el1].aprobado_por==='Ing. Nilson'&&/Aprobado por Ing\. Nilson/.test(boton)?'aprueba el elemento':'no aprobó'].join(' · ');
+      await q.evaluate(()=>inspLevOf(REC_ORDEN.findIndex(x=>/Apto 4A/.test(x)),'plomeria'));
+      await q.waitForTimeout(250);
+      r.levSinFoto=await q.evaluate(()=>[...document.querySelectorAll('#c-hp .lev-sinfoto')].some(x=>x.checkVisibility()&&x.textContent==='sin foto'))?'«sin foto» a la vista':'no sale «sin foto»';
       await q.close();
     }catch(e){ r.levantamiento='se cortó: '+String(e&&e.message||e).split('\n')[0].slice(0,120); }
     r.realBase=fuera;
