@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v157 — 27 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v158 — 28 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -3352,6 +3352,30 @@ archivo pero está APAGADO** con `INSP_CREA_PARTIDAS = false`.
 - **Lista de chequeo (v157)**: treinta y seis — `sinCausa`, `sinFoto` (guarda,
   87,5 % y «sin foto»), `quitarMal` (ahora se quita), `pintura4A` (Muros 14 ·
   Techo 14 · 8 puntos) y `levSinFoto`.
+- **EL ✗ SE GUARDA CON UNA OPCIÓN O CON UNA NOTA (v158).** Hasta la v157 exigía
+  la causa: con solo la nota, «Guardar el problema» soltaba un aviso de 3 s y no
+  guardaba, y al cerrar el recuadro la nota se perdía — le pasó al Ing. Nilson el
+  28-oct en 2A · Entrada principal. Ahora basta cualquiera de las dos
+  (`_inspMalVale`); sin ninguna, el botón se ve apagado y dice en rojo «Escoja
+  qué tiene o escriba una nota». Al guardar, aviso verde «Guardado». Escribir no
+  repinta (perdería el teclado): `inspMalNota` solo enciende el botón.
+- **BORRADOR DEL ✗ (v158)**: lo escrito y no guardado vive en el teléfono
+  (`mecca_insp_borr_v1`, clave `rowId#punto`), vuelve al abrir el ✗ y el punto
+  dice «✗ sin guardar: «…». Toca ✗ para seguir.». No va a la base: no es una
+  marca. Se borra al guardar, o al marcar ese punto ✔ o «No aplica».
+- **«¿QUÉ TIENE?» (v158, decisión del dueño)**: cuatro opciones —No está puesto
+  · Incompleto · Mal hecho, hay que corregir · Dañado—, claves **`no_puesto`,
+  `incompleto`, `mal_hecho`, `danado`, que no se cambian**. Las cinco de antes
+  quedan en `INSP_CAUSAS_VIEJAS` solo para leer lo guardado (`_inspCausaTxt`);
+  medido el 28-oct, ningún ✗ de la base las tenía. Lo que se lee de un ✗ es
+  `_inspProbTxt`: «Incompleto · falta la roseta», en el renglón, el
+  Levantamiento y la Bitácora. Tocar otra vez la opción la quita.
+- **«No aplica» (v158)** es el tercer botón (el «—» pequeño encima) y arriba de
+  los puntos va la línea «✔ Bien · ✗ Tiene algo · No aplica = ese punto no
+  existe en este elemento (ej.: puerta sin tope)». No cuenta para el avance,
+  como siempre.
+- **Lista de chequeo (v158)**: cuarenta — entran `opciones`, `noAplica`,
+  `soloNota` y `borrador`, y `sinCausa` pasa a «sin opción ni nota».
 - **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO» (hasta la v155)**: veinticinco
   comprobaciones como Karina por el Modo Campo a 390 (desde la v154, también
   ✗ → «—» deja la partida abierta con su nota, y los tres dibujos de la hoja de
