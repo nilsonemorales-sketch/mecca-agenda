@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v158 — 28 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v159 — 28 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -257,7 +257,7 @@ mismos botones que cualquier otra.
 | **EL AVANCE POR UBICACIÓN, POR CONTRATISTA Y CRUZADO, con cada número tocable** | **Reportes → «Avance»** (v146), la primera de la sub-barra, y en el cajón «Reportes — Avance por ubicación y contratista» — `renderAvanceRep()`, `_raFilas()`, `_raPasa()`, `_raEn()`, `raVer()`, `raImprimir()`. Solo lectura. Ver «AVANCE (v146)» abajo |
 | **LA HOJA DE UN CONTRATISTA O DE UNA UBICACIÓN, para imprimir y mandar** | **Reportes → Avance → «Hoja ›»** en una fila de Por contratista o de un área (v147) — `raHoja()`, `_raHojaHTML()`, `_raCargarMov()`, `raHojaImprimir()`, CSS en `<style id="hj-css">`. Sin dinero. Ver «LA HOJA DE REPORTE (v147)» abajo |
 | **SACAR LA HOJA PARA PEGAR DE UNA UBICACIÓN, o EL PDF DE UN CONTRATISTA** | **Reportes** (v149) — lo ÚNICO que se ve al entrar: dos botones → escoger → sale la hoja. También en el **Modo Campo**. `renderHojasRep()`, `_hpHubHTML()`, `hpSacar()`, `_hpPegarHTML()`, `_hpContHTML()`. Ver «REPORTES EN DOS HOJAS (v149)» abajo |
-| **INSPECCIONAR un apartamento por oficio, punto por punto, con foto en cada problema** | **Reportes y Modo Campo → «Inspección»**, el tercer botón junto a las dos hojas (v153) — `inspAbrir()`, `_inspHTML()`, `_inspElementos()`, `inspMarcar()`, `inspMalGuardar()`, `_inspResolver()`, `_inspEnviar()`, `inspImprimir()`; desde la v155 `_inspDesmarcar()`, `inspResetAbrir()`, `inspFotoPunto()`, `inspQuitarFoto()`; desde la v156 `inspGuardarSeguir()`, `inspCerrarSi()`, `inspReabrir()`, `inspLev()`. Tablas `obra_inspecciones` y `obra_insp_estado`. **Desde la v156 es un LEVANTAMIENTO: no toca las actividades**. Ver «INSPECCIÓN POR APARTAMENTO (v153)» abajo |
+| **INSPECCIONAR un apartamento por oficio, punto por punto, con foto en cada problema** | **Reportes y Modo Campo → «Inspección»**, el tercer botón junto a las dos hojas (v153) — `inspAbrir()`, `_inspHTML()`, `_inspElementos()`, `inspMarcar()`, `inspMalGuardar()`, `_inspResolver()`, `_inspEnviar()`, `inspImprimir()`; desde la v155 `_inspDesmarcar()`, `inspResetAbrir()`, `inspFotoPunto()`, `inspQuitarFoto()`; desde la v156 `inspGuardarSeguir()`, `inspCerrarSi()`, `inspReabrir()`, `inspLev()`; desde la v159 `_inspPantallas()`, `inspGuardarPant()`, `_inspGuardia()`, `inspHistorial()`. Tablas `obra_inspecciones` y `obra_insp_estado`. **Desde la v156 es un LEVANTAMIENTO: no toca las actividades**. Ver «INSPECCIÓN POR APARTAMENTO (v153)» abajo |
 | **Escanear la hoja pegada y caer en la lista de ese contratista en ese sitio** | **Cajón → «Escanear el QR del apartamento»** y **Modo Campo → «Escanear el QR de la hoja»** (v150) — `recEscanear()`, `recLeido()`, `recAplicarFiltro()`. Los QR los dibuja `_qrSvg()` / `_qrMatriz()`, dentro del archivo |
 | **Las doce pantallas viejas de Reportes (Avance, Dashboard, Historial…)** | **Reportes → «Otros reportes ›»**, solo administrador (v149) — `REPORTES_OCULTOS`, `reporteOculto()`, `hpOtros()`. Escondidas, no borradas |
 | ~~Agregar una actividad dictándola~~ | **Se retiró en la v144** (decisión del dueño). Ver «DICTAR (v143) — RETIRADO EN LA v144» abajo. **No la vuelvas a construir sin que él lo pida** |
@@ -3376,6 +3376,38 @@ archivo pero está APAGADO** con `INSP_CREA_PARTIDAS = false`.
   como siempre.
 - **Lista de chequeo (v158)**: cuarenta — entran `opciones`, `noAplica`,
   `soloNota` y `borrador`, y `sinCausa` pasa a «sin opción ni nota».
+- **POR BAÑO, CON «GUARDAR» Y CON HISTORIAL (v159).** Palabras del dueño: *«que
+  sea como por baño… un historial de quién llenó cada una y quién modificó… que
+  no me deje salir sin haber guardado».* Tres cosas:
+  - **PANTALLAS** (`INSP_POR_ESPACIO`, `_inspPantallas`): en Plomería, Inodoro +
+    Lavamanos + Ducha de un mismo baño salen en UNA pantalla (el ½ baño sin
+    ducha); en Electricidad, Tomas + Interruptores + Luminarias por espacio; en
+    Pintura, Muros + Techo. Se juntan por el id del espacio. **Los renglones de
+    la base NO cambiaron**: cada elemento sigue siendo su fila
+    `código|oficio|grupo|elemento`; la pantalla es solo cómo se enseñan.
+    `I.i` cuenta pantallas e `I.k` el elemento dentro (`inspK(k)` delante de
+    cada `onclick`).
+  - **«GUARDAR · N cambios»** arriba (pegado) y abajo. ✔, «No aplica» y
+    desmarcar quedan pendientes en el teléfono (`mecca_insp_pend_v1`,
+    `{rowId:{antes,ahora}}`) hasta tocarlo. Lo que ya guardaba solo —el ✗ con su
+    recuadro, la foto, quitar foto, empezar de nuevo, el lápiz— guarda la
+    pantalla entera de una vez. **Salir con cambios pregunta** (`_inspGuardia`,
+    en volver, cambiar de pantalla, salir y `goTab`): Guardar · Descartar ·
+    Seguir aquí, y el navegador avisa al cerrar (`beforeunload`).
+  - **HISTORIAL**: cada guardado de una fila deja un renglón `guardada` en
+    `obra_cambios` (entidad `inspeccion`, `_inspHistTxt`: «Llenó|Modificó · N ✔ ·
+    N ✗ · N No aplica — 1. Punto: antes → ahora»), y cada punto guarda `u0/t0`
+    (quién lo llenó primero) y `u/t` (el último cambio). La pantalla dice
+    «Llenó: X · Último cambio: Y» y el botón «Historial» trae los renglones con
+    UN `GET`. Los puntos viejos sin `u0` caen en el `ingeniero` de la fila.
+  - **POR QUÉ SE PERDÍAN MARCAS, además de «volver»**: `_inspCargarApto` pisaba
+    con la copia de la base las filas que todavía estaban en la cola sin salir.
+    Ahora no toca las que están en la cola o pendientes, y `_inspEnviar` funde lo
+    que resuelve (foto subida, foto quitada) sin pisar lo que se esté tocando
+    (`_inspFundir`, `_inspDevolver`).
+  - **Lista de chequeo (v159)**: entran `porBano`, `salir`, `historial` y
+    `noPisa` (la marca sigue al volver a entrar con la escritura cortada), y
+    `pintura4A` pasa a pantallas de muros + techo.
 - **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO» (hasta la v155)**: veinticinco
   comprobaciones como Karina por el Modo Campo a 390 (desde la v154, también
   ✗ → «—» deja la partida abierta con su nota, y los tres dibujos de la hoja de

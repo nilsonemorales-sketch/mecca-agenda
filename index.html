@@ -230,6 +230,18 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .in-foto{display:flex;align-items:center;gap:10px}
 .in-foto img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1.5px solid var(--border2)}
 .in-falta{font-size:12.5px;color:var(--red);font-weight:650}
+.in-sec{margin:14px 0 2px;font-size:15px;font-weight:800;color:var(--accent);border-bottom:2px solid var(--accent);padding-bottom:4px}
+.in-quien{font-size:12px;color:var(--text3);margin:2px 0 4px}
+.in .in-guardar-pant{width:100%;min-height:52px;border-radius:14px;border:none;background:var(--accent);color:#fff;font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;margin-top:8px}
+.in .in-guardar-pant.arriba{position:sticky;top:6px;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.in-salir{border-color:#e8b84a;background:#fff8e6;color:#3a2a00}
+.in-salir .in-paso{color:#8a5a00}
+.in-singuardar{color:#8a5a00!important;font-weight:700}
+.in-hist{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:8px 12px;font-size:13px;margin-top:6px}
+.in-hist-r{padding:6px 0;border-bottom:1px solid var(--border)}
+.in-hist-r:last-child{border-bottom:none}
+.in-hist-r div{color:var(--text2);font-size:12px}
+.in-hist-r i{display:block;font-style:normal;color:var(--text2);font-size:12.5px;margin-top:2px;overflow-wrap:anywhere}
 .in-ayuda{font-size:12.5px;color:var(--text3);margin:-4px 0 4px}
 .in-fase{display:inline-block;font-size:11px;font-weight:800;border-radius:6px;padding:1px 7px;margin-bottom:4px;color:#fff}
 .in-fase.f-I{background:#5b6b8c}.in-fase.f-C{background:#2f7fa8}.in-fase.f-P{background:#c07a12}.in-fase.f-T{background:#346837}
@@ -1423,7 +1435,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261028_158';
+const APP_VERSION='20261028_159';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -17839,6 +17851,8 @@ async function compartirEjecutivoWA(){
 }
 
 function goTab(tab){
+  /* v159 · No se sale de una pantalla de inspección con marcas sin guardar. */
+  if(typeof _inspGuardia==='function' && _inspGuardia(function(){ goTab(tab); })) return;
   /* Caía en 'hoy', que no existe desde v84: la vista no se encontraba, no se
      activaba ninguna, y la pantalla quedaba en blanco. Ahora cae en la lista. */
   if(moduloOculto(tab)) tab='obra';
@@ -32555,6 +32569,233 @@ function _inspCuenta(area, of){
           completos:completos, conMal:conMal, sinTocar:sinTocar};
 }
 function _inspPctTxt(p){ return p==null?'—':(String(p).replace('.',',')+'%'); }
+/* v159 · UNA PANTALLA POR BAÑO, POR ESPACIO (decisión del dueño, 28-oct-2026):
+   «que sea por baño». Hasta la v158 la plomería salía Inodoro de todos los
+   baños, después Lavamanos de todos, después Ducha de todos: el ingeniero
+   entraba tres veces al mismo baño. Ahora el baño es UNA pantalla con sus
+   aparatos uno debajo del otro, y lo mismo en Electricidad (tomas,
+   interruptores y luminarias de cada espacio) y en Pintura (muros y techo).
+   LOS ELEMENTOS NO CAMBIARON: cada aparato sigue siendo su fila de
+   `obra_inspecciones`, con el mismo id, así que lo ya marcado está donde
+   estaba. Solo cambia cómo se juntan para enseñarlos. */
+var INSP_POR_ESPACIO={plomeria:['inodoro','lavamanos','ducha'], electricidad:['tomas','interruptores','luminarias'], pintura:['muros','techo']};
+var INSP_POR_ESPACIO_TXT={plomeria:'Por baño', electricidad:'Por espacio', pintura:'Por espacio'};
+function _inspPantallas(area, of){
+  var gs=INSP_POR_ESPACIO[of]||[], out=[], porId={};
+  _inspElementos(area,of).forEach(function(e){
+    if(gs.indexOf(e.grupo)>=0 && !e.agregado){
+      var p=porId[e.id]; if(!p){ p=porId[e.id]={key:'e:'+e.id, nombre:e.nombre, junta:true, els:[]}; out.push(p); }
+      p.els.push(e);
+    }else out.push({key:e.rowId, nombre:e.nombre, junta:false, els:[e]});
+  });
+  return out;
+}
+function _inspPantActual(){ var I=S._insp; return I?_inspPantallas(I.area,I.of)[I.i]:null; }
+function _inspElActual(){ var P=_inspPantActual(); return P?(P.els[S._insp.k||0]||P.els[0]):null; }
+/* Cada botón de la pantalla dice primero de qué aparato es (k). */
+function inspK(k){ if(S._insp) S._insp.k=k; }
+function _inspPantFalta(P){ return P.els.some(function(e){ var ps=_inspPuntos(e.rowId); for(var i=0;i<8;i++) if(!(ps[i]&&ps[i].m)) return true; return false; }); }
+function _inspQueEs(of){ return of==='plomeria'?'baño':'espacio'; }
+
+/* v159 · GUARDAR, Y NO SALIR SIN GUARDAR (decisión del dueño, 28-oct).
+   ✔, «No aplica» y desmarcar quedan PENDIENTES en el teléfono
+   (`mecca_insp_pend_v1`: cómo estaba la fila antes y cómo está ahora) hasta
+   tocar «Guardar». Lo que ya tiene su propio botón de confirmar —«Guardar el
+   problema», «＋ Foto», «Quitar foto», «Empezar de nuevo», el nombre— guarda la
+   pantalla entera en el acto. Salir con algo pendiente (Volver, Siguiente,
+   otra pestaña) pregunta: Guardar · Descartar · Seguir aquí. Si el teléfono se
+   apaga a medias, lo pendiente sigue ahí al volver.
+   Cada guardado deja UN renglón `guardada` en `obra_cambios` por elemento
+   tocado (quién, cuándo y qué punto pasó de qué a qué) y cada punto lleva
+   quién lo llenó (`u0`, `t0`) y quién lo cambió por última vez (`u`, `t`). */
+var INSP_PEND_LS='mecca_insp_pend_v1';
+function _inspPend(){ try{ return JSON.parse(localStorage.getItem(INSP_PEND_LS)||'{}')||{}; }catch(e){ return {}; } }
+function _inspPendSet(m){ try{ localStorage.setItem(INSP_PEND_LS, JSON.stringify(m)); }catch(e){} }
+function _inspCopia(r){ return r?JSON.parse(JSON.stringify(r)):null; }
+function _inspHuella(r){
+  var ps=(r&&r.puntos)||[], out=[];
+  for(var j=0;j<8;j++){ var p=ps[j]||{}; out.push([p.m||'',p.c||'',p.n||'',p.f||'',!!p.fp,(p.x||[]).map(function(x){ return x.id; }).join(','),(p.q||[]).length]); }
+  return JSON.stringify({e:(r&&r.elemento)||'', p:out, b:((r&&r.bk)||[]).length});
+}
+function _inspAntesDe(id){
+  var an=S.insp&&S.insp.antes; if(an && Object.prototype.hasOwnProperty.call(an,id)) return {hay:true, r:an[id]};
+  var pe=_inspPend()[id]; if(pe) return {hay:true, r:pe.antes};
+  return {hay:false};
+}
+function _inspCambiada(id){
+  var a=_inspAntesDe(id); if(!a.hay) return false;
+  var b=(S.insp&&S.insp.rows[id])||(_inspPend()[id]||{}).ahora;
+  return _inspHuella(a.r)!==_inspHuella(b);
+}
+function _inspCambiosPant(P){ P=P||_inspPantActual(); if(!P) return []; return P.els.map(function(e){ return e.rowId; }).filter(_inspCambiada); }
+function _inspNCambios(P){
+  var n=0; _inspCambiosPant(P).forEach(function(id){
+    var a=_inspAntesDe(id).r, b=S.insp.rows[id], ap=(a&&a.puntos)||[], bp=(b&&b.puntos)||[];
+    for(var j=0;j<8;j++) if(_inspHuella({puntos:[ap[j]]})!==_inspHuella({puntos:[bp[j]]})) n++;
+  });
+  return n;
+}
+function _inspPendEn(P){ var pe=_inspPend(); return P.els.some(function(e){ return pe[e.rowId] && _inspCambiada(e.rowId); }); }
+function _inspMarcaTxt(p){ p=p||{}; return p.m==='ok'?'✔':p.m==='mal'?'✗':p.m==='na'?'No aplica':'sin marcar'; }
+function _inspNomFila(r){ var g=_inspGrupo(r.oficio,r.grupo); return _hpNomUbic(r.apto)+' · '+(g?g.nombre+' · ':'')+(r.elemento||''); }
+/* El renglón del historial: «Llenó · 6 ✔ · 1 ✗ · 1 No aplica — 3. Llave de paso: ✗ (Incompleto · falta la roseta)». */
+function _inspHistTxt(r, a){
+  var g=_inspGrupo(r.oficio,r.grupo), ps=r.puntos||[], as=(a&&a.puntos)||[], cam=[], c={ok:0,mal:0,na:0};
+  for(var j=0;j<8;j++){
+    var p=ps[j]||{}, q=as[j]||{}, t=(j+1)+'. '+((g&&g.pts[j])?g.pts[j][0]:'');
+    if(p.m) c[p.m]++;
+    var pr=p.m==='mal'?_inspProbTxt(p):'';
+    if((p.m||'')!==(q.m||'')) cam.push(t+': '+(q.m?_inspMarcaTxt(q)+' → ':'')+_inspMarcaTxt(p)+(pr?' ('+pr+')':''));
+    else if(p.m==='mal' && pr!==_inspProbTxt(q)) cam.push(t+': ✗ ('+pr+')');
+    var nx=(p.x||[]).length+((p.f||p.fp)?1:0)-(q.x||[]).length-((q.f||q.fp)?1:0);
+    if(nx>0) cam.push(t+': + foto'); else if(nx<0) cam.push(t+': foto quitada');
+  }
+  if(r.bk && r.bk.length) cam.unshift('empezó de nuevo');
+  var habia=as.some(function(p){ return p&&p.m; });
+  return (habia?'Modificó':'Llenó')+' · '+c.ok+' ✔ · '+c.mal+' ✗ · '+c.na+' No aplica'+(cam.length?' — '+cam.join('; '):'');
+}
+/* Quién y cuándo, en cada punto que cambió. */
+function _inspSellar(r, a){
+  var quien=(S.user&&S.user.nombre)||'', ahora=new Date().toISOString(), as=(a&&a.puntos)||[];
+  for(var j=0;j<8;j++){
+    var p=r.puntos[j], q=as[j]||{}; if(!p) continue;
+    if(_inspHuella({puntos:[p]})===_inspHuella({puntos:[q]})) continue;
+    p.u=quien; p.t=ahora;
+    if(p.m && !p.u0){ p.u0=(q.m&&(q.u0||q.u||(a&&a.ingeniero)))||quien; p.t0=(q.m&&(q.t0||q.t))||ahora; }
+  }
+}
+/* Una fila pasa a la cola de salida (la de siempre, `mecca_insp_v1`). Los
+   respaldos y el renglón del historial viajan en `bk` y salen ANTES que la
+   fila; en memoria `bk` se vacía para no mandarlos dos veces. */
+function _inspGuardarFila(r, rec){
+  r.elemento=r.elemento||'';
+  r.fecha=today(); r.ingeniero=(S.user&&S.user.nombre)||'';
+  r.actualizado_en=new Date().toISOString();
+  var c=_inspCopia(r), suc=_inspSucios(), prev=suc[r.id];
+  c.bk=(c.bk||[]).concat(rec?[rec]:[]);
+  if(prev && prev.bk && prev.bk.length) c.bk=prev.bk.concat(c.bk.filter(function(b){ return !prev.bk.some(function(x){ return x.id===b.id; }); }));
+  suc[r.id]=c; _inspGuardarSucios(suc);
+  r.bk=[];
+  var pe=_inspPend(); delete pe[r.id]; _inspPendSet(pe);
+  if(S.insp.antes) delete S.insp.antes[r.id];
+}
+function inspGuardarPant(despues, callado){
+  var I=S._insp, P=_inspPantActual(); if(!I||!P) return;
+  var n=0;
+  _inspCambiosPant(P).forEach(function(id){
+    var r=S.insp.rows[id], a=_inspAntesDe(id).r; if(!r) return;
+    _inspSellar(r,a);
+    _inspGuardarFila(r, _logRec('guardada','inspeccion',r.id,_inspNomFila(r),_inspHistTxt(r,a)));
+    n++;
+  });
+  /* Lo que se abrió y no cambió suelta su foto de «antes». */
+  var pe=_inspPend();
+  P.els.forEach(function(e){ if(S.insp.antes) delete S.insp.antes[e.rowId]; delete pe[e.rowId]; });
+  _inspPendSet(pe);
+  I.salir=null;
+  if(n) _inspEnviar();
+  if(n && !callado) showToast('Guardado','ok',2000);
+  if(typeof despues==='function') despues(); else _hpRepintar();
+}
+function inspDescartarPant(despues){
+  var I=S._insp, P=_inspPantActual(); if(!I||!P) return;
+  var pe=_inspPend();
+  P.els.forEach(function(e){
+    var id=e.rowId, a=_inspAntesDe(id); if(!a.hay) return;
+    var cur=S.insp.rows[id], an=a.r;
+    /* Las fotos tomadas después y no guardadas se borran del teléfono. */
+    ((cur&&cur.puntos)||[]).forEach(function(p,j){
+      var q=(an&&an.puntos&&an.puntos[j])||{};
+      if(p&&p.fp&&!q.fp) _inspFotoDel(id+'#'+j);
+      ((p&&p.x)||[]).forEach(function(x){ if(!x.bo && x.k && !(q.x||[]).some(function(y){ return y.id===x.id; })) _inspFotoDel(x.k); });
+    });
+    if(an) S.insp.rows[id]=_inspCopia(an); else delete S.insp.rows[id];
+    delete pe[id]; if(S.insp.antes) delete S.insp.antes[id];
+  });
+  _inspPendSet(pe);
+  I.salir=null; I.mal=null; I.verFoto=null; I.aviso=null;
+  showToast('Cambios descartados','ok',2500);
+  if(typeof despues==='function') despues(); else _hpRepintar();
+}
+/* La guardia: si hay algo pendiente en la pantalla, no se sale; se pregunta. */
+function _inspGuardia(ir){
+  var I=S._insp; if(!I || I.paso!=='elem' || !_inspCambiosPant().length) return false;
+  I.salir={ir:ir}; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){}
+  showToast('Tienes cambios sin guardar','warn',3000);
+  return true;
+}
+function inspSalirGuardar(){ var I=S._insp, ir=I&&I.salir&&I.salir.ir; inspGuardarPant(ir); }
+function inspSalirDescartar(){ var I=S._insp, ir=I&&I.salir&&I.salir.ir; inspDescartarPant(ir); }
+function inspSalirQuedar(){ if(S._insp){ S._insp.salir=null; _hpRepintar(); } }
+function inspSigGuardar(i){ inspGuardarPant(function(){ inspElem(i); }); }
+function inspTerminarGuardar(){ inspGuardarPant(function(){ inspVolver(); }); }
+function _inspSalirHTML(n){
+  return '<div class="in-mal in-conf in-salir"><div class="in-paso">Tienes cambios sin guardar</div>'+
+    '<div class="in-conf-t">'+n+(n===1?' punto marcado o cambiado':' puntos marcados o cambiados')+' en esta pantalla todavía no se '+(n===1?'ha':'han')+' guardado.</div>'+
+    '<div class="in-dos"><button class="in-b2 fuerte" onclick="inspSalirGuardar()">Guardar</button>'+
+    '<button class="in-b2 rojo" onclick="inspSalirDescartar()">Descartar</button></div>'+
+    '<button class="in-b2" onclick="inspSalirQuedar()">Seguir aquí</button></div>';
+}
+try{ window.addEventListener('beforeunload', function(ev){
+  try{ if(S._insp && S._insp.paso==='elem' && _inspCambiosPant().length){ ev.preventDefault(); ev.returnValue=''; } }catch(e){}
+}); }catch(e){}
+/* Al volver de la cola: lo que el envío resolvió (la foto subió, una nota se
+   borró) se pasa a la fila de memoria SIN pisar lo que se esté marcando ahora. */
+function _inspFundir(d, s){
+  if(!d||!s) return;
+  (s.puntos||[]).forEach(function(sp,j){ var dp=d.puntos&&d.puntos[j]; if(!dp||!sp) return;
+    if(dp.fp && !sp.fp){ dp.fp=false; dp.f=sp.f||dp.f||null; dp.fb=sp.fb||dp.fb||null; delete dp.fu; }
+    (dp.x||[]).forEach(function(dx){ var sx=(sp.x||[]).find(function(y){ return y.id===dx.id; }); if(sx&&sx.bo){ dx.bo=sx.bo; dx.u=sx.u; } });
+    if(dp.q&&dp.q.length){ var ids=(sp.q||[]).map(function(q){ return q.rec&&q.rec.id; }); dp.q=dp.q.filter(function(q){ return ids.indexOf(q.rec&&q.rec.id)>=0; }); }
+  });
+}
+function _inspDevolver(r){
+  if(!S.insp) return;
+  var m=S.insp.rows[r.id], pe=_inspPend(), abierta=!!pe[r.id]||!!(S.insp.antes&&Object.prototype.hasOwnProperty.call(S.insp.antes,r.id));
+  if(!m || !abierta){ var c=_inspCopia(r); c.bk=[]; S.insp.rows[r.id]=c; return; }
+  _inspFundir(m,r);
+  if(S.insp.antes && S.insp.antes[r.id]) _inspFundir(S.insp.antes[r.id],r);
+  if(pe[r.id]){ if(pe[r.id].antes) _inspFundir(pe[r.id].antes,r); pe[r.id].ahora=_inspCopia(m); _inspPendSet(pe); }
+}
+/* Quién llenó y quién cambió por última vez, de los puntos del elemento. */
+function _inspQuienTxt(rowId){
+  var r=S.insp.rows[rowId]; if(!r) return '';
+  var ps=(r.puntos||[]).filter(function(p){ return p&&p.m; }); if(!ps.length) return '';
+  var pri=null, ult=null;
+  ps.forEach(function(p){
+    var t0=p.t0||p.t, t=p.t||p.t0;
+    if(t0 && (!pri || t0<pri.t)) pri={u:p.u0||p.u, t:t0};
+    if(t && (!ult || t>ult.t)) ult={u:p.u||p.u0, t:t};
+  });
+  if(!pri) pri={u:r.ingeniero, t:r.actualizado_en||r.fecha};
+  var s='Llenó: '+(pri.u||'—')+' · '+_inspFechaCorta(pri.t);
+  if(ult && (ult.u!==pri.u || String(ult.t).slice(0,16)!==String(pri.t).slice(0,16))) s+=' · Último cambio: '+(ult.u||'—')+' · '+_inspFechaCorta(ult.t)+(String(ult.t).length>10?' '+String(new Date(ult.t).toTimeString()).slice(0,5):'');
+  return s;
+}
+/* «Historial» de la pantalla: los renglones `guardada` y los respaldos de sus
+   elementos, de `obra_cambios`. Una lectura chica, al tocar. */
+async function inspHistorial(){
+  var I=S._insp, P=_inspPantActual(); if(!I||!P) return;
+  if(I.hist){ I.hist=null; _hpRepintar(); return; }
+  I.hist={cargando:true, filas:[]}; _hpRepintar();
+  try{
+    var ids=P.els.map(function(e){ return encodeURIComponent('"'+e.rowId+'"'); }).join(',');
+    var f=await sb('obra_cambios?entidad=eq.inspeccion&entidad_id=in.('+ids+')&select=created_at,usuario_nombre,accion,entidad_nombre,detalle&order=created_at.desc&limit=60');
+    if(S._insp===I) I.hist={filas:f||[]};
+  }catch(e){ if(S._insp===I) I.hist={err:'No se pudo traer el historial. Prueba con señal.', filas:[]}; }
+  _hpRepintar();
+}
+function _inspHistHTML(){
+  var H=S._insp.hist; if(!H) return '';
+  if(H.cargando) return '<div class="in-hist"><div class="hp-sub">Trayendo el historial…</div></div>';
+  if(H.err) return '<div class="in-hist"><div class="in-falta">'+esc(H.err)+'</div></div>';
+  if(!H.filas.length) return '<div class="in-hist"><div class="hp-sub">Todavía no hay nada guardado aquí.</div></div>';
+  return '<div class="in-hist">'+H.filas.map(function(c){
+    var d=String(c.detalle||''); if(c.accion==='respaldo') d='Empezó de nuevo (con respaldo)';
+    return '<div class="in-hist-r"><b>'+esc(c.usuario_nombre||'')+'</b> · '+esc(_inspFechaCorta(c.created_at))+' '+esc(String(new Date(c.created_at).toTimeString()).slice(0,5))+
+      '<div>'+esc(String(c.entidad_nombre||'').split(' · ').slice(1).join(' · '))+'</div><i>'+esc(d)+'</i></div>';
+  }).join('')+'</div>';
+}
 
 /* ── Lo que se guarda en el teléfono ── */
 function _inspSucios(){ try{ return JSON.parse(localStorage.getItem(INSP_LS)||'{}')||{}; }catch(e){ return {}; } }
@@ -32576,7 +32817,15 @@ async function _inspCargarApto(area){
   S.insp=S.insp||{rows:{}, cargados:{}};
   try{
     var filas=await sb('obra_inspecciones?apto=eq.'+encodeURIComponent(area)+'&select=*');
-    (filas||[]).forEach(function(r){ S.insp.rows[r.id]=r; });
+    /* v159 · NO PISAR LO QUE TODAVÍA NO SUBIÓ. Hasta la v158 entrar otra vez
+       al apartamento traía la copia de la base y la ponía ENCIMA de lo que
+       esperaba en la cola (sin señal o con señal lenta): lo marcado se perdía de
+       la pantalla y la cola volvía a mandar la copia vieja. Lo que está en la
+       cola o pendiente de «Guardar» manda sobre la base. */
+    var sucC=_inspSucios(), peC=_inspPend();
+    (filas||[]).forEach(function(r){ if(!sucC[r.id] && !peC[r.id]) S.insp.rows[r.id]=r; });
+    Object.keys(sucC).forEach(function(id){ var c=sucC[id]; if(c && c.apto===area && !peC[id] && !S.insp.rows[id]){ c=_inspCopia(c); c.bk=[]; S.insp.rows[id]=c; } });
+    Object.keys(peC).forEach(function(id){ var x=peC[id]; if(x && x.ahora && x.ahora.apto===area){ S.insp.rows[id]=x.ahora; S.insp.antes=S.insp.antes||{}; S.insp.antes[id]=x.antes; } });
     /* v156 · El estado de cada oficio (en curso o cerrada), una lectura chica. */
     var ests=await sb('obra_insp_estado?apto=eq.'+encodeURIComponent(area)+'&select=*');
     S.insp.est=S.insp.est||{};
@@ -32663,6 +32912,10 @@ async function _inspCargarNombres(){
 /* ── Escribir ── */
 function _inspFila(el, area, of){
   var r=S.insp.rows[el.rowId];
+  /* v159 · Antes del primer cambio en la pantalla se guarda cómo estaba, para
+     poder descartar y para el historial. */
+  if(S._insp && S._insp.paso==='elem'){ S.insp.antes=S.insp.antes||{};
+    if(!Object.prototype.hasOwnProperty.call(S.insp.antes,el.rowId) && !_inspPend()[el.rowId]) S.insp.antes[el.rowId]=_inspCopia(r||null); }
   if(!r){
     r={id:el.rowId, apto:area, oficio:of, grupo:el.grupo, elemento:el.nombre, agregado:!!el.agregado, puntos:[]};
     S.insp.rows[el.rowId]=r;
@@ -32672,9 +32925,14 @@ function _inspFila(el, area, of){
 }
 function _inspTocar(r){
   r.elemento=r.elemento||'';
-  r.fecha=today(); r.ingeniero=(S.user&&S.user.nombre)||'';
-  r.actualizado_en=new Date().toISOString();
-  var suc=_inspSucios(); suc[r.id]=JSON.parse(JSON.stringify(r)); _inspGuardarSucios(suc);
+  /* v159 · Dentro de una pantalla, el cambio queda PENDIENTE hasta «Guardar».
+     Fuera (agregar un elemento, empezar de nuevo la inspección) se guarda ya. */
+  if(S._insp && S._insp.paso==='elem'){
+    var pe=_inspPend(), a=_inspAntesDe(r.id);
+    pe[r.id]={antes:a.hay?a.r:null, ahora:_inspCopia(r)}; _inspPendSet(pe);
+    return;
+  }
+  _inspGuardarFila(r, null);
   _inspEnviar();
 }
 var _inspEnviando=false, _inspOtraVez=false;
@@ -32695,8 +32953,10 @@ async function _inspEnviar(){
     }
     var suc=_inspSucios(), ids=Object.keys(suc);
     for(var i=0;i<ids.length && !sinRed;i++){
-      var r=(S.insp&&S.insp.rows[ids[i]])||suc[ids[i]];
-      if(S.insp) S.insp.rows[r.id]=r;
+      /* v159 · Se manda la copia GUARDADA (la de la cola), no la de memoria:
+         en memoria puede haber marcas pendientes de «Guardar». */
+      var r=suc[ids[i]]; if(!r) continue;
+      _inspDevolver(r);
       /* v155 · «Empezar de nuevo»: el RESPALDO de lo que había se escribe en
          obra_cambios ANTES de que la fila vacía llegue a la base. Si no sale,
          la fila tampoco: así nunca se borra nada sin su copia. */
@@ -32707,12 +32967,13 @@ async function _inspEnviar(){
       }
       if(sinRed || (r.bk && r.bk.length)) { if(sinRed) break; continue; }
       for(var j=0;j<(r.puntos||[]).length && !sinRed;j++){
-        try{ await _inspResolver(r,j); var s1=_inspSucios(); if(s1[r.id]){ s1[r.id]=JSON.parse(JSON.stringify(r)); _inspGuardarSucios(s1); } }
+        try{ await _inspResolver(r,j); var s1=_inspSucios(); if(s1[r.id]){ s1[r.id]=JSON.parse(JSON.stringify(r)); _inspGuardarSucios(s1); } _inspDevolver(r); }
         catch(e){ if(_inspEsSinRed(e)) sinRed=true; else { console.warn('inspección:',e); showToast('No se pudo guardar un problema: '+((e&&e.message)||''),'err',6000); } }
       }
       if(sinRed) break;
       var cuerpo={id:r.id, apto:r.apto, oficio:r.oficio, grupo:r.grupo, elemento:r.elemento, agregado:!!r.agregado,
                   fecha:r.fecha||today(), ingeniero:r.ingeniero||'', puntos:r.puntos, actualizado_en:r.actualizado_en||new Date().toISOString()};
+      _inspDevolver(r);
       try{
         await sb('obra_inspecciones',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:JSON.stringify(cuerpo)});
         var s2=_inspSucios();
@@ -32856,7 +33117,7 @@ async function _inspSubirFotoMal(r, j, p){
 /* ── Navegación ── */
 function inspAbrir(){ if(!canEdit()){ showToast('Solo los ingenieros y Gerencia hacen inspecciones','warn',4000); return; }
   S._hpPaso=null; S._insp={paso:'apto'}; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
-function inspSalir(){ S._insp=null; _hpRepintar(); }
+function inspSalir(){ if(_inspGuardia(function(){ inspSalir(); })) return; S._insp=null; _hpRepintar(); }
 async function inspApto(i){
   var area=REC_ORDEN[i]; if(!area) return;
   S._insp={paso:'oficio', area:area, cargando:true}; _hpRepintar();
@@ -32869,17 +33130,16 @@ function inspOficio(of){
   /* v156 · «Guardar y seguir después»: al volver a entrar a una inspección en
      curso, el app lleva al primer elemento con algún punto sin revisar. */
   if(_inspEstado(I.area,of)==='en_curso'){
-    var els=_inspElementos(I.area,of);
-    var k=els.findIndex(function(e){ var ps=_inspPuntos(e.rowId); for(var i=0;i<8;i++) if(!(ps[i]&&ps[i].m)) return true; return false; });
+    var k=_inspPantallas(I.area,of).findIndex(_inspPantFalta);
     if(k>=0 && _inspCuenta(I.area,of).puntos>0) return inspElem(k);
   }
   _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){}
 }
 function inspGuardarSeguir(){
   var I=S._insp; if(!I||!canEdit()) return;
+  if(I.paso==='elem' && _inspCambiosPant().length) return inspGuardarPant(inspGuardarSeguir, true);
   if(_inspEstado(I.area,I.of)!=='cerrada') _inspEstPoner(I.area,I.of,{estado:'en_curso'});
-  var els=_inspElementos(I.area,I.of);
-  var sig=els.find(function(e){ var ps=_inspPuntos(e.rowId); for(var i=0;i<8;i++) if(!(ps[i]&&ps[i].m)) return true; return false; });
+  var sig=_inspPantallas(I.area,I.of).find(_inspPantFalta);
   I.paso='oficio'; I.mal=null; I.reset=null; I.cerrar=false; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){}
   showToast('Guardada.'+(sig?' Al volver, sigue en «'+sig.nombre+'».':''),'ok',4000);
 }
@@ -32910,9 +33170,11 @@ function _inspCerrarHTML(els){
     '<button class="in-b2 fuerte" onclick="inspCerrarSi()">Sí, cerrar la inspección</button></div></div>';
 }
 function _inspEstChip(est){ return '<span class="in-est e-'+est+'">'+INSP_EST_TXT[est]+'</span>'; }
-function inspElem(i){ S._insp.paso='elem'; S._insp.i=i; S._insp.mal=null; S._insp.ren=null; S._insp.reset=null; S._insp.verFoto=null; S._insp.aviso=null; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
+function inspElem(i){ if(S._insp && S._insp.paso==='elem' && i!==S._insp.i && _inspGuardia(function(){ inspElem(i); })) return;
+  S._insp.k=0; S._insp.hist=null; S._insp.salir=null; S._insp.paso='elem'; S._insp.i=i; S._insp.mal=null; S._insp.ren=null; S._insp.reset=null; S._insp.verFoto=null; S._insp.aviso=null; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
 function inspVolver(){
   var I=S._insp; if(!I) return;
+  if(_inspGuardia(function(){ inspVolver(); })) return;
   I.reset=null; I.verFoto=null; I.cerrar=false; I.aviso=null;
   if(I.paso==='levOf'){ I.paso=I.levDesde||'levApto'; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} return; }
   if(I.paso==='levApto'){ I.paso='lev'; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} return; }
@@ -32969,12 +33231,17 @@ function _inspHTML(){
     else if(fe && fe.reabierta_por)
       h+='<div class="hp-sub" style="margin-top:0">Reabierta el '+esc(_inspFechaCorta(fe.reabierta_fecha))+' por '+esc(fe.reabierta_por)+'.</div>';
     if(I.desg) h+=_inspDesgloseHTML(area,I.of,els);
-    var gAnt='';
-    els.forEach(function(e,i){
-      if(e.grupo!==gAnt){ gAnt=e.grupo; var g=_inspGrupo(I.of,e.grupo); h+='<div class="cp-lbl">'+esc(g?g.nombre:e.grupo)+'</div>'; }
-      var ps=_inspPuntos(e.rowId), m=0, x=0; ps.forEach(function(p){ if(p&&p.m) m++; if(p&&p.m==='mal') x++; });
-      var listo=_inspListo(e.rowId);
-      h+='<button class="hp-op in-el'+(x?' mal':listo?' ok':'')+'" onclick="inspElem('+i+')"><span>'+esc(e.nombre)+(listo&&!x?'<i>listo</i>':'')+'</span><b>'+(x?x+' ✗ · ':'')+m+'/8</b></button>';
+    var gAnt='', pantsL=_inspPantallas(area,I.of);
+    pantsL.forEach(function(P,i){
+      var e0=P.els[0], lbl=P.junta?INSP_POR_ESPACIO_TXT[I.of]:((_inspGrupo(I.of,e0.grupo)||{}).nombre||e0.grupo);
+      if(lbl!==gAnt){ gAnt=lbl; h+='<div class="cp-lbl">'+esc(lbl)+'</div>'; }
+      var m=0, x=0, listos=0, det=[];
+      P.els.forEach(function(e){ var ps=_inspPuntos(e.rowId), me=0; ps.forEach(function(p){ if(p&&p.m){ m++; me++; } if(p&&p.m==='mal') x++; });
+        var li=_inspListo(e.rowId); if(li) listos++;
+        if(P.junta){ var g=_inspGrupo(I.of,e.grupo); det.push((g?g.nombre:e.grupo)+' '+(li?'listo':me+'/8')); } });
+      var listo=listos===P.els.length, pend=_inspPendEn(P);
+      h+='<button class="hp-op in-el'+(x?' mal':listo?' ok':'')+'" onclick="inspElem('+i+')"><span>'+esc(P.nombre)+
+        (P.junta?'<i>'+esc(det.join(' · '))+'</i>':(listo&&!x?'<i>listo</i>':''))+(pend?'<i class="in-singuardar">cambios sin guardar</i>':'')+'</span><b>'+(x?x+' ✗ · ':'')+m+'/'+(P.els.length*8)+'</b></button>';
     });
     if(!els.length) h+='<div class="hp-sub">Este oficio no tiene inventario: los elementos se agregan en la primera inspección.</div>';
     h+=_inspAgregarHTML(I.of);
@@ -32988,47 +33255,60 @@ function _inspHTML(){
     else if(rev) h+='<button class="in-agr in-reset" onclick="inspResetAbrir(\'insp\')">Empezar de nuevo esta inspección</button>';
     return h+'</div>';
   }
-  /* El elemento: sus 8 puntos. */
-  var e=els[I.i]; if(!e){ I.paso='lista'; return _inspHTML(); }
-  var g=_inspGrupo(I.of,e.grupo), ps=_inspPuntos(e.rowId), marcados=0;
-  ps.forEach(function(p){ if(p&&p.m) marcados++; });
+  /* v159 · La pantalla: un baño (o un espacio) con sus aparatos, o un
+     elemento solo. Cada aparato con sus 8 puntos, uno debajo del otro. */
+  var pants=_inspPantallas(area,I.of), P=pants[I.i]; if(!P){ I.paso='lista'; return _inspHTML(); }
+  var tot=P.els.length*8, marcados=0;
+  P.els.forEach(function(e){ _inspPuntos(e.rowId).forEach(function(p){ if(p&&p.m) marcados++; }); });
+  var ncam=_inspNCambios(P), e0=P.els[0], g0=_inspGrupo(I.of,e0.grupo), cerr=_inspEstado(area,I.of)==='cerrada';
+  var queEs=P.junta?_inspQueEs(I.of):'elemento';
+  if(I.salir) h+=_inspSalirHTML(ncam);
   h+=(I.ren
-     ? '<div class="in-mal"><div class="in-paso">Nombre de este elemento</div>'+
+     ? '<div class="in-mal"><div class="in-paso">Nombre de '+(P.junta?'este '+queEs:'este elemento')+'</div>'+
        '<input id="in-ren" class="in-nota" value="'+esc(I.ren.t)+'" oninput="S._insp.ren.t=this.value">'+
        '<div class="in-dos"><button class="in-b2" onclick="S._insp.ren=null;_hpRepintar()">Cancelar</button>'+
        '<button class="in-b2 fuerte" onclick="inspRenombrar()">Guardar el nombre</button></div>'+
-       (e.agregado?'':'<div class="in-falta" style="color:var(--text3)">Vale para los apartamentos del mismo tipo.</div>')+'</div>'
-     : '<div class="in-cab"><div class="hp-tit">'+esc(e.nombre)+'</div>'+
-       '<button class="in-lapiz" title="Corregir el nombre" onclick="S._insp.ren={t:'+esc(JSON.stringify(e.nombre))+'};_hpRepintar()">'+INSP_ICO_LAPIZ+'</button></div>')+
-     '<div class="hp-sub">'+esc(nom)+' · '+esc(g.nombre)+' · elemento '+(I.i+1)+' de '+els.length+' · '+marcados+' de 8 puntos</div>'+
+       (e0.agregado?'':'<div class="in-falta" style="color:var(--text3)">Vale para los apartamentos del mismo tipo.</div>')+'</div>'
+     : '<div class="in-cab"><div class="hp-tit">'+esc(P.nombre)+'</div>'+
+       '<button class="in-lapiz" title="Corregir el nombre" onclick="S._insp.ren={t:'+esc(JSON.stringify(P.nombre))+'};_hpRepintar()">'+INSP_ICO_LAPIZ+'</button></div>')+
+     '<div class="hp-sub">'+esc(nom)+' · '+(P.junta?esc(P.els.map(function(e){ var g=_inspGrupo(I.of,e.grupo); return g?g.nombre:e.grupo; }).join(' · ')):esc(g0.nombre))+
+       ' · '+queEs+' '+(I.i+1)+' de '+pants.length+' · '+marcados+' de '+tot+' puntos</div>'+
      '<div class="in-ayuda">✔ Bien · ✗ Tiene algo · No aplica = ese punto no existe en este elemento (ej.: puerta sin tope)</div>'+
-     '<div class="in-ayuda">Para quitar una marca, toca otra vez el mismo botón.</div>'+
-     (_inspEstado(area,I.of)==='cerrada'?'<div class="in-cerrada">Inspección cerrada: solo para ver. Para cambiarla, vuelva a la lista y toque «Reabrir la inspección».</div>':'')+
-     (_inspListo(e.rowId)?'<div class="in-listo">✔ Elemento listo</div>':'');
-  g.pts.forEach(function(pt,j){
-    var p=ps[j]||{}, abierto=I.mal&&I.mal.j===j;
-    h+='<div class="in-pt'+(p.m==='ok'?' ok':p.m==='mal'?' mal':p.m==='na'?' na':'')+'">'+
-      (pt[2]?'<span class="in-fase f-'+pt[2]+'">'+pt[2]+' · '+INSP_FASES[pt[2]]+'</span>':'')+
-      '<div class="in-pt-t">'+(j+1)+'. '+esc(pt[0])+'</div><div class="in-pt-d">'+esc(pt[1])+'</div>'+
-      '<div class="in-tres">'+
-        '<button class="in-b'+(p.m==='ok'?' on':'')+'" onclick="inspMarcar('+j+',\'ok\')" aria-label="Bien">✔</button>'+
-        '<button class="in-b x'+(p.m==='mal'||abierto?' on':'')+'" onclick="inspMarcar('+j+',\'mal\')" aria-label="Problema">✗</button>'+
-        '<button class="in-b in-na'+(p.m==='na'?' on':'')+'" onclick="inspMarcar('+j+',\'na\')" aria-label="No aplica"><small>—</small>No aplica</button>'+
-      '</div>'+
-      (!abierto&&p.m!=='mal'&&_inspBorr()[e.rowId+'#'+j]?'<div class="in-falta">✗ sin guardar: «'+esc(_inspProbTxt(_inspBorr()[e.rowId+'#'+j]))+'». Toca ✗ para seguir.</div>':'')+
-      (p.m==='mal'&&!abierto?'<div class="in-prob">'+esc(_inspProbTxt(p))+
-        (p.fp?' · foto esperando señal':p.f?' · con foto':' · sin foto')+(p.ap?' · partida por crear':'')+
-        '<button class="in-cambiar" onclick="inspMalEditar('+j+')">Cambiar el problema</button></div>':'')+
-      (I.aviso&&I.aviso.j===j?'<div class="in-aviso-fase">⚠ '+esc(I.aviso.t)+'. Se marcó igual.</div>':'')+
-      (abierto?_inspMalHTML(j):_inspFotosHTML(e,j,p))+
-    '</div>';
+     '<div class="in-ayuda">Para quitar una marca, toca otra vez el mismo botón. Lo que marques queda pendiente hasta tocar «Guardar».</div>'+
+     (cerr?'<div class="in-cerrada">Inspección cerrada: solo para ver. Para cambiarla, vuelva a la lista y toque «Reabrir la inspección».</div>':'')+
+     (ncam?'<button class="in-guardar-pant arriba" onclick="inspGuardarPant()">Guardar · '+ncam+(ncam===1?' cambio':' cambios')+' sin guardar</button>':'');
+  P.els.forEach(function(e,k){
+    var g=_inspGrupo(I.of,e.grupo), ps=_inspPuntos(e.rowId), qn=_inspQuienTxt(e.rowId);
+    if(P.junta) h+='<div class="in-sec">'+esc(g.nombre)+'</div>';
+    if(qn) h+='<div class="in-quien">'+esc(qn)+'</div>';
+    if(_inspListo(e.rowId)) h+='<div class="in-listo">✔ '+(P.junta?esc(g.nombre)+' listo':'Elemento listo')+'</div>';
+    g.pts.forEach(function(pt,j){
+      var p=ps[j]||{}, abierto=I.mal&&I.mal.j===j&&I.mal.r===e.rowId, pre='inspK('+k+');';
+      h+='<div class="in-pt'+(p.m==='ok'?' ok':p.m==='mal'?' mal':p.m==='na'?' na':'')+'">'+
+        (pt[2]?'<span class="in-fase f-'+pt[2]+'">'+pt[2]+' · '+INSP_FASES[pt[2]]+'</span>':'')+
+        '<div class="in-pt-t">'+(j+1)+'. '+esc(pt[0])+'</div><div class="in-pt-d">'+esc(pt[1])+'</div>'+
+        '<div class="in-tres">'+
+          '<button class="in-b'+(p.m==='ok'?' on':'')+'" onclick="'+pre+'inspMarcar('+j+',\'ok\')" aria-label="Bien">✔</button>'+
+          '<button class="in-b x'+(p.m==='mal'||abierto?' on':'')+'" onclick="'+pre+'inspMarcar('+j+',\'mal\')" aria-label="Problema">✗</button>'+
+          '<button class="in-b in-na'+(p.m==='na'?' on':'')+'" onclick="'+pre+'inspMarcar('+j+',\'na\')" aria-label="No aplica"><small>—</small>No aplica</button>'+
+        '</div>'+
+        (!abierto&&p.m!=='mal'&&_inspBorr()[e.rowId+'#'+j]?'<div class="in-falta">✗ sin guardar: «'+esc(_inspProbTxt(_inspBorr()[e.rowId+'#'+j]))+'». Toca ✗ para seguir.</div>':'')+
+        (p.m==='mal'&&!abierto?'<div class="in-prob">'+esc(_inspProbTxt(p))+
+          (p.fp?' · foto esperando señal':p.f?' · con foto':' · sin foto')+(p.ap?' · partida por crear':'')+
+          '<button class="in-cambiar" onclick="'+pre+'inspMalEditar('+j+')">Cambiar el problema</button></div>':'')+
+        (I.aviso&&I.aviso.j===j&&I.aviso.r===e.rowId?'<div class="in-aviso-fase">⚠ '+esc(I.aviso.t)+'. Se marcó igual.</div>':'')+
+        (abierto?_inspMalHTML(j):_inspFotosHTML(e,j,p,k))+
+      '</div>';
+    });
   });
+  if(ncam) h+='<button class="in-guardar-pant" onclick="inspGuardarPant()">Guardar · '+ncam+(ncam===1?' cambio':' cambios')+'</button>';
   if(I.reset==='el') h+=_inspResetHTML('el');
-  else if(marcados) h+='<button class="in-agr in-reset" onclick="inspResetAbrir(\'el\')">Empezar de nuevo este elemento</button>';
-  if(_inspEstado(area,I.of)!=='cerrada') h+='<button class="in-agr in-guardar" onclick="inspGuardarSeguir()">Guardar y seguir después</button>';
-  var sig=els[I.i+1];
-  h+=sig ? '<button class="in-sig'+(marcados===8?' listo':'')+'" onclick="inspElem('+(I.i+1)+')">'+(marcados===8?'Listo · ':'')+'Siguiente: '+esc(sig.nombre)+' ›</button>'
-         : '<button class="in-sig listo" onclick="inspVolver()">Terminé '+esc(of.nombre)+' · ver el avance ›</button>';
+  else if(marcados) h+='<button class="in-agr in-reset" onclick="inspResetAbrir(\'el\')">Empezar de nuevo '+(P.junta?'este '+queEs:'este elemento')+'</button>';
+  if(!cerr) h+='<button class="in-agr in-guardar" onclick="inspGuardarSeguir()">Guardar y seguir después</button>';
+  h+='<button class="in-agr in-hist-btn" onclick="inspHistorial()">'+(I.hist?'Esconder el historial':'Historial: quién llenó y quién cambió')+'</button>'+_inspHistHTML();
+  var sig=pants[I.i+1];
+  h+=sig ? '<button class="in-sig'+(marcados===tot?' listo':'')+'" onclick="'+(ncam?'inspSigGuardar('+(I.i+1)+')':'inspElem('+(I.i+1)+')')+'">'+(ncam?'Guardar y seguir: ':(marcados===tot?'Listo · Siguiente: ':'Siguiente: '))+esc(sig.nombre)+' ›</button>'
+         : '<button class="in-sig listo" onclick="'+(ncam?'inspTerminarGuardar()':'inspVolver()')+'">'+(ncam?'Guardar y terminar ':'Terminé ')+esc(of.nombre)+' · ver el avance ›</button>';
   return h+'</div>';
 }
 function _inspDesgloseHTML(area, of, els){
@@ -33146,7 +33426,8 @@ function _inspLevHTML(){
     var g=_inspGrupo(I.of,e.grupo), ps=_inspPuntos(e.rowId), r=(S.insp.rows||{})[e.rowId];
     if(e.grupo!==gAnt){ gAnt=e.grupo; h+='<div class="cp-lbl">'+esc(g?g.nombre:e.grupo)+'</div>'; }
     var mk=ps.filter(function(p){ return p&&p.m; }).length, x=ps.filter(function(p){ return p&&p.m==='mal'; }).length, listo=_inspListo(e.rowId);
-    h+='<div class="lev-el'+(x?' mal':listo?' ok':'')+'"><div class="lev-el-t"><b>'+esc(e.nombre)+'</b><span>'+(listo?'listo':x?x+' ✗':mk+'/8')+'</span></div>';
+    h+='<div class="lev-el'+(x?' mal':listo?' ok':'')+'"><div class="lev-el-t"><b>'+esc(e.nombre)+'</b><span>'+(listo?'listo':x?x+' ✗':mk+'/8')+'</span></div>'+
+      (_inspQuienTxt(e.rowId)?'<div class="in-quien">'+esc(_inspQuienTxt(e.rowId))+'</div>':'');
     var sin=[];
     (g?g.pts:[]).forEach(function(pt,j){
       var p=ps[j]||{};
@@ -33190,7 +33471,6 @@ async function inspAprobarOf(){
 }
 
 /* ── Marcar ── */
-function _inspElActual(){ var I=S._insp; return _inspElementos(I.area,I.of)[I.i]; }
 function inspMarcar(j, m){
   if(!canEdit() || _inspCerradaAqui()) return;
   var I=S._insp, e=_inspElActual(); if(!e) return;
@@ -33198,14 +33478,14 @@ function inspMarcar(j, m){
   I.verFoto=null;
   if(m==='mal'){
     /* El recuadro del ✗ abierto y sin guardar: tocar ✗ otra vez lo cierra. */
-    if(I.mal&&I.mal.j===j){ I.mal=null; _hpRepintar(); return; }
+    if(I.mal&&I.mal.j===j&&I.mal.r===e.rowId){ I.mal=null; _hpRepintar(); return; }
     /* v155 · Ya estaba en ✗: tocarlo otra vez lo DESMARCA (lo pidió el dueño).
        Para cambiar la causa o la nota está «Cambiar el problema». */
     if(p0.m==='mal') return _inspDesmarcar(j);
     var bo=_inspBorr()[e.rowId+'#'+j]||{};
-    I.mal={j:j, c:bo.c||null, n:bo.n||'', foto:null}; _hpRepintar(); return;
+    I.mal={j:j, c:bo.c||null, n:bo.n||'', foto:null, k:I.k||0, r:e.rowId}; _hpRepintar(); return;
   }
-  if(I.mal&&I.mal.j===j) I.mal=null;
+  if(I.mal&&I.mal.j===j&&I.mal.r===e.rowId) I.mal=null;
   _inspBorrPon(e.rowId+'#'+j,null); /* ✔ o «No aplica»: ese borrador ya no aplica */
   if(p0.m===m) return _inspDesmarcar(j);
   var r=_inspFila(e,I.area,I.of), p=r.puntos[j]||{};
@@ -33220,7 +33500,7 @@ function inspMarcar(j, m){
   else if(p.a && m==='na' && antes==='mal') nuevo.nt=true;
   if(antes==='mal' && p.fp){ if(nuevo.a || !INSP_CREA_PARTIDAS) nuevo.fp=true; else _inspFotoDel(r.id+'#'+j); }
   r.puntos[j]=nuevo;
-  I.aviso=(m==='ok')?_inspAvisoFase(r,j,e):null;
+  I.aviso=(m==='ok')?_inspAvisoFase(r,j,e):null; if(I.aviso) I.aviso.r=e.rowId;
   _inspTocar(r); _hpRepintar();
 }
 /* v155 · El punto vuelve a «sin marcar», como si nunca se hubiera revisado.
@@ -33249,7 +33529,7 @@ function inspMalEditar(j){
   var p0=_inspPuntos(e.rowId)[j]||{};
   I.verFoto=null;
   var bo=_inspBorr()[e.rowId+'#'+j];
-  I.mal={j:j, c:bo?bo.c:(p0.c||null), n:bo?bo.n:(p0.n||''), foto:null, tiene:!!(p0.f||p0.fp)}; _hpRepintar();
+  I.mal={j:j, c:bo?bo.c:(p0.c||null), n:bo?bo.n:(p0.n||''), foto:null, tiene:!!(p0.f||p0.fp), k:I.k||0, r:e.rowId}; _hpRepintar();
 }
 /* ── Empezar de nuevo ── */
 function _inspTieneMarcas(rowId){ return _inspPuntos(rowId).some(function(p){ return p && p.m; }); }
@@ -33271,7 +33551,7 @@ function inspResetCancelar(){ S._insp.reset=null; _hpRepintar(); }
 function inspResetSi(){
   var I=S._insp; if(!I||!canEdit()) return;
   var n=0;
-  if(I.reset==='el'){ var e=_inspElActual(); if(e && _inspResetUno(e)) n=1; }
+  if(I.reset==='el'){ _inspPantActual().els.forEach(function(e){ if(_inspResetUno(e)) n++; }); if(n) inspGuardarPant(null, true); n=n?1:0; }
   else if(I.reset==='insp'){ _inspElementos(I.area,I.of).forEach(function(e){ if(_inspResetUno(e)) n++; }); }
   I.reset=null; _hpRepintar();
   showToast(n?(n===1?'Marcas borradas. El respaldo queda en el historial.':n+' elementos sin marcar. El respaldo queda en el historial.'):'No había marcas','ok',4000);
@@ -33279,9 +33559,9 @@ function inspResetSi(){
 function _inspResetHTML(que){
   var I=S._insp, c=_inspCuenta(I.area,I.of), txt;
   if(que==='el'){
-    var e=_inspElActual(), ps=_inspPuntos(e.rowId), mk=0, x=0;
-    ps.forEach(function(p){ if(p&&p.m) mk++; if(p&&p.m==='mal'&&p.a) x++; });
-    txt='Se borran las marcas de los 8 puntos de <b>'+esc(e.nombre)+'</b> ('+mk+(mk===1?' marcado':' marcados')+').';
+    var PP=_inspPantActual(), mk=0, x=0;
+    PP.els.forEach(function(e){ _inspPuntos(e.rowId).forEach(function(p){ if(p&&p.m) mk++; if(p&&p.m==='mal'&&p.a) x++; }); });
+    txt='Se borran las marcas de los '+(PP.els.length*8)+' puntos de <b>'+esc(PP.nombre)+'</b> ('+mk+(mk===1?' marcado':' marcados')+').';
     if(x) txt+=' '+(x===1?'La partida que nació de un ✗ NO se borra ni se cierra':'Las '+x+' partidas que nacieron de un ✗ NO se borran ni se cierran')+': queda'+(x===1?'':'n')+' abierta'+(x===1?'':'s')+' con una nota para revisar y cerrar a mano.';
   }else{
     var nel=0, x2=0;
@@ -33292,7 +33572,8 @@ function _inspResetHTML(que){
     if(x2) txt+=' '+(x2===1?'La partida que nació de un ✗ NO se borra ni se cierra':'Las '+x2+' partidas que nacieron de un ✗ NO se borran ni se cierran')+': queda'+(x2===1?'':'n')+' abierta'+(x2===1?'':'s')+' con una nota para revisar y cerrar a mano.';
   }
   txt+=' Las fotos se quedan. Antes de borrar se guarda un respaldo en el historial.';
-  return '<div class="in-mal in-conf"><div class="in-paso">'+(que==='el'?'¿Empezar de nuevo este elemento?':'¿Empezar de nuevo esta inspección?')+'</div>'+
+  var PQ=que==='el'?_inspPantActual():null;
+  return '<div class="in-mal in-conf"><div class="in-paso">'+(que==='el'?'¿Empezar de nuevo '+(PQ&&PQ.junta?'este '+_inspQueEs(I.of):'este elemento')+'?':'¿Empezar de nuevo esta inspección?')+'</div>'+
     '<div class="in-conf-t">'+txt+'</div>'+
     '<div class="in-dos"><button class="in-b2" onclick="inspResetCancelar()">Cancelar</button>'+
     '<button class="in-b2 rojo" onclick="inspResetSi()">Sí, borrar las marcas</button></div></div>';
@@ -33301,11 +33582,12 @@ function _inspResetHTML(que){
 S._inspMem=S._inspMem||{};
 function inspFotoPunto(j){
   if(!canEdit() || _inspCerradaAqui()) return;
+  var e0=_inspElActual(), k0=S._insp.k||0;
   var inp=document.createElement('input');
   inp.type='file'; inp.accept='image/*'; inp.style.display='none';
   inp.onchange=async function(){
     var f=inp.files&&inp.files[0]; inp.remove(); var I=S._insp; if(!f||!I) return;
-    var e=_inspElActual(); if(!e) return;
+    var e=e0; if(!e) return; I.k=k0;
     var data;
     try{ data=await compressImagen(f); }catch(err){ showToast('No se pudo leer la foto','err',4000); return; }
     var r=_inspFila(e,I.area,I.of), p=r.puntos[j]||(r.puntos[j]={});
@@ -33313,36 +33595,37 @@ function inspFotoPunto(j){
     try{ await _inspFotoPut(k,data); }catch(err){ showToast('No se pudo guardar la foto en el teléfono','err',5000); return; }
     S._inspMem[k]=data;
     p.x=(p.x||[]); p.x.push({id:xid, k:k, d:today()});
-    _inspTocar(r); _hpRepintar();
+    _inspTocar(r); inspGuardarPant();
   };
   document.body.appendChild(inp); inp.click();
 }
-function inspVerFoto(j, cual){ var I=S._insp; I.mal=null; I.reset=null;
-  I.verFoto=(I.verFoto&&I.verFoto.j===j&&I.verFoto.cual===cual)?null:{j:j, cual:cual, conf:false}; _hpRepintar(); }
+function inspVerFoto(j, cual){ var I=S._insp, e=_inspElActual(); I.mal=null; I.reset=null;
+  var rid=e?e.rowId:'';
+  I.verFoto=(I.verFoto&&I.verFoto.j===j&&I.verFoto.r===rid&&I.verFoto.cual===cual)?null:{j:j, cual:cual, conf:false, k:I.k||0, r:rid}; _hpRepintar(); }
 function _inspFotoSrc(rowId, j, p, cual){
   if(cual==='f') return p.f || S._inspMem[rowId+'#'+j] || '';
   var x=(p.x||[]).find(function(y){ return y.id===cual; }); if(!x) return '';
   return x.u || (x.k&&S._inspMem[x.k]) || '';
 }
-function _inspFotosHTML(e, j, p){
-  var I=S._insp, h='<div class="in-fotos">';
+function _inspFotosHTML(e, j, p, k){
+  var I=S._insp, h='<div class="in-fotos">', pre='inspK('+(k||0)+');';
   var mini=function(cual, src, espera){
-    var on=I.verFoto&&I.verFoto.j===j&&I.verFoto.cual===cual;
-    return '<button class="in-mini'+(on?' on':'')+'" onclick="inspVerFoto('+j+',\''+cual+'\')" aria-label="Ver la foto">'+
+    var on=I.verFoto&&I.verFoto.j===j&&I.verFoto.r===e.rowId&&I.verFoto.cual===cual;
+    return '<button class="in-mini'+(on?' on':'')+'" onclick="'+pre+'inspVerFoto('+j+',\''+cual+'\')" aria-label="Ver la foto">'+
       (src?'<img src="'+esc(src)+'" alt="">':'<span>foto</span>')+(espera?'<i>sin subir</i>':'')+'</button>';
   };
   if(p.f||p.fp) h+=mini('f', _inspFotoSrc(e.rowId,j,p,'f'), !!p.fp);
   (p.x||[]).forEach(function(x){ h+=mini(x.id, _inspFotoSrc(e.rowId,j,p,x.id), !x.bo); });
-  h+='<button class="in-masfoto" onclick="inspFotoPunto('+j+')">'+INSP_ICO_CAM+' ＋ Foto</button></div>';
+  h+='<button class="in-masfoto" onclick="'+pre+'inspFotoPunto('+j+')">'+INSP_ICO_CAM+' ＋ Foto</button></div>';
   var V=I.verFoto;
-  if(V && V.j===j){
+  if(V && V.j===j && V.r===e.rowId){
     var src=_inspFotoSrc(e.rowId,j,p,V.cual), bloq=(V.cual==='f' && p.m==='mal' && INSP_CREA_PARTIDAS);
     h+='<div class="in-mal in-ver">'+(src?'<img class="in-grande" src="'+esc(src)+'" alt="">':'<div class="in-conf-t">La foto está guardada en el teléfono y sube cuando haya señal.</div>');
     if(bloq) h+='<div class="in-conf-t">Es la foto del problema (✗). Para quitarla, cambia antes la marca de este punto.</div>'+
       '<div class="in-dos"><button class="in-b2" onclick="inspVerFoto('+j+',\'f\')">Cerrar</button></div>';
     else if(V.conf) h+='<div class="in-conf-t">¿Quitar esta foto? Se borra de la inspección'+(V.cual==='f'&&p.a?' y de su partida':' y de la Bitácora')+'. El respaldo queda en el historial.</div>'+
       '<div class="in-dos"><button class="in-b2" onclick="S._insp.verFoto.conf=false;_hpRepintar()">Cancelar</button>'+
-      '<button class="in-b2 rojo" onclick="inspQuitarFoto()">Sí, quitar la foto</button></div>';
+      '<button class="in-b2 rojo" onclick="'+pre+'inspQuitarFoto()">Sí, quitar la foto</button></div>';
     else h+='<div class="in-dos"><button class="in-b2" onclick="S._insp.verFoto=null;_hpRepintar()">Cerrar</button>'+
       '<button class="in-b2" onclick="S._insp.verFoto.conf=true;_hpRepintar()">Quitar foto</button></div>';
     h+='</div>';
@@ -33350,7 +33633,7 @@ function _inspFotosHTML(e, j, p){
   return h;
 }
 function inspQuitarFoto(){
-  var I=S._insp, V=I&&I.verFoto, e=_inspElActual(); if(!V||!e||!canEdit()||_inspCerradaAqui()) return;
+  var I=S._insp, V=I&&I.verFoto; if(V&&V.k!=null) I.k=V.k; var e=_inspElActual(); if(!V||!e||!canEdit()||_inspCerradaAqui()) return;
   var r=_inspFila(e,I.area,I.of), j=V.j, p=r.puntos[j]||{}, g=_inspGrupo(I.of,e.grupo), t=(j+1)+'. '+((g&&g.pts[j])?g.pts[j][0]:'');
   var pre='RESPALDO antes de borrar: foto de la inspección '+_hpNomUbic(I.area)+' · '+r.elemento+' — '+t+': ';
   p.q=(p.q||[]);
@@ -33371,7 +33654,7 @@ function inspQuitarFoto(){
   }
   p.q=p.q.filter(function(q){ return q.rec; });
   r.puntos[j]=p; I.verFoto=null;
-  _inspTocar(r); _hpRepintar();
+  _inspTocar(r); inspGuardarPant(null, true);
   showToast('Foto quitada','ok',2500);
 }
 function inspFoto(fuente){
@@ -33390,7 +33673,7 @@ function inspFoto(fuente){
    soltaba un aviso de 3 s y no guardaba, y al cerrar el recuadro la nota se
    perdía (2A · Entrada principal, 28-oct). */
 function _inspMalVale(M){ return !!(M && (M.c || String(M.n||'').trim())); }
-function _inspMalBorrKey(){ var I=S._insp, e=_inspElActual(); return (e&&I&&I.mal)?e.rowId+'#'+I.mal.j:null; }
+function _inspMalBorrKey(){ var I=S._insp; return (I&&I.mal&&I.mal.r)?I.mal.r+'#'+I.mal.j:null; }
 function inspCausa(c){ var M=S._insp&&S._insp.mal; if(!M) return; M.c=(M.c===c)?null:c; var k=_inspMalBorrKey(); if(k) _inspBorrPon(k,M); _hpRepintar(); }
 /* Escribir no repinta (perdería el teclado): solo enciende el botón. */
 function inspMalNota(v){ var M=S._insp&&S._insp.mal; if(!M) return; M.n=v; var k=_inspMalBorrKey(); if(k) _inspBorrPon(k,M);
@@ -33401,6 +33684,7 @@ async function inspMalGuardar(){
   var I=S._insp, M=I&&I.mal; if(!M || _inspCerradaAqui()) return;
   /* v157 · La foto del ✗ es OPCIONAL. v158 · Basta la opción o la nota. */
   if(!_inspMalVale(M)){ showToast('Escoja qué tiene o escriba una nota','warn',3500); return; }
+  if(M.k!=null) I.k=M.k;
   var e=_inspElActual(); if(!e) return;
   var r=_inspFila(e,I.area,I.of), p=r.puntos[M.j]||{};
   if(M.foto){
@@ -33413,8 +33697,9 @@ async function inspMalGuardar(){
   I.aviso=null;
   _inspBorrPon(r.id+'#'+M.j,null);
   I.mal=null;
-  _inspTocar(r); _hpRepintar();
-  showToast('Guardado','ok',2000);
+  /* v159 · «Guardar el problema» guarda la pantalla entera: el botón dice
+     guardar, y así es verdad. */
+  _inspTocar(r); inspGuardarPant();
 }
 function inspAgregarAbrir(){ if(_inspCerradaAqui()) return; var I=S._insp; I.agregar={g:_inspOficio(I.of).grupos[0].id, t:''}; _hpRepintar(); }
 function inspAgregarGuardar(){
@@ -33427,17 +33712,20 @@ function inspAgregarGuardar(){
 /* El lápiz. Lo agregado en obra se renombra en su fila; lo del inventario,
    en `obra_config.insp_nombres`, y vale para los cinco del mismo tipo. */
 async function inspRenombrar(){
-  var I=S._insp, e=_inspElActual(); if(!e) return;
+  var I=S._insp, PR=_inspPantActual(); if(!PR) return;
   var t=String((I.ren&&I.ren.t)||'').trim(); I.ren=null;
-  if(!t||t===e.nombre){ _hpRepintar(); return; }
-  if(e.agregado){ var r=S.insp.rows[e.rowId]; r.elemento=t; _inspTocar(r); _hpRepintar(); return; }
-  S.inspNombres=S.inspNombres||{}; S.inspNombres[e.clave]=t;
-  var fila=S.insp.rows[e.rowId]; if(fila){ fila.elemento=t; _inspTocar(fila); }
-  _hpRepintar();
+  if(!t||t===PR.nombre){ _hpRepintar(); return; }
+  var e=PR.els[0];
+  if(e.agregado){ var r=_inspFila(e,I.area,I.of); r.elemento=t; _inspTocar(r); inspGuardarPant(null,true); return; }
+  /* v159 · En una pantalla por baño el nombre es del baño: vale para sus tres
+     aparatos. */
+  S.inspNombres=S.inspNombres||{};
+  PR.els.forEach(function(x){ S.inspNombres[x.clave]=t; var fila=S.insp.rows[x.rowId]; if(fila){ _inspFila(x,I.area,I.of); fila.elemento=t; _inspTocar(fila); } });
+  inspGuardarPant(null, true);
   try{
     var r2=await sb('obra_config?key=eq.insp_nombres&select=value'), base={};
     try{ base=(r2&&r2[0]&&JSON.parse(r2[0].value))||{}; }catch(x){}
-    base[e.clave]=t;
+    PR.els.forEach(function(x){ base[x.clave]=t; });
     await sb('obra_config',{method:'POST',prefer:'resolution=merge-duplicates,return=minimal',body:JSON.stringify({key:'insp_nombres',value:JSON.stringify(base)})});
     S.inspNombres=base;
   }catch(err){ showToast('El nombre quedó en este teléfono; no se pudo guardar para los demás','warn',5000); }

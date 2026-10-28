@@ -1675,7 +1675,11 @@ const IN_ESPERADO={
   cerrar:{v:'resumen 0 ✔ · 0 ✗ · 25 faltan · cerrada por Karina · no deja marcar · reabierta por Karina', d:'(v156) «Cerrar inspección» enseña el resumen, la cierra con nombre y fecha, cerrada no deja marcar, y al reabrir queda anotado quién'},
   plomeria4A:{v:'4 inodoro · 4 lavamanos · 3 ducha · 3 fregadero · 1 calentador', d:'(v156) en el 4A salen los elementos de plomería según sus 4 baños (el 1/2 baño sin ducha), 3 fregaderos y lavadero, y el calentador'},
   inodoroListo:{v:'inodoro · listo · la lista lo dice', d:'(v156) un inodoro con sus 8 puntos en ✔ queda «listo»'},
-  pintura4A:{v:'Muros 14 · Techo 14 · Techo con 8 puntos · Corte con la pared', d:'(v157) Pintura del 4A sale en dos grupos, Muros y Techo, uno por espacio, y el Techo trae sus 8 puntos'},
+  pintura4A:{v:'Muros 14 · Techo 14 · 14 espacios con muros y techo juntos · Techo con 8 puntos · Corte con la pared', d:'(v157, v159) Pintura del 4A: Muros y Techo por espacio, los dos en la MISMA pantalla, y el Techo con sus 8 puntos'},
+  porBano:{v:'8 pantallas · la lista igual · Inodoro · Lavamanos · Ducha · 24 puntos · 3 con ducha · 1 sin ducha', d:'(v159) la plomería del 4A se recorre por baño: una pantalla con inodoro, lavamanos y ducha (el 1/2 baño sin ducha), más los fregaderos y el calentador'},
+  salir:{v:'pregunta al salir · seguir aquí se queda · otra pestaña también pregunta · descartar quita · guardar guarda', d:'(v159) un ✔ queda pendiente hasta «Guardar»: Volver y otra pestaña preguntan Guardar · Descartar · Seguir aquí, y cada una hace lo que dice'},
+  historial:{v:'un renglón por guardado · Llenó con su punto · quién en el punto · se ve en la pantalla · y en el historial', d:'(v159) cada guardado deja un renglón «guardada» con quién y qué punto cambió; el punto guarda quién lo llenó y la pantalla lo dice'},
+  noPisa:{v:'la marca sigue al volver a entrar · sale al volver la red', d:'(v159) lo guardado que no pudo subir no se pierde al volver a entrar al apartamento (hasta la v158 la copia de la base lo pisaba)'},
   levKarina:{v:'no lo ve', d:'(v156) el Levantamiento es solo del administrador: la Ing. Karina no ve el botón'},
   sinActividades:{v:0, d:'(v156) en toda la prueba de la inspección, cero escrituras a obra_actividades'},
   levSinFoto:{v:'«sin foto» a la vista', d:'(v157) en el Levantamiento, un ✗ sin foto lleva la etiqueta «sin foto»'},
@@ -1696,7 +1700,7 @@ async function probarInspeccion(nombreVer, html, b){
       window.__compartido=null;
       try{ Object.defineProperty(navigator,'canShare',{value:()=>true,configurable:true});
         Object.defineProperty(navigator,'share',{value:async d=>{ window.__compartido=d.files[0]; },configurable:true}); }catch(e){} });
-    let sinRed=false;
+    let sinRed=false, cortaInsp=false;
     await ctx.route('**', q=>{
       const u=q.request().url(), m=q.request().method();
       if(u.startsWith(ORIGEN)) return q.continue();
@@ -1705,6 +1709,7 @@ async function probarInspeccion(nombreVer, html, b){
       if(/script\.google\.com/.test(u)){ drive++; return q.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,url:'https://drive.google.com/thumbnail?id=F'+drive})}); }
       if(!/\/rest\/v1\//.test(u)){ if(m!=='GET') fuera++; return q.abort(); }
       const pth=decodeURIComponent(u.split('/rest/v1/')[1]||''), base=pth.split('?')[0];
+      if(cortaInsp && base==='obra_inspecciones' && m!=='GET') return q.abort('internetdisconnected');
       if(m!=='GET'){
         let body=null; try{ body=JSON.parse(q.request().postData()||'null'); }catch(e){}
         ESC.push({m,base,pth,body});
@@ -1757,6 +1762,8 @@ async function probarInspeccion(nombreVer, html, b){
     const esActs=()=>ESC.filter(x=>x.base==='obra_actividades').length;
     const esperar=async(f,n=24)=>{ for(let t=0;t<n;t++){ await p.waitForTimeout(250); if(await f()) return true; } return false; };
     const filaDe=id=>FILAS[id]||{puntos:[]};
+    // v159 · lo marcado queda pendiente: antes de volver se guarda, como lo haría el ingeniero
+    const volver=async()=>{ const bG=p.locator('#campo-root .in-guardar-pant'); if(await bG.count()){ await bG.first().click(); await p.waitForTimeout(250); } await p.locator('#campo-root .hp-volver').click(); };
     const acts0=esActs();
     // La primera puerta: «Entrada principal». Puntos por fase: 1 Jamba · 2 Hoja · 3 Tope (I) · 4 Cerradura (C) · 5 Abre y cierra (P) · 6-8 (T).
     await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(300);
@@ -1801,7 +1808,7 @@ async function probarInspeccion(nombreVer, html, b){
     const fila=filaDe(el1);
     r.fila=Object.keys(FILAS).length+' fila · '+fila.puntos.filter(x=>x&&x.m).length+' puntos · '+(/drive\.google\.com/.test(pt3.f||'')?'✗ con su foto':'✗ sin foto');
     // Avance y desglose
-    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    await volver(); await p.waitForTimeout(250);
     r.avance=await G(()=>{ const b=document.querySelector('#campo-root .in-avance b'); return b?b.textContent.trim():''; });
     await p.locator('#campo-root .in-avance').click(); await p.waitForTimeout(200);
     r.desglose=await G(()=>{ const t=[...document.querySelectorAll('#campo-root .in-dg-t')].map(x=>x.textContent);
@@ -1827,7 +1834,7 @@ async function probarInspeccion(nombreVer, html, b){
     const nota6=Object.values(NOTAS).find(n=>/Entrada principal — 6\. Barniz/.test(n.nota||''));
     r.sinRed=[espera?'espera en el teléfono':'no esperó', nota6&&Object.keys(NOTAS).length===notas0+1?'sale al volver':'no salió', esActs()-acts0+' actividades'].join(' · ');
     // ── v155 · desmarcar, foto en cualquier punto, empezar de nuevo (sin partidas) ──
-    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    await volver(); await p.waitForTimeout(250);
     await p.locator('#campo-root .in-el').nth(1).click(); await p.waitForTimeout(250);
     const el2=await G(()=>({id:_inspElActual().rowId, nom:_inspElActual().nombre}));
     for(const i of [0,1,2,3,4,5,6]) { await tresDe(i).nth(0).click(); await p.waitForTimeout(60); }
@@ -1882,7 +1889,7 @@ async function probarInspeccion(nombreVer, html, b){
     const p7=await G(()=>_inspPuntos(_inspElActual().rowId)[7]||{});
     r.desmarcaMal=[!p7.m?'sin marcar':'sigue '+p7.m, p7.f?'la foto se queda':'se perdió la foto', (esActs()-a4)+' actividades'].join(' · ');
     // f) empezar de nuevo el primer elemento
-    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    await volver(); await p.waitForTimeout(250);
     await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(250);
     const d0=await G(()=>window.__dialogos), e5=ESC.length, a5=esActs();
     if(await p.locator('#campo-root .in-reset').count()){
@@ -1905,7 +1912,7 @@ async function probarInspeccion(nombreVer, html, b){
       const c=[...document.querySelectorAll('#c-bitacora .bit-insp div')].map(x=>x.textContent);
       return c.find(t=>/Cerradura/.test(t))||c[0]||'sin pie'; });
     // La hoja de papel
-    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    await volver(); await p.waitForTimeout(250);
     if(JSPDF){
       await p.locator('#campo-root .in-imp').click(); await p.waitForTimeout(1200);
       r.papel=await G(async()=>{ const f=window.__compartido; if(!f) return 'no salió';
@@ -1918,19 +1925,19 @@ async function probarInspeccion(nombreVer, html, b){
     }else r.papel='(sin jsPDF local)';
     try{
     // g) empezar de nuevo la inspección entera: lo agregado y el nombre se quedan
-    if(await G(()=>S._insp&&S._insp.paso==='elem')){ await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250); }
+    if(await G(()=>S._insp&&S._insp.paso==='elem')){ await volver(); await p.waitForTimeout(250); }
     if(await p.locator('#campo-root .in-reset',{hasText:'esta inspección'}).count()){
       await p.locator('#campo-root .in-agr',{hasText:'Agregar elemento que falta'}).click(); await p.waitForTimeout(150);
       await p.locator('#in-nuevo').fill('Puerta del cuarto de prueba');
       await p.locator('#campo-root .in-b2',{hasText:/^Agregar$/}).click(); await p.waitForTimeout(250);
       await p.locator('#campo-root .in-el',{hasText:'Puerta del cuarto de prueba'}).click(); await p.waitForTimeout(250);
       await tresDe(0).nth(0).click(); await p.waitForTimeout(150);
-      await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(200);
+      await volver(); await p.waitForTimeout(200);
       await p.locator('#campo-root .in-el').nth(2).click(); await p.waitForTimeout(250);
       await p.locator('#campo-root .in-lapiz').click(); await p.locator('#in-ren').fill('Puerta renombrada en obra');
       await p.locator('#campo-root .in-b2',{hasText:'Guardar el nombre'}).click(); await p.waitForTimeout(250);
       await tresDe(0).nth(0).click(); await p.waitForTimeout(150);
-      await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(400);
+      await volver(); await p.waitForTimeout(400);
       await esperar(async()=>!(await G(()=>Object.keys(_inspSucios()).length)));
       const e6=ESC.length, a6=esActs();
       await p.locator('#campo-root .in-reset',{hasText:'esta inspección'}).click(); await p.waitForTimeout(150);
@@ -1959,7 +1966,7 @@ async function probarInspeccion(nombreVer, html, b){
       r.guardar=[est().estado==='en_curso'&&enOficios?'guardada':'no guardó', chip==='En curso'?'en curso':'chip '+chip, vuelve==='Entrada principal'?'vuelve al elemento que falta':'cae en '+vuelve].join(' · ');
     }else r.guardar='sin botón';
     // i) cerrar con su resumen, no deja marcar, y se reabre
-    if(await G(()=>S._insp&&S._insp.paso==='elem')){ await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250); }
+    if(await G(()=>S._insp&&S._insp.paso==='elem')){ await volver(); await p.waitForTimeout(250); }
     if(await p.locator('#campo-root .in-fin .in-b2',{hasText:'Cerrar inspección'}).count()){
       await p.locator('#campo-root .in-fin .in-b2',{hasText:'Cerrar inspección'}).click(); await p.waitForTimeout(150);
       const res=await G(()=>{ const c=document.querySelector('#campo-root .in-cierre .in-res'); return c?[...c.children].map(x=>x.textContent.trim()).join(' '):''; });
@@ -1970,7 +1977,7 @@ async function probarInspeccion(nombreVer, html, b){
       await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(250);
       const e7=ESC.length; await tresDe(1).nth(0).click(); await p.waitForTimeout(600);
       const bloq=!ESC.slice(e7).some(x=>x.base==='obra_inspecciones') && !(await G(()=>(_inspPuntos(_inspElActual().rowId)[1]||{}).m));
-      await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(200);
+      await volver(); await p.waitForTimeout(200);
       await p.locator('#campo-root .in-agr',{hasText:'Reabrir la inspección'}).click(); await p.waitForTimeout(150);
       await esperar(()=>est().estado==='en_curso');
       r.cerrar=[/0 con todo ✔ 0 con ✗ 25 sin terminar/.test(res)?'resumen 0 ✔ · 0 ✗ · 25 faltan':'resumen: '+res,
@@ -1978,7 +1985,7 @@ async function probarInspeccion(nombreVer, html, b){
         bloq?'no deja marcar':'dejó marcar', /Karina/.test(est().reabierta_por||'')?'reabierta por Karina':'reabierta: '+est().reabierta_por].join(' · ');
     }else r.cerrar='sin botón';
     // j) un inodoro con sus 8 puntos en ✔ queda «listo»
-    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    await volver(); await p.waitForTimeout(250);
     if(await p.locator('#campo-root .in-of',{hasText:'Plomería'}).count()){
       await p.locator('#campo-root .in-of',{hasText:'Plomería'}).click(); await p.waitForTimeout(250);
       const plom=await G(()=>{ const c={}; _inspElementos(S._insp.area,'plomeria').forEach(e=>c[e.grupo]=(c[e.grupo]||0)+1); return c; });
@@ -1987,7 +1994,7 @@ async function probarInspeccion(nombreVer, html, b){
       const nomI=await G(()=>_inspElActual().grupo+' · '+_inspElActual().nombre);
       for(let i=0;i<8;i++){ await tresDe(i).nth(0).click(); await p.waitForTimeout(60); }
       const listo=await G(()=>{ const l=document.querySelector('#campo-root .in-listo'); return !!(l&&l.checkVisibility()); });
-      await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+      await volver(); await p.waitForTimeout(250);
       const enLista=await G(()=>/listo/.test((document.querySelector('#campo-root .in-el')||{}).textContent||''));
       r.inodoroListo=(nomI.startsWith('inodoro')?'inodoro':nomI)+' · '+(listo?'listo':'no listo')+' · '+(enLista?'la lista lo dice':'la lista no lo dice');
       // v157 · un ✗ sin foto en el segundo elemento, para el Levantamiento
@@ -2007,7 +2014,7 @@ async function probarInspeccion(nombreVer, html, b){
       await p.locator('#in-nota').fill('falta la roseta');
       await p.locator('#campo-root .in-mal .in-b2',{hasText:'Cancelar'}).click(); await p.waitForTimeout(200);
       const avisa=await G(()=>/sin guardar: «falta la roseta»/.test((document.querySelectorAll('#campo-root .in-pt')[1]||{}).textContent||''));
-      await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(200);
+      await volver(); await p.waitForTimeout(200);
       await p.locator('#campo-root .in-el').nth(1).click(); await p.waitForTimeout(250);
       await tresDe(1).nth(1).click(); await p.waitForTimeout(150);
       const sigue=await G(()=>(document.getElementById('in-nota')||{}).value);
@@ -2015,16 +2022,73 @@ async function probarInspeccion(nombreVer, html, b){
       const escr=ESC.slice(eB).filter(x=>x.base==='obra_inspecciones'&&x.body&&x.body.id===elSF&&x.body.puntos&&x.body.puntos[1]&&x.body.puntos[1].m).length;
       await p.locator('#campo-root .in-mal .in-b2',{hasText:'Cancelar'}).click(); await p.waitForTimeout(150);
       r.borrador=[sigue==='falta la roseta'?'la nota sigue':'quedó '+JSON.stringify(sigue), avisa?'lo dice en el punto':'no lo dice', escr?'escribió':'no escribió'].join(' · ');
+      await volver(); await p.waitForTimeout(250);
+      // v159 · por baño
+      const pb=await G(()=>{ const ps=_inspPantallas(S._insp.area,'plomeria'), banos=ps.filter(x=>x.junta);
+        return {n:ps.length, lista:document.querySelectorAll('#campo-root .in-el').length, con:banos.filter(x=>x.els.length===3).length, sin:banos.filter(x=>x.els.length===2).length,
+          idx:ps.findIndex(x=>x.els.length===3)}; });
+      const idx=pb.idx;
+      await p.locator('#campo-root .in-el').nth(idx).click(); await p.waitForTimeout(250);
+      const pb2=await G(()=>({secs:[...document.querySelectorAll('#campo-root .in-sec')].map(x=>x.textContent.trim()).join(' · '), pts:document.querySelectorAll('#campo-root .in-pt').length}));
+      r.porBano=[pb.n+' pantallas', pb.lista===pb.n?'la lista igual':'lista '+pb.lista, pb2.secs, pb2.pts+' puntos', pb.con+' con ducha · '+pb.sin+' sin ducha'].join(' · ');
+      // v159 · no salir sin guardar
+      const ptD=n=>p.locator('#campo-root .in-pt').nth(n).locator('.in-b');
+      const rowD=await G(()=>_inspPantActual().els[2].rowId);
+      const s0=ESC.length;
+      await ptD(16).nth(0).click(); await p.waitForTimeout(200);
+      const noEscribe=!ESC.slice(s0).some(x=>x.base==='obra_inspecciones');
       await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+      const pregunta=await G(()=>!!document.querySelector('#campo-root .in-salir')&&S._insp.paso==='elem');
+      await p.locator('#campo-root .in-salir .in-b2',{hasText:'Seguir aquí'}).click(); await p.waitForTimeout(200);
+      const sigueAqui=await G(id=>S._insp.paso==='elem'&&!document.querySelector('#campo-root .in-salir')&&(_inspPuntos(id)[0]||{}).m==='ok', rowD);
+      await G(()=>goTab('obra')); await p.waitForTimeout(250);
+      const tabPregunta=await G(()=>!!document.querySelector('#campo-root .in-salir')&&S._insp.paso==='elem');
+      await p.locator('#campo-root .in-salir .in-b2',{hasText:'Seguir aquí'}).click(); await p.waitForTimeout(200);
+      await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+      await p.locator('#campo-root .in-salir .in-b2',{hasText:'Descartar'}).click(); await p.waitForTimeout(300);
+      const descarta=(await G(id=>S._insp.paso==='lista'&&!(_inspPuntos(id)[0]||{}).m, rowD)) && !ESC.slice(s0).some(x=>x.base==='obra_inspecciones');
+      await p.locator('#campo-root .in-el').nth(idx).click(); await p.waitForTimeout(250);
+      const c0=CAMB.length;
+      await ptD(16).nth(0).click(); await p.waitForTimeout(150);
+      await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+      await p.locator('#campo-root .in-salir .in-b2',{hasText:/^Guardar$/}).click();
+      await esperar(()=>{ const f=FILAS[rowD]; return f&&f.puntos&&f.puntos[0]&&f.puntos[0].m==='ok'; });
+      const guarda=!!(FILAS[rowD]&&FILAS[rowD].puntos[0]&&FILAS[rowD].puntos[0].m==='ok') && await G(()=>S._insp.paso==='lista');
+      r.salir=[noEscribe&&pregunta?'pregunta al salir':'no preguntó', sigueAqui?'seguir aquí se queda':'no se quedó', tabPregunta?'otra pestaña también pregunta':'otra pestaña no pregunta',
+        descarta?'descartar quita':'descartar no quitó', guarda?'guardar guarda':'no guardó'].join(' · ');
+      // v159 · historial
+      const h1=CAMB.slice(c0).filter(c=>c.accion==='guardada'&&c.entidad_id===rowD);
+      const pt0=(FILAS[rowD]&&FILAS[rowD].puntos[0])||{};
+      await p.locator('#campo-root .in-el').nth(idx).click(); await p.waitForTimeout(250);
+      const quien=await G(()=>[...document.querySelectorAll('#campo-root .in-quien')].map(x=>x.textContent).join(' | '));
+      await p.locator('#campo-root .in-hist-btn').click();
+      await esperar(async()=>await G(()=>document.querySelectorAll('#campo-root .in-hist-r').length>0));
+      const histVe=await G(()=>/Llenó · 1 ✔/.test((document.querySelector('#campo-root .in-hist')||{}).textContent||''));
+      r.historial=[h1.length===1?'un renglón por guardado':h1.length+' renglones',
+        h1[0]&&/^Llenó · 1 ✔ · 0 ✗ · 0 No aplica — 1\. /.test(h1[0].detalle)&&h1[0].usuario_nombre==='Ing. Karina Breton'?'Llenó con su punto':'detalle '+JSON.stringify(h1[0]&&h1[0].detalle),
+        pt0.u0==='Ing. Karina Breton'&&pt0.u==='Ing. Karina Breton'?'quién en el punto':'punto '+JSON.stringify([pt0.u0,pt0.u]),
+        /Llenó: Ing\. Karina Breton/.test(quien)?'se ve en la pantalla':'pantalla: '+quien, histVe?'y en el historial':'el historial no lo enseña'].join(' · ');
+      // v159 · lo guardado que no subió no se pisa al volver a entrar
+      cortaInsp=true;
+      await ptD(17).nth(0).click(); await p.waitForTimeout(150);
+      await volver(); await p.waitForTimeout(600);
+      await G(()=>{ inspVolver(); inspVolver(); }); await p.waitForTimeout(200);
+      await p.locator('#campo-root .hp-op',{hasText:/^Apartamento 4A/}).click(); await p.waitForTimeout(900);
+      const sigueMarca=await G(id=>(_inspPuntos(id)[1]||{}).m==='ok', rowD);
+      cortaInsp=false; await G(()=>_inspEnviar());
+      await esperar(()=>{ const f=FILAS[rowD]; return f&&f.puntos[1]&&f.puntos[1].m==='ok'; });
+      r.noPisa=[sigueMarca?'la marca sigue al volver a entrar':'se perdió al volver a entrar',
+        (FILAS[rowD]&&FILAS[rowD].puntos[1]&&FILAS[rowD].puntos[1].m==='ok')?'sale al volver la red':'no salió'].join(' · ');
+      await p.locator('#campo-root .in-of',{hasText:'Plomería'}).click(); await p.waitForTimeout(250);
     }else{ r.plomeria4A='sin Plomería'; r.inodoroListo='sin Plomería'; }
-    // v157 · Pintura en dos grupos, Muros y Techo
-    await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250);
+    // v157 · Pintura en dos grupos, Muros y Techo (al entrar a un oficio en curso se cae en su elemento: se vuelve hasta los oficios)
+    for(let t=0;t<3&&(await G(()=>S._insp&&(S._insp.paso==='elem'||S._insp.paso==='lista')));t++){ await volver(); await p.waitForTimeout(250); }
     if(await p.locator('#campo-root .in-of',{hasText:'Pintura'}).count()){
       await p.locator('#campo-root .in-of',{hasText:'Pintura'}).click(); await p.waitForTimeout(250);
-      const pin=await G(()=>{ const out={}; let g='';
-        document.querySelectorAll('#campo-root .cp-lbl, #campo-root .in-el').forEach(e=>{ if(e.classList.contains('cp-lbl')) g=e.textContent.trim(); else out[g]=(out[g]||0)+1; });
-        const t=_inspGrupo('pintura','techo'); return {out, n:t?t.pts.length:0, p5:t&&t.pts[4]?t.pts[4][0]:''}; });
-      r.pintura4A=['Muros '+(pin.out['Muros']||0), 'Techo '+(pin.out['Techo']||0), 'Techo con '+pin.n+' puntos', pin.p5].join(' · ');
+      const pin=await G(()=>{ const c={}; _inspElementos(S._insp.area,'pintura').forEach(e=>c[e.grupo]=(c[e.grupo]||0)+1);
+        const ps=typeof _inspPantallas==='function'?_inspPantallas(S._insp.area,'pintura'):[];
+        const t=_inspGrupo('pintura','techo'); return {c, np:ps.length, junta:ps.length&&ps.every(x=>x.els.length===2), lista:document.querySelectorAll('#campo-root .in-el').length, n:t?t.pts.length:0, p5:t&&t.pts[4]?t.pts[4][0]:''}; });
+      r.pintura4A=['Muros '+(pin.c.muros||0), 'Techo '+(pin.c.techo||0), (pin.junta&&pin.lista===pin.np?pin.np+' espacios con muros y techo juntos':'por separado'), 'Techo con '+pin.n+' puntos', pin.p5].join(' · ');
     }else r.pintura4A='sin Pintura';
     r.levKarina=await G(()=>{ inspVolver(); inspVolver(); return document.querySelector('#campo-root .in-lev-btn')?'lo ve':'no lo ve'; });
     r.sinActividades=esActs()-acts0;
