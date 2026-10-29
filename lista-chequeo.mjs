@@ -1675,6 +1675,7 @@ const IN_ESPERADO={
   cerrar:{v:'resumen 0 ✔ · 0 ✗ · 25 faltan · cerrada por Karina · no deja marcar · reabierta por Karina', d:'(v156) «Cerrar inspección» enseña el resumen, la cierra con nombre y fecha, cerrada no deja marcar, y al reabrir queda anotado quién'},
   plomeria4A:{v:'4 inodoro · 4 lavamanos · 3 ducha · 3 fregadero · 1 calentador', d:'(v156) en el 4A salen los elementos de plomería según sus 4 baños (el 1/2 baño sin ducha), 3 fregaderos y lavadero, y el calentador'},
   inodoroListo:{v:'inodoro · listo · la lista lo dice', d:'(v156) un inodoro con sus 8 puntos en ✔ queda «listo»'},
+  cada160:{v:'Electricidad del 4A sin «pintura» · 3 mamparas en el 4A · Puerta del lavado del 2A en polimetal y no en Ventanas · Cocina caliente del 2B en polimetal · Calentador con Gas y Ventilación · 146 puertas de madera', d:'(v160) cada punto a quien le toca: al eléctrico no se le pide pintura, la mampara es de Lantigua, las dos puertas de polimetal son de Laura Gonel y el calentador es de gas'},
   pintura4A:{v:'Muros 14 · Techo 14 · 14 espacios con muros y techo juntos · Techo con 8 puntos · Corte con la pared', d:'(v157, v159) Pintura del 4A: Muros y Techo por espacio, los dos en la MISMA pantalla, y el Techo con sus 8 puntos'},
   porBano:{v:'8 pantallas · la lista igual · Inodoro · Lavamanos · Ducha · 24 puntos · 3 con ducha · 1 sin ducha', d:'(v159) la plomería del 4A se recorre por baño: una pantalla con inodoro, lavamanos y ducha (el 1/2 baño sin ducha), más los fregaderos y el calentador'},
   salir:{v:'pregunta al salir · seguir aquí se queda · otra pestaña también pregunta · descartar quita · guardar guarda', d:'(v159) un ✔ queda pendiente hasta «Guardar»: Volver y otra pestaña preguntan Guardar · Descartar · Seguir aquí, y cada una hace lo que dice'},
@@ -2090,6 +2091,18 @@ async function probarInspeccion(nombreVer, html, b){
         const t=_inspGrupo('pintura','techo'); return {c, np:ps.length, junta:ps.length&&ps.every(x=>x.els.length===2), lista:document.querySelectorAll('#campo-root .in-el').length, n:t?t.pts.length:0, p5:t&&t.pts[4]?t.pts[4][0]:''}; });
       r.pintura4A=['Muros '+(pin.c.muros||0), 'Techo '+(pin.c.techo||0), (pin.junta&&pin.lista===pin.np?pin.np+' espacios con muros y techo juntos':'por separado'), 'Techo con '+pin.n+' puntos', pin.p5].join(' · ');
     }else r.pintura4A='sin Pintura';
+    r.cada160=await G(()=>{ try{ const el=(ar,of)=>_inspElementos(ar,of);
+      const pin=INSP_CAT.find(o=>o.id==='electricidad').grupos.flatMap(g=>g.pts).filter(p=>/pintur/i.test(p[0]+' '+p[1])).length;
+      const mam=el('N4 — Apto 4A','ventanas').filter(e=>e.grupo==='mamparas').length;
+      const lavV=el('N2 — Apto 2A','ventanas').some(e=>/lavado/i.test(e.nombre)), lavP=el('N2 — Apto 2A','polimetal').some(e=>/lavado/i.test(e.nombre));
+      const cocP=el('N2 — Apto 2B','polimetal').some(e=>/cocina caliente/i.test(e.nombre)) && !el('N2 — Apto 2B','ventanas').some(e=>/cocina caliente/i.test(e.nombre));
+      const cal=(_inspGrupo('plomeria','calentador').pts.map(p=>p[0]));
+      let mad=0; ['2A','3A','4A','5A','6A','2B','3B','4B','5B','6B'].forEach(c=>{ mad+=el('N'+c[0]+' — Apto '+c,'ebanisteria').filter(e=>e.grupo==='puertas'&&!e.agregado).length; }); mad+=el('N7 — Penthouse','ebanisteria').filter(e=>e.grupo==='puertas'&&!e.agregado).length;
+      return [pin?'Electricidad con '+pin+' puntos de pintura':'Electricidad del 4A sin «pintura»', mam+' mamparas en el 4A',
+        lavP&&!lavV?'Puerta del lavado del 2A en polimetal y no en Ventanas':'la Puerta del lavado sigue en Ventanas',
+        cocP?'Cocina caliente del 2B en polimetal':'la Cocina caliente del 2B no está en polimetal',
+        cal.indexOf('Gas')>=0&&cal.indexOf('Ventilación')>=0?'Calentador con Gas y Ventilación':'Calentador sin Gas ni Ventilación', mad+' puertas de madera'].join(' · ');
+    }catch(e){ return 'se cortó: '+String(e&&e.message||e).slice(0,80); } });
     r.levKarina=await G(()=>{ inspVolver(); inspVolver(); return document.querySelector('#campo-root .in-lev-btn')?'lo ve':'no lo ve'; });
     r.sinActividades=esActs()-acts0;
     }catch(e){ r._error156=String(e&&e.message||e).split('\n')[0].slice(0,200); }

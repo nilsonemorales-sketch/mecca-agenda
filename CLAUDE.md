@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v159 — 28 de octubre de 2026.** Antes de escribir, comprueba
+**Al día a v160 — 29 de octubre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -3408,6 +3408,32 @@ archivo pero está APAGADO** con `INSP_CREA_PARTIDAS = false`.
   - **Lista de chequeo (v159)**: entran `porBano`, `salir`, `historial` y
     `noPisa` (la marca sigue al volver a entrar con la escritura cortada), y
     `pintura4A` pasa a pantallas de muros + techo.
+- **CADA PUNTO A QUIEN LE TOCA (v160).** Revisión del catálogo entero con una
+  regla del dueño: *un punto se le cobra solo al contratista de ese oficio*; si
+  el ✗ sería por el trabajo de otro (pintura, resane, limpieza final), va en el
+  oficio del otro. Al eléctrico ya no se le piden placas «sin pintura» ni caja
+  «sin hueco alrededor»: eso lo cobra la Limpieza de Pintura · Muros (placas,
+  tomas e interruptores) y el resane de Albañilería. Gabinetes ya no piden los
+  huecos ni el silicón del tope (son de Milo); Fregadero, Ducha y Calentador
+  (este último a GAS, con su ventilación) cambiaron los puntos que eran de Milo,
+  de Lantigua o del eléctrico. **Elemento nuevo: «Mampara de baño»** en Ventanas
+  y vidrio (`mamparas`, una por baño con ducha, de los `banos` del inventario).
+  **Tipo de puerta nuevo en el inventario: `Polimetal`** — la Puerta del lavado
+  de los A y la Cocina caliente (desde el área común) de los B (confirmado por
+  el dueño): salen de Ventanas y entran de arranque en Puertas de polimetal
+  (Laura Gonel); Ebanistería las sigue dejando fuera, así que siguen siendo
+  **146** puertas de madera. El dibujo de Gabinetes movió sus círculos 6 y 7.
+  - **LA REGLA QUE PROTEGE LO REGISTRADO**: en `puntos[]` el índice es la
+    POSICIÓN DESPUÉS de `_inspFases`. En un grupo con marcas solo se cambia el
+    detalle (o el título si conserva el sentido), **nunca la fase, el orden ni la
+    cantidad**: cambiar una fase reordena y las marcas caen en otro punto. Los
+    reemplazos se hicieron solo en grupos sin una marca en la base (medido el
+    29-oct). Con marcas solo cambiaron dos detalles: Muros 8 «Limpieza» y Topes 1
+    «Base liberada». Antes, **respaldo de las 22 inspecciones y los 4 estados en
+    `obra_cambios`** («RESPALDO antes de cambiar el catálogo (v160)», ids
+    `resp160-…`). El catálogo es código: **ni una escritura a
+    `obra_inspecciones`** — lo marcado sigue igual, comprobado por SQL.
+  - **Lista de chequeo (v160)**: entra `cada160`.
 - **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO» (hasta la v155)**: veinticinco
   comprobaciones como Karina por el Modo Campo a 390 (desde la v154, también
   ✗ → «—» deja la partida abierta con su nota, y los tres dibujos de la hoja de
@@ -4791,7 +4817,7 @@ orden de magnitud.
 | `obra_capitulos`, `obra_subgrupos` | **La estructura del módulo «Partidas», editable desde el app (v108).** Los capítulos con su `orden` (que rompe empates) y `en_presupuesto`; los grupos de trabajo con sus `palabras` y su `orden` (gana el primero que coincide). Las constantes del código se quedan de respaldo. `obra_capitulos` lleva además el **`avance_manual`** de la v110. | 48 + 44 |
 | `obra_partidas`, `obra_partida_actividad` | **Del módulo de PRUEBA «Partidas» (v98, v100, v101, v106).** Desde la v118 `obra_partida_actividad` es además lo que la tabla lee para la columna CAPÍTULO y lo que reescribe al cambiarlo. Guarda DOS niveles en la misma tabla, separados por `tipo` (`presupuesto` / `agenda`). **Sin `cantidad` desde v101**; **con `grupo` desde v106** (el grupo de trabajo puesto a mano, que manda sobre la regla); **con `avance_manual`, `avance_manual_por` y `avance_manual_fecha` desde v110**; **con `orden` desde v114** (el orden que el dueño pone a mano en «Por partida»). Se borran las dos y el app queda como en v97. | 274 + 1.029, 2.466 amarres |
 | `obra_nodos`, `obra_nodo_actividad`, `obra_plan_fuera` | **EL PLAN (v111→v113, rehecho en v120)** — el segundo eje. **Desde el 20-sep es el esquema del dueño, no el MS Project**: 131 nodos = 1 raíz + **8 grupos** + **28 partidas madre** + **93 subpartidas** + POR UBICAR, ids `es_raiz`, `es_g*`, `es_p*`, `es_s***`, `es_porubicar`, y `origen` vale `raiz · grupo · partida · subpartida · porubicar`. **Los `cr_*` del Project ya no están**, pero sus columnas sí (`costo_plan`, `dias_plan`, `pred_plan`, `inicio_plan`, `fin_plan`, `pct_plan`, `costo_real_plan`) y el cronograma las sigue leyendo — vacías. **Columna nueva `palabras` (v120)**, texto separado por coma, llena en 73 de las 93, que es lo que ordena las candidatas de Clasificar. Más `tipo` (`rama`/`entregable`), `clase`, `orden`, `notas` y `avance_manual`. **No hay siembra desde el app.** `obra_nodo_actividad` lleva `UNIQUE (nodo_id, actividad_id)`, así que el POST va con `resolution=merge-duplicates`. **El sitio NO es un nodo**: sale del `area` de la actividad. `obra_plan_fuera` son los descartes: **no borra nada**. Se borran las tres y el catálogo queda exactamente igual. | 131 + 2.445 |
-| `obra_inspecciones` | **La inspección por apartamento (v153).** Un renglón por elemento revisado; `puntos` jsonb con la marca, causa, nota, foto y partida de cada uno de los 8 puntos. Desde la v156 con `aprobado_por` y `aprobado_fecha`. Ver «INSPECCIÓN POR APARTAMENTO (v153)» y «LA INSPECCIÓN ES UN LEVANTAMIENTO (v156)». | 1 (27-oct) |
+| `obra_inspecciones` | **La inspección por apartamento (v153).** Un renglón por elemento revisado; `puntos` jsonb con la marca, causa, nota, foto y partida de cada uno de los 8 puntos. Desde la v156 con `aprobado_por` y `aprobado_fecha`. Ver «INSPECCIÓN POR APARTAMENTO (v153)» y «LA INSPECCIÓN ES UN LEVANTAMIENTO (v156)». | 22 (29-oct) |
 | `obra_insp_estado` | **El estado de cada inspección (v156)**: una fila por apartamento y oficio, en curso o cerrada, quién cerró, reabrió y aprobó. | 0 al nacer |
 | `obra_ubicaciones` | **Del módulo «Partidas» (v110, v116).** Guarda el porcentaje a mano de una ubicación **y, desde la v116, las ubicaciones que el dueño crea**: `_catUbicsTodas()` devuelve la unión de las que usan las actividades y las filas activas de aquí. El nombre sigue viviendo en `obra_actividades.area`. | 0 al nacer |
 

@@ -1435,7 +1435,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261028_159';
+const APP_VERSION='20261029_160';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -32179,8 +32179,8 @@ var INSP_CAT=[
    ['Abren y cierran','Puertas y gavetas cierran completo, sin rozar.'],
    ['Tiradores','Todos puestos, derechos y firmes.'],
    ['Zócalo y ribetes','Zócalo abajo y remates donde van.'],
-   ['Huecos y agua','Huecos de fregadero, estufa y extractor hechos y sellados.'],
-   ['Juntas selladas','Silicón parejo entre gabinete, tope y pared.'],
+   ['Pases de tubería','Huecos para tuberías, desagüe y extractor a la medida y sellados; fondo bajo el fregadero protegido.'],
+   ['Juntas selladas','Silicón parejo entre el gabinete y la pared.'],
    ['Sin daños','Sin golpes, rayas, manchas ni piezas que falten.']]}]},
  {id:'plomeria',nombre:'Plomería',contratista:'Daniel Espinal',grupos:[
   {id:'inodoro',nombre:'Inodoro',filas:'cada inodoro',pts:_inspFases([
@@ -32202,13 +32202,13 @@ var INSP_CAT=[
    ['T','Sellado','Silicón parejo contra la pared o el tope.'],
    ['T','Limpio','Sin cemento, masilla ni pegatinas.']])},
   {id:'fregadero',nombre:'Fregadero y lavadero',filas:'cada fregadero o lavadero',pts:_inspFases([
-   ['I','Asentado en el tope','Bien apoyado en su hueco, con sus grapas.'],
+   ['I','Canastilla','Canastilla y su empaque puestos y apretados.'],
    ['I','Grifería','Firme; caliente a la izquierda, fría a la derecha.'],
    ['C','Agua','Llaves angulares con escudo y flexibles conectados.'],
-   ['C','Desagüe','Canastilla, sifón y salida a la pared; triturador si lleva.'],
+   ['C','Desagüe','Sifón y salida a la pared; triturador si lleva.'],
    ['P','Drena','Lleno y destapado drena rápido, sin gorgoteo.'],
    ['P','Sin fugas','Seco debajo después de 5 minutos abierto.'],
-   ['T','Sellado al tope','Silicón parejo entre fregadero y tope.'],
+   ['T','Grifería sellada','Base de la grifería sellada contra el tope; no entra agua.'],
    ['T','Limpio','Sin masilla, cemento ni pegatinas.']])},
   {id:'ducha',nombre:'Ducha',filas:'cada ducha',pts:_inspFases([
    ['I','Mezcladora','Firme, con su placa o escudo contra la pared.'],
@@ -32216,28 +32216,28 @@ var INSP_CAT=[
    ['P','Caliente y fría','Sale caliente y fría donde dice, con buena presión.'],
    ['P','Desagüe','Rejilla puesta; drena sin dejar charco.'],
    ['P','Sin fugas','Seco detrás de la pared y en el techo del piso de abajo.'],
-   ['I','Puerta o mampara','Cierra bien y no bota agua al baño.'],
-   ['T','Silicón','Juntas de piso, pared y mampara selladas.'],
-   ['T','Limpio','Sin cemento ni manchas en cerámica y vidrio.']])},
+   ['I','Pases sellados','Alrededor de la mezcladora y la regadera, sellado; no entra agua a la pared.'],
+   ['T','Silicón','Juntas de piso y pared selladas.'],
+   ['T','Limpio','Sin restos de su trabajo (cemento, silicón) en mezcladora y regadera.']])},
   {id:'calentador',nombre:'Calentador',filas:'cada calentador',pts:_inspFases([
    ['I','Fijado','Firme en su sitio, a plomo, con espacio para darle servicio.'],
    ['C','Entrada de agua fría','Con su llave de paso a mano.'],
    ['C','Salida caliente','Conectada a la red del apartamento.'],
    ['C','Válvula de alivio','Puesta, con su tubo llevando el agua a un sitio seguro.'],
-   ['C','Energía o gas','Breaker propio, o llave de gas y prueba con agua jabonosa.'],
+   ['C','Gas','Llave de paso del gas puesta; prueba con agua jabonosa sin burbujas.'],
    ['P','Calienta','A los 20 minutos sale caliente en la cocina y el baño más lejano.'],
    ['P','Sin fugas','Seco en todas las uniones.'],
-   ['T','Terminado','Tapas puestas y pared terminada alrededor.']])}]},
+   ['T','Ventilación','Ducto de salida al exterior puesto, firme y sellado.']])}]},
  {id:'electricidad',nombre:'Electricidad',contratista:'Alexander Ramos',grupos:[
   {id:'tomas',nombre:'Tomacorrientes',filas:'cada espacio',pts:_inspFases([
-   ['I','Caja','A ras de la pared, firme y sin hueco alrededor.'],
+   ['I','Caja','A ras de la pared y firme.'],
    ['I','Accesorio','Derecho, fijo y a la misma altura que los demás.'],
    ['P','Polaridad y tierra','El probador de 3 luces dice «correcto» en cada uno.'],
    ['P','Voltaje','120 V; los especiales (estufa, secadora, aire) 240 V.'],
    ['P','Protección GFCI','En baños, cocina, lavado y exteriores: el botón TEST lo dispara y RESET lo vuelve.'],
    ['C','Circuito','Se sabe cuál breaker lo apaga.'],
-   ['T','Placa','Puesta, derecha y sin pintura.'],
-   ['T','Limpio','Sin masilla ni pintura en el accesorio.']])},
+   ['T','Placa','Puesta, derecha y firme.'],
+   ['T','Completos','Están todos los del plano en ese espacio.']])},
   {id:'interruptores',nombre:'Interruptores',filas:'cada espacio',pts:_inspFases([
    ['I','Instalado','Derecho, fijo, del lado de la cerradura de la puerta.'],
    ['I','Altura','A la misma altura en todo el apartamento.'],
@@ -32245,17 +32245,17 @@ var INSP_CAT=[
    ['P','3 vías','Donde hay dos, la luz prende y apaga desde los dos.'],
    ['P','Dimmer','Donde lleva, sube y baja sin parpadeo.'],
    ['P','Sin calentarse','No chispea ni se calienta.'],
-   ['T','Placa','Puesta, derecha y sin pintura.'],
-   ['T','Limpio','Sin masilla ni pintura.']])},
+   ['T','Placa','Puesta, derecha y firme.'],
+   ['T','Completos','Están todos los del plano en ese espacio.']])},
   {id:'luminarias',nombre:'Luminarias',filas:'cada espacio',pts:_inspFases([
    ['I','Fija a su caja','Atornillada a la caja, no colgando del cable.'],
    ['I','Ubicada','Centrada y alineada con las demás.'],
    ['P','Enciende','Prende y apaga desde su interruptor.'],
    ['P','Luz pareja','Mismo color de luz en todo el espacio; ningún LED parpadea.'],
    ['I','Difusor','Vidrio, aro o difusor puesto.'],
-   ['T','Borde terminado','Sin hueco entre la lámpara y el techo.'],
+   ['T','Aro o borde','El aro de la lámpara tapa el hueco y queda pegado al techo.'],
    ['T','Exterior y balcón','Las de balcón son para exterior y están selladas.'],
-   ['T','Limpia','Sin polvo, pintura ni pegatinas.']])},
+   ['T','Completas','Están todas las del plano en ese espacio.']])},
   {id:'panel',nombre:'Panel de breakers',filas:'cada panel',pts:_inspFases([
    ['I','Fijado','A nivel y firme en la pared.'],
    ['I','Tapa','Tapa interior y puerta puestas; sin huecos abiertos.'],
@@ -32272,8 +32272,8 @@ var INSP_CAT=[
    ['P','Voltaje','El que pide el equipo (120 o 240 V).'],
    ['P','Equipo funciona','Si el equipo ya está: enciende y trabaja.'],
    ['P','Extractor','Saca el aire hacia afuera; no hace ruido.'],
-   ['T','Pared terminada','Sin hueco ni rotura alrededor.'],
-   ['T','Limpio','Sin pintura ni masilla.']])}]},
+   ['T','Ubicación','Donde va el equipo: detrás de la nevera, junto a la estufa, a la altura del aire.'],
+   ['T','Completas','Están todas las que pide el plano.']])}]},
  {id:'pintura',nombre:'Pintura',contratista:'Jordy',grupos:[
   /* v157 · Muros y Techo, aparte (decisión del dueño). El grupo de los muros
      conserva el id `muros`: lo ya marcado en «Muros y techos» sigue en su fila
@@ -32286,7 +32286,7 @@ var INSP_CAT=[
    ['T','Cortes','Líneas limpias contra rodapié, marcos, ventanas y el encuentro con el techo.'],
    ['T','Retoques','Los golpes de las instalaciones, repintados.'],
    ['T','Color','El de la tabla de terminación en cada pared.'],
-   ['T','Limpieza','Sin pintura en pisos, vidrios, placas ni aparatos.']])},
+   ['T','Limpieza','Sin pintura ni masilla en placas, tomacorrientes, interruptores, pisos, vidrios ni aparatos.']])},
   {id:'techo',nombre:'Techo',filas:'cada espacio',pts:_inspFases([
    ['I','Superficie liberada','Sheetrock o pañete masillado y lijado (liberación L1).'],
    ['I','Sellador','Aplicado en todo el techo antes de pintar.'],
@@ -32324,7 +32324,7 @@ var INSP_CAT=[
    ['I','Tope','Tope o amortiguador al final del recorrido.'],
    ['P','Umbral','Con caída hacia afuera; manguera 5 minutos y no entra agua.'],
    ['T','Vidrio templado','Con su sello de templado visible y sin rayas.'],
-   ['T','Limpieza','Perfiles y vidrio limpios, sin cemento ni pintura.']])},
+   ['T','Limpieza','Sin restos de su trabajo (silicón, etiquetas, plástico).']])},
   {id:'barandas',nombre:'Baranda',filas:'cada baranda · se agregan en la primera inspección',pts:_inspFases([
    ['I','Firme','Empujada con fuerza no se mueve.'],
    ['I','Altura','La altura del plano, pareja en todo el largo.'],
@@ -32333,10 +32333,22 @@ var INSP_CAT=[
    ['T','Vidrio','Templado o laminado, sin rayas.'],
    ['T','Sin filos','Sin puntas ni bordes que corten.'],
    ['T','Acabado','Sin óxido ni rayas.'],
-   ['T','Limpieza','Sin cemento ni pintura.']])}]},
+   ['T','Limpieza','Sin restos de su trabajo (silicón, etiquetas, plástico).']])},
+  /* v160 · La mampara del baño es de José Lantigua (en la base: «Instalar las
+     mamparas de baño»): sale de la Ducha de Plomería y viene aquí, una por
+     baño con ducha. */
+  {id:'mamparas',nombre:'Mampara de baño',filas:'cada baño con ducha',pts:_inspFases([
+   ['I','Instalada','Firme, a plomo y bien anclada.'],
+   ['I','Sellada','Silicón por fuera; el agua no sale por las juntas.'],
+   ['P','Abre o corre','Sin trabarse; la corrediza no se sale del riel.'],
+   ['P','Cierra bien','Cierra completo; imán o burlete puestos.'],
+   ['P','No bota agua','Con la ducha abierta 5 minutos, el piso de afuera queda seco.'],
+   ['T','Vidrio templado','Con su sello de templado y sin rayas.'],
+   ['T','Herrajes','Jaladera, bisagras o rodamientos completos y firmes.'],
+   ['T','Sin restos','Sin silicón regado ni etiquetas.']])}]},
  {id:'topes',nombre:'Topes',contratista:'Milo',grupos:[
   {id:'topes',nombre:'Tope (cocina, isla, lavado o baño)',filas:'cada tope · de arranque, las partidas abiertas de Milo aquí',pts:_inspFases([
-   ['I','Base liberada','Gabinetes nivelados y fijos antes de medir (liberación L3).'],
+   ['I','Base liberada','Gabinetes nivelados y fijos antes de medir (L3). Si no lo estaban, anótelo: el ✗ es de Dimedes, no de Milo.'],
    ['I','Medida en sitio','Se midió con el fregadero, la estufa y la grifería en obra.'],
    ['I','Perforaciones','Fregadero, estufa, grifería y lavamanos a la medida; cantos pulidos y esquinas redondeadas.'],
    ['I','Instalado y nivelado','Apoyado completo, a nivel; los voladizos con su soporte.'],
@@ -32387,7 +32399,7 @@ var INSP_CAT=[
    ['Anclajes sellados','Los huecos en la pared sellados; no entra agua.'],
    ['Limpieza','Sin restos de soldadura ni pintura alrededor.']]}]},
  {id:'polimetal',nombre:'Puertas de polimetal y corredizas',contratista:'Laura Gonel',grupos:[
-  {id:'puertas',nombre:'Puertas',filas:'cada puerta de polimetal o corrediza · se agregan en la primera inspección',pts:[
+  {id:'puertas',nombre:'Puertas',filas:'cada puerta de polimetal o corrediza · la del lavado de arranque, las demás se agregan',pts:[
    ['Instalada a plomo','Derecha y firme en su marco.'],
    ['Abre o corre suave','Sin trabarse ni salirse del riel.'],
    ['Seguro o cerradura','Cierra y traba bien.'],
@@ -32395,7 +32407,7 @@ var INSP_CAT=[
    ['Guía o tope','Guía de abajo y tope puestos.'],
    ['Marco sellado','Sellado contra la pared, sin rendijas.'],
    ['Sin daños','Sin abolladuras, rayas ni golpes.'],
-   ['Limpieza','Sin plástico, cemento ni pintura.']]}]},
+   ['Limpieza','Sin restos de su trabajo (plástico, silicón, etiquetas).']]}]},
  {id:'intercom',nombre:'Intercom y cámaras',contratista:'Venancio',grupos:[
   {id:'equipos',nombre:'Equipos',filas:'cada monitor o cámara · se agregan en la primera inspección',pts:[
    ['Instalado firme','A nivel, a la altura correcta y bien sujeto.'],
@@ -32404,7 +32416,7 @@ var INSP_CAT=[
    ['Imagen y sonido','Se ve y se oye bien en los dos sentidos.'],
    ['Abre la puerta','El botón del monitor abre la puerta de abajo.'],
    ['Cables ocultos','Sin cables sueltos ni a la vista.'],
-   ['Placa y caja','Caja tapada y pared terminada alrededor.'],
+   ['Placa y caja','Caja tapada; el monitor cubre toda la caja.'],
    ['Explicado','El ingeniero sabe cómo se usa para enseñarlo al cliente.']]}]},
  {id:'aires',nombre:'Aires acondicionados',contratista:'Kelvin',grupos:[
   {id:'equipos',nombre:'Equipos',filas:'cada equipo de aire · se agregan en la primera inspección',pts:[
@@ -32415,7 +32427,7 @@ var INSP_CAT=[
    ['Tubería','Aislada y forrada, sin partes peladas.'],
    ['Control','Control remoto o termostato funciona.'],
    ['Sin ruido','No vibra ni hace ruido raro.'],
-   ['Huecos sellados','Pase de tubería sellado y resanado.']]}]}
+   ['Huecos sellados','Pase de tubería sellado.']]}]}
 ];
 var INSP_ESPACIOS={
  A:['Recibidor','Sala','Comedor','Estar / balcón','Cocina','Cocina caliente y lavado','Habitación principal','Baño principal','Habitación secundaria 1','Habitación secundaria 2','Baño común','Habitación de servicio','Baño de servicio','1/2 baño de visita'],
@@ -32428,14 +32440,14 @@ var INSP_INV={
  A:{puertas:[['Entrada principal','De frente',_IA],['Habitación de servicio','Paso','2A 5A'],['Pasillo hacia el baño de servicio','Paso','3A 4A 5A 6A'],
    ['Baño de servicio','Paso',_IA],['1/2 baño de visita','Paso',_IA],['Habitación secundaria 1 (arriba)','Paso',_IA],['Habitación secundaria 2 (abajo)','Paso','2A 3A 4A 6A'],
    ['Baño común — puerta del inodoro','Paso',_IA],['Baño común — puerta hacia la habitación','Paso',_IA],['Baño principal','Paso',_IA],['Habitación principal','Paso',_IA],
-   ['Puerta del lavado','Aluminio',_IA],['Balcón del estar','Aluminio',_IA],['Baño','Corrediza',_IA],['Cocina (vaivén, entre cocina principal y cocina caliente)','Vaivén',_IA],
+   ['Puerta del lavado','Polimetal',_IA],['Balcón del estar','Aluminio',_IA],['Baño','Corrediza',_IA],['Cocina (vaivén, entre cocina principal y cocina caliente)','Vaivén',_IA],
    ['Habitación secundaria','Paso',_IA],['Habitación principal','Paso',_IA]],
   banos:['1/2 baño de visita','Baño común (habitaciones secundarias)','Baño de servicio','Baño principal'],
   closets:['Habitación principal (no lo veo en el plano)','Habitación secundaria 1 (CL)','Habitación secundaria 2 (CL)','Ropa blanca (CLB)'],
   gabinetes:['Cocina caliente / lavado','Cocina principal (bajos, altos e isla)','Mueble del 1/2 baño','Mueble del baño común','Mueble del baño de servicio','Mueble del baño principal'],
   cocinaCaliente:true},
  B:{puertas:[['Entrada principal','De frente',_IB],['Habitación de servicio','Corrediza','2B 5B'],['Pasillo hacia el baño de servicio','Paso','4B 5B 6B'],
-   ['Baño de servicio','Paso','4B 5B 6B'],['Cocina caliente (desde el área común)','Aluminio',_IB],['Cocina (la de vaivén)','Paso',_IB],['Habitación principal','Paso',_IB],
+   ['Baño de servicio','Paso','4B 5B 6B'],['Cocina caliente (desde el área común)','Polimetal',_IB],['Cocina (la de vaivén)','Paso',_IB],['Habitación principal','Paso',_IB],
    ['Vestidor','Paso',_IB],['Baño principal','Paso',_IB],['Habitación secundaria 1','Paso',_IB],['Baño común — desde la habitación 1','Corrediza',_IB],
    ['Baño común — puerta del inodoro','Paso',_IB],['Baño común — desde la habitación 2','Corrediza',_IB],['Habitación secundaria 2','Paso',_IB],
    ['1/2 baño de visita','Paso',_IB],['Balcón del estar','Aluminio',_IB],['Balcón habitación P periferia y vidrio-','Aluminio',_IB],['Cocina','Vaivén',_IB],
@@ -32504,7 +32516,7 @@ function _inspElementos(area, of){
   var enEste=function(p){ return String(p[2]).split(' ').indexOf(ap.code)>=0; };
   var espacios=function(gid){ (INSP_ESPACIOS[ap.tipo]||[]).forEach(function(x){ add(gid,x); }); };
   if(of==='ebanisteria'){
-    inv.puertas.filter(function(p){ return p[1]!=='Aluminio' && enEste(p); }).forEach(function(p){ add('puertas',p[0]); });
+    inv.puertas.filter(function(p){ return p[1]!=='Aluminio' && p[1]!=='Polimetal' && enEste(p); }).forEach(function(p){ add('puertas',p[0]); });
     inv.closets.forEach(function(x){ add('closets',x); });
     inv.gabinetes.forEach(function(x){ add('gabinetes',x); });
   }else if(of==='plomeria'){
@@ -32526,6 +32538,7 @@ function _inspElementos(area, of){
     /* Las ventanas y las barandas se agregan en la primera inspección; las
        puertas corredizas son las de tipo «Aluminio» del inventario. */
     inv.puertas.filter(function(p){ return p[1]==='Aluminio' && enEste(p); }).forEach(function(p){ add('puertas',p[0]); });
+    inv.banos.filter(function(x){ return !/1\/2/.test(x); }).forEach(function(x){ add('mamparas',x); });
   }else if(of==='topes'){
     /* La lista de arranque son las partidas ABIERTAS de Milo en ese sitio,
        más lo que ya se inspeccionó (una partida que se cierra no puede
@@ -32540,7 +32553,12 @@ function _inspElementos(area, of){
     Object.keys(rs).forEach(function(k){ var r=rs[k];
       if(!r.agregado && r.apto===area && r.oficio==='topes' && !ya[k]){ vistos['topes|'+k.split('|')[3]]=1;
         out.push({id:k.split('|')[3], grupo:'topes', nombre:r.elemento, rowId:k, clave:ap.tipo+'|topes|topes|'+k.split('|')[3]}); } });
-  }else if(of==='herreria'||of==='polimetal'||of==='intercom'||of==='aires'){
+  }else if(of==='polimetal'){
+    /* v160 · La puerta del lavado (A) y la de la cocina caliente desde el área
+       común (B) son de polimetal, de Laura Gonel (lo confirmó el dueño): salen
+       de arranque; las demás se agregan en la primera inspección. */
+    inv.puertas.filter(function(p){ return p[1]==='Polimetal' && enEste(p); }).forEach(function(p){ add('puertas',p[0]); });
+  }else if(of==='herreria'||of==='intercom'||of==='aires'){
     /* Sin inventario: se agregan en la primera inspección. */
   }else{
     espacios('espacios');
@@ -33788,7 +33806,9 @@ var INSP_DIBUJOS={
     [27,33,67,73].forEach(function(x){ D.l(x,47,x,53); });               // tiradores
     D.r(12,64,76,5,'f');                                                  // zócalo
     D.dash(true); D.l(14,33,40,33); D.dash(false); D.r(22,31,8,4); D.c(26,33,1);   // nivel
-    return [[8,30],[48,15],[40,56],[24,52],[60,73],[76,32],[96,38],[84,56]];
+    /* v160 · el 6 (pases de tubería) va debajo del fregadero, dentro del mueble,
+       y el 7 (junta) entre el mueble alto y la pared: lo del tope es de Milo. */
+    return [[8,30],[48,15],[40,56],[24,52],[60,73],[62,50],[94,14],[84,56]];
   },
   'plomeria|banos':function(D){
     D.l(3,70,97,70); D.l(64,4,64,70);
