@@ -1675,6 +1675,10 @@ const IN_ESPERADO={
   cerrar:{v:'resumen 0 ✔ · 0 ✗ · 25 faltan · cerrada por Karina · no deja marcar · reabierta por Karina', d:'(v156) «Cerrar inspección» enseña el resumen, la cierra con nombre y fecha, cerrada no deja marcar, y al reabrir queda anotado quién'},
   plomeria4A:{v:'4 inodoro · 4 lavamanos · 3 ducha · 3 fregadero · 1 calentador', d:'(v156) en el 4A salen los elementos de plomería según sus 4 baños (el 1/2 baño sin ducha), 3 fregaderos y lavadero, y el calentador'},
   inodoroListo:{v:'inodoro · listo · la lista lo dice', d:'(v156) un inodoro con sus 8 puntos en ✔ queda «listo»'},
+  albanileria161:{v:'7. Huecos tapados · 8. Pie de la pared · 8 puntos', d:'(v161) los puntos 7 y 8 de Albañilería con el título nuevo, en el mismo lugar y sin cambiar la cantidad'},
+  todoBien:{v:'marca los 7 · el ✗ se queda · con su etiqueta · se guarda con «Guardar»', d:'(v161) «Todo bien» en un elemento con un ✗: pone ✔ en los otros 7 y no toca el ✗; se guarda como uno por uno'},
+  nadaAplica:{v:'vacío: los 8 · con marcas: pregunta · no cambió nada · al decir sí, los 7 que faltan', d:'(v161) «Nada aplica» en un elemento vacío marca los 8; en uno con marcas primero pregunta en la pantalla'},
+  levBotones:{v:'etiquetas «todo bien» y «nada aplica» · la cuenta por ingeniero', d:'(v161) en el Levantamiento, lo marcado con botón lleva su etiqueta gris y sale la cuenta de cada ingeniero'},
   cada160:{v:'Electricidad del 4A sin «pintura» · 3 mamparas en el 4A · Puerta del lavado del 2A en polimetal y no en Ventanas · Cocina caliente del 2B en polimetal · Calentador con Gas y Ventilación · 146 puertas de madera', d:'(v160) cada punto a quien le toca: al eléctrico no se le pide pintura, la mampara es de Lantigua, las dos puertas de polimetal son de Laura Gonel y el calentador es de gas'},
   pintura4A:{v:'Muros 14 · Techo 14 · 14 espacios con muros y techo juntos · Techo con 8 puntos · Corte con la pared', d:'(v157, v159) Pintura del 4A: Muros y Techo por espacio, los dos en la MISMA pantalla, y el Techo con sus 8 puntos'},
   porBano:{v:'8 pantallas · la lista igual · Inodoro · Lavamanos · Ducha · 24 puntos · 3 con ducha · 1 sin ducha', d:'(v159) la plomería del 4A se recorre por baño: una pantalla con inodoro, lavamanos y ducha (el 1/2 baño sin ducha), más los fregaderos y el calentador'},
@@ -2103,6 +2107,47 @@ async function probarInspeccion(nombreVer, html, b){
         cocP?'Cocina caliente del 2B en polimetal':'la Cocina caliente del 2B no está en polimetal',
         cal.indexOf('Gas')>=0&&cal.indexOf('Ventilación')>=0?'Calentador con Gas y Ventilación':'Calentador sin Gas ni Ventilación', mad+' puertas de madera'].join(' · ');
     }catch(e){ return 'se cortó: '+String(e&&e.message||e).slice(0,80); } });
+    // v161 · Albañilería: los títulos nuevos, «Todo bien» y «Nada aplica», como Karina en el 4A
+    try{
+      for(let t=0;t<4&&(await G(()=>S._insp&&S._insp.paso!=='oficio'));t++){ await volver(); await p.waitForTimeout(250); }
+      await p.locator('#campo-root .in-of',{hasText:'Albañilería'}).click(); await p.waitForTimeout(300);
+      if(await G(()=>S._insp.paso==='lista')){ await p.locator('#campo-root .in-el').first().click(); await p.waitForTimeout(300); }
+      const tit=await G(()=>[...document.querySelectorAll('#campo-root .in-pt-t')].map(x=>x.textContent));
+      r.albanileria161=[tit[6]||'—', tit[7]||'—', tit.length+' puntos'].join(' · ');
+      const rowA=await G(()=>_inspElActual().rowId);
+      const tres=i=>p.locator('#campo-root .in-pt').nth(i).locator('.in-b');
+      await tres(1).nth(1).click(); await p.waitForTimeout(150);
+      await p.locator('#campo-root .in-b2',{hasText:'Incompleto'}).click();
+      await p.locator('#campo-root .in-b2',{hasText:'Guardar el problema'}).click(); await p.waitForTimeout(400);
+      await p.locator('#campo-root .in-todo .in-b2',{hasText:'Todo bien'}).click(); await p.waitForTimeout(200);
+      const enPant=await G(id=>_inspPuntos(id).map(x=>(x&&x.m||'')+(x&&x.b?'/'+x.b:'')), rowA);
+      await p.locator('#campo-root .in-guardar-pant').first().click();
+      const guardoTB=await esperar(()=>{ const f=FILAS[rowA]; return f&&f.puntos.filter(x=>x&&x.m==='ok'&&x.b==='tb').length===7&&f.puntos[1].m==='mal'; });
+      r.todoBien=[enPant.filter(x=>x==='ok/tb').length===7?'marca los 7':'marcó '+enPant.join(','), enPant[1]==='mal'?'el ✗ se queda':'tocó el ✗',
+        enPant.filter(x=>/\/tb$/.test(x)).length===7?'con su etiqueta':'sin etiqueta', guardoTB?'se guarda con «Guardar»':'no se guardó'].join(' · ');
+      // el siguiente, vacío: «Nada aplica» marca los 8
+      await p.locator('#campo-root .in-sig').click(); await p.waitForTimeout(300);
+      const rowB=await G(()=>_inspElActual().rowId);
+      await p.locator('#campo-root .in-todo .in-b2',{hasText:'Nada aplica'}).click(); await p.waitForTimeout(200);
+      const vacio=await G(id=>_inspPuntos(id).filter(x=>x&&x.m==='na'&&x.b==='na').length, rowB);
+      await p.locator('#campo-root .in-guardar-pant').first().click(); await p.waitForTimeout(400);
+      // el tercero, con un ✔ puesto a mano: pregunta antes
+      await p.locator('#campo-root .in-sig').click(); await p.waitForTimeout(300);
+      const rowC=await G(()=>_inspElActual().rowId);
+      await tres(0).nth(0).click(); await p.waitForTimeout(150);
+      await p.locator('#campo-root .in-todo .in-b2',{hasText:'Nada aplica'}).click(); await p.waitForTimeout(200);
+      const pre=await G(()=>{ const x=document.querySelector('#campo-root .in-todo-pre'); return x&&x.checkVisibility()?x.textContent:''; });
+      const sinCambio=await G(id=>_inspPuntos(id).filter(x=>x&&x.m).length, rowC);
+      await p.locator('#campo-root .in-todo-pre .in-b2',{hasText:'Sí'}).click(); await p.waitForTimeout(200);
+      const tras=await G(id=>{ const ps=_inspPuntos(id); return {na:ps.filter(x=>x&&x.m==='na'&&x.b==='na').length, ok:ps[0]&&ps[0].m==='ok'&&!ps[0].b}; }, rowC);
+      await p.locator('#campo-root .in-guardar-pant').first().click();
+      await esperar(()=>{ const f=FILAS[rowC]; return f&&f.puntos.filter(x=>x&&x.m==='na').length===7; });
+      r.nadaAplica=[vacio===8?'vacío: los 8':'vacío: '+vacio, /ya tiene marcas/.test(pre)?'con marcas: pregunta':'no preguntó', sinCambio===1?'no cambió nada':'cambió '+sinCambio,
+        tras.na===7&&tras.ok?'al decir sí, los 7 que faltan':'después: '+JSON.stringify(tras)].join(' · ');
+      await volver(); await p.waitForTimeout(250);
+      await p.locator('#campo-root .in-of',{hasText:'Pintura'}).click(); await p.waitForTimeout(250);
+      if(await G(()=>S._insp.paso==='elem')){ await volver(); await p.waitForTimeout(250); }
+    }catch(e){ r.albanileria161=r.albanileria161||'se cortó: '+String(e&&e.message||e).split('\n')[0].slice(0,120); }
     r.levKarina=await G(()=>{ inspVolver(); inspVolver(); return document.querySelector('#campo-root .in-lev-btn')?'lo ve':'no lo ve'; });
     r.sinActividades=esActs()-acts0;
     }catch(e){ r._error156=String(e&&e.message||e).split('\n')[0].slice(0,200); }
@@ -2127,6 +2172,13 @@ async function probarInspeccion(nombreVer, html, b){
         const tr=[...t.querySelectorAll('tbody tr')].find(x=>x.querySelector('th').textContent==='4A');
         const b=tr&&tr.children[ci].querySelector('button');
         return {filas, cols, cel:b?b.className.replace('lev-c ','')+' '+b.textContent:'' }; });
+      const como=await q.evaluate(()=>{ const x=document.querySelector('#c-hp .lev-como'); if(!x) return null;
+        const tr=[...x.querySelectorAll('tbody tr')].find(t=>/Karina/.test(t.textContent)); return tr?[...tr.children].map(c=>c.textContent):null; });
+      await q.evaluate(()=>inspLevOf(REC_ORDEN.findIndex(x=>/Apto 4A/.test(x)),'albanileria')); await q.waitForTimeout(250);
+      const etq=await q.evaluate(()=>[...document.querySelectorAll('#c-hp .lev-boton')].filter(x=>x.checkVisibility()).map(x=>x.textContent));
+      r.levBotones=[etq.includes('todo bien')&&etq.includes('nada aplica')?'etiquetas «todo bien» y «nada aplica»':'etiquetas: '+JSON.stringify([...new Set(etq)]),
+        como&&Number(como[2])>=7&&Number(como[3])>=15?'la cuenta por ingeniero':'cuenta: '+JSON.stringify(como)].join(' · ');
+      await q.evaluate(()=>{ S._insp.paso='lev'; _hpRepintar(); }); await q.waitForTimeout(200);
       const f4=Object.values(FILAS).find(f=>f.id===el1);
       await q.evaluate(()=>{ const t=document.querySelector('#c-hp .lev-t'); const ths=[...t.querySelectorAll('thead th')].map(x=>x.textContent), ci=ths.indexOf('Ebanistería');
         const tr=[...t.querySelectorAll('tbody tr')].find(x=>x.querySelector('th').textContent==='4A'); tr.children[ci].querySelector('button').click(); });

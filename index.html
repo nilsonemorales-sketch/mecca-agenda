@@ -279,6 +279,10 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .lev-pt em{display:block;font-style:normal;color:var(--red);font-weight:650}
 .lev-pt.mal{color:var(--text)}.lev-m{font-weight:800;width:16px;flex-shrink:0}
 .lev-sinfoto{display:inline-block;margin-top:2px;font-size:11px;font-weight:650;color:var(--text3);border:1px solid var(--border2);border-radius:6px;padding:0 5px}
+.lev-boton{display:inline-block;margin-left:4px;font-size:11px;font-weight:650;color:var(--text3);border:1px solid var(--border2);border-radius:6px;padding:0 5px}
+.in-todo{display:flex;gap:8px;margin:8px 0 4px}.in-todo .in-b2{flex:1;min-height:44px}
+.in-todo-pre{margin:8px 0;padding:10px;border:1px solid var(--amber,#b45309);border-radius:10px;font-size:14px}
+.lev-como{margin:14px 0 4px}.lev-como table{border-collapse:collapse;font-size:13px;width:100%}.lev-como td,.lev-como th{padding:6px 4px;border-bottom:1px solid var(--border2);text-align:left}
 .lev-pt.ok .lev-m{color:var(--green)}.lev-pt.mal .lev-m{color:var(--red)}
 .lev-fotos{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 4px 22px}
 .lev-fotos img{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border2);cursor:pointer}
@@ -1435,7 +1439,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261029_160';
+const APP_VERSION='20261102_161';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -32366,8 +32370,11 @@ var INSP_CAT=[
    ['Mochetas de ventana','Completas, a escuadra y sin rajaduras.'],
    ['Resanes','Alrededor de cajitas eléctricas, registros y tuberías, sin huecos.'],
    ['Patinillos','Cerrados con block y pañetados.'],
-   ['Huecos sobrantes','Huecos de puertas o pases que no se usan, cerrados y terminados.'],
-   ['Encuentro con el piso','Terminación limpia donde termina el piso y en los balcones.']]}]},
+   /* v161 · los títulos y el texto de 7 y 8 se aclararon (la Ing. Karina no
+      sabía qué se revisaba). SOLO TEXTO: en el 6A ya hay marcas en estas
+      posiciones, así que no se mueven ni se cambia la cantidad. */
+   ['Huecos tapados','No queda ningún hueco abierto en la pared: pases de tubería que no se usaron, regatas (canales) de tubo o cable y huecos de puerta o ventana que se movieron. Rellenos y pañetados al ras; pasando la mano no se nota dónde estaban.'],
+   ['Pie de la pared','En los últimos 10 cm de abajo, el pañete llega completo y derecho hasta el piso: sin huecos, sin bultos y sin mezcla pegada en el piso. El pisero puede pegar el rodapié sin calzarlo.']]}]},
  {id:'sheetrock',nombre:'Sheetrock',contratista:'Secre',grupos:[
   {id:'espacios',nombre:'Techos, plafones y columnas falsas',filas:'cada espacio con techo o pieza de sheetrock',pts:[
    ['Plano y nivelado','Sin ondas ni bajadas; las esquinas cierran.'],
@@ -32632,7 +32639,7 @@ function _inspPendSet(m){ try{ localStorage.setItem(INSP_PEND_LS, JSON.stringify
 function _inspCopia(r){ return r?JSON.parse(JSON.stringify(r)):null; }
 function _inspHuella(r){
   var ps=(r&&r.puntos)||[], out=[];
-  for(var j=0;j<8;j++){ var p=ps[j]||{}; out.push([p.m||'',p.c||'',p.n||'',p.f||'',!!p.fp,(p.x||[]).map(function(x){ return x.id; }).join(','),(p.q||[]).length]); }
+  for(var j=0;j<8;j++){ var p=ps[j]||{}; out.push([p.m||'',p.b||'',p.c||'',p.n||'',p.f||'',!!p.fp,(p.x||[]).map(function(x){ return x.id; }).join(','),(p.q||[]).length]); }
   return JSON.stringify({e:(r&&r.elemento)||'', p:out, b:((r&&r.bk)||[]).length});
 }
 function _inspAntesDe(id){
@@ -32663,7 +32670,7 @@ function _inspHistTxt(r, a){
     var p=ps[j]||{}, q=as[j]||{}, t=(j+1)+'. '+((g&&g.pts[j])?g.pts[j][0]:'');
     if(p.m) c[p.m]++;
     var pr=p.m==='mal'?_inspProbTxt(p):'';
-    if((p.m||'')!==(q.m||'')) cam.push(t+': '+(q.m?_inspMarcaTxt(q)+' → ':'')+_inspMarcaTxt(p)+(pr?' ('+pr+')':''));
+    if((p.m||'')!==(q.m||'')) cam.push(t+': '+(q.m?_inspMarcaTxt(q)+' → ':'')+_inspMarcaTxt(p)+(pr?' ('+pr+')':'')+(p.b?' (con «'+INSP_BOTON_TXT[p.b]+'»)':''));
     else if(p.m==='mal' && pr!==_inspProbTxt(q)) cam.push(t+': ✗ ('+pr+')');
     var nx=(p.x||[]).length+((p.f||p.fp)?1:0)-(q.x||[]).length-((q.f||q.fp)?1:0);
     if(nx>0) cam.push(t+': + foto'); else if(nx<0) cam.push(t+': foto quitada');
@@ -33300,6 +33307,7 @@ function _inspHTML(){
     if(P.junta) h+='<div class="in-sec">'+esc(g.nombre)+'</div>';
     if(qn) h+='<div class="in-quien">'+esc(qn)+'</div>';
     if(_inspListo(e.rowId)) h+='<div class="in-listo">✔ '+(P.junta?esc(g.nombre)+' listo':'Elemento listo')+'</div>';
+    if(!cerr && canEdit()) h+=_inspTodoHTML(e,k,ps);
     g.pts.forEach(function(pt,j){
       var p=ps[j]||{}, abierto=I.mal&&I.mal.j===j&&I.mal.r===e.rowId, pre='inspK('+k+');';
       h+='<div class="in-pt'+(p.m==='ok'?' ok':p.m==='mal'?' mal':p.m==='na'?' na':'')+'">'+
@@ -33420,7 +33428,7 @@ function _inspLevHTML(){
       });
       h+='</tr>';
     });
-    return h+'</tbody></table></div>';
+    return h+'</tbody></table></div>'+_inspLevComoHTML();
   }
   var area=I.area, nom=_hpNomUbic(area);
   if(I.paso==='levApto'){
@@ -33452,6 +33460,7 @@ function _inspLevHTML(){
       if(!p.m){ sin.push(j+1); return; }
       var fotos=[]; if(p.f) fotos.push(p.f); (p.x||[]).forEach(function(xx){ if(xx.u) fotos.push(xx.u); });
       h+='<div class="lev-pt '+p.m+'"><span class="lev-m">'+(p.m==='ok'?'✔':p.m==='mal'?'✗':'—')+'</span><span>'+(j+1)+'. '+esc(pt[0])+(pt[2]?' <i>'+INSP_FASES[pt[2]]+'</i>':'')+
+        (p.b?' <b class="lev-boton">'+INSP_BOTON_TXT[p.b]+'</b>':'')+
         (p.m==='mal'?'<em>'+esc(_inspProbTxt(p))+(p.fp?' · foto esperando señal':'')+'</em>'+(!p.f&&!p.fp?'<b class="lev-sinfoto">sin foto</b>':''):'')+'</span></div>'+
         (fotos.length?'<div class="lev-fotos">'+fotos.map(function(u){ return '<img src="'+esc(u)+'" alt="" onclick="verFoto(\''+String(u).replace(/'/g,'%27')+'\')">'; }).join('')+'</div>':'');
     });
@@ -33489,6 +33498,59 @@ async function inspAprobarOf(){
 }
 
 /* ── Marcar ── */
+/* v161 · «TODO BIEN» y «NADA APLICA» (pedido del Ing. Nilson: 17 elementos de la
+   Ing. Karina tenían los 8 en «No aplica», 136 toques que no dicen nada).
+   Marcan SOLO los puntos sin marcar —no tocan un ✗ ni un «No aplica» ni un ✔
+   puesto— y dejan en el punto `b` ('tb' o 'na') para que el Levantamiento
+   diga que se marcó con el botón. Tocar el punto después lo marca a mano y
+   `b` se va (inspMarcar y _inspLimpiarPunto rehacen el punto sin él). Quedan
+   pendientes igual que uno por uno: se guardan con «Guardar». */
+var INSP_BOTON_TXT={tb:'todo bien', na:'nada aplica'};
+function _inspTodoHTML(e, k, ps){
+  var I=S._insp, libres=0, marcas=0;
+  for(var j=0;j<8;j++){ if(ps[j]&&ps[j].m) marcas++; else libres++; }
+  if(!libres) return '';
+  if(I.todoNa && I.todoNa.r===e.rowId)
+    return '<div class="in-todo-pre">Este elemento ya tiene marcas. ¿Poner «No aplica» en los '+libres+' que faltan?'+
+      '<div class="in-dos"><button class="in-b2" onclick="S._insp.todoNa=null;_hpRepintar()">Cancelar</button>'+
+      '<button class="in-b2 fuerte" onclick="inspK('+k+');inspTodo(\'na\',true)">Sí, poner «No aplica»</button></div></div>';
+  return '<div class="in-todo">'+
+    '<button class="in-b2" onclick="inspK('+k+');inspTodo(\'ok\')">✔ Todo bien'+(marcas?' ('+libres+')':'')+'</button>'+
+    '<button class="in-b2" onclick="inspK('+k+');inspTodo(\'na\')">— Nada aplica'+(marcas?' ('+libres+')':'')+'</button></div>';
+}
+function inspTodo(m, ya){
+  if(!canEdit() || _inspCerradaAqui()) return;
+  var I=S._insp, e=_inspElActual(); if(!e) return;
+  var ps=_inspPuntos(e.rowId), libres=[], marcas=0;
+  for(var j=0;j<8;j++){ if(ps[j]&&ps[j].m) marcas++; else libres.push(j); }
+  if(!libres.length) return;
+  if(m==='na' && marcas && !ya){ I.todoNa={r:e.rowId}; _hpRepintar(); return; }
+  I.todoNa=null; I.verFoto=null; I.aviso=null;
+  if(I.mal && I.mal.r===e.rowId && libres.indexOf(I.mal.j)>=0) I.mal=null;
+  var r=_inspFila(e,I.area,I.of);
+  libres.forEach(function(j){
+    var p=r.puntos[j]||{};
+    _inspBorrPon(e.rowId+'#'+j,null);
+    r.puntos[j]={m:m, b:m==='ok'?'tb':'na', a:p.a||null, f:p.f||null, fb:p.fb||null, x:p.x||[], q:p.q||[], dm:p.dm||false, nt:p.nt||false};
+    if(p.fp) r.puntos[j].fp=true;
+  });
+  _inspTocar(r); _hpRepintar();
+  showToast(libres.length+(libres.length===1?' punto':' puntos')+' en «'+(m==='ok'?'✔ Bien':'No aplica')+'» · falta «Guardar»','ok',2500);
+}
+/* Debajo de la tabla del Levantamiento: cuántos puntos marcó cada ingeniero
+   con los botones y cuántos uno por uno. Para que los botones no se usen sin
+   mirar, se ve. Cuenta lo cargado (todas las inspecciones al entrar aquí). */
+function _inspLevComoHTML(){
+  var rs=(S.insp&&S.insp.rows)||{}, por={};
+  Object.keys(rs).forEach(function(id){ var r=rs[id];
+    (r.puntos||[]).forEach(function(p){ if(!p||!p.m) return;
+      var q=p.u||p.u0||r.ingeniero||'—', o=por[q]||(por[q]={uno:0,tb:0,na:0});
+      if(p.b==='tb') o.tb++; else if(p.b==='na') o.na++; else o.uno++; }); });
+  var ks=Object.keys(por).sort(function(a,b){ var A=por[a],B=por[b]; return (B.uno+B.tb+B.na)-(A.uno+A.tb+A.na); });
+  if(!ks.length) return '';
+  return '<div class="lev-como"><div class="cp-lbl">Cómo se marcaron los puntos</div><table><thead><tr><th>Ingeniero</th><th>Uno por uno</th><th>«Todo bien»</th><th>«Nada aplica»</th></tr></thead><tbody>'+
+    ks.map(function(q){ var o=por[q]; return '<tr><td>'+esc(q)+'</td><td>'+o.uno+'</td><td>'+o.tb+'</td><td>'+o.na+'</td></tr>'; }).join('')+'</tbody></table></div>';
+}
 function inspMarcar(j, m){
   if(!canEdit() || _inspCerradaAqui()) return;
   var I=S._insp, e=_inspElActual(); if(!e) return;
