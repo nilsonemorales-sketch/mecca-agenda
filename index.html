@@ -1439,7 +1439,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261102_161';
+const APP_VERSION='20261103_162';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1561,8 +1561,14 @@ const APP_BUILD='mecca-v13';
       _busy=false;
       var base=null; try{ base=sessionStorage.getItem(SIG_KEY); }catch(e){}
       if(s && base && s!==base){
+        /* v162 · Con una inspección abierta NO se recarga: se le cortaba a
+           Karina en medio del recorrido. Se vuelve a mirar cada minuto y se
+           recarga cuando salga de la inspección. */
+        if(typeof _inspAbierta==='function' && _inspAbierta()) return;
         try{ sessionStorage.setItem(SIG_KEY,s); }catch(e){} // evita loop
         location.replace(location.pathname+'?_r='+Date.now());
+      }else if(window._swRecargaPend && !(typeof _inspAbierta==='function' && _inspAbierta())){
+        window._swRecargaPend=false; location.reload();
       }
     });
   }
@@ -3341,6 +3347,7 @@ function doLogin(){
   updateUserUI();
   renderAll();
   _renderUndoBar();
+  setTimeout(function(){ _inspSitioVolver().catch(function(){}); },0);   // v162
 }
 
 function logout(){
@@ -17857,6 +17864,10 @@ async function compartirEjecutivoWA(){
 function goTab(tab){
   /* v159 · No se sale de una pantalla de inspección con marcas sin guardar. */
   if(typeof _inspGuardia==='function' && _inspGuardia(function(){ goTab(tab); })) return;
+  /* v162 · Irse a otra pestaña es dejar la inspección: se olvida el sitio, o
+     una recarga mañana lo devolvería a donde ya no quiere estar. Antes de
+     intentar volver (el arranque llama a goTab) no se borra nada. */
+  if(tab!=='reportes' && _inspSitioHecho) _inspSitioBorrar();
   /* Caía en 'hoy', que no existe desde v84: la vista no se encontraba, no se
      activaba ninguna, y la pantalla quedaba en blanco. Ahora cae en la lista. */
   if(moduloOculto(tab)) tab='obra';
@@ -31872,7 +31883,60 @@ function _hpEscogerHTML(dim){
 function _hpRepintar(){
   if(document.documentElement.getAttribute('data-campo')==='1' && document.getElementById('campo-root')) renderCampo();
   else renderHojasRep();
+  _inspSitioGuardar();
 }
+/* ══ v162 · LA INSPECCIÓN SOBREVIVE A UNA RECARGA ═══════════════════════════
+   La Ing. Karina, el 3-nov: «se le sale, se le cierra» en la inspección. El app
+   se recargaba solo por tres caminos —la versión nueva (chequeo cada minuto y
+   al volver al app), el cambio de service worker y el iPhone que mata la
+   página para liberar memoria, que pasa mucho al abrir la CÁMARA— y al
+   recargar `S._insp` vive solo en memoria: se caía en la pantalla de inicio y
+   había que volver a escoger apartamento, oficio y elemento. Las marcas no se
+   perdían (están en el teléfono desde la v159); se perdía el SITIO.
+   Ahora el sitio se guarda en el teléfono en cada repintado y al esconderse la
+   página, y al arrancar se vuelve a él. Solo dónde estaba, no qué marcó. */
+var INSP_SITIO_LS='mecca_insp_sitio_v1', INSP_SITIO_MAX=4*3600*1000, _inspSitioHecho=false;
+function _inspSitioGuardar(){
+  try{
+    var I=S._insp;
+    if(!I || !I.area || !S.user){ localStorage.removeItem(INSP_SITIO_LS); return; }
+    localStorage.setItem(INSP_SITIO_LS, JSON.stringify({
+      u:S.user.id, area:I.area, of:I.of||null, paso:I.paso||'oficio',
+      i:(I.paso==='elem'?I.i:null), k:I.k||0, y:Math.round(window.scrollY||0), t:Date.now(),
+      campo:document.documentElement.getAttribute('data-campo')==='1'
+    }));
+  }catch(e){}
+}
+function _inspSitioBorrar(){ try{ localStorage.removeItem(INSP_SITIO_LS); }catch(e){} }
+/* ¿Hay una inspección abierta en pantalla? Mientras la haya, el app no se
+   recarga solo para ponerse al día: se espera a que salga. */
+function _inspAbierta(){ try{ return !!(typeof S!=='undefined' && S && S._insp && S._insp.area); }catch(e){ return false; } }
+async function _inspSitioVolver(){
+  if(_inspSitioHecho) return false; _inspSitioHecho=true;
+  var s=null; try{ s=JSON.parse(localStorage.getItem(INSP_SITIO_LS)||'null'); }catch(e){}
+  if(!s || !S.user || s.u!==S.user.id || !canEdit() || S._insp) return false;
+  if(!s.t || Date.now()-s.t>INSP_SITIO_MAX){ _inspSitioBorrar(); return false; }
+  var idx=REC_ORDEN.indexOf(s.area); if(idx<0){ _inspSitioBorrar(); return false; }
+  var campo=document.documentElement.getAttribute('data-campo')==='1';
+  if(!!s.campo!==campo) return false;   // estaba en la otra pantalla: no se le mueve
+  if(!campo){ S.reportesVista='hojas'; goTab('reportes'); }
+  await inspApto(idx);
+  var I=S._insp; if(!I || I.area!==s.area) return false;
+  if(s.of && _inspOficio(s.of)){
+    inspOficio(s.of);
+    I=S._insp;
+    if(s.paso==='elem' && s.i!=null && s.i<_inspPantallas(I.area,I.of).length){
+      I.paso='lista';            // sin el aviso de cambios: lo marcado es de esta misma pantalla
+      inspElem(s.i);
+      if(s.k){ inspK(s.k); _hpRepintar(); }
+    }else if(s.paso==='lista' && I.paso!=='lista'){ I.paso='lista'; _hpRepintar(); }
+  }
+  setTimeout(function(){ try{ window.scrollTo(0,s.y||0); }catch(e){} },60);
+  showToast('El app se había cerrado: volviste a la inspección donde estabas','ok',4500);
+  return true;
+}
+document.addEventListener('visibilitychange',function(){ if(document.hidden && _inspAbierta()) _inspSitioGuardar(); });
+window.addEventListener('pagehide',function(){ if(_inspAbierta()) _inspSitioGuardar(); });
 function hpEscoger(dim){ S._hpPaso=dim||null; _hpRepintar(); try{ window.scrollTo(0,0); }catch(e){} }
 function hpOtros(){
   if(!isAdmin()) return;
@@ -34433,6 +34497,7 @@ function iniciarModoCampo(){
   if(!host){ host=document.createElement('div'); host.id='campo-root'; document.body.appendChild(host); }
   renderCampo();
   if(!(S.acts||[]).length) loadActsAll().then(function(){ renderCampo(); }).catch(function(){});
+  setTimeout(function(){ _inspSitioVolver().catch(function(){}); },0);   // v162
   return true;
 }
 function salirModoCampo(){
@@ -35860,6 +35925,9 @@ setInterval(function(){
 /* Se entra por Obra. Va por goTab y no por la clase del HTML para que la barra
    de abajo marque el botón que toca: updateBNav solo lo hace desde aquí. */
 try{ goTab('terreno'); }catch(e){ console.warn('arranque:',e); }
+/* v162 · Si el app se cerró en medio de una inspección (fuera del Modo Campo),
+   se vuelve a ella. En el Modo Campo lo hace `iniciarModoCampo`. */
+try{ if(S.user && document.documentElement.getAttribute('data-campo')!=='1') setTimeout(function(){ _inspSitioVolver().catch(function(){}); },0); }catch(e){}
 /* ── DOS FUNCIONES CON EL MISMO NOMBRE, QUE AVISE (v119) ──
    Había dos `catSelToggle` desde la v107 y la segunda tapaba a la primera:
    once versiones sin que nadie lo viera, porque en 30.000 líneas eso no se
@@ -38335,7 +38403,11 @@ if('serviceWorker' in navigator){
         try{ var _u=reg.update(); if(_u&&_u.catch) _u.catch(function(){}); }catch(e){}
         // Auto-reload when a new SW takes control (new version deployed)
         navigator.serviceWorker.addEventListener('controllerchange',function(){
-          if(!_swReloaded){_swReloaded=true;window.location.reload();}
+          if(_swReloaded) return;
+          /* v162 · Con una inspección abierta, se espera: la recarga la hace
+             el chequeo de cada minuto cuando se salga de la inspección. */
+          if(typeof _inspAbierta==='function' && _inspAbierta()){ window._swRecargaPend=true; return; }
+          _swReloaded=true; window.location.reload();
         });
       })
       .catch(function(err){console.warn('SW:',err);});

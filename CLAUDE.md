@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v161 — 2 de noviembre de 2026.** Antes de escribir, comprueba
+**Al día a v162 — 3 de noviembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -257,7 +257,7 @@ mismos botones que cualquier otra.
 | **EL AVANCE POR UBICACIÓN, POR CONTRATISTA Y CRUZADO, con cada número tocable** | **Reportes → «Avance»** (v146), la primera de la sub-barra, y en el cajón «Reportes — Avance por ubicación y contratista» — `renderAvanceRep()`, `_raFilas()`, `_raPasa()`, `_raEn()`, `raVer()`, `raImprimir()`. Solo lectura. Ver «AVANCE (v146)» abajo |
 | **LA HOJA DE UN CONTRATISTA O DE UNA UBICACIÓN, para imprimir y mandar** | **Reportes → Avance → «Hoja ›»** en una fila de Por contratista o de un área (v147) — `raHoja()`, `_raHojaHTML()`, `_raCargarMov()`, `raHojaImprimir()`, CSS en `<style id="hj-css">`. Sin dinero. Ver «LA HOJA DE REPORTE (v147)» abajo |
 | **SACAR LA HOJA PARA PEGAR DE UNA UBICACIÓN, o EL PDF DE UN CONTRATISTA** | **Reportes** (v149) — lo ÚNICO que se ve al entrar: dos botones → escoger → sale la hoja. También en el **Modo Campo**. `renderHojasRep()`, `_hpHubHTML()`, `hpSacar()`, `_hpPegarHTML()`, `_hpContHTML()`. Ver «REPORTES EN DOS HOJAS (v149)» abajo |
-| **INSPECCIONAR un apartamento por oficio, punto por punto, con foto en cada problema** | **Reportes y Modo Campo → «Inspección»**, el tercer botón junto a las dos hojas (v153) — `inspAbrir()`, `_inspHTML()`, `_inspElementos()`, `inspMarcar()`, `inspMalGuardar()`, `_inspResolver()`, `_inspEnviar()`, `inspImprimir()`; desde la v155 `_inspDesmarcar()`, `inspResetAbrir()`, `inspFotoPunto()`, `inspQuitarFoto()`; desde la v156 `inspGuardarSeguir()`, `inspCerrarSi()`, `inspReabrir()`, `inspLev()`; desde la v159 `_inspPantallas()`, `inspGuardarPant()`, `_inspGuardia()`, `inspHistorial()`; desde la v161 `inspTodo()` («Todo bien» / «Nada aplica»). Tablas `obra_inspecciones` y `obra_insp_estado`. **Desde la v156 es un LEVANTAMIENTO: no toca las actividades**. Ver «INSPECCIÓN POR APARTAMENTO (v153)» abajo |
+| **INSPECCIONAR un apartamento por oficio, punto por punto, con foto en cada problema** (desde la v162 vuelve a donde estaba si el app se recarga: `_inspSitioVolver`) | **Reportes y Modo Campo → «Inspección»**, el tercer botón junto a las dos hojas (v153) — `inspAbrir()`, `_inspHTML()`, `_inspElementos()`, `inspMarcar()`, `inspMalGuardar()`, `_inspResolver()`, `_inspEnviar()`, `inspImprimir()`; desde la v155 `_inspDesmarcar()`, `inspResetAbrir()`, `inspFotoPunto()`, `inspQuitarFoto()`; desde la v156 `inspGuardarSeguir()`, `inspCerrarSi()`, `inspReabrir()`, `inspLev()`; desde la v159 `_inspPantallas()`, `inspGuardarPant()`, `_inspGuardia()`, `inspHistorial()`; desde la v161 `inspTodo()` («Todo bien» / «Nada aplica»). Tablas `obra_inspecciones` y `obra_insp_estado`. **Desde la v156 es un LEVANTAMIENTO: no toca las actividades**. Ver «INSPECCIÓN POR APARTAMENTO (v153)» abajo |
 | **Escanear la hoja pegada y caer en la lista de ese contratista en ese sitio** | **Cajón → «Escanear el QR del apartamento»** y **Modo Campo → «Escanear el QR de la hoja»** (v150) — `recEscanear()`, `recLeido()`, `recAplicarFiltro()`. Los QR los dibuja `_qrSvg()` / `_qrMatriz()`, dentro del archivo |
 | **Las doce pantallas viejas de Reportes (Avance, Dashboard, Historial…)** | **Reportes → «Otros reportes ›»**, solo administrador (v149) — `REPORTES_OCULTOS`, `reporteOculto()`, `hpOtros()`. Escondidas, no borradas |
 | ~~Agregar una actividad dictándola~~ | **Se retiró en la v144** (decisión del dueño). Ver «DICTAR (v143) — RETIRADO EN LA v144» abajo. **No la vuelvas a construir sin que él lo pida** |
@@ -3457,6 +3457,33 @@ archivo pero está APAGADO** con `INSP_CREA_PARTIDAS = false`.
     es la misma (SQL).
   - **Lista de chequeo (v161)**: entran `albanileria161`, `todoBien`,
     `nadaAplica` y `levBotones`.
+- **LA INSPECCIÓN SOBREVIVE A UNA RECARGA (v162).** La Ing. Karina, el 3-nov:
+  «se le sale, se le cierra». Medido en `obra_cambios`, guardó bien 67 elementos
+  ese día: no se perdía lo marcado (pendiente en el teléfono desde la v159), se
+  perdía **el sitio**. El app se recarga solo por tres caminos —la firma del
+  `index.html` cambió (chequeo cada minuto y al volver al app), el
+  `controllerchange` del service worker, y el iPhone que mata la página para
+  liberar memoria, sobre todo **al abrir la cámara**—, y `S._insp` vive en
+  memoria: caía en el inicio y había que escoger apartamento, oficio y elemento
+  otra vez.
+  - **Con una inspección abierta (`_inspAbierta`) el app NO se recarga para
+    ponerse al día**: el chequeo de la firma no hace nada y el
+    `controllerchange` deja `window._swRecargaPend`; la recarga ocurre en el
+    chequeo de cada minuto cuando ya salió. `sw.js` **no se tocó**.
+  - **El sitio se guarda en el teléfono** (`mecca_insp_sitio_v1`:
+    usuario, apartamento, oficio, paso, pantalla, elemento, desplazamiento,
+    hora) en cada `_hpRepintar` y al esconderse la página; al salir de la
+    inspección o irse a otra pestaña se borra. **Al arrancar**
+    (`iniciarModoCampo`, el arranque fuera del Modo Campo y el PIN),
+    `_inspSitioVolver` vuelve a él si es del mismo usuario, de menos de 4 horas y
+    de la misma pantalla (Modo Campo o no), y lo dice: «El app se había cerrado:
+    volviste a la inspección donde estabas». Solo el sitio: las marcas ya las
+    trae lo de la v159.
+  - **Lo que no se arregla:** si el iPhone mata la página mientras la cámara está
+    abierta, **esa foto se pierde** (el navegador no la entrega a una página que
+    ya no existe): hay que volver a tomarla. Y si el sistema borra también la
+    sesión (`sessionStorage`), pide el PIN; después del PIN vuelve al sitio.
+  - Lista de chequeo: entra `recarga`.
 - **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO» (hasta la v155)**: veinticinco
   comprobaciones como Karina por el Modo Campo a 390 (desde la v154, también
   ✗ → «—» deja la partida abierta con su nota, y los tres dibujos de la hoja de

@@ -1678,6 +1678,7 @@ const IN_ESPERADO={
   albanileria161:{v:'7. Huecos tapados · 8. Pie de la pared · 8 puntos', d:'(v161) los puntos 7 y 8 de Albañilería con el título nuevo, en el mismo lugar y sin cambiar la cantidad'},
   todoBien:{v:'marca los 7 · el ✗ se queda · con su etiqueta · se guarda con «Guardar»', d:'(v161) «Todo bien» en un elemento con un ✗: pone ✔ en los otros 7 y no toca el ✗; se guarda como uno por uno'},
   nadaAplica:{v:'vacío: los 8 · con marcas: pregunta · no cambió nada · al decir sí, los 7 que faltan', d:'(v161) «Nada aplica» en un elemento vacío marca los 8; en uno con marcas primero pregunta en la pantalla'},
+  recarga:{v:'vuelve al mismo elemento · la marca sin guardar sigue · lo dice · no se recarga con la inspección abierta · al salir lo olvida', d:'(v162) con una inspección abierta el app no se recarga solo por una versión nueva; y si se recarga igual (el iPhone al abrir la cámara), vuelve al apartamento, oficio y elemento donde estaba, con lo marcado'},
   levBotones:{v:'etiquetas «todo bien» y «nada aplica» · la cuenta por ingeniero', d:'(v161) en el Levantamiento, lo marcado con botón lleva su etiqueta gris y sale la cuenta de cada ingeniero'},
   cada160:{v:'Electricidad del 4A sin «pintura» · 3 mamparas en el 4A · Puerta del lavado del 2A en polimetal y no en Ventanas · Cocina caliente del 2B en polimetal · Calentador con Gas y Ventilación · 146 puertas de madera', d:'(v160) cada punto a quien le toca: al eléctrico no se le pide pintura, la mampara es de Lantigua, las dos puertas de polimetal son de Laura Gonel y el calentador es de gas'},
   pintura4A:{v:'Muros 14 · Techo 14 · 14 espacios con muros y techo juntos · Techo con 8 puntos · Corte con la pared', d:'(v157, v159) Pintura del 4A: Muros y Techo por espacio, los dos en la MISMA pantalla, y el Techo con sus 8 puntos'},
@@ -2150,6 +2151,31 @@ async function probarInspeccion(nombreVer, html, b){
     }catch(e){ r.albanileria161=r.albanileria161||'se cortó: '+String(e&&e.message||e).split('\n')[0].slice(0,120); }
     r.levKarina=await G(()=>{ inspVolver(); inspVolver(); return document.querySelector('#campo-root .in-lev-btn')?'lo ve':'no lo ve'; });
     r.sinActividades=esActs()-acts0;
+    // v162 · el app se recarga en medio de la inspección: vuelve a donde estaba
+    try{
+      for(let t=0;t<5&&(await G(()=>S._insp&&S._insp.paso!=='oficio'));t++){ await volver(); await p.waitForTimeout(250); }
+      if(!(await G(()=>S._insp&&S._insp.paso==='oficio'))){ await p.locator('#campo-root .hp-gran',{hasText:'Inspección'}).first().click().catch(()=>{}); await p.waitForTimeout(200);
+        await p.locator('#campo-root .hp-op',{hasText:/^Apartamento 4A/}).click(); await p.waitForTimeout(900); }
+      await p.locator('#campo-root .in-of',{hasText:'Estuco'}).click(); await p.waitForTimeout(300);
+      if(await G(()=>S._insp.paso==='elem')){ await p.locator('#campo-root .hp-volver').click(); await p.waitForTimeout(250); }
+      await p.locator('#campo-root .in-el').nth(2).click(); await p.waitForTimeout(300);
+      const antes=await G(()=>({of:S._insp.of, i:S._insp.i, row:_inspElActual().rowId, area:S._insp.area}));
+      await p.locator('#campo-root .in-pt').nth(0).locator('.in-b').nth(0).click(); await p.waitForTimeout(200);
+      // una versión nueva publicada mientras está ahí: no recarga
+      const noRec=await G(()=>{ window._swRecargaPend=true; return _inspAbierta(); });
+      await p.reload({waitUntil:'load'});
+      for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S._insp&&S._insp.paso==='elem').catch(()=>0)) break; await p.waitForTimeout(300); }
+      await p.waitForTimeout(500);
+      const desp=await G(()=>({of:S._insp&&S._insp.of, i:S._insp&&S._insp.i, area:S._insp&&S._insp.area, row:S._insp&&S._insp.paso==='elem'?_inspElActual().rowId:'',
+        toast:[...document.querySelectorAll('.toast,#toast,[class*=toast]')].map(x=>x.textContent).join(' ')}));
+      const sigue=await G(id=>{ const x=_inspPuntos(id)[0]; return !!(x&&x.m==='ok') && _inspCambiosPant().length>0; }, antes.row);
+      await p.locator('#campo-root .in-guardar-pant').first().click(); await p.waitForTimeout(400);
+      await G(()=>{ inspSalir(); }); await p.waitForTimeout(200);
+      const olvida=await G(()=>!localStorage.getItem('mecca_insp_sitio_v1'));
+      r.recarga=[desp.area===antes.area&&desp.of===antes.of&&desp.i===antes.i&&desp.row===antes.row?'vuelve al mismo elemento':'cayó en '+JSON.stringify(desp).slice(0,120),
+        sigue?'la marca sin guardar sigue':'se perdió la marca', /donde estabas/.test(desp.toast)?'lo dice':'no lo dice',
+        noRec?'no se recarga con la inspección abierta':'se recarga', olvida?'al salir lo olvida':'se queda guardado al salir'].join(' · ');
+    }catch(e){ r.recarga='se cortó: '+String(e&&e.message||e).split('\n')[0].slice(0,120); }
     }catch(e){ r._error156=String(e&&e.message||e).split('\n')[0].slice(0,200); }
     r.dedos=await G(()=>{ const chicos=[...document.querySelectorAll('#campo-root .in button, #campo-root .in input')].filter(e=>e.checkVisibility()&&e.getBoundingClientRect().height<40).length;
       return chicos+(document.documentElement.scrollWidth>window.innerWidth+1?1:0); });
