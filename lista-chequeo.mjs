@@ -2167,7 +2167,7 @@ async function probarInspeccion(nombreVer, html, b){
       for(let t=0;t<40;t++){ if(await G(()=>typeof S!=='undefined'&&S._insp&&S._insp.paso==='elem').catch(()=>0)) break; await p.waitForTimeout(300); }
       await p.waitForTimeout(500);
       const desp=await G(()=>({of:S._insp&&S._insp.of, i:S._insp&&S._insp.i, area:S._insp&&S._insp.area, row:S._insp&&S._insp.paso==='elem'?_inspElActual().rowId:'',
-        toast:[...document.querySelectorAll('.toast,#toast,[class*=toast]')].map(x=>x.textContent).join(' ')}));
+        toast:(document.getElementById('app-toast')||{}).textContent||''}));
       const sigue=await G(id=>{ const x=_inspPuntos(id)[0]; return !!(x&&x.m==='ok') && _inspCambiosPant().length>0; }, antes.row);
       await p.locator('#campo-root .in-guardar-pant').first().click(); await p.waitForTimeout(400);
       await G(()=>{ inspSalir(); }); await p.waitForTimeout(200);
