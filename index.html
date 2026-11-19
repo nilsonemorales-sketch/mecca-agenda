@@ -303,6 +303,8 @@ html[data-campo],html[data-campo] body{overflow:auto!important;height:auto!impor
 .in-sig{width:100%;min-height:56px;border-radius:14px;border:1.5px solid var(--accent);background:var(--bg2);color:var(--accent);font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;padding:8px 12px}
 .in-sig.listo{background:var(--accent);color:#fff}
 .in-agr{width:100%;min-height:48px;border-radius:12px;border:1.5px dashed var(--accent);background:transparent;color:var(--accent);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
+.in-ver-ocultos{border-style:solid;text-align:left;padding:8px 12px;line-height:1.3}
+.in-ver-ocultos i{display:block;font-style:normal;font-size:11.5px;color:var(--text3);margin-top:3px;font-weight:500}
 .in-imp{margin-top:8px}
 .in-aviso{font-size:13px;color:var(--amber);font-weight:650}
 .in-barra{width:100%;min-height:48px;border-radius:12px;border:1.5px solid var(--amber);background:var(--amber-light);color:var(--amber);font-family:var(--font);font-size:13.5px;font-weight:800;cursor:pointer;padding:8px 12px;text-align:left;display:flex;flex-direction:column;gap:2px}
@@ -1230,7 +1232,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
     <div class="tab" data-tab="equipo" onclick="goTab('equipo')">Equipo</div>
     <div class="tab" data-tab="reportes" onclick="goTab('reportes')">Reportes</div>
     <div class="tab" data-tab="fotos" onclick="goTab('fotos')">Fotos</div>
-    <div class="tab" data-tab="planos" onclick="goTab('planos')">Planos</div>
+    <div class="tab" id="tab-planos" data-tab="planos" onclick="goTab('planos')">Planos</div>
     <div class="tab" data-tab="compras" onclick="goTab('compras')">Compras</div>
     <div class="tab" data-tab="topes" onclick="goTab('topes')">Topes</div>
     <div class="tab" data-tab="plan" id="tab-plan" onclick="goTab('plan')" style="display:none">Plan</div>
@@ -1394,7 +1396,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
     <button class="dw-btn" style="display:none" onclick="goTabD('reportes');S.reportesVista='semana'">Reportes — Plan semanal</button>
     <button class="dw-btn" style="display:none" onclick="goTabD('reportes');S.reportesVista='historial'">Reportes — Historial</button>
     <button class="dw-btn" onclick="goTabD('fotos')">Galería de fotos</button>
-    <button class="dw-btn" onclick="goTabD('planos')">Planos y documentos</button>
+    <button class="dw-btn" id="dw-planos" onclick="goTabD('planos')">Planos y documentos</button>
     <button class="dw-btn" onclick="goTabD('compras')">Órdenes de Compra</button>
     <!-- v129 · LA PUERTA DEL TELÉFONO. La barra de pestañas de arriba está
          `display:none` por debajo de 600px, y la barra de abajo tiene sus cinco
@@ -1439,7 +1441,7 @@ button.hj-cuadro{cursor:pointer;min-height:84px}
 <input type="file" id="bitac-file-input" accept="image/*" style="display:none" onchange="_handleBitacFotoFile(this)">
 
 <script>
-const APP_VERSION='20261103_162';
+const APP_VERSION='20261119_163';
 /* Modulos tapados (fase 1 de simplificacion, sep-2026): el codigo sigue ahi,
    pero no aparecen en ninguna barra ni se pueden abrir. Para devolver uno,
    ponerlo en false y publicar. */
@@ -1509,10 +1511,13 @@ var PAL_PROPIO='Personal x la casa';
 var VOZ_ACTIVA = false;
 function vozActiva(){ return !!VOZ_ACTIVA; }
 
-var MODULOS_OCULTOS={plan:true, replan:true};
+/* v163 · Planos se esconde (decisión del Ing. Nilson, 19-nov): 0 documentos en
+   `obra_planos`. Los 5 mapas por nivel de `obra_planos_mapa` se quedan en la
+   base; volver a enseñarlo es quitar `planos` de aquí. */
+var MODULOS_OCULTOS={plan:true, replan:true, planos:true};
 function moduloOculto(t){ return !!MODULOS_OCULTOS[t]; }
 function aplicarModulosOcultos(){
-  var ids={plan:['tab-plan','sb-plan','bn-plan','dw-plan'], replan:['tab-replan']};
+  var ids={plan:['tab-plan','sb-plan','bn-plan','dw-plan'], replan:['tab-replan'], planos:['tab-planos','sb-planos','dw-planos']};
   Object.keys(ids).forEach(function(m){
     if(!moduloOculto(m)) return;
     ids[m].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
@@ -32561,6 +32566,11 @@ var INSP_LS='mecca_insp_v1', INSP_IDB='mecca_insp_fotos', INSP_EST_LS='mecca_ins
    Bitácora como nota. El código que crea, traba, anota y completa partidas
    (v153-v155) SE QUEDA, apagado: volver a encenderlo es poner true aquí. */
 var INSP_CREA_PARTIDAS=false;
+/* v163 · La foto del ✗ es obligatoria (ver `_inspMalVale`), así que tampoco se
+   QUITA mientras el punto siga en ✗: se cambia por otra con «Cambiar el
+   problema». Es el bloqueo de la v153, que la v157 había dejado solo para
+   cuando se crean partidas. */
+var INSP_FOTO_MAL=true;
 
 function _inspApto(area){
   var m=String(area||'').match(/Apto\s*(\d)([AB])/i);
@@ -32646,13 +32656,58 @@ function _inspElementos(area, of){
   return out;
 }
 function _inspPuntos(rowId){ var r=(S.insp.rows||{})[rowId]; return (r&&Array.isArray(r.puntos))?r.puntos:[]; }
+/* v163 · LO QUE NO LLEVA CADA ESPACIO (aprobado por el Ing. Nilson el 19-nov).
+   Hasta la v162 las listas «por espacio» preguntaban los 8 puntos en todos los
+   cuartos, y uno de cada cuatro toques era «No aplica»: 586 en la base. La
+   regla SALE DE ESOS 586, no se inventó: por oficio, tipo de espacio y punto,
+   dónde el «No aplica» fue siempre o casi siempre la respuesta. El dueño
+   aprobó las «firmes» y las «casi siempre» y dejó fuera las dudosas
+   (Albañilería 6 «Patinillos» y Albañilería y Estuco completos en los baños).
+     · Pisos 7 «Caída al desagüe»: habitaciones (13 de 16) y vestidor (3 de 3).
+       En sala/estar NO, porque «Estar / balcón» sí lleva caída.
+     · Pisos 8 «Revestimiento»: habitaciones, sala/comedor/recibidor/estar y
+       vestidor (37 de 37, 5 apartamentos).
+     · Sheetrock 3 «Huecos de luces y extractor»: sala/comedor (24 de 25).
+     · Sheetrock 4 «Registros»: sala/comedor (26 de 26, 8 apartamentos). En
+       habitaciones NO: hay 2 ✗, así que hay registros.
+     · Sheetrock 5 «Rejillas»: habitaciones (18/19), baños (15/16) y sala (24/28).
+     · Estuco 5 «Sitios difíciles»: habitaciones y sala/comedor (11 de 11).
+   Las claves son la POSICIÓN del punto (0 = el 1), la misma de `puntos[]`.
+   ESCONDER NO ES MARCAR: el punto no se escribe ni cambia en la base, solo no
+   se enseña ni se pide. Un punto con marca SE ENSEÑA SIEMPRE —los 586 «No
+   aplica» y todo lo marcado siguen viéndose igual—, y «＋ Ver los N puntos que
+   aquí no suelen ir» los trae si en un cuarto concreto sí van. El elemento
+   está listo sin ellos. */
+var INSP_NO_APLICA={
+  pisos:{espacios:{6:['habitacion','vestidor'], 7:['habitacion','social','vestidor']}},
+  sheetrock:{espacios:{2:['social'], 3:['social'], 4:['habitacion','bano','social']}},
+  estuco:{espacios:{4:['habitacion','social']}}
+};
+var INSP_TIPO_TXT={bano:'los baños', cocina:'la cocina', vestidor:'el vestidor', habitacion:'las habitaciones', social:'sala, comedor y recibidor'};
+/* El tipo sale del id del espacio (el nombre del inventario hecho slug), con el
+   mismo orden de preguntas con que se midió: «sala-comedor-y-cocina» es cocina. */
+function _inspTipoEspacio(elId){
+  var x=String(elId||'');
+  if(/bano/.test(x)) return 'bano'; if(/cocina/.test(x)) return 'cocina';
+  if(/vestidor/.test(x)) return 'vestidor'; if(/habitacion/.test(x)) return 'habitacion';
+  return 'social';
+}
+/* Por la regla y sin marca, sin mirar si el ingeniero pidió verlos. */
+function _inspReglaOculta(rowId, j){
+  var x=String(rowId||'').split('|'), r=(INSP_NO_APLICA[x[1]]||{})[x[2]];
+  if(!r || !r[j] || r[j].indexOf(_inspTipoEspacio(x[3]))<0) return false;
+  var p=_inspPuntos(rowId)[j]; return !(p&&p.m);
+}
+function _inspOculto(rowId, j){ return _inspReglaOculta(rowId,j) && !((S._inspVer||{})[rowId]); }
+function _inspNOcultos(rowId){ var n=0; for(var j=0;j<8;j++) if(_inspOculto(rowId,j)) n++; return n; }
+function inspVerOcultos(rowId, k){ inspK(k); S._inspVer=S._inspVer||{}; S._inspVer[rowId]=!S._inspVer[rowId]; _hpRepintar(); }
 /* El avance comprobable: ✔ ÷ (✔ + ✗). «— no tiene» no cuenta. */
 function _inspCuenta(area, of){
   var els=_inspElementos(area,of), ok=0, mal=0, puntos=0, completos=0, conMal=0, sinTocar=0;
   els.forEach(function(e){
     var ps=_inspPuntos(e.rowId), m=0, k=0, x=0;
     for(var i=0;i<8;i++){ var v=ps[i]&&ps[i].m; if(v){ m++; puntos++; } if(v==='ok'){ ok++; k++; } if(v==='mal'){ mal++; x++; } }
-    if(!m) sinTocar++; else if(x) conMal++; else if(m===8) completos++;
+    if(!m) sinTocar++; else if(x) conMal++; else if(m+_inspNOcultos(e.rowId)>=8) completos++;
   });
   return {els:els, ok:ok, mal:mal, puntos:puntos, pct:(ok+mal)?Math.round(ok/(ok+mal)*1000)/10:null,
           completos:completos, conMal:conMal, sinTocar:sinTocar};
@@ -32683,7 +32738,7 @@ function _inspPantActual(){ var I=S._insp; return I?_inspPantallas(I.area,I.of)[
 function _inspElActual(){ var P=_inspPantActual(); return P?(P.els[S._insp.k||0]||P.els[0]):null; }
 /* Cada botón de la pantalla dice primero de qué aparato es (k). */
 function inspK(k){ if(S._insp) S._insp.k=k; }
-function _inspPantFalta(P){ return P.els.some(function(e){ var ps=_inspPuntos(e.rowId); for(var i=0;i<8;i++) if(!(ps[i]&&ps[i].m)) return true; return false; }); }
+function _inspPantFalta(P){ return P.els.some(function(e){ var ps=_inspPuntos(e.rowId); for(var i=0;i<8;i++) if(!(ps[i]&&ps[i].m) && !_inspOculto(e.rowId,i)) return true; return false; }); }
 function _inspQueEs(of){ return of==='plomeria'?'baño':'espacio'; }
 
 /* v159 · GUARDAR, Y NO SALIR SIN GUARDAR (decisión del dueño, 28-oct).
@@ -32963,11 +33018,12 @@ function _inspCerradaAqui(){
   showToast('Esta inspección está cerrada. Para cambiarla, toque «Reabrir la inspección».','warn',4500);
   return true;
 }
-/* Un elemento está LISTO cuando sus 8 puntos están en ✔ o en «— no tiene». */
+/* Un elemento está LISTO cuando sus 8 puntos están en ✔ o en «— no tiene».
+   v163 · Los que en ese espacio no van (`_inspOculto`) no se piden. */
 function _inspListo(rowId){
-  var ps=_inspPuntos(rowId); if(ps.length<8) return false;
-  for(var i=0;i<8;i++){ var m=ps[i]&&ps[i].m; if(m!=='ok'&&m!=='na') return false; }
-  return true;
+  var ps=_inspPuntos(rowId), alguno=false;
+  for(var i=0;i<8;i++){ if(_inspOculto(rowId,i)) continue; var m=ps[i]&&ps[i].m; if(m!=='ok'&&m!=='na') return false; alguno=true; }
+  return alguno;
 }
 function _inspResumen(els){
   var listos=0, conMal=0;
@@ -33324,13 +33380,13 @@ function _inspHTML(){
     pantsL.forEach(function(P,i){
       var e0=P.els[0], lbl=P.junta?INSP_POR_ESPACIO_TXT[I.of]:((_inspGrupo(I.of,e0.grupo)||{}).nombre||e0.grupo);
       if(lbl!==gAnt){ gAnt=lbl; h+='<div class="cp-lbl">'+esc(lbl)+'</div>'; }
-      var m=0, x=0, listos=0, det=[];
-      P.els.forEach(function(e){ var ps=_inspPuntos(e.rowId), me=0; ps.forEach(function(p){ if(p&&p.m){ m++; me++; } if(p&&p.m==='mal') x++; });
+      var m=0, x=0, listos=0, det=[], totP=0;
+      P.els.forEach(function(e){ var ps=_inspPuntos(e.rowId), me=0, ve=8-_inspNOcultos(e.rowId); totP+=ve; ps.forEach(function(p){ if(p&&p.m){ m++; me++; } if(p&&p.m==='mal') x++; });
         var li=_inspListo(e.rowId); if(li) listos++;
-        if(P.junta){ var g=_inspGrupo(I.of,e.grupo); det.push((g?g.nombre:e.grupo)+' '+(li?'listo':me+'/8')); } });
+        if(P.junta){ var g=_inspGrupo(I.of,e.grupo); det.push((g?g.nombre:e.grupo)+' '+(li?'listo':me+'/'+ve)); } });
       var listo=listos===P.els.length, pend=_inspPendEn(P);
       h+='<button class="hp-op in-el'+(x?' mal':listo?' ok':'')+'" onclick="inspElem('+i+')"><span>'+esc(P.nombre)+
-        (P.junta?'<i>'+esc(det.join(' · '))+'</i>':(listo&&!x?'<i>listo</i>':''))+(pend?'<i class="in-singuardar">cambios sin guardar</i>':'')+'</span><b>'+(x?x+' ✗ · ':'')+m+'/'+(P.els.length*8)+'</b></button>';
+        (P.junta?'<i>'+esc(det.join(' · '))+'</i>':(listo&&!x?'<i>listo</i>':''))+(pend?'<i class="in-singuardar">cambios sin guardar</i>':'')+'</span><b>'+(x?x+' ✗ · ':'')+m+'/'+totP+'</b></button>';
     });
     if(!els.length) h+='<div class="hp-sub">Este oficio no tiene inventario: los elementos se agregan en la primera inspección.</div>';
     h+=_inspAgregarHTML(I.of);
@@ -33347,8 +33403,8 @@ function _inspHTML(){
   /* v159 · La pantalla: un baño (o un espacio) con sus aparatos, o un
      elemento solo. Cada aparato con sus 8 puntos, uno debajo del otro. */
   var pants=_inspPantallas(area,I.of), P=pants[I.i]; if(!P){ I.paso='lista'; return _inspHTML(); }
-  var tot=P.els.length*8, marcados=0;
-  P.els.forEach(function(e){ _inspPuntos(e.rowId).forEach(function(p){ if(p&&p.m) marcados++; }); });
+  var tot=0, marcados=0;
+  P.els.forEach(function(e){ tot+=8-_inspNOcultos(e.rowId); _inspPuntos(e.rowId).forEach(function(p){ if(p&&p.m) marcados++; }); });
   var ncam=_inspNCambios(P), e0=P.els[0], g0=_inspGrupo(I.of,e0.grupo), cerr=_inspEstado(area,I.of)==='cerrada';
   var queEs=P.junta?_inspQueEs(I.of):'elemento';
   if(I.salir) h+=_inspSalirHTML(ncam);
@@ -33373,6 +33429,7 @@ function _inspHTML(){
     if(_inspListo(e.rowId)) h+='<div class="in-listo">✔ '+(P.junta?esc(g.nombre)+' listo':'Elemento listo')+'</div>';
     if(!cerr && canEdit()) h+=_inspTodoHTML(e,k,ps);
     g.pts.forEach(function(pt,j){
+      if(_inspOculto(e.rowId,j)) return;
       var p=ps[j]||{}, abierto=I.mal&&I.mal.j===j&&I.mal.r===e.rowId, pre='inspK('+k+');';
       h+='<div class="in-pt'+(p.m==='ok'?' ok':p.m==='mal'?' mal':p.m==='na'?' na':'')+'">'+
         (pt[2]?'<span class="in-fase f-'+pt[2]+'">'+pt[2]+' · '+INSP_FASES[pt[2]]+'</span>':'')+
@@ -33390,6 +33447,13 @@ function _inspHTML(){
         (abierto?_inspMalHTML(j):_inspFotosHTML(e,j,p,k))+
       '</div>';
     });
+    /* v163 · La salida: si en este cuarto sí va un punto que normalmente no. */
+    var nReg=0, nomReg=[];
+    for(var jj=0;jj<8;jj++) if(_inspReglaOculta(e.rowId,jj)){ nReg++; nomReg.push((jj+1)+'. '+g.pts[jj][0]); }
+    if(nReg && !cerr) h+='<button class="in-agr in-ver-ocultos" onclick="inspVerOcultos(\''+esc(e.rowId)+'\','+k+')">'+
+      ((S._inspVer||{})[e.rowId]
+        ? 'Esconder otra vez '+(nReg===1?'el punto':'los '+nReg+' puntos')+' que en '+INSP_TIPO_TXT[_inspTipoEspacio(e.id)]+' no suelen ir'
+        : '＋ '+(nReg===1?'Aquí sí va: ':'Aquí sí van: ')+esc(nomReg.join(' · '))+'<i>En '+INSP_TIPO_TXT[_inspTipoEspacio(e.id)]+' no se piden. Tóquelo si en este cuarto sí '+(nReg===1?'va':'van')+'.</i>')+'</button>';
   });
   if(ncam) h+='<button class="in-guardar-pant" onclick="inspGuardarPant()">Guardar · '+ncam+(ncam===1?' cambio':' cambios')+'</button>';
   if(I.reset==='el') h+=_inspResetHTML('el');
@@ -33407,8 +33471,8 @@ function _inspDesgloseHTML(area, of, els){
     var ps=_inspPuntos(e.rowId), g=_inspGrupo(of,e.grupo), m=0, xs=[];
     ps.forEach(function(p,j){ if(p&&p.m) m++; if(p&&p.m==='mal') xs.push(g.pts[j][0]); });
     if(xs.length) malos.push('<b>'+esc(e.nombre)+'</b> — '+esc(xs.join(', ')));
-    else if(m===8) comp.push(esc(e.nombre));
-    else pend.push(esc(e.nombre)+(m?' ('+m+'/8)':''));
+    else if(m+_inspNOcultos(e.rowId)>=8) comp.push(esc(e.nombre));
+    else pend.push(esc(e.nombre)+(m?' ('+m+'/'+(8-_inspNOcultos(e.rowId))+')':''));
   });
   var bloque=function(t,l,cl){ return '<div class="in-dg-t '+cl+'">'+t+' ('+l.length+')</div>'+(l.length?'<div class="in-dg-l">'+l.join('<br>')+'</div>':''); };
   return '<div class="in-dg">'+bloque('Con problemas',malos,'mal')+bloque('Completos y bien',comp,'ok')+bloque('Por revisar o a medias',pend,'')+'</div>';
@@ -33421,7 +33485,7 @@ function _inspMalHTML(j){
       : M.tiene
       ? '<div class="in-paso">1 · Foto del problema <i>(ya tiene una)</i></div>'+
         '<div class="in-dos"><button class="in-b2" onclick="inspFoto(\'camera\')">'+INSP_ICO_CAM+' Cambiarla</button></div>'
-      : '<div class="in-paso">1 · Foto del problema <i>(opcional)</i></div>'+
+      : '<div class="in-paso">1 · Foto del problema <i>(obligatoria)</i></div>'+
         '<div class="in-dos"><button class="in-b2 fuerte" onclick="inspFoto(\'camera\')">'+INSP_ICO_CAM+' Tomar foto</button>'+
         '<button class="in-b2" onclick="inspFoto(\'galeria\')">De la galería</button></div>')+
     '<div class="in-paso">¿Qué tiene?</div><div class="in-causas">'+
@@ -33429,7 +33493,7 @@ function _inspMalHTML(j){
     '<input id="in-nota" class="in-nota" placeholder="ej.: falta la roseta; rayada abajo; no cierra" value="'+esc(M.n||'')+'" oninput="inspMalNota(this.value)">'+
     '<div class="in-dos"><button class="in-b2" onclick="inspMalCancelar()">Cancelar</button>'+
       '<button id="in-mal-g" class="in-b2 fuerte'+(_inspMalVale(M)?'':' apagado')+'" onclick="inspMalGuardar()">Guardar el problema</button></div>'+
-    '<div id="in-mal-f" class="in-falta"'+(_inspMalVale(M)?' style="display:none"':'')+'>Escoja qué tiene o escriba una nota</div>'+
+    '<div id="in-mal-f" class="in-falta"'+(_inspMalVale(M)?' style="display:none"':'')+'>'+_inspMalFalta(M)+'</div>'+
   '</div>';
 }
 function _inspAgregarHTML(of){
@@ -33492,11 +33556,11 @@ function _inspLevHTML(){
       });
       h+='</tr>';
     });
-    return h+'</tbody></table></div>'+_inspLevComoHTML();
+    return h+'</tbody></table></div>'+_inspLevEsperanHTML()+_inspLevComoHTML();
   }
   var area=I.area, nom=_hpNomUbic(area);
   if(I.paso==='levApto'){
-    h+='<div class="hp-tit">Levantamiento · '+esc(nom)+'</div>'+err+'<div class="hp-lista">';
+    h+='<div class="hp-tit">Levantamiento · '+esc(nom)+'</div>'+err+_inspLevAprobAptoHTML(area)+'<div class="hp-lista">';
     INSP_CAT.forEach(function(o){
       var est=_inspEstado(area,o.id), c=_inspCuenta(area,o.id), q=_inspLevQuien(area,o.id), f=_inspEstFila(area,o.id), rz=_inspResumen(c.els);
       h+='<button class="hp-op in-of lev-card" onclick="inspLevOf('+I.levA+',\''+o.id+'\')"><span>'+esc(o.nombre)+
@@ -33516,12 +33580,12 @@ function _inspLevHTML(){
     var g=_inspGrupo(I.of,e.grupo), ps=_inspPuntos(e.rowId), r=(S.insp.rows||{})[e.rowId];
     if(e.grupo!==gAnt){ gAnt=e.grupo; h+='<div class="cp-lbl">'+esc(g?g.nombre:e.grupo)+'</div>'; }
     var mk=ps.filter(function(p){ return p&&p.m; }).length, x=ps.filter(function(p){ return p&&p.m==='mal'; }).length, listo=_inspListo(e.rowId);
-    h+='<div class="lev-el'+(x?' mal':listo?' ok':'')+'"><div class="lev-el-t"><b>'+esc(e.nombre)+'</b><span>'+(listo?'listo':x?x+' ✗':mk+'/8')+'</span></div>'+
+    h+='<div class="lev-el'+(x?' mal':listo?' ok':'')+'"><div class="lev-el-t"><b>'+esc(e.nombre)+'</b><span>'+(listo?'listo':x?x+' ✗':mk+'/'+(8-_inspNOcultos(e.rowId)))+'</span></div>'+
       (_inspQuienTxt(e.rowId)?'<div class="in-quien">'+esc(_inspQuienTxt(e.rowId))+'</div>':'');
     var sin=[];
     (g?g.pts:[]).forEach(function(pt,j){
       var p=ps[j]||{};
-      if(!p.m){ sin.push(j+1); return; }
+      if(!p.m){ if(!_inspOculto(e.rowId,j)) sin.push(j+1); return; }
       var fotos=[]; if(p.f) fotos.push(p.f); (p.x||[]).forEach(function(xx){ if(xx.u) fotos.push(xx.u); });
       h+='<div class="lev-pt '+p.m+'"><span class="lev-m">'+(p.m==='ok'?'✔':p.m==='mal'?'✗':'—')+'</span><span>'+(j+1)+'. '+esc(pt[0])+(pt[2]?' <i>'+INSP_FASES[pt[2]]+'</i>':'')+
         (p.b?' <b class="lev-boton">'+INSP_BOTON_TXT[p.b]+'</b>':'')+
@@ -33534,6 +33598,62 @@ function _inspLevHTML(){
   });
   if(!c.els.length) h+='<div class="hp-sub">Este oficio no tiene elementos en este apartamento todavía.</div>';
   return h;
+}
+/* v163 · APROBAR UN APARTAMENTO ENTERO, Y QUÉ ESPERA EL VISTO BUENO.
+   Medido el 19-nov: las 330 inspecciones con `aprobado_por` vacío. Aprobar
+   ya existía por elemento y por oficio (v156), pero había que entrar oficio
+   por oficio. Ahora el Levantamiento dice, por apartamento, cuántos elementos
+   inspeccionados esperan su visto bueno (los que tienen alguna marca y no
+   están aprobados), y en el apartamento hay un botón para aprobarlos todos de
+   una vez, con su confirmación EN LA PANTALLA (son decenas de filas, no una).
+   Escribe `aprobado_por` y `aprobado_fecha` en cada uno —lo mismo que el
+   botón del elemento— y deja UN renglón en `obra_cambios` con cuántos y
+   cuáles. No toca puntos ni actividades. Lo aprobado se quita igual que
+   antes, en el elemento. */
+function _inspEsperan(area){
+  var rs=(S.insp&&S.insp.rows)||{};
+  return Object.keys(rs).filter(function(k){ var r=rs[k];
+    return r && r.apto===area && !r.aprobado_por && (r.puntos||[]).some(function(p){ return p&&p.m; }); });
+}
+function _inspLevEsperanHTML(){
+  var tot=0, bs=[];
+  REC_ORDEN.forEach(function(a,i){ var n=_inspEsperan(a).length, ap=_inspApto(a); if(!n||!ap) return; tot+=n;
+    bs.push('<button class="hp-op lev-esp" onclick="inspLevApto('+i+')"><span>'+esc(ap.code)+'<i>'+n+(n===1?' elemento':' elementos')+' por aprobar</i></span><b>›</b></button>'); });
+  return '<div class="cp-lbl">Esperan su visto bueno</div>'+
+    (tot ? '<div class="hp-sub">'+tot+(tot===1?' elemento inspeccionado':' elementos inspeccionados')+' sin aprobar. Toque el apartamento para verlos y aprobarlos.</div><div class="hp-lista">'+bs.join('')+'</div>'
+         : '<div class="hp-sub">Nada esperando: todo lo inspeccionado está aprobado.</div>');
+}
+function _inspLevAprobAptoHTML(area){
+  var I=S._insp, ids=_inspEsperan(area), rs=(S.insp&&S.insp.rows)||{}, mal=0;
+  if(!ids.length) return '<div class="in-res"><span class="ok">Todo lo inspeccionado de este apartamento está aprobado.</span></div>';
+  ids.forEach(function(k){ if((rs[k].puntos||[]).some(function(p){ return p&&p.m==='mal'; })) mal++; });
+  if(I.aprobApto===area)
+    return '<div class="in-todo-pre">¿Aprobar los <b>'+ids.length+'</b> elementos inspeccionados de este apartamento?'+
+      (mal?' <b>'+mal+'</b> tienen algún ✗: quedan aprobados con su ✗ anotado.':'')+
+      '<div class="in-dos"><button class="in-b2" onclick="S._insp.aprobApto=null;_hpRepintar()">Cancelar</button>'+
+      '<button class="in-b2 fuerte" onclick="inspAprobarApto()">Sí, aprobar los '+ids.length+'</button></div></div>';
+  return '<button class="in-aprob" onclick="S._insp.aprobApto=S._insp.area;_hpRepintar()">Aprobar el apartamento · '+ids.length+(ids.length===1?' elemento espera':' elementos esperan')+' su visto bueno</button>';
+}
+async function inspAprobarApto(){
+  if(!isAdmin()) return;
+  var I=S._insp, area=I.area, ids=_inspEsperan(area); if(!ids.length) return;
+  var quien=(S.user&&S.user.nombre)||'', body={aprobado_por:quien, aprobado_fecha:new Date().toISOString()}, hechos=[];
+  I.aprobApto=null; I.aprobando=true; _hpRepintar();
+  try{
+    for(var i=0;i<ids.length;i+=40){
+      var lote=ids.slice(i,i+40);
+      await sb('obra_inspecciones?id=in.('+lote.map(function(k){ return encodeURIComponent('"'+k+'"'); }).join(',')+')&aprobado_por=is.null',
+        {method:'PATCH',prefer:'return=minimal',body:JSON.stringify(body)});
+      lote.forEach(function(k){ Object.assign(S.insp.rows[k],body); hechos.push(k); });
+    }
+  }catch(e){ showToast('No se pudo terminar'+(e&&e.sinRed?': sin señal':'')+'. Quedaron aprobados '+hechos.length+' de '+ids.length+'.','err',6000); }
+  if(hechos.length){
+    var ap=_inspApto(area);
+    logCambio('aprobado','inspeccion',(ap?ap.code:area),_hpNomUbic(area),
+      'Apartamento aprobado por '+quien+': '+hechos.length+(hechos.length===1?' elemento':' elementos')+' — '+hechos.map(function(k){ return k.split('|').slice(1).join('/'); }).join(', '));
+    if(hechos.length===ids.length) showToast('Aprobados '+hechos.length+(hechos.length===1?' elemento':' elementos'),'ok',3000);
+  }
+  I.aprobando=false; _hpRepintar();
 }
 async function inspAprobarEl(rowId){
   if(!isAdmin()) return;
@@ -33572,7 +33692,7 @@ async function inspAprobarOf(){
 var INSP_BOTON_TXT={tb:'todo bien', na:'nada aplica'};
 function _inspTodoHTML(e, k, ps){
   var I=S._insp, libres=0, marcas=0;
-  for(var j=0;j<8;j++){ if(ps[j]&&ps[j].m) marcas++; else libres++; }
+  for(var j=0;j<8;j++){ if(ps[j]&&ps[j].m) marcas++; else if(!_inspOculto(e.rowId,j)) libres++; }
   if(!libres) return '';
   if(I.todoNa && I.todoNa.r===e.rowId)
     return '<div class="in-todo-pre">Este elemento ya tiene marcas. ¿Poner «No aplica» en los '+libres+' que faltan?'+
@@ -33586,7 +33706,7 @@ function inspTodo(m, ya){
   if(!canEdit() || _inspCerradaAqui()) return;
   var I=S._insp, e=_inspElActual(); if(!e) return;
   var ps=_inspPuntos(e.rowId), libres=[], marcas=0;
-  for(var j=0;j<8;j++){ if(ps[j]&&ps[j].m) marcas++; else libres.push(j); }
+  for(var j=0;j<8;j++){ if(ps[j]&&ps[j].m) marcas++; else if(!_inspOculto(e.rowId,j)) libres.push(j); }
   if(!libres.length) return;
   if(m==='na' && marcas && !ya){ I.todoNa={r:e.rowId}; _hpRepintar(); return; }
   I.todoNa=null; I.verFoto=null; I.aviso=null;
@@ -33763,9 +33883,9 @@ function _inspFotosHTML(e, j, p, k){
   h+='<button class="in-masfoto" onclick="'+pre+'inspFotoPunto('+j+')">'+INSP_ICO_CAM+' ＋ Foto</button></div>';
   var V=I.verFoto;
   if(V && V.j===j && V.r===e.rowId){
-    var src=_inspFotoSrc(e.rowId,j,p,V.cual), bloq=(V.cual==='f' && p.m==='mal' && INSP_CREA_PARTIDAS);
+    var src=_inspFotoSrc(e.rowId,j,p,V.cual), bloq=(V.cual==='f' && p.m==='mal' && (INSP_CREA_PARTIDAS||INSP_FOTO_MAL));
     h+='<div class="in-mal in-ver">'+(src?'<img class="in-grande" src="'+esc(src)+'" alt="">':'<div class="in-conf-t">La foto está guardada en el teléfono y sube cuando haya señal.</div>');
-    if(bloq) h+='<div class="in-conf-t">Es la foto del problema (✗). Para quitarla, cambia antes la marca de este punto.</div>'+
+    if(bloq) h+='<div class="in-conf-t">Es la foto del problema (✗), y el ✗ no se queda sin foto. Para cambiarla, toque «Cambiar el problema» y tome otra; para quitarla, cambie antes la marca de este punto.</div>'+
       '<div class="in-dos"><button class="in-b2" onclick="inspVerFoto('+j+',\'f\')">Cerrar</button></div>';
     else if(V.conf) h+='<div class="in-conf-t">¿Quitar esta foto? Se borra de la inspección'+(V.cual==='f'&&p.a?' y de su partida':' y de la Bitácora')+'. El respaldo queda en el historial.</div>'+
       '<div class="in-dos"><button class="in-b2" onclick="S._insp.verFoto.conf=false;_hpRepintar()">Cancelar</button>'+
@@ -33784,7 +33904,7 @@ function inspQuitarFoto(){
   if(V.cual==='f'){
     /* v157 · Sin partidas, la foto del ✗ se quita como las otras: el ✗ se
        queda con su causa y su nota, ahora «sin foto». */
-    if(p.m==='mal' && INSP_CREA_PARTIDAS){ showToast('Es la foto del problema: cambia antes la marca','warn',4000); return; }
+    if(p.m==='mal' && (INSP_CREA_PARTIDAS||INSP_FOTO_MAL)){ showToast('Es la foto del problema: cambia antes la marca','warn',4000); return; }
     if(p.fp){ _inspFotoDel(r.id+'#'+j); p.fp=false; }
     if(p.f && p.a) p.q.push({rec:_logRec('respaldo','inspeccion',r.id,r.elemento,pre+p.f+' (de la partida '+p.a+')'), a:p.a, u:p.f});
     else if(p.f && p.fb) p.q.push({rec:_logRec('respaldo','inspeccion',r.id,r.elemento,pre+p.f+' (nota '+p.fb+' de la Bitácora)'), b:p.fb});
@@ -33816,18 +33936,29 @@ function inspFoto(fuente){
    Hasta la v157 exigía la causa: con solo la nota, «Guardar el problema»
    soltaba un aviso de 3 s y no guardaba, y al cerrar el recuadro la nota se
    perdía (2A · Entrada principal, 28-oct). */
-function _inspMalVale(M){ return !!(M && (M.c || String(M.n||'').trim())); }
+/* v163 · LA FOTO DEL ✗ VUELVE A SER OBLIGATORIA (decisión del Ing. Nilson, 19-nov,
+   que deshace la de la v157). De los 104 ✗ de la base, los del 2A y el 2B no
+   tienen foto ni nota, y sin eso no se le puede reclamar al contratista. Sin
+   foto —nueva, o la que ya tenía si se está cambiando el problema— «Guardar el
+   problema» no se enciende. La opción o la nota siguen bastando para el texto
+   (v158). Los ✗ viejos sin foto se quedan como están y dicen «sin foto». */
+function _inspMalTieneFoto(M){ return !!(M && (M.foto || M.tiene)); }
+function _inspMalVale(M){ return !!(M && (M.c || String(M.n||'').trim()) && _inspMalTieneFoto(M)); }
+function _inspMalFalta(M){
+  var foto=_inspMalTieneFoto(M), txt=!!(M && (M.c || String(M.n||'').trim()));
+  return !foto&&!txt ? 'Falta la foto, y escoger qué tiene o escribir una nota' : !foto ? 'Falta la foto del problema' : 'Escoja qué tiene o escriba una nota';
+}
 function _inspMalBorrKey(){ var I=S._insp; return (I&&I.mal&&I.mal.r)?I.mal.r+'#'+I.mal.j:null; }
 function inspCausa(c){ var M=S._insp&&S._insp.mal; if(!M) return; M.c=(M.c===c)?null:c; var k=_inspMalBorrKey(); if(k) _inspBorrPon(k,M); _hpRepintar(); }
 /* Escribir no repinta (perdería el teclado): solo enciende el botón. */
 function inspMalNota(v){ var M=S._insp&&S._insp.mal; if(!M) return; M.n=v; var k=_inspMalBorrKey(); if(k) _inspBorrPon(k,M);
   var ok=_inspMalVale(M), b=document.getElementById('in-mal-g'), f=document.getElementById('in-mal-f');
-  if(b) b.classList.toggle('apagado',!ok); if(f) f.style.display=ok?'none':''; }
+  if(b) b.classList.toggle('apagado',!ok); if(f){ f.style.display=ok?'none':''; f.textContent=_inspMalFalta(M); } }
 function inspMalCancelar(){ S._insp.mal=null; _hpRepintar(); }
 async function inspMalGuardar(){
   var I=S._insp, M=I&&I.mal; if(!M || _inspCerradaAqui()) return;
-  /* v157 · La foto del ✗ es OPCIONAL. v158 · Basta la opción o la nota. */
-  if(!_inspMalVale(M)){ showToast('Escoja qué tiene o escriba una nota','warn',3500); return; }
+  /* v158 · Basta la opción o la nota. v163 · Y la foto es obligatoria otra vez. */
+  if(!_inspMalVale(M)){ showToast(_inspMalFalta(M),'warn',3500); return; }
   if(M.k!=null) I.k=M.k;
   var e=_inspElActual(); if(!e) return;
   var r=_inspFila(e,I.area,I.of), p=r.puntos[M.j]||{};

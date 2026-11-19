@@ -1,6 +1,6 @@
 # Mecca Agenda — contexto del proyecto
 
-**Al día a v162 — 3 de noviembre de 2026.** Antes de escribir, comprueba
+**Al día a v163 — 19 de noviembre de 2026.** Antes de escribir, comprueba
 la versión real del repo (`APP_VERSION` en `index.html`, línea ~890): este
 documento se queda viejo si nadie lo actualiza, y ya pasó una vez que se
 pidió construir algo que llevaba veinte versiones hecho.
@@ -3333,8 +3333,10 @@ archivo pero está APAGADO** con `INSP_CREA_PARTIDAS = false`.
   comprobaciones desde la v156 (las de partidas de la v153-v155 se cambiaron por
   «cero escrituras a actividades», y entran fases, guardar, cerrar, el inodoro
   listo, la plomería del 4A y el Levantamiento como Nilson).
-- **LA FOTO DEL ✗ ES OPCIONAL (v157, decisión del dueño).** «1 · Foto del
-  problema (opcional)»; «Guardar el problema» se enciende con la causa, que
+- ~~**LA FOTO DEL ✗ ES OPCIONAL (v157, decisión del dueño).**~~ **La v163 lo
+  deshizo, también por decisión del dueño: la foto del ✗ vuelve a ser
+  obligatoria** (ver «SIMPLIFICAR (v163)» abajo). Lo que sigue es cómo fue.
+  «1 · Foto del problema (opcional)»; «Guardar el problema» se enciende con la causa, que
   sigue obligatoria (la nota, opcional), y el aviso rojo dice solo «Falta
   escoger qué falta». La foto de un ✗ **se quita** como las otras (respaldo en
   `obra_cambios`, después el `DELETE` de su nota de la Bitácora) y el ✗ se queda
@@ -3484,6 +3486,57 @@ archivo pero está APAGADO** con `INSP_CREA_PARTIDAS = false`.
     ya no existe): hay que volver a tomarla. Y si el sistema borra también la
     sesión (`sessionStorage`), pide el PIN; después del PIN vuelve al sitio.
   - Lista de chequeo: entra `recarga`.
+- **SIMPLIFICAR (v163, 19-nov).** Medido: lo último que se escribió en la base
+  fue el 5-nov; las 330 inspecciones tenían 1.580 ✔ (70 %), 586 «No aplica»
+  (26 %) y 104 ✗ (4,6 %), y 0 aprobadas. El pedido llegó escrito como si «Todo
+  bien» no existiera: **existía desde la v161** y se usó (396 puntos con
+  `b:'tb'`), así que no se rehízo. Tres cosas, decididas por el dueño con
+  opciones:
+  - **LO QUE NO LLEVA CADA ESPACIO** (`INSP_NO_APLICA`, `_inspTipoEspacio`,
+    `_inspReglaOculta`, `_inspOculto`, `inspVerOcultos`). La regla sale de los
+    586 «No aplica» de la base, por oficio, tipo de espacio y punto; el app la
+    propuso y el dueño aprobó las firmes y las «casi siempre» (no las dudosas:
+    Albañilería 6 «Patinillos» y Albañilería/Estuco completos en baños). Pisos 7
+    en habitaciones y vestidor; Pisos 8 en habitaciones, sala y vestidor;
+    Sheetrock 3 y 4 en sala; Sheetrock 5 en habitaciones, baños y sala; Estuco
+    5 en habitaciones y sala. **El tipo sale del id del espacio** (`bano`,
+    `cocina`, `vestidor`, `habitacion`, lo demás «sala»), en ese orden: es el
+    mismo con que se midió. **ESCONDER NO ES MARCAR**: el punto no se escribe,
+    no se pide, no cuenta para «listo» ni para «N/8», y «Todo bien» no lo toca.
+    **Un punto con marca se ve siempre** (los 586 «No aplica» y todo lo
+    marcado se ven igual que antes). Debajo de los puntos, «＋ Aquí sí van: …»
+    los trae para ese elemento (en memoria) si en ese cuarto concreto sí van.
+    Las claves son la POSICIÓN en `puntos[]`: si alguien cambia el orden de esos
+    grupos, cambia la regla en el mismo commit. En un 4A son 40 puntos de 1.440.
+  - **LA FOTO DEL ✗ OBLIGATORIA OTRA VEZ** (`_inspMalVale`, `_inspMalFalta`,
+    `INSP_FOTO_MAL`). Sin foto —nueva, o la que ya tenía si se cambia el
+    problema— «Guardar el problema» no se enciende y dice qué falta. **Y la foto
+    de un ✗ no se quita** mientras siga en ✗ (el bloqueo de la v153, que la v157
+    dejó solo para las partidas): se cambia con «Cambiar el problema». Los ✗
+    viejos sin foto no se tocaron: siguen diciendo «sin foto».
+  - **APROBAR UN APARTAMENTO ENTERO** (`_inspEsperan`, `_inspLevEsperanHTML`,
+    `_inspLevAprobAptoHTML`, `inspAprobarApto`). En el Levantamiento, debajo de
+    la tabla, «Esperan su visto bueno»: por apartamento, los elementos con alguna
+    marca y sin aprobar. En el apartamento, «Aprobar el apartamento · N esperan»,
+    que confirma EN LA PANTALLA (y avisa cuántos tienen ✗) y escribe
+    `aprobado_por` / `aprobado_fecha` de 40 en 40 con `id=in.(…)&aprobado_por=is.null`,
+    más UN renglón `aprobado` (entidad `inspeccion`) con cuántos y cuáles. Quitar
+    sigue siendo por elemento.
+  - **PLANOS SE ESCONDIÓ** (`MODULOS_OCULTOS.planos`, decisión del dueño): 0
+    documentos. Sus 5 mapas por nivel siguen en `obra_planos_mapa`. `obra_tareas`
+    no la escribe ninguna pantalla y la «Semana» ya estaba escondida (v149):
+    no había nada más que esconder. **Partidas se quedó** (es su módulo).
+  - **Funciones sin ninguna llamada: 11 de 1.856, 3,6 KB** (`_nodoDerHTML`,
+    `_ctxTorre`, `clasSacar`, `_nodoPieHTML`, `verPendientesApto`,
+    `_diasCorridos`, `_cmdEsInstalado`, `_cmdEsIOS`, `_catMoneda`,
+    `_congeladasCount`, `qpVaciar`). No se borraron: decide el dueño. El peso de
+    verdad no es código muerto sino módulos vivos: Partidas son ~500 funciones y
+    ~385 KB.
+  - Lista de chequeo: `sinCausa`, `sinFoto`, `soloNota`, `quitarMal` y
+    `levSinFoto` cambiaron A PROPÓSITO (la foto ya no es opcional; el ✗ viejo
+    sin foto se mete en el doble); `todoBien` pone foto a su ✗; entran
+    `noAplica163`, `planos163` y `aprobarApto`. El doble entiende
+    `PATCH id=in.(…)`.
 - **Lista de chequeo, sección «INSPECCIÓN POR APARTAMENTO» (hasta la v155)**: veinticinco
   comprobaciones como Karina por el Modo Campo a 390 (desde la v154, también
   ✗ → «—» deja la partida abierta con su nota, y los tres dibujos de la hoja de
